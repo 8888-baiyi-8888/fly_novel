@@ -1,0 +1,26 @@
+{
+  "name": "fly_novel",
+  "version": "1.0.0",
+  "description": "fly_novel TypeScript project",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/8888-baiyi-8888/fly_novel.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/8888-baiyi-8888/fly_novel/issues"
+  },
+  "homepage": "https://github.com/8888-baiyi-8888/fly_novel#readme",
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^7.0.2"
+  }
+}
