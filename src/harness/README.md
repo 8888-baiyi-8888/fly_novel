@@ -4,13 +4,13 @@
 
 | 子目录 | 作用 |
 | --- | --- |
-| [agent/](agent/README.md) | Agent 定义、运行状态和模型与工具的执行循环。 |
-| [model/](model/README.md) | 大语言模型的请求、响应和能力接口。 |
+| [agent/](agent/README.md) | Agent 接口、注册、创建、查询和生命周期管理。 |
+| [agent-loop/](agent-loop/README.md) | 驱动 Agent 调用大语言模型和工具，直至本轮结束。 |
+| [llm/](llm/README.md) | 大语言模型的请求、响应和能力接口。 |
 | [tools/](tools/README.md) | 工具定义、注册、输入校验和执行。 |
-| [context/](context/README.md) | 运行消息组装、上下文预算和压缩。 |
-| [orchestration/](orchestration/README.md) | 多 Agent 委派、父子运行和结果汇总。 |
-| [execution/](execution/README.md) | 取消、超时、执行额度和资源清理。 |
-| [approval/](approval/README.md) | 人工确认请求及批准、拒绝结果的处理。 |
-| [events/](events/README.md) | 运行事件定义、投递和订阅。 |
-| [persistence/](persistence/README.md) | Agent 运行记录和检查点的存储接口。 |
-| [adapters/](adapters/README.md) | 模型服务和运行存储的具体接入实现。 |
+| [session/](session/README.md) | 会话状态和追加式事件日志。 |
+| [session-persistence/](session-persistence/README.md) | 会话与事件日志的持久化接口。 |
+| [session-persistence-jsonl/](session-persistence-jsonl/README.md) | 使用本地 JSONL 文件实现会话持久化。 |
+| [system-prompt/](system-prompt/README.md) | 系统提示词片段的注册与组装。 |
+| [subagent/](subagent/README.md) | 子 Agent 的创建、委派、状态查询和回收。 |
+| [user-approval/](user-approval/README.md) | 人工确认请求及批准、拒绝结果的处理。 |
