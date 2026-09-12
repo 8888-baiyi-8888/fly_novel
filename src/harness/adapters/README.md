@@ -1,13 +1,8 @@
-# Harness 外部适配器
+# 模型服务与运行存储适配
 
-## 职责
+## 一级子目录
 
-将外部模型服务和存储机制接入 Harness 的内部契约。
-
-## 内容范围
-
-models/ 提供模型接入实现，persistence/ 提供运行记录和检查点的存储实现。
-
-## 边界
-
-依赖 Harness 契约实现适配；供应商和存储技术的细节不向 Agent 或小说业务传播。
+| 子目录 | 作用 |
+| --- | --- |
+| [models/](models/README.md) | 将具体模型服务接入 Harness 的模型调用接口。 |
+| [persistence/](persistence/README.md) | 实现 Agent 运行记录和检查点的存取接口。 |

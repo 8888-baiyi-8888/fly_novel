@@ -1,13 +1,10 @@
-# 源码目录
+# 小说创作工作流与 Agent 运行系统
 
-## 职责
+## 一级子目录
 
-组织小说代码库的应用组装、Agent 运行框架、工作流引擎和小说业务。
-
-## 内容范围
-
-应用组装放在 app/，通用 Agent 能力放在 harness/，图工作流机制放在 workflow/，小说业务放在 novel/。
-
-## 边界
-
-本目录存放源码及模块说明；小说正文、运行数据和编译产物存放在源码目录之外。
+| 子目录 | 作用 |
+| --- | --- |
+| [app/](app/README.md) | 应用配置、依赖组装和应用实例创建。 |
+| [harness/](harness/README.md) | 通用 Agent 运行框架。 |
+| [workflow/](workflow/README.md) | 通用图工作流引擎。 |
+| [novel/](novel/README.md) | 小说数据、业务规则和写作流程。 |
