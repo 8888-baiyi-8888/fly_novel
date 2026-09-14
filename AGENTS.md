@@ -18,14 +18,17 @@
 
 ```text
 .agents/           Agent 决策记录目录，存放非简单变更的重要工程决定
+.fly-novel/        模型配置样例与本机配置，仅样例提交 Git（见 README.md）
 docs/              开发文档目录，存放架构、模块设计、开发流程、决策背景、接口约定和排障记录（见 docs/AGENTS.md）
 src/               源码目录，包含应用组装、Agent 运行框架、工作流引擎和小说业务（见 src/README.md）
+tests/             自动化测试目录，与 src 分开管理
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 package-lock.json  npm 依赖锁文件
 package.json       Node.js 项目配置、依赖与脚本
 README.md          项目介绍
 tsconfig.json      TypeScript 编译配置
+tsconfig.test.json 测试编译配置，产物输出到 .test-dist/
 ```
 
 新增源码、测试、脚本和第三方源码目录时，应在本节同步登记职责。目录划分应体现本项目的模块职责，不创建无用途的空目录。`docs/` 下新增开发文档时，同时遵循 [docs/AGENTS.md](docs/AGENTS.md)。
@@ -79,6 +82,7 @@ tsconfig.json      TypeScript 编译配置
 - **标签遵循仓库实际分类。** 建立 PR 或 Issue 分类后按约定填写；是否创建 PR 由任务要求和本项目协作流程决定。
 - **待办标记说明具体问题。** `FIXME` 标记已知缺陷，`TODO` 标记后续工作，`XXX` 标记需要重点审查的可疑实现，避免无说明占位。
 - **文本格式统一。** 默认 UTF-8，遵循仓库格式配置，文件末尾恰好一个换行。已跟踪修改使用 `git diff --check`，暂存修改使用 `git diff --cached --check`；新文件也应检查空白错误。
+- **只实现明确要求的最小功能。** 不擅自添加额外参数、功能、抽象层或未来扩展。确需超出当前要求时，先说明原因并征得同意；必要的安全校验不应借机扩大实现范围。
 
 ## 防御性设计
 
