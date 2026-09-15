@@ -15,6 +15,11 @@ Desktop.ini
 logs/
 
 # Environment and local config
+/.fly-novel/*
+!/.fly-novel/settings.example.json
+!/.fly-novel/.credentials.example.json
+.credentials.json
+.encryption-key
 .env
 .env.*
 !.env.example
@@ -22,6 +27,7 @@ logs/
 # Dependencies and build outputs
 node_modules/
 dist/
+.test-dist/
 build/
 out/
 coverage/

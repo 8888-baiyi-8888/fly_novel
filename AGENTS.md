@@ -18,7 +18,7 @@
 
 ```text
 .agents/           Agent 决策记录目录，存放非简单变更的重要工程决定
-.fly-novel/        模型配置样例与本机配置，仅样例提交 Git（见 README.md）
+.fly-novel/        模型配置样例与本机配置，仅样例提交 Git（见 src/config/README.md）
 docs/              开发文档目录，存放架构、模块设计、开发流程、决策背景、接口约定和排障记录（见 docs/AGENTS.md）
 src/               源码目录，包含应用组装、Agent 运行框架、工作流引擎和小说业务（见 src/README.md）
 tests/             自动化测试目录，与 src 分开管理

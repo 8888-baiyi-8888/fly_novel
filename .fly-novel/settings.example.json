@@ -1,0 +1,7 @@
+{
+  "deepseek": {
+    "baseURL": "https://api.deepseek.com",
+    "model": "deepseek-chat",
+    "credentialRef": "DEEPSEEK_API_KEY"
+  }
+}

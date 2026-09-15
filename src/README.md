@@ -4,7 +4,8 @@
 
 | 子目录 | 作用 |
 | --- | --- |
-| [app/](app/README.md) | 应用配置、依赖组装和应用实例创建。 |
+| [app/](app/README.md) | 读取配置并组装应用依赖和实例。 |
+| [config/](config/README.md) | 固定应用数据路径、配置校验与本地凭据加密存储。 |
 | [harness/](harness/README.md) | 通用 Agent 运行框架。 |
 | [workflow/](workflow/README.md) | 通用图工作流引擎。 |
 | [novel/](novel/README.md) | 小说数据、业务规则和写作流程。 |
