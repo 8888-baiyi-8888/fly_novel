@@ -6,7 +6,6 @@
 | --- | --- |
 | [agent/](agent/README.md) | Agent 接口、注册、创建、查询和生命周期管理。 |
 | [agent-loop/](agent-loop/README.md) | 驱动 Agent 调用大语言模型和工具，直至本轮结束。 |
-| [llm/](llm/README.md) | 大语言模型的请求、响应和能力接口。 |
 | [tools/](tools/README.md) | 工具定义、注册、输入校验和执行。 |
 | [session/](session/README.md) | 会话状态和追加式事件日志。 |
 | [session-persistence/](session-persistence/README.md) | 会话与事件日志的持久化接口。 |

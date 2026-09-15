@@ -1,7 +1,7 @@
 import {
   callDeepSeek,
   type DeepSeekCallParameters,
-} from "../harness/llm/deepseek";
+} from "../llm/deepseek";
 import { readSettings, readEncryptionKey } from "../config/settings";
 import { decryptSecret } from "../config/credentials";
 

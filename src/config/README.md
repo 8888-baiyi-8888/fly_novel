@@ -19,7 +19,7 @@
 
 `src/config/settings.ts` 的 `readSettings()` 一次读取两个配置文件，返回 `{ settings, credentials }`：`settings` 包含全部普通配置，`credentials` 包含 refs 下的全部原样密文。它只检查 JSON 对象结构和凭据值类型，不读取加密密钥、不解密、不写文件，也不限定模型提供商。配置不要求 version 字段。添加其他模型配置不需要新增读取函数。
 
-`src/app/call-deepseek.ts` 从总配置的 `settings.deepseek` 取得当前模型设置并校验，使用时才读取加密密钥、解密对应 API Key，再将参数传给 Harness；调用参数中的 `model` 可覆盖文件默认值。Harness 不直接读取应用配置。目前没有自动保存接口，不承诺与 DeepSeek Harness 配置格式互通。
+`src/app/call-deepseek.ts` 从总配置的 `settings.deepseek` 取得当前模型设置并校验，使用时才读取加密密钥、解密对应 API Key，再将参数传给 `src/llm/deepseek.ts`；调用参数中的 `model` 可覆盖文件默认值。LLM 模块与 Harness 均不直接读取应用配置。目前没有自动保存接口，不承诺与 DeepSeek Harness 配置格式互通。
 
 ### 开发时加密与解密
 
