@@ -25,5 +25,8 @@
   "devDependencies": {
     "@types/node": "^22.20.2",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "^4.0.2"
   }
 }
