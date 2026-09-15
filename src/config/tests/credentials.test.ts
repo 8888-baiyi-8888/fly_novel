@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
-import { decryptSecret, encryptSecret } from "../../src/config/credentials";
+import { decryptSecret, encryptSecret } from "../credentials";
 
 test("加解密仅接收字符串和密钥，直接返回字符串", () => {
   const key = randomBytes(32).toString("hex");

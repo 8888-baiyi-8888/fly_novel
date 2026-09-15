@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { PassThrough, Writable } from "node:stream";
 import { test } from "node:test";
-import { promptSecret } from "../../src/app/credentials-cli";
+import { promptSecret } from "../credentials-cli";
 
 test("圆点回显支持粘贴、退格、光标编辑和取消，不泄露输入", async () => {
   const stdinDescriptor = Object.getOwnPropertyDescriptor(process, "stdin")!;

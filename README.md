@@ -21,5 +21,5 @@ npm install
 ```bash
 npm run typecheck # 执行 TypeScript 类型检查，不生成构建产物
 npm run build     # 编译 TypeScript 源码到 dist/
-npm test          # 编译并运行 tests/ 下的测试
+npm test          # 编译并运行 src/*/tests/ 下的测试
 ```

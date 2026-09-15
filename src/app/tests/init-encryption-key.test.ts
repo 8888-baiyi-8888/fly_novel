@@ -18,8 +18,8 @@ function initialize(home: string) {
   // 在独立子进程加载入口前替换 CommonJS 路径导出，避免访问真实 APP_HOME。
   return spawnSync(process.execPath, ["-e",
     "require(process.argv[1]).APP_HOME = process.argv[2]; require(process.argv[3]);",
-    require.resolve("../../src/config/paths"), home,
-    require.resolve("../../src/app/init-encryption-key")], { encoding: "utf8" });
+    require.resolve("../../config/paths"), home,
+    require.resolve("../init-encryption-key")], { encoding: "utf8" });
 }
 
 test("首次初始化创建目录及合法的 32 字节密钥，不输出密钥或创建凭据", async (t) => {

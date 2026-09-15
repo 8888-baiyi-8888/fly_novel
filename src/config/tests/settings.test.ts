@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
-import { callConfiguredDeepSeek } from "../../src/app/call-deepseek";
-import * as credentials from "../../src/config/credentials";
-import { APP_HOME } from "../../src/config/paths";
-import { readSettings } from "../../src/config/settings";
+import { callConfiguredDeepSeek } from "../../app/call-deepseek";
+import * as credentials from "../credentials";
+import { APP_HOME } from "../paths";
+import { readSettings } from "../settings";
 
 test("普通设置使用固定路径，每次请求读取配置并使用解密后的凭据", async (t) => {
   let settings: unknown = { deepseek: {

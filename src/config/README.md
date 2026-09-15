@@ -2,7 +2,9 @@
 
 ## 一级子目录
 
-当前无一级子目录。
+| 子目录 | 作用 |
+| --- | --- |
+| tests/ | 配置读取与凭据加解密测试。 |
 
 ## 配置文件
 
@@ -57,7 +59,7 @@ npm run credentials -- decrypt
 
 这只能保护单独泄露的凭据文件；整个目录被读取仍可解密。Windows 文件访问保护依赖目录 ACL；`mode: 0o600` 不提供 Windows 权限隔离。
 
-测试统一放在根目录 `tests/`，其中 `config/` 检查配置和加解密，`app/` 检查命令行交互。测试使用虚构密钥和临时目录，不访问真实模型。`npm run build` 只编译 `src/`，测试单独编译到被 Git 忽略的 `.test-dist/`；`npm run typecheck` 同时检查源码和测试。
+测试按模块放在 `src` 一级子目录内的 `tests/`，本模块测试位于 `src/config/tests/`，应用入口测试位于 `src/app/tests/`，更深的源码子目录不另设测试目录。测试使用虚构密钥和临时目录，不访问真实模型。`npm run build` 排除 `src/*/tests/`，测试单独编译到被 Git 忽略的 `.test-dist/`；`npm run typecheck` 同时检查源码和测试。
 
 ```bash
 npm test
