@@ -27,3 +27,12 @@ export function callConfigEquals(a: LlmCallConfig, b: LlmCallConfig): boolean {
   if (a.stop === undefined || b.stop === undefined) return a.stop === b.stop
   return a.stop.length === b.stop.length && a.stop.every((s, i) => s === b.stop?.[i])
 }
+
+/**
+ * 由精确模型（exact-model）的 Adapter 解析过程提供的有效配置字段，
+ * 而不是由调用方（caller）提交的请求配置方案提供。
+ */
+export interface LlmCallConfigAdapterDefaults {
+  reasoningEffort?: true
+  maxTokens?: true
+}

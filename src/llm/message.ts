@@ -1,5 +1,5 @@
 import type { MessageId, ToolCallId} from './brand'
-import type { ContentBlock} from './types'
+import type { ContentBlock, ToolResultBlock} from './types'
 import { deepFreeze } from '@fly-novel/util'
 /** 助手消息的供应商、模型身份和适配器私有重放数据。 */
 export interface AssistantProviderMetadata {
@@ -96,4 +96,17 @@ export function freezeMessage<T extends Message>(message: T): T {
 export interface SystemMessage extends Message {
   readonly role: 'system'
   readonly source: MessageSourceMap['plugin']
+}
+
+/** 共享消息表示（shared message representation）中，由模型生成的 Assistant 角色特化类型。 */
+export interface AssistantMessage extends Message {
+  readonly role: 'assistant'
+  readonly source: ModelMessageSource
+}
+
+/**工具结果（tool-result）在共享消息表示中的一种特化类型，其中面向模型的内容块（model-facing block）会保留与对应工具调用之间的关联关系。*/
+export interface ToolResultMessage extends Message {
+  readonly role: 'user'
+  readonly content: [ToolResultBlock]
+  readonly source: ToolMessageSource
 }
