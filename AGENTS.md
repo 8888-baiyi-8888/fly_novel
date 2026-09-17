@@ -27,7 +27,8 @@ AGENTS.md          开发协作与工程约束
 package-lock.json  npm 依赖锁文件
 package.json       Node.js 项目配置、依赖与脚本
 README.md          项目介绍
-tsconfig.json      TypeScript 编译配置
+tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物
+tsconfig.build.json 正式构建配置，排除测试，产物输出到 dist/
 tsconfig.test.json 测试编译配置，产物输出到 .test-dist/
 ```
 

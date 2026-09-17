@@ -6,11 +6,12 @@
     "doc": "docs"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "credentials": "npm run build && node dist/app/credentials-cli.js",
     "init-encryption-key": "npm run build && node dist/app/init-encryption-key.js",
-    "typecheck": "tsc -p tsconfig.test.json --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .test-dist/*/tests/**/*.test.js"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/*/tests/**/*.test.js",
+    "test:deepseek": "tsc -p tsconfig.test.json && node .test-dist/llm/tests/deepseek.manual.js"
   },
   "repository": {
     "type": "git",

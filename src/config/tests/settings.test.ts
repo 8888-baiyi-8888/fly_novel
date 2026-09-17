@@ -47,7 +47,7 @@ test("普通设置使用固定路径，每次请求读取配置并使用解密�
     assert.equal(url, "https://example.test/chat/completions");
     assert.deepEqual(init.headers, { Authorization: "Bearer updated-key", "Content-Type": "application/json" });
     assert.equal(JSON.parse(String(init.body)).model, expectedModel);
-    return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }));
+    return new Response(JSON.stringify({ choices: [{ message: { content: "ok" }, finish_reason: "stop" }] }));
   });
   assert.equal(await callConfiguredDeepSeek({ messages: [] }), "ok");
   expectedModel = "override-model";
