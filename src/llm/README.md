@@ -6,6 +6,8 @@
 
 ## 模块职责
 
+工作区包名为 `@fly-novel/llm`，跨模块通过 `index.ts` 公共入口导入，例如 `import type { LlmFailure } from '@fly-novel/llm'`。构建与依赖声明见[项目说明](../../README.md#本地工作区包)。
+
 | 文件 | 职责 |
 | --- | --- |
 | `index.ts` | 公共导出，不承载运行时实现。 |
@@ -16,7 +18,6 @@
 | `call-config.ts`、`retry-policy.ts` | 调用配置比较和重试策略类型声明。 |
 | `content.ts` | 文件路径说明和纯文本模型的图片占位转换。 |
 | `error.ts`、`adapter-failure.ts` | LLM 错误分类、参数校验和外部失败快照。 |
-| `deep-freeze.ts` | 冻结对象图，保留取消信号的可变状态。 |
 | `adapters/deepseek.ts` | DeepSeek 适配器：连接校验、统一消息转换、响应及用量解析。 |
 
 ## 运行时约定

@@ -2,7 +2,15 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {}
   },
-  "exclude": ["node_modules", "dist", ".test-dist", "src/*/tests/**"]
+  "exclude": [
+    "**/node_modules",
+    "**/dist",
+    ".test-dist",
+    "src/*/tests/**",
+    "src/llm",
+    "src/util"
+  ]
 }

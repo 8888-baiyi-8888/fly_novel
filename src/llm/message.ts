@@ -1,6 +1,6 @@
 import type { MessageId, ToolCallId} from './brand'
 import type { ContentBlock} from './types'
-import { deepFreeze } from "./deep-freeze"
+import { deepFreeze } from '@fly-novel/util'
 /** 助手消息的供应商、模型身份和适配器私有重放数据。 */
 export interface AssistantProviderMetadata {
   /** 生成此消息的供应商路由。 */

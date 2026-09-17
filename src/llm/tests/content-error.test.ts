@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { contentHasFile, contentHasImage, projectFilesToText, projectImagesForTextModel } from '../content'
 import { freezeMessage, type Message } from '../message'
 import type { AttachmentId, MessageId, ToolCallId } from '../brand'
-import { deepFreeze } from '../deep-freeze'
+
 import { LlmError } from '../error'
 import { normalizeLlmFailure } from '../adapter-failure'
 
@@ -26,16 +26,6 @@ test('嵌套工具结果中的附件按模型能力投影，原消息保持不�
   assert.equal(contentHasImage(messages[0].content), true)
   assert.equal(projectImagesForTextModel(text), text)
   assert.equal(projectFilesToText(text, () => undefined), text)
-})
-
-test('深度冻结支持循环引用，取消信号仍可更新', () => {
-  const controller = new AbortController()
-  const value: { signal: AbortSignal; nested: { count: number }; self?: unknown } = { signal: controller.signal, nested: { count: 1 } }
-  value.self = value
-  assert.equal(deepFreeze(value), value)
-  assert.ok(Object.isFrozen(value.nested))
-  controller.abort()
-  assert.equal(value.signal.aborted, true)
 })
 
 test('失败快照保留供应商信息，拒绝错误的卸载数量，不调用 failure 访问器', () => {

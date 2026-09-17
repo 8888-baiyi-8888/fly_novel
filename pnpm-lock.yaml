@@ -11,6 +11,12 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
         version: 4.0.2
+      '@fly-novel/llm':
+        specifier: workspace:*
+        version: link:src/llm
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:src/util
     devDependencies:
       '@types/node':
         specifier: ^22.20.2
@@ -18,6 +24,17 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+
+  src/llm:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../util
+
+  src/util: {}
 
 packages:
 

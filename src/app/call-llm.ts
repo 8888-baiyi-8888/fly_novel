@@ -1,8 +1,8 @@
 import { Context } from "@deepseek-ai/cordis";
 import { getAdapterFactory } from "./llm-adapters";
-import { LlmRuntime } from "../llm/runtime";
-import { LlmError } from "../llm/error";
-import type { GenerateOptions } from "../llm/types";
+import { LlmRuntime } from '@fly-novel/llm';
+import { LlmError } from '@fly-novel/llm';
+import type { GenerateOptions } from '@fly-novel/llm';
 import { readSettings, readEncryptionKey } from "../config/settings";
 import { decryptSecret } from "../config/credentials";
 

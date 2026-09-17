@@ -22,10 +22,12 @@
 docs/              开发文档目录，存放架构、模块设计、开发流程、决策背景、接口约定和排障记录（见 docs/AGENTS.md）
 src/               源码目录，包含应用组装、LLM 调用、Agent 运行框架、工作流引擎和小说业务（见 src/README.md）
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
+src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件
+pnpm-workspace.yaml 本地工作区成员：src/llm 和 src/util；包清单与构建配置位于各包内
 package.json       Node.js 项目配置、依赖与脚本
 README.md          项目介绍
 tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物

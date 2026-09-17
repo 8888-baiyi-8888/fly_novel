@@ -1,5 +1,5 @@
-import { DeepSeekAdapter } from '../llm/adapters/deepseek';
-import type { LlmAdapter } from '../llm/adapter';
+import { DeepSeekAdapter } from '@fly-novel/llm';
+import type { LlmAdapter } from '@fly-novel/llm';
 
 interface AdapterConnection {
   readonly baseURL: string;

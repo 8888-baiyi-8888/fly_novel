@@ -5,7 +5,7 @@ import { LlmError } from './error'
 import { normalizeLlmFailure } from './adapter-failure'
 import { contentHasFile, projectFilesToText, contentHasImage, projectImagesForTextModel } from './content'
 import { callConfigEquals, type LlmCallConfig } from './call-config'
-import { deepFreeze } from './deep-freeze'
+import { deepFreeze } from '@fly-novel/util'
 import { freezeMessage, type Message } from './message'
 
 declare module '@deepseek-ai/cordis' {

@@ -24,4 +24,17 @@ pnpm run build     # 编译 TypeScript 源码到 dist/
 pnpm test          # 编译并运行 src/*/tests/ 下的测试
 ```
 
-`tsconfig.json` 为编辑器和类型检查提供包含源码与测试的统一配置，不生成产物；`tsconfig.build.json` 排除测试并输出到 `dist/`；`tsconfig.test.json` 将源码和测试编译到 `.test-dist/`。
+`tsconfig.json` 为编辑器和类型检查提供包含源码与测试的统一配置，不生成产物。`pnpm run build` 按依赖顺序构建工作区包到各包的 `dist/`，再将应用源码编译到根目录 `dist/`；正式构建排除测试。`pnpm run build:tests` 先构建工作区包，再通过 `tsconfig.test.json` 将源码和测试编译到 `.test-dist/`。
+
+## 本地工作区包
+
+`pnpm-workspace.yaml` 登记 `src/llm` 和 `src/util` 两个私有包，依赖通过 `workspace:*` 引用。安装依赖后，跨模块使用公共入口：
+
+```ts
+import type { LlmFailure } from '@fly-novel/llm';
+import { deepFreeze } from '@fly-novel/util';
+```
+
+编辑器和类型检查通过源码映射解析公共入口，无需预先构建。Node.js 通过工作区链接和各包的 `exports` 加载构建产物；运行测试或应用前使用上述构建命令。新增依赖应声明在实际使用它的包中，包内实现继续使用相对导入。
+
+VS Code 调试任务应运行 `pnpm run build:tests`，源码映射范围包含 `.test-dist/**/*.js` 与 `src/*/dist/**/*.js`。本机调试配置位于被忽略的 `.vscode/` 中。

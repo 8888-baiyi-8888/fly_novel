@@ -6,12 +6,14 @@
     "doc": "docs"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm run build:packages && tsc -p tsconfig.build.json",
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
     "init-encryption-key": "pnpm run build && node dist/app/init-encryption-key.js",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && node --test .test-dist/*/tests/**/*.test.js",
-    "test:deepseek": "tsc -p tsconfig.test.json && node .test-dist/llm/tests/deepseek.manual.js"
+    "test": "pnpm run build:tests && node --test .test-dist/*/tests/**/*.test.js",
+    "test:deepseek": "pnpm run build:tests && node .test-dist/llm/tests/deepseek.manual.js",
+    "build:packages": "pnpm -r run build",
+    "build:tests": "pnpm run build:packages && tsc -p tsconfig.test.json"
   },
   "repository": {
     "type": "git",
@@ -28,6 +30,9 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@deepseek-ai/cordis": "^4.0.2"
-  }
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@fly-novel/llm": "workspace:*",
+    "@fly-novel/util": "workspace:*"
+  },
+  "private": true
 }
