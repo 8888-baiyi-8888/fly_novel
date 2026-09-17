@@ -69,6 +69,11 @@ export interface Message {
   readonly source: MessageSource
 }
 
+/**共享消息表示（shared message representation）中针对用户角色（user-role）的一种特化类型。 */
+export interface UserMessage extends Message {
+  readonly role: 'user'
+}
+
 /**
  * 复制并深度冻结已有身份的消息。
  * @param message 包含稳定标识的完整消息。
