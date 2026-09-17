@@ -82,3 +82,18 @@ export interface UserMessage extends Message {
 export function freezeMessage<T extends Message>(message: T): T {
   return deepFreeze(structuredClone(message))
 }
+
+/**
+ * 共享消息表示（shared message representation）中针对系统角色（system-role）
+ * 的一种特化类型：
+ *
+ * 表示一条已经渲染完成的系统提示词（System Prompt），
+ * 并记录负责组装该提示词的插件（Plugin）。
+ *
+ * 当 `content` 为空时，表示“没有系统提示词”，
+ * 此时不会被投影（project）为实际发送给模型的消息（wire message）。
+ */
+export interface SystemMessage extends Message {
+  readonly role: 'system'
+  readonly source: MessageSourceMap['plugin']
+}
