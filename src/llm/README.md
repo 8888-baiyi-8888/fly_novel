@@ -2,7 +2,7 @@
 
 本模块与 `harness/` 平级，负责模型调用接口与提供商适配。`deepseek.ts` 提供继承 `LlmAdapter` 的 `DeepSeekAdapter`，构造时接收地址和 API Key，调用时接收统一的 `GenerateOptions`，不依赖 app、config 或 Harness，也不读取应用配置文件。
 
-`app/call-deepseek.ts` 负责读取配置、按需解密凭据，创建 `LlmRuntime` 并注册 DeepSeek 适配器，通过运行时调用后在 finally 中注销路由。该便捷入口接收统一消息，聚合文本块并返回文本或 `null`；失败结束块转换为 `LlmError`。需要消费推理或工具调用的调用方应直接使用运行时的数据块。
+`app/call-llm.ts` 负责读取配置、按需解密凭据，按 `provider` 选择适配器工厂，创建 `LlmRuntime` 并注册适配器，通过运行时调用后在 finally 中注销路由。该便捷入口接收统一消息，聚合文本块并返回文本或 `null`；失败结束块转换为 `LlmError`。需要消费推理或工具调用的调用方应直接使用运行时的数据块。
 
 ## 模块职责
 
@@ -43,7 +43,7 @@ DeepSeek 请求与响应字段参考 [官方 Chat Completions 文档](https://ap
 
 本机 `.vscode/launch.json` 配置了“调试 DeepSeek 手动测试”，启动前通过 `.vscode/tasks.json` 编译测试，使用源码映射在 TypeScript 文件中设置断点。这两个文件遵循当前 `.vscode/` 忽略规则，仅保存在本机。
 
-用 VS Code 打开整个项目文件夹，打开 `src/llm/tests/deepseek.manual.ts`，修改消息文本并保存。在调用 `callConfiguredDeepSeek` 的行和输出结果的 `console.log` 行左侧单击，设置红色断点。按 Ctrl+Shift+D，在上方选择“调试 DeepSeek 手动测试”，按 F5 启动。
+用 VS Code 打开整个项目文件夹，打开 `src/llm/tests/deepseek.manual.ts`，修改消息文本并保存。在调用 `callConfiguredLlm` 的行和输出结果的 `console.log` 行左侧单击，设置红色断点。按 Ctrl+Shift+D，在上方选择“调试 DeepSeek 手动测试”，按 F5 启动。
 
 黄色行是即将执行的语句。F10 执行当前行，F11 进入函数，Shift+F11 返回调用方，F5 继续到下一个断点，Shift+F5 停止调试。在结果输出行暂停时，悬停 `text` 或在“监视”中添加 `text` 查看模型回复；程序输出显示在“调试控制台”。每次重新启动都会发起真实请求。配置读取与终端测试相同，无需另填密钥。
 

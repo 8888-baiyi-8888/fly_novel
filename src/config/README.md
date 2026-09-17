@@ -21,7 +21,25 @@
 
 `src/config/settings.ts` 的 `readSettings()` 一次读取两个配置文件，返回 `{ settings, credentials }`：`settings` 包含全部普通配置，`credentials` 包含 refs 下的全部原样密文。它只检查 JSON 对象结构和凭据值类型，不读取加密密钥、不解密、不写文件，也不限定模型提供商。配置不要求 version 字段。添加其他模型配置不需要新增读取函数。
 
-`src/app/call-deepseek.ts` 从总配置的 `settings.deepseek` 取得当前模型设置并校验，使用时才读取加密密钥、解密对应 API Key，再用连接参数创建 `DeepSeekAdapter` 并注册到 `LlmRuntime`，通过运行时执行调用并在结束后注销路由；调用参数中的 `model` 可覆盖文件默认值。LLM 模块与 Harness 均不直接读取应用配置。目前没有自动保存接口，不承诺与 DeepSeek Harness 配置格式互通。
+`src/app/call-llm.ts` 按调用参数 `provider` 从 `settings[provider]` 取得模型设置并校验，使用时才读取加密密钥、解密对应 API Key，再用连接参数从 `src/app/llm-adapters.ts` 注册表创建适配器并注册到 `LlmRuntime`，通过运行时执行调用并在结束后注销路由；调用参数中的 `model` 可覆盖文件默认值。LLM 模块与 Harness 均不直接读取应用配置。目前没有自动保存接口，不承诺与 DeepSeek Harness 配置格式互通。
+
+### 供应商与模型的选择
+
+`settings.json` 的顶层键就是供应商标识，不需要在对象中再填写一个重复的 provider 字段。例如以下配置对应调用参数 `provider: "deepseek"`：
+
+```json
+{
+  "deepseek": {
+    "baseURL": "https://api.deepseek.com",
+    "model": "你的模型ID",
+    "credentialRef": "DEEPSEEK_API_KEY"
+  }
+}
+```
+
+调用方式为 `callConfiguredLlm({ provider: "deepseek", messages })`。model 可以在调用时覆盖；不传则采用该供应商的配置值。供应商标识区分大小写。现有 DeepSeek 配置不需要迁移，密文与加密密钥也无需修改。
+
+新增供应商时，在 settings.json 添加对应顶层配置，并在 `src/app/llm-adapters.ts` 登记其适配器工厂；只填写配置不能自动支持新协议。目前仅注册 deepseek，未知供应商会在读取和解密前报错。DeepSeek 专有的 `thinking` 可选配置位于 `settings.deepseek` 中，值为 enabled 或 disabled，省略时使用服务端默认值。
 
 ### 开发时加密与解密
 

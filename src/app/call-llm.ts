@@ -1,45 +1,49 @@
 import { Context } from "@deepseek-ai/cordis";
-import { DeepSeekAdapter, type DeepSeekAdapterOptions } from "../llm/deepseek";
+import { getAdapterFactory } from "./llm-adapters";
 import { LlmRuntime } from "../llm/runtime";
 import { LlmError } from "../llm/error";
 import type { GenerateOptions } from "../llm/types";
 import { readSettings, readEncryptionKey } from "../config/settings";
 import { decryptSecret } from "../config/credentials";
 
-type ConfiguredDeepSeekParameters = Omit<
+type ConfiguredLlmParameters = Omit<
   GenerateOptions,
-  "provider" | "model"
-> & { readonly model?: string; readonly thinking?: DeepSeekAdapterOptions["thinking"] };
+  "model"
+> & { readonly model?: string };
 
-/** 从完整配置中取出 DeepSeek 设置，在模型调用前解密对应 API Key。 */
-export async function callConfiguredDeepSeek(
-  parameters: ConfiguredDeepSeekParameters,
+/** 按 provider 选择配置和适配器，在模型调用前解密对应凭据。 */
+export async function callConfiguredLlm(
+  parameters: ConfiguredLlmParameters,
 ): Promise<string | null> {
+  const provider = parameters.provider.trim();
+  const createAdapter = getAdapterFactory(provider);
   const { settings, credentials } = await readSettings();
-  const config = settings.deepseek;
+  if (!Object.hasOwn(settings, provider)) throw new Error(`缺少供应商配置：${provider}`);
+  const config = settings[provider];
   if (typeof config !== "object" || config === null ||
       !("baseURL" in config) || typeof config.baseURL !== "string" || !config.baseURL.trim() ||
       !("model" in config) || typeof config.model !== "string" || !config.model.trim() ||
       !("credentialRef" in config) || typeof config.credentialRef !== "string" || !config.credentialRef.trim()) {
-    throw new Error("DeepSeek requires non-empty baseURL, model and credentialRef");
+    throw new Error(`供应商 ${provider} 必须配置非空 baseURL、model 和 credentialRef`);
   }
   const baseURL = config.baseURL.trim();
   let url: URL;
   try { url = new URL(baseURL); }
-  catch { throw new Error("deepseek.baseURL must be a valid HTTP(S) URL"); }
+  catch { throw new Error("baseURL 必须是有效的 HTTP(S) URL"); }
   if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
-    throw new Error("deepseek.baseURL must use HTTP(S) without credentials, query or fragment");
+    throw new Error("baseURL 必须使用 HTTP(S)，且不能包含凭据、查询参数或片段");
   }
+  const model = parameters.model?.trim() ?? config.model.trim();
+  if (!model) throw new Error("model 必须是非空字符串");
   const ref = config.credentialRef.trim();
   if (!Object.hasOwn(credentials, ref)) throw new Error("Credential reference was not found");
   const apiKey = decryptSecret(credentials[ref], await readEncryptionKey()).trim();
-  if (!apiKey) throw new Error("DeepSeek API Key must be a non-empty string");
+  if (!apiKey) throw new Error("API Key 必须是非空字符串");
   const runtime = new LlmRuntime(new Context());
-  const unregister = runtime.registerAdapter(["deepseek"], new DeepSeekAdapter({ baseURL, apiKey, thinking: parameters.thinking }));
-  const { thinking: _thinking, ...request } = parameters;
+  const unregister = runtime.registerAdapter([provider], createAdapter({ baseURL, apiKey }, config));
   let text: string | null = null;
   try {
-    const stream = runtime.stream({ ...request, provider: "deepseek", model: parameters.model ?? config.model.trim() });
+    const stream = runtime.stream({ ...parameters, provider, model });
     for await (const chunk of stream) {
       if (chunk.type === "block-end" && chunk.block.type === "text") text = (text ?? "") + chunk.block.text;
       if (chunk.type === "finish" && (chunk.reason.kind === "error" || chunk.reason.kind === "aborted")) {

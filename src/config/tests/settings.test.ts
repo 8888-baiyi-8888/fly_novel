@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
-import { callConfiguredDeepSeek } from "../../app/call-deepseek";
+import { callConfiguredLlm } from "../../app/call-llm";
 import * as credentials from "../credentials";
 import { APP_HOME } from "../paths";
 import { readSettings } from "../settings";
@@ -49,11 +49,12 @@ test("普通设置使用固定路径，每次请求读取配置并使用解密�
     assert.equal(JSON.parse(String(init.body)).model, expectedModel);
     return new Response(JSON.stringify({ choices: [{ message: { content: "ok" }, finish_reason: "stop" }] }));
   });
-  assert.equal(await callConfiguredDeepSeek({ messages: [] }), "ok");
+  assert.equal(await callConfiguredLlm({ provider: "deepseek", messages: [] }), "ok");
   expectedModel = "override-model";
-  assert.equal(await callConfiguredDeepSeek({ messages: [], model: expectedModel }), "ok");
+  assert.equal(await callConfiguredLlm({ provider: "deepseek", messages: [], model: expectedModel }), "ok");
+  await assert.rejects(callConfiguredLlm({ provider: "deepseek", messages: [], model: " " }), /model/);
   credentialError = true;
-  await assert.rejects(callConfiguredDeepSeek({ messages: [] }), /decryption failed/);
+  await assert.rejects(callConfiguredLlm({ provider: "deepseek", messages: [] }), /decryption failed/);
   assert.equal(fetchMock.mock.callCount(), 2);
   credentialError = false;
   malformed = true;
@@ -62,7 +63,23 @@ test("普通设置使用固定路径，每次请求读取配置并使用解密�
   settings = [];
   await assert.rejects(readSettings(), /configuration object/);
   settings = { deepseek: { baseURL: "file:///tmp/key", model: "test", credentialRef: "DEEPSEEK_API_KEY" } };
-  await assert.rejects(callConfiguredDeepSeek({ messages: [] }), /HTTP\(S\)/);
+  await assert.rejects(callConfiguredLlm({ provider: "deepseek", messages: [] }), /HTTP\(S\)/);
+});
+
+test("未知供应商在读取配置和解密前拒绝，不能把其他配置当作默认供应商", async t => {
+  const read = t.mock.method(fs, "readFile", async () => { throw new Error("不应读取配置"); });
+  for (const provider of ["unknown", "", "constructor", "__proto__"]) {
+    await assert.rejects(callConfiguredLlm({ provider, messages: [] }), /未注册供应商适配器/);
+  }
+  assert.equal(read.mock.callCount(), 0);
+});
+
+test("已注册供应商缺少对应配置时明确失败，不发送请求", async t => {
+  t.mock.method(fs, "readFile", async (path: string) => path === join(APP_HOME, "settings.json")
+    ? JSON.stringify({ another: { model: "other" } }) : JSON.stringify({ refs: {} }));
+  const decrypt = t.mock.method(credentials, "decryptSecret", () => { throw new Error("不应解密"); });
+  await assert.rejects(callConfiguredLlm({ provider: "deepseek", messages: [] }), /缺少供应商配置/);
+  assert.equal(decrypt.mock.callCount(), 0);
 });
 
 test("一次读取多个提供商及全部密文，不依赖加密密钥文件", async (t) => {
