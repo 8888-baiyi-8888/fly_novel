@@ -1,4 +1,5 @@
-import type {ReasoningEffortId, AttachmentId, ToolCallId, Branded, ProviderRequestId} from "./brand"
+import type {ReasoningEffortId, AttachmentId, ToolCallId, ProviderRequestId} from "./brand"
+import type { Branded } from '@fly-novel/util'
 import type {Message} from "./message"
 
 /** 一个已注册 Provider 路由的展示元数据。 */
