@@ -20,6 +20,23 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
   return chunks
 }
 
+test('适配器未返回结束块时明确失败，不把截断响应当作成功', async () => {
+  class TruncatedAdapter extends LlmAdapter {
+    async *stream(): AsyncIterable<StreamChunk> {
+      yield { type: 'text-delta', index: 0, text: '未完成' }
+    }
+  }
+  const runtime = new LlmRuntime(new Context())
+  const remove = runtime.registerAdapter(['test'], new TruncatedAdapter())
+  try {
+    const chunks = await collect(runtime.stream(options))
+    assert.equal(chunks.length, 2)
+    const end = chunks[1]
+    assert.ok(end.type === 'finish' && end.reason.kind === 'error')
+    assert.equal(end.reason.failure.code, 'INVALID_RESPONSE')
+  } finally { remove() }
+})
+
 test('路由注册拒绝重复，批量失败不留下部分注册，重复清理不删除新注册', async () => {
   const runtime = new LlmRuntime(new Context())
   const adapter = new Adapter()

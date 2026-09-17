@@ -24,7 +24,7 @@ src/               源码目录，包含应用组装、LLM 调用、Agent 运行
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
-package-lock.json  npm 依赖锁文件
+pnpm-lock.yaml     pnpm 依赖锁文件
 package.json       Node.js 项目配置、依赖与脚本
 README.md          项目介绍
 tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物

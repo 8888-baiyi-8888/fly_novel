@@ -377,6 +377,7 @@ export class LlmRuntime extends Service {
 
         if (item.done) {
             completed = true
+            yield adapterFailureChunk(new LlmError('适配器未返回结束块就结束了响应', 'INVALID_RESPONSE'), options.signal)
             return
         }
 

@@ -51,4 +51,4 @@ DeepSeek 请求与响应字段参考 [官方 Chat Completions 文档](https://ap
 
 测试复用应用已有的配置方式：从 APP_HOME/settings.json 读取地址、模型和凭据引用，从 .credentials.json 取得密文，再用已有 .encryption-key 按需解密。配置方法见 [配置说明](../config/README.md)，不需要额外的环境变量文件，不要重新生成已有密钥。
 
-在项目根目录执行 `npm run test:deepseek`，命令编译后运行 src/llm/tests/deepseek.manual.ts，发送“请只回复：连接成功”并显示模型回复。它会调用真实 API；npm test 不运行此手动测试。失败时返回非零退出码，Ctrl+C 可退出。测试不修改配置、密钥和凭据文件。
+在项目根目录执行 `pnpm run test:deepseek`，命令编译后运行 src/llm/tests/deepseek.manual.ts，发送该文件中配置的消息文本并显示模型回复。它会调用真实 API；pnpm test 不运行此手动测试。失败时返回非零退出码，Ctrl+C 可退出。测试不修改配置、密钥和凭据文件。

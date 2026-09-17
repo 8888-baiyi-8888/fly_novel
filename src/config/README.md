@@ -53,8 +53,8 @@
 如果需要独立运行，`src/app/credentials-cli.ts` 只是这两个函数的交互入口，命令会先构建再运行：
 
 ```bash
-npm run credentials -- encrypt
-npm run credentials -- decrypt
+pnpm run credentials encrypt
+pnpm run credentials decrypt
 ```
 
 `encrypt` 输入 API Key 时以圆点 `•` 回显，回车后仅输出密文，由用户复制到 `.credentials.json` 的 `refs.DEEPSEEK_API_KEY`。`decrypt` 提示粘贴密文，同样以圆点回显，回车后显示明文。长输入仅显示光标附近的一行圆点，不截断实际值。两种操作都不写文件，也不自动读取凭据文件。命令不再接收引用名称。Ctrl+C 取消，不支持管道输入；不要将 API Key 放入命令行参数。解密时避免录屏、共享终端和日志收集，普通模型调用不会输出明文。
@@ -71,14 +71,14 @@ npm run credentials -- decrypt
 
 密文使用 `gcm2` 标记，不绑定凭据名称。明文凭据需逐项加密并替换真实值、移除空项。配置文件不再区分版本，密文格式仍通过自身标记识别。
 
-首次使用运行 `npm run init-encryption-key`，命令先构建再执行 `src/app/init-encryption-key.ts` 对应的入口。入口创建缺失的应用目录，将随机 32 字节密钥保存为 `APP_HOME/.encryption-key` 中的 64 位十六进制文本，末尾一个换行；文件已存在时拒绝覆盖。命令不输出密钥，也不读取或修改 `.credentials.json`。
+首次使用运行 `pnpm run init-encryption-key`，命令先构建再执行 `src/app/init-encryption-key.ts` 对应的入口。入口创建缺失的应用目录，将随机 32 字节密钥保存为 `APP_HOME/.encryption-key` 中的 64 位十六进制文本，末尾一个换行；文件已存在时拒绝覆盖。命令不输出密钥，也不读取或修改 `.credentials.json`。
 
 密钥文件不提交 Git，需要安全备份。新克隆不会带有此文件；已有密文但密钥丢失时，应恢复原密钥，不能重新生成代替。迁移电脑需安全转移已有密钥。配置读取代码去掉密钥文本首尾空白，文件缺失时明确报错。加解密使用 Node 自带的 AES-256-GCM 和随机 IV，验证失败不返回明文。
 
 这只能保护单独泄露的凭据文件；整个目录被读取仍可解密。Windows 文件访问保护依赖目录 ACL；`mode: 0o600` 不提供 Windows 权限隔离。
 
-测试按模块放在 `src` 一级子目录内的 `tests/`，本模块测试位于 `src/config/tests/`，应用入口测试位于 `src/app/tests/`，更深的源码子目录不另设测试目录。测试使用虚构密钥和临时目录，不访问真实模型。`npm run build` 排除 `src/*/tests/`，测试单独编译到被 Git 忽略的 `.test-dist/`；`npm run typecheck` 同时检查源码和测试。
+测试按模块放在 `src` 一级子目录内的 `tests/`，本模块测试位于 `src/config/tests/`，应用入口测试位于 `src/app/tests/`，更深的源码子目录不另设测试目录。测试使用虚构密钥和临时目录，不访问真实模型。`pnpm run build` 排除 `src/*/tests/`，测试单独编译到被 Git 忽略的 `.test-dist/`；`pnpm run typecheck` 同时检查源码和测试。
 
 ```bash
-npm test
+pnpm test
 ```
