@@ -28,7 +28,7 @@ pnpm test          # 编译并运行 src/*/tests/ 下的测试
 
 ## 本地工作区包
 
-`pnpm-workspace.yaml` 登记 `src/llm` 和 `src/util` 两个私有包，依赖通过 `workspace:*` 引用。安装依赖后，跨模块使用公共入口：
+`pnpm-workspace.yaml` 登记 `src/harness`、`src/llm` 和 `src/util` 三个私有包，依赖通过 `workspace:*` 引用。安装依赖后，跨模块使用公共入口：
 
 ```ts
 import type { LlmFailure } from '@fly-novel/llm';

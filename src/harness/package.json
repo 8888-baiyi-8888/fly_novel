@@ -1,0 +1,24 @@
+{
+  "name": "@fly-novel/harness",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-llm": "link:../../../deepseek-harness/packages/llm/llm",
+    "@fly-novel/llm": "workspace:*",
+    "@fly-novel/util": "workspace:*",
+    "@deepseek-ai/dsh-session-projection": "link:../../../deepseek-harness/packages/session/session-projection",
+    "@deepseek-ai/dsh-session": "link:../../../deepseek-harness/packages/core/session",
+    "@deepseek-ai/dsh-agent": "link:../../../deepseek-harness/packages/core/agent",
+    "zod": "link:../../../deepseek-harness/packages/session/session-projection/node_modules/zod"
+  }
+}

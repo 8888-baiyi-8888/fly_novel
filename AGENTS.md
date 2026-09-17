@@ -27,7 +27,7 @@ src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件
-pnpm-workspace.yaml 本地工作区成员：src/llm 和 src/util；包清单与构建配置位于各包内
+pnpm-workspace.yaml 本地工作区成员：src/harness、src/llm 和 src/util；包清单与构建配置位于各包内
 package.json       Node.js 项目配置、依赖与脚本
 README.md          项目介绍
 tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物

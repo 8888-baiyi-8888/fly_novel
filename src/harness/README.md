@@ -1,6 +1,12 @@
 # Agent 运行框架
 
+本目录是私有工作区包 `@fly-novel/harness`，由自己的 `package.json` 管理依赖。公共入口为 `index.ts`，构建产物输出到本包 `dist/`，测试放在本包 `tests/`。构建命令为 `pnpm --filter @fly-novel/harness run build`，根目录构建也会按依赖顺序构建本包。
+
+添加外部依赖时，在项目根目录执行 `pnpm --filter @fly-novel/harness add 包名`；命令更新本包的依赖清单及根目录共享锁文件。LLM 与共享工具使用 `workspace:*` 引用。
+
 ## 一级子目录
+
+学习阶段的 DSH 依赖通过 `link:` 引用同级 `deepseek-harness` 仓库中的已构建包；外部引用集中在 `session/dependencies.ts`。投影、会话和 Agent 包使用其自身工作区的传递依赖，Zod 链接到投影包已安装的同一份依赖。该配置依赖本机目录布局：两个仓库应位于同一父目录，DSH 仓库需已安装依赖并生成 `lib/` 产物。移动仓库或清理 DSH 依赖后需重新准备依赖与构建，再在本项目运行 `pnpm install`。本地包不会随本项目自动构建，源码变更后需在 DSH 仓库按其构建说明更新产物。
 
 | 子目录 | 作用 |
 | --- | --- |

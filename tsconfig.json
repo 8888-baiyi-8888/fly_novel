@@ -16,6 +16,7 @@
     "declaration": true,
     "moduleResolution": "NodeNext",
     "paths": {
+      "@fly-novel/harness": ["./src/harness/index.ts"],
       "@fly-novel/llm": [
         "./src/llm/index.ts"
       ],

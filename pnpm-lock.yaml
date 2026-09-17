@@ -11,6 +11,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
         version: 4.0.2
+      '@fly-novel/harness':
+        specifier: workspace:*
+        version: link:src/harness
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:src/llm
@@ -24,6 +27,30 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+
+  src/harness:
+    dependencies:
+      '@deepseek-ai/dsh-agent':
+        specifier: link:../../../deepseek-harness/packages/core/agent
+        version: link:../../../deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-llm':
+        specifier: link:../../../deepseek-harness/packages/llm/llm
+        version: link:../../../deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: link:../../../deepseek-harness/packages/core/session
+        version: link:../../../deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-session-projection':
+        specifier: link:../../../deepseek-harness/packages/session/session-projection
+        version: link:../../../deepseek-harness/packages/session/session-projection
+      '@fly-novel/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../util
+      zod:
+        specifier: link:../../../deepseek-harness/packages/session/session-projection/node_modules/zod
+        version: link:../../../deepseek-harness/packages/session/session-projection/node_modules/zod
 
   src/llm:
     dependencies:
