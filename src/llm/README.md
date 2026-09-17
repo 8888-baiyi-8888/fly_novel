@@ -37,18 +37,4 @@ DeepSeek 适配器使用 HTTP `stream: false`，收到并校验完整响应后�
 
 DeepSeek 请求与响应字段参考 [官方 Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)。
 
-## 手动测试真实连接
 
-### 在 VS Code 中调试
-
-本机 `.vscode/launch.json` 配置了“调试 DeepSeek 手动测试”，启动前通过 `.vscode/tasks.json` 编译测试，使用源码映射在 TypeScript 文件中设置断点。这两个文件遵循当前 `.vscode/` 忽略规则，仅保存在本机。
-
-用 VS Code 打开整个项目文件夹，打开 `src/llm/tests/deepseek.manual.ts`，修改消息文本并保存。在调用 `callConfiguredLlm` 的行和输出结果的 `console.log` 行左侧单击，设置红色断点。按 Ctrl+Shift+D，在上方选择“调试 DeepSeek 手动测试”，按 F5 启动。
-
-黄色行是即将执行的语句。F10 执行当前行，F11 进入函数，Shift+F11 返回调用方，F5 继续到下一个断点，Shift+F5 停止调试。在结果输出行暂停时，悬停 `text` 或在“监视”中添加 `text` 查看模型回复；程序输出显示在“调试控制台”。每次重新启动都会发起真实请求。配置读取与终端测试相同，无需另填密钥。
-
-### 在终端中运行
-
-测试复用应用已有的配置方式：从 APP_HOME/settings.json 读取地址、模型和凭据引用，从 .credentials.json 取得密文，再用已有 .encryption-key 按需解密。配置方法见 [配置说明](../config/README.md)，不需要额外的环境变量文件，不要重新生成已有密钥。
-
-在项目根目录执行 `pnpm run test:deepseek`，命令编译后运行 src/llm/tests/deepseek.manual.ts，发送该文件中配置的消息文本并显示模型回复。它会调用真实 API；pnpm test 不运行此手动测试。失败时返回非零退出码，Ctrl+C 可退出。测试不修改配置、密钥和凭据文件。
