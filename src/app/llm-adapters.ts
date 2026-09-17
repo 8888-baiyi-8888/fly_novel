@@ -1,4 +1,4 @@
-import { DeepSeekAdapter } from '../llm/deepseek';
+import { DeepSeekAdapter } from '../llm/adapters/deepseek';
 import type { LlmAdapter } from '../llm/adapter';
 
 interface AdapterConnection {

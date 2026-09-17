@@ -1,7 +1,7 @@
-import { LlmAdapter } from './adapter';
-import { LlmError } from './error';
-import type { ReasoningEffortId, ToolCallId } from './brand';
-import type { ContentBlock, FinishReason, GenerateOptions, LlmResolvedModelInfo, StreamChunk, TokenUsage } from './types';
+import { LlmAdapter } from '../adapter';
+import { LlmError } from '../error';
+import type { ReasoningEffortId, ToolCallId } from '../brand';
+import type { ContentBlock, FinishReason, GenerateOptions, LlmResolvedModelInfo, StreamChunk, TokenUsage } from '../types';
 
 /** 由应用提供连接信息；适配器不读取配置或解密凭据。 */
 export interface DeepSeekAdapterOptions {

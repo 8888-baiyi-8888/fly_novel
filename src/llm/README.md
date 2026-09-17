@@ -1,6 +1,6 @@
 # 大语言模型调用
 
-本模块与 `harness/` 平级，负责模型调用接口与提供商适配。`deepseek.ts` 提供继承 `LlmAdapter` 的 `DeepSeekAdapter`，构造时接收地址和 API Key，调用时接收统一的 `GenerateOptions`，不依赖 app、config 或 Harness，也不读取应用配置文件。
+本模块与 `harness/` 平级，负责模型调用接口与提供商适配。`adapters/deepseek.ts` 提供继承 `LlmAdapter` 的 `DeepSeekAdapter`，构造时接收地址和 API Key，调用时接收统一的 `GenerateOptions`，不依赖 app、config 或 Harness，也不读取应用配置文件。
 
 `app/call-llm.ts` 负责读取配置、按需解密凭据，按 `provider` 选择适配器工厂，创建 `LlmRuntime` 并注册适配器，通过运行时调用后在 finally 中注销路由。该便捷入口接收统一消息，聚合文本块并返回文本或 `null`；失败结束块转换为 `LlmError`。需要消费推理或工具调用的调用方应直接使用运行时的数据块。
 
@@ -17,7 +17,7 @@
 | `content.ts` | 文件路径说明和纯文本模型的图片占位转换。 |
 | `error.ts`、`adapter-failure.ts` | LLM 错误分类、参数校验和外部失败快照。 |
 | `deep-freeze.ts` | 冻结对象图，保留取消信号的可变状态。 |
-| `deepseek.ts` | DeepSeek 适配器：连接校验、统一消息转换、响应及用量解析。 |
+| `adapters/deepseek.ts` | DeepSeek 适配器：连接校验、统一消息转换、响应及用量解析。 |
 
 ## 运行时约定
 
@@ -33,8 +33,7 @@ DeepSeek 适配器使用 HTTP `stream: false`，收到并校验完整响应后�
 
 | 子目录 | 职责 |
 | --- | --- |
+| `adapters/` | 各供应商的具体适配器实现，共用根目录的 adapter.ts 契约。 |
 | `tests/` | 使用模拟适配器验证路由、模型默认值、流式失败、取消、清理、内容投影和错误快照。 |
 
 DeepSeek 请求与响应字段参考 [官方 Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)。
-
-

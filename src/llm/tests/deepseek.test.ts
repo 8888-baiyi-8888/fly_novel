@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
-import { DeepSeekAdapter } from '../deepseek';
+import { DeepSeekAdapter } from '../adapters/deepseek';
 import { LlmRuntime } from '../runtime';
 import type { GenerateOptions, StreamChunk } from '../types';
 import type { MessageId, ReasoningEffortId, ToolCallId } from '../brand';
