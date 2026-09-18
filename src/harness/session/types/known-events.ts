@@ -1,18 +1,9 @@
 /**
- * 由 `scripts/gen-persistence-catalog.ts` 生成——请勿手动编辑；运行
- * `pnpm run gen-persistence-catalog` 重新生成（通过
- * `pnpm run verify-persistence-catalog` 校验是否为最新内容，该检查属于 `doc-sync`）。
- * @module @deepseek-ai/dsh-session/known-event-types
- */
-
-/**
- * 本仓库中声明的所有 `SessionEventMap` 成员，即此构建可识别的事件词汇表。
+ * 沿用的已知事件词汇表，用于区分内置事件和未知事件；不表示本地已实现全部事件。
  * 持久化读取遇到集合外的事件类型时拒绝解释日志，除非事件携带信封中的 ignorable 标记（见 ./types.ts 的 SessionEvent.ignorable）。
  * 这类日志可能由较新的 Harness 写入，静默跳过必需事件会错误重建会话。
  * 仓库外的下游插件事件不在此列表中，持久化的 SessionEvent.ignorable 标记负责兼容。
  * 未采用事件名称注册机制，因为它无法判断省略是否安全，还会让读取结果依赖插件组装。
- * 设计依据见
- * `.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md`。
  */
 export const KNOWN_SESSION_EVENT_TYPES: ReadonlySet<string> = new Set([
   'agent-preset/selected',

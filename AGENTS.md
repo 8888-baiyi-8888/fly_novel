@@ -24,6 +24,9 @@ src/               源码目录，包含应用组装、LLM 调用、Agent 运行
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
+src/harness/session/types/       会话标识、头部与事件协议类型
+src/harness/session/validation/  会话头、历史事件与载荷边界校验
+src/harness/session/surface/     消息视图派生、元数据校验及状态转换
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件

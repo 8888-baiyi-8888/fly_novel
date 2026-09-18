@@ -1,22 +1,15 @@
 /**
- * Request-header reconstruction utilities over full `request/header` session
- * events. Anyone holding a session log reconstructs the {@link EpochHeader}
- * any request was built under by taking the latest canonical snapshot; the
- * loop uses the same equality helper to avoid logging unchanged headers.
- *
- * @module dsh-session/request-header
+ * 根据完整的 request/header 事件重建请求头，并比较规范化后的请求配置。
  */
 
 import { callConfigEquals } from '@fly-novel/llm'
 import type { ToolSchema } from '@fly-novel/llm'
-import type { EpochHeader, SessionEvent } from './types.ts'
+import type { EpochHeader, SessionEvent } from './types/index.ts'
 
 /**
- * Normalize a header to canonical form: an empty tool list becomes an absent
- * field, matching how requests are built. Logging, folding, and comparison use
- * this one representation.
- * @param header - the header to normalize (not mutated).
- * @returns the canonical header.
+ * 规范化请求头：省略空工具列表及未生效的适配器默认值标记。
+ * @param header - 待规范化的请求头，不修改输入。
+ * @returns 规范化后的请求头。
  */
 export function canonicalHeader(header: EpochHeader): EpochHeader {
   const adapterDefaults = header.adapterDefaults
@@ -29,16 +22,18 @@ export function canonicalHeader(header: EpochHeader): EpochHeader {
   }
 }
 
-/** Canonical JSON equality for tool schemas assembled through the same path. */
+/**
+ * 比较经同一路径组装的工具模式的 JSON 表示。
+ */
 function sameSchema(a: ToolSchema, b: ToolSchema): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
 /**
- * Field-wise equality over canonical headers. Tool schemas compare in order.
- * @param a - one canonical header.
- * @param b - the other.
- * @returns whether config, adapter defaults, and tools all match.
+ * 逐字段比较规范化的请求头，工具模式按顺序比较。
+ * @param a - 第一个规范化请求头。
+ * @param b - 第二个规范化请求头。
+ * @returns 配置、适配器默认值及工具模式全部一致时返回 true。
  */
 export function headerEquals(a: EpochHeader, b: EpochHeader): boolean {
   if (
@@ -52,13 +47,10 @@ export function headerEquals(a: EpochHeader, b: EpochHeader): boolean {
 }
 
 /**
- * Fold the header events of a log (or any prefix) into the
- * {@link EpochHeader} in force after the last snapshot. Non-header events are
- * skipped. This is the pure offline reconstruction path; the live session
- * tracks the same fold incrementally.
- * @param events - session events in log order.
- * @param from - a previously folded state to continue from.
- * @returns the latest canonical header, or undefined when none exists yet.
+ * 按日志顺序读取请求头事件，跳过其他事件，得到最新生效的请求头。
+ * @param events - 按日志顺序排列的会话事件。
+ * @param from - 可选的已有折叠结果，用于继续增量处理。
+ * @returns 最新的规范化请求头；尚无请求头时返回 undefined。
  */
 export function foldRequestHeader(events: readonly SessionEvent[], from?: EpochHeader): EpochHeader | undefined {
   let state = from
