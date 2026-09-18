@@ -5,6 +5,7 @@
     "outDir": "dist",
     "noEmit": false,
     "paths": {}
+
   },
   "include": ["**/*.ts"],
   "exclude": ["tests", "dist", "node_modules"]

@@ -28,6 +28,8 @@ pnpm test          # 编译并运行 src/*/tests/ 下的测试
 
 ## 本地工作区包
 
+相对导入支持 `.ts` 后缀，例如 `import { value } from './types.ts'`；编译时通过 `rewriteRelativeImportExtensions` 将输出路径改写为 `.js`。工作区包仍使用 `@fly-novel/llm` 等包名导入。
+
 `pnpm-workspace.yaml` 登记 `src/harness`、`src/llm` 和 `src/util` 三个私有包，依赖通过 `workspace:*` 引用。安装依赖后，跨模块使用公共入口：
 
 ```ts
