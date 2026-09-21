@@ -14,3 +14,12 @@ export type BrandedNumber<B extends string> = number & { readonly [BRAND]: B }
 export function brandNumber<T extends BrandedNumber<string>>(value: number | T): T {
   return value as T
 }
+
+/**
+ * Apply a compile-time string brand without changing the value.
+ * @param value - string admitted by the domain that owns the target brand.
+ * @returns the same string with the requested compile-time brand.
+ */
+export function brandString<T extends Branded<string>>(value: string | T): T {
+  return value as T
+}

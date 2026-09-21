@@ -1,6 +1,8 @@
 export { deepFreeze } from './deep-freeze'
 export type { Branded,BrandedNumber } from './brand'
-export {brandNumber} from './brand'
+export {brandNumber,brandString} from './brand'
+export {randomUUID} from './crypto'
+
 /** 可以通过 JSON 进行无损序列化与反序列化（round-trip）的值。 */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 /** Whether a candidate is one realm's intrinsic `Object.prototype`. */

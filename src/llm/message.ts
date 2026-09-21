@@ -1,6 +1,6 @@
 import type { MessageId, ToolCallId} from './brand'
 import type { ContentBlock, ToolResultBlock} from './types'
-import { deepFreeze } from '@fly-novel/util'
+import { deepFreeze,brandString, randomUUID} from '@fly-novel/util'
 /** 助手消息的供应商、模型身份和适配器私有重放数据。 */
 export interface AssistantProviderMetadata {
   /** 生成此消息的供应商路由。 */
@@ -83,6 +83,70 @@ export function freezeMessage<T extends Message>(message: T): T {
   return deepFreeze(structuredClone(message))
 }
 
+type NewMessage = Omit<Message, 'id'>
+type NewUserMessage = Omit<UserMessage, 'id' | 'role'>
+type NewAssistantMessage = Omit<AssistantMessage, 'id' | 'role' | 'source'> & {
+  readonly source: Omit<ModelMessageSource, 'kind'> & { readonly kind?: never }
+}
+/**
+ * 创建一条消息，自动生成唯一标识，并在对外提供前冻结消息。
+ * @param input - 新消息的完整信息，包括角色、内容和来源；不允许自行指定 id。
+ * @returns 带有新生成的唯一标识、不可修改的消息。
+ */
+export function createMessage<T extends NewMessage>(
+  input: T & { readonly id?: never },
+): T & Pick<Message, 'id'> {
+  return freezeMessage({
+    ...input,
+    id: brandString<MessageId>(randomUUID()),
+  })
+}
+
+/**
+ * 创建用户角色的消息，自动设置角色和唯一标识，并冻结消息。
+ * @param input - 新消息的完整内容和来源；不允许自行指定 id 或 role。
+ * @returns 角色为 user、带有唯一标识且不可修改的消息。
+ */
+export function createUserMessage<T extends NewUserMessage>(
+  input: T & { readonly id?: never; readonly role?: never },
+): T & Pick<UserMessage, 'id' | 'role'> {
+  return createMessage({
+    ...input,
+    role: 'user',
+  })
+}
+
+/**
+ * 创建模型生成的助手消息，设置角色和模型来源标记，自动生成唯一标识并冻结消息。
+ * @param input - 消息内容及来源信息，包括供应商、模型和可选的重放状态；不允许自行指定 id 或 role。
+ * @returns 角色为 assistant、带有模型来源信息和唯一标识且不可修改的消息。
+ */
+export function createAssistantMessage(
+  input: NewAssistantMessage & { readonly id?: never; readonly role?: never },
+): AssistantMessage {
+  return createMessage({
+    role: 'assistant',
+    content: input.content,
+    source: {
+      kind: 'model',
+      ...input.source,
+    },
+  })
+}
+
+/**
+ * 将组装完成的系统提示词创建为系统消息，自动生成唯一标识并冻结消息。
+ * @param text - 完整的系统提示词；空字符串表示没有系统提示词，消息内容为空数组。
+ * @param plugin - 负责组装该提示词的插件名称。
+ * @returns 角色为 system、带有插件来源信息和唯一标识且不可修改的消息。
+ */
+export function createSystemMessage(text: string, plugin: string): SystemMessage {
+  return createMessage({
+    role: 'system',
+    content: text.length === 0 ? [] : [{ type: 'text', text }],
+    source: { kind: 'plugin', plugin },
+  })
+}
 /**
  * 共享消息表示（shared message representation）中针对系统角色（system-role）
  * 的一种特化类型：
