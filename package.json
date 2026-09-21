@@ -2,6 +2,7 @@
   "name": "fly_novel",
   "version": "1.0.0",
   "description": "fly_novel TypeScript project",
+  "packageManager": "pnpm@11.25.0",
   "directories": {
     "doc": "docs"
   },
