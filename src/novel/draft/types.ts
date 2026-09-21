@@ -5,10 +5,13 @@
  * 字段对齐《小说级开发工作流文档-v2》节点 N1 的五类草案结构：
  *   Basics（书名/题材/平台/目标章节数/单章字数/语言）
  *   World（世界前提/补充设定）
- *   Characters（主角/配角）
+ *   Characters（主角们/配角）
  *   Conflict（核心冲突/简介/作者意图）
  *   Structure（分卷大纲/当前重点/创作约束）
  * 外加 openQuestions（待澄清问题）与 rawSummary（原文摘要）。
+ *
+ * 版本说明：schemaVersion=2 起支持「多主角」（protagonists 数组），
+ * 单主角文也写为长度为 1 的数组；v1 的 protagonist 字段在解析时自动并入数组。
  */
 
 /** 主角草案（只记录相对稳定的属性；当前位置、伤势等动态信息属于运行状态）。 */
@@ -38,13 +41,17 @@ export interface SupportingCastDraft {
 
 /** 结构化创意草案。 */
 export interface CreativeDraft {
-  /** 草案 schema 版本，未来格式变化时用于迁移判断。 */
-  schemaVersion: 1;
+  /** 草案 schema 版本，未来格式变化时用于迁移判断。v2：多主角数组。 */
+  schemaVersion: 2;
   /** 书名；用户未定时为 undefined。 */
   title?: string;
   /** 题材，如「都市修仙」，至少一个。 */
   genre: string[];
-  protagonist?: ProtagonistDraft;
+  /**
+   * 主角们（数组，可多主角/双女主/群像；单主角也写为 [主角]）。
+   * v1 的 protagonist（单数）在解析时自动并入本数组。
+   */
+  protagonists?: ProtagonistDraft[];
   supportingCast?: SupportingCastDraft[];
   /** 世界前提：一句话说明这个世界是什么样（World.worldPremise）。 */
   worldPremise?: string;

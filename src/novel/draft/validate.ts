@@ -27,8 +27,20 @@ function requireString(value: unknown, field: string): string {
   return value;
 }
 
+/**
+ * 原版：空字符串会被当作非法值，导致模型输出 ""（未填写的可选字段）时整份草案被拒。
+ * 保留注释，便于回切。
+ */
+// function optionalString(value: unknown, field: string): string | undefined {
+//   if (value === undefined) {
+//     return undefined;
+//   }
+//   return requireString(value, field);
+// }
+
+/** 可选字符串：undefined 或空字符串都视为「未填写」，返回 undefined。 */
 function optionalString(value: unknown, field: string): string | undefined {
-  if (value === undefined) {
+  if (value === undefined || (typeof value === "string" && value.length === 0)) {
     return undefined;
   }
   return requireString(value, field);
@@ -61,22 +73,53 @@ function optionalNumber(value: unknown, field: string): number | undefined {
   return value;
 }
 
-function parseProtagonist(value: unknown): ProtagonistDraft | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
+/**
+ * 原版：只解析单个主角（返回 undefined 表示缺省）。
+ * 保留注释，便于回切。v2 起主角是多主角数组，见 parseProtagonists。
+ */
+// function parseProtagonist(value: unknown): ProtagonistDraft | undefined {
+//   if (value === undefined) {
+//     return undefined;
+//   }
+//   if (typeof value !== "object" || value === null || Array.isArray(value)) {
+//     throw new DraftValidationError("字段 protagonist 必须是对象");
+//   }
+//   const obj = value as Record<string, unknown>;
+//   return {
+//     name: requireString(obj.name, "protagonist.name"),
+//     age: optionalNumber(obj.age, "protagonist.age"),
+//     identity: optionalString(obj.identity, "protagonist.identity"),
+//     traits: optionalStringArray(obj.traits, "protagonist.traits"),
+//     coreNeed: optionalString(obj.coreNeed, "protagonist.coreNeed"),
+//     coreFear: optionalString(obj.coreFear, "protagonist.coreFear"),
+//   };
+// }
+
+/** 解析单个主角对象（必填版）：value 必须是对象，name 必填；prefix 用于错误信息定位。 */
+function parseProtagonistObject(value: unknown, prefix: string): ProtagonistDraft {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new DraftValidationError("字段 protagonist 必须是对象");
+    throw new DraftValidationError(`字段 ${prefix} 必须是对象`);
   }
   const obj = value as Record<string, unknown>;
   return {
-    name: requireString(obj.name, "protagonist.name"),
-    age: optionalNumber(obj.age, "protagonist.age"),
-    identity: optionalString(obj.identity, "protagonist.identity"),
-    traits: optionalStringArray(obj.traits, "protagonist.traits"),
-    coreNeed: optionalString(obj.coreNeed, "protagonist.coreNeed"),
-    coreFear: optionalString(obj.coreFear, "protagonist.coreFear"),
+    name: requireString(obj.name, `${prefix}.name`),
+    age: optionalNumber(obj.age, `${prefix}.age`),
+    identity: optionalString(obj.identity, `${prefix}.identity`),
+    traits: optionalStringArray(obj.traits, `${prefix}.traits`),
+    coreNeed: optionalString(obj.coreNeed, `${prefix}.coreNeed`),
+    coreFear: optionalString(obj.coreFear, `${prefix}.coreFear`),
   };
+}
+
+/** 解析主角数组（v2）：每项必须是对象、name 必填；undefined 或缺省视为未填写。 */
+function parseProtagonists(value: unknown): ProtagonistDraft[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new DraftValidationError("字段 protagonists 必须是数组");
+  }
+  return value.map((item, index) => parseProtagonistObject(item, `protagonists[${index}]`));
 }
 
 /** 校验配角数组：name 必填，identity/traits/relation 可选；返回规范化后的数组。 */
@@ -107,14 +150,29 @@ export function parseAndValidateDraft(input: unknown): CreativeDraft {
     throw new DraftValidationError("草案必须是 JSON 对象");
   }
   const obj = input as Record<string, unknown>;
-  if (obj.schemaVersion !== 1) {
-    throw new DraftValidationError(`不支持的草案版本：${String(obj.schemaVersion)}`);
+  if (obj.schemaVersion !== 1 && obj.schemaVersion !== 2) {
+    throw new DraftValidationError(`不支持的草案版本：${String(obj.schemaVersion)}（支持 1 和 2）`);
   }
+
+  // 主角解析：
+  // - v2：优先读 protagonists（复数）；若模型仍按旧名输出 protagonist（单数）数组，兜底迁移。
+  // - v1 迁移：单数 protagonist 对象并入数组；若 v1 误给数组，也按数组解析。
+  const protagonists =
+    obj.schemaVersion === 1
+      ? obj.protagonist !== undefined
+        ? Array.isArray(obj.protagonist)
+          ? parseProtagonists(obj.protagonist)
+          : [parseProtagonistObject(obj.protagonist, "protagonist")]
+        : undefined
+      : parseProtagonists(
+          obj.protagonists ?? (Array.isArray(obj.protagonist) ? obj.protagonist : undefined),
+        );
+
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     title: optionalString(obj.title, "title"),
     genre: requireStringArray(obj.genre, "genre"),
-    protagonist: parseProtagonist(obj.protagonist),
+    protagonists,
     supportingCast: parseSupportingCast(obj.supportingCast),
     worldPremise: optionalString(obj.worldPremise, "worldPremise"),
     setting: optionalStringArray(obj.setting, "setting"),

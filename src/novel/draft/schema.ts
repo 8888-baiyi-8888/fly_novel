@@ -1,9 +1,9 @@
 /** 创意草案的结构化输出描述（供提示词与模型调用契约使用）。 */
 export const DRAFT_JSON_DESCRIPTION = `输出 JSON 对象，字段如下：
-- schemaVersion: 数字，固定 1
-- title: 书名（字符串；未定可不填）
+- schemaVersion: 数字，固定 2
+- title: 书名（字符串；未定可不填，不要输出空字符串）
 - genre: 题材数组，至少一个元素，如 ["都市","隐龙流"]
-- protagonist: 主角对象（可选）：{ name: 姓名, age: 年龄(可选), identity: 身份/职业(可选), traits: 长期性格数组(可选), coreNeed: 核心需求(可选), coreFear: 核心恐惧(可选) }
+- protagonists: 主角们数组（可选），支持单主角/双主角/群像，每项 { name: 姓名, age: 年龄(可选), identity: 身份/职业(可选), traits: 长期性格数组(可选), coreNeed: 核心需求(可选), coreFear: 核心恐惧(可选) }；单主角也写成数组，如 [{ "name": "叶凡" }]；两个主角就写两项
 - supportingCast: 配角数组（可选）：[{ name: 姓名, identity: 身份/定位(可选), traits: 长期性格数组(可选), relation: 与主角关系(可选) }]
 - worldPremise: 世界前提（字符串，可选）——一句话说明这个世界是什么样
 - setting: 世界观要点/补充设定数组（可选）

@@ -7,16 +7,63 @@ import { EXAMPLE_DRAFT, EXAMPLE_DRAFT_JSON } from "./example";
 
 test("合法草案对象通过校验并规范化", () => {
   const draft = parseAndValidateDraft(JSON.parse(EXAMPLE_DRAFT_JSON));
-  assert.equal(draft.schemaVersion, 1);
+  assert.equal(draft.schemaVersion, 2);
   assert.deepEqual(draft.genre, EXAMPLE_DRAFT.genre);
-  assert.equal(draft.protagonist?.name, "叶凡");
+  assert.equal(draft.protagonists?.[0]?.name, "叶凡");
+});
+
+test("多主角数组通过校验（双女主场景）", () => {
+  const draft = parseAndValidateDraft(
+    JSON.parse(
+      JSON.stringify({
+        schemaVersion: 2,
+        genre: ["都市", "职场"],
+        tone: ["现实慢热"],
+        rawSummary: "x",
+        protagonists: [
+          { name: "林小满", age: 22, identity: "应届生", coreNeed: "摆脱自我否定" },
+          { name: "沈砚", age: 32, identity: "创意总监", coreNeed: "学会信任" },
+        ],
+      }),
+    ),
+  );
+  assert.equal(draft.protagonists?.length, 2);
+  assert.equal(draft.protagonists?.[0]?.name, "林小满");
+  assert.equal(draft.protagonists?.[1]?.name, "沈砚");
+});
+
+test("v1 草案自动迁移：单数 protagonist 并入 protagonists 数组", () => {
+  const draft = parseAndValidateDraft({
+    schemaVersion: 1,
+    genre: ["都市"],
+    tone: ["信息差"],
+    rawSummary: "x",
+    protagonist: { name: "叶凡", identity: "龙王殿殿主" },
+  });
+  assert.equal(draft.schemaVersion, 2);
+  assert.equal(draft.protagonists?.length, 1);
+  assert.equal(draft.protagonists?.[0]?.name, "叶凡");
+  assert.equal(draft.protagonists?.[0]?.identity, "龙王殿殿主");
+});
+
+test("模型误输出单数 protagonist 数组也能兜底并入（不丢主角）", () => {
+  const draft = parseAndValidateDraft({
+    schemaVersion: 2,
+    genre: ["都市"],
+    tone: ["信息差"],
+    rawSummary: "x",
+    protagonist: [{ name: "林小满" }, { name: "沈砚" }],
+  });
+  assert.equal(draft.protagonists?.length, 2);
+  assert.equal(draft.protagonists?.[0]?.name, "林小满");
+  assert.equal(draft.protagonists?.[1]?.name, "沈砚");
 });
 
 test("新字段（运行参数/作者意图/配角）通过校验并保留", () => {
   const draft = parseAndValidateDraft(
     JSON.parse(
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         genre: ["都市"],
         tone: ["信息差"],
         rawSummary: "x",
@@ -44,18 +91,43 @@ test("新字段（运行参数/作者意图/配角）通过校验并保留", () 
   assert.equal(draft.supportingCast?.[0]?.relation, "妻子");
 });
 
+test("空字符串 title 视为未填写，不报错", () => {
+  const draft = parseAndValidateDraft({
+    schemaVersion: 2,
+    genre: ["都市"],
+    tone: ["信息差"],
+    rawSummary: "x",
+    title: "",
+  });
+  assert.equal(draft.title, undefined);
+});
+
 test("可选字段缺失时返回 undefined（不报错）", () => {
-  const draft = parseAndValidateDraft({ schemaVersion: 1, genre: ["都市"], tone: ["信息差"], rawSummary: "x" });
+  const draft = parseAndValidateDraft({ schemaVersion: 2, genre: ["都市"], tone: ["信息差"], rawSummary: "x" });
   assert.equal(draft.platform, undefined);
-  assert.equal(draft.protagonist, undefined);
+  assert.equal(draft.protagonists, undefined);
   assert.equal(draft.supportingCast, undefined);
+});
+
+test("protagonists 项缺 name 时校验失败", () => {
+  assert.throws(
+    () =>
+      parseAndValidateDraft({
+        schemaVersion: 2,
+        genre: ["都市"],
+        tone: ["信息差"],
+        rawSummary: "x",
+        protagonists: [{ identity: "没有名字" }],
+      }),
+    DraftValidationError,
+  );
 });
 
 test("supportingCast 项缺 name 时校验失败", () => {
   assert.throws(
     () =>
       parseAndValidateDraft({
-        schemaVersion: 1,
+        schemaVersion: 2,
         genre: ["都市"],
         tone: ["信息差"],
         rawSummary: "x",
@@ -67,7 +139,7 @@ test("supportingCast 项缺 name 时校验失败", () => {
 
 test("缺少必填字段时校验失败", () => {
   assert.throws(
-    () => parseAndValidateDraft({ schemaVersion: 1, genre: ["都市"], tone: [], rawSummary: "" }),
+    () => parseAndValidateDraft({ schemaVersion: 2, genre: ["都市"], tone: [], rawSummary: "" }),
     DraftValidationError,
   );
 });
@@ -76,7 +148,7 @@ test("版本不匹配时校验失败", () => {
   assert.throws(
     () =>
       parseAndValidateDraft({
-        schemaVersion: 2,
+        schemaVersion: 3,
         genre: ["都市"],
         tone: ["信息差"],
         rawSummary: "x",

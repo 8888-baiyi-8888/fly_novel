@@ -8,9 +8,9 @@ export const EXAMPLE_RAW_INPUT = `我想写一本都市隐龙流小说。主角�
 反噬江家，中期重新聚拢旧部势力，最后揭开灭门真相。不要虐主、不要送女、
 不要把反派写成无脑降智。目标平台番茄，100 章左右完结。`;
 
-/** 演示/测试用：与 EXAMPLE_DRAFT_JSON 对应的规范化草案对象（《隐龙》，含 N1 全部五类字段）。 */
+/** 演示/测试用：与 EXAMPLE_DRAFT_JSON 对应的规范化草案对象（《隐龙》，含 N1 全部五类字段，v2 多主角数组）。 */
 export const EXAMPLE_DRAFT: CreativeDraft = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   title: "隐龙",
   genre: ["都市", "隐龙流"],
   platform: "番茄",
@@ -19,13 +19,15 @@ export const EXAMPLE_DRAFT: CreativeDraft = {
   language: "zh",
   worldPremise:
     "当代都市，江氏贸易是本地龙头企业；龙王殿是离岸世界的传说，公众不知其存在；五年前叶家雨夜灭门案已结案，真相不明。",
-  protagonist: {
-    name: "叶凡",
-    identity: "上门女婿，表面身份江氏贸易小职员，真实身份龙王殿殿主",
-    traits: ["谨慎", "克制", "不做无把握的暴露"],
-    coreNeed: "查清五年前灭门案真相",
-    coreFear: "身份暴露",
-  },
+  protagonists: [
+    {
+      name: "叶凡",
+      identity: "上门女婿，表面身份江氏贸易小职员，真实身份龙王殿殿主",
+      traits: ["谨慎", "克制", "不做无把握的暴露"],
+      coreNeed: "查清五年前灭门案真相",
+      coreFear: "身份暴露",
+    },
+  ],
   supportingCast: [
     { name: "苏晴", identity: "江氏品牌部职员", relation: "妻子，不知叶凡真实身份" },
     { name: "赵芳", identity: "岳母", relation: "嫌弃女婿，正在逼离婚" },
