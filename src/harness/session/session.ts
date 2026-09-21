@@ -342,4 +342,42 @@ export class Session{
     return this.surfaceManager.deriveEventMessage(event)
   }
 
+  /**
+   * 按事件编号读取日志中的一条记录，不复制事件。
+   * @deprecated 为已有调用保留；新逻辑应读取已维护的状态，避免同步查询任意历史事件。
+   * @param seq 要读取的事件编号
+   * @returns 对应的事件；编号不存在时返回 undefined
+   */
+  eventAt(seq: SessionSeq): SessionEvent | undefined {
+    return this.log[seq]
+  }
+
+  /**
+   * 获取指定范围的只读事件快照，包含起始位置，不包含结束位置。
+   * 完整快照在追加事件前重复使用；后续追加不会改变已经返回的快照。
+   * @deprecated 为已有调用保留；新逻辑应读取已维护的状态，避免同步查询任意历史事件。
+   * @param fromSeq 起始偏移量，默认从日志开头读取
+   * @param toSeqExclusive 结束偏移量，不包含该位置，默认读取到当前日志末尾
+   * @returns 已冻结的事件数组，按日志顺序排列，事件本身沿用日志中的记录
+   */
+  snapshotEvents(
+    fromSeq: SessionLogOffset = SessionLogOffset(0),
+    toSeqExclusive: SessionLogOffset = this.seq,
+  ): readonly SessionEvent[] {
+    if (fromSeq === 0 && toSeqExclusive === this.log.length) {
+      this.eventsSnapshot ??= Object.freeze([...this.log])
+      return this.eventsSnapshot
+    }
+    return Object.freeze(this.log.slice(fromSeq, toSeqExclusive))
+  }
+
+  /**
+   * 获取当前会话自身的事件，跳过从父会话继承的事件前缀。
+   * @deprecated 为已有调用保留；新逻辑应读取已维护的状态，避免同步查询任意历史事件。
+   * @returns 按日志顺序排列的只读事件快照，包含继承边界之后的会话标记和新增事件
+   */
+  ownEvents(): readonly SessionEvent[] {
+    return this.snapshotEvents(this.inheritedEventCount)
+  }
+
 }

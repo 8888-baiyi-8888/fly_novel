@@ -8,6 +8,7 @@
 | --- | --- |
 | [index.ts](index.ts) | 公共入口，导出会话类型、Session、消息视图查询及请求头工具。 |
 | [types/index.ts](types/index.ts) | 事件映射、事件信封和消息视图操作类型；汇总导出其他类型。 |
+| [types/cordis.ts](types/cordis.ts) | 扩展 Cordis 的会话事件类型，由公共入口加载。 |
 | [types/identifiers.ts](types/identifiers.ts) | 会话标识、事件序号、日志偏移及其构造函数。 |
 | [types/headers.ts](types/headers.ts) | 会话头、请求头、路由元数据和恢复状态类型。 |
 | [session.ts](session.ts) | 完整的 Session 类，负责历史接收、事件追加和派生结果缓存。 |
@@ -29,6 +30,8 @@
 
 顶层入口导出事件协议类型与标识构造函数、`Session`、消息视图与投影类型、消息事件判断函数、`deriveEventMessage`、`foldSurface`，以及请求头工具 `canonicalHeader`、`headerEquals`、`foldRequestHeader`。
 
+入口同时加载 Cordis 的 `session/event` 类型声明，使监听器能够推断会话与事件参数类型。声明本身不建立存储关联，也不触发事件通知。
+
 ```ts
 import { Session, SessionId } from './index.ts'
 import type { SessionSurface } from './index.ts'
@@ -40,6 +43,8 @@ const surface: SessionSurface = session.surface
 `SurfaceManager`、内部校验函数、观察者关联和折叠状态转换不通过顶层入口导出。LLM 消息类型和其他模块的接口由各自所属模块提供。
 
 ## 状态与校验边界
+
+`Session.eventAt()`、`snapshotEvents()` 和 `ownEvents()` 提供同步历史读取，供已有调用使用，并保留弃用标记。完整快照在下一次追加前复用，已返回的快照不会随追加改变；`ownEvents()` 从继承前缀之后开始读取。新逻辑应优先读取已维护的状态，避免依赖完整历史常驻内存。
 
 会话创建头先复制、校验并冻结；恢复流程按约定提供独立持有或可共享的历史值。事件数据和消息视图元数据保持原有校验规则。消息视图先规划候选事件的状态转换，在日志接纳该事件后提交；完整重放与增量处理共用状态转换实现。
 
