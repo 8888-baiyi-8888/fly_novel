@@ -1,4 +1,5 @@
 import type { Branded } from '@fly-novel/util'
+import { brandString } from '@fly-novel/util'
 
 /** 适配器定义的模型推理强度标识。 */
 export type ReasoningEffortId = Branded<'ReasoningEffortId'>
@@ -14,3 +15,19 @@ export type AttachmentId = Branded<'AttachmentId'>
 
 /** 供应商返回的请求标识，用于跨模块诊断。 */
 export type ProviderRequestId = Branded<'ProviderRequestId'>
+
+
+/** 
+ * 一次模型流式调用尝试的唯一标识,在单个 Agent 生命周期内保持唯一。
+ */
+export type LlmAttemptId = Branded<'LlmAttemptId'>
+
+/**
+ * 为一个由循环（loop）管理的流式调用尝试标识符添加品牌类型。
+ *
+ * @param id - Agent 生命周期范围内使用的不透明标识符。
+ * @returns 添加了“调用尝试 ID”品牌类型后的同一个字符串。
+ */
+export function LlmAttemptId(id: string): LlmAttemptId {
+  return brandString<LlmAttemptId>(id)
+}
