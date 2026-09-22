@@ -25,6 +25,8 @@ src/*/tests/       按 src 一级模块归属的自动化测试，不在更深�
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件
+pnpm-workspace.yaml pnpm 工作区成员，登记 src/agents
+src/agents/        独立工作区包 @fly-novel/agents，公共入口与构建说明见 src/agents/README.md
 package.json       Node.js 项目配置、依赖与脚本
 README.md          项目介绍
 tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物

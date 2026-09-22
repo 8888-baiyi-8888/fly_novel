@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "CommonJS",
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "rootDir": "src",
     "noEmit": true,
     "strict": true,
@@ -11,8 +12,11 @@
     "skipLibCheck": true,
     "types": ["node"],
     "sourceMap": true,
-    "declaration": true
+    "declaration": true,
+    "paths": {
+      "@fly-novel/agents": ["./src/agents/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", ".test-dist"]
+  "exclude": ["**/node_modules", "**/dist", ".test-dist"]
 }

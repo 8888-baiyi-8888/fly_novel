@@ -6,11 +6,12 @@
     "doc": "docs"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm --filter @fly-novel/agents build && tsc -p tsconfig.build.json",
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
     "init-encryption-key": "pnpm run build && node dist/app/init-encryption-key.js",
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && node --test .test-dist/*/tests/**/*.test.js"
+    "typecheck": "pnpm --filter @fly-novel/agents typecheck && tsc -p tsconfig.json",
+    "build:tests": "pnpm --filter @fly-novel/agents build && tsc -p tsconfig.test.json",
+    "test": "pnpm run build:tests && node --test .test-dist/*/tests/**/*.test.js"
   },
   "repository": {
     "type": "git",
@@ -25,5 +26,8 @@
   "devDependencies": {
     "@types/node": "^22.20.2",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@fly-novel/agents": "workspace:*"
   }
 }
