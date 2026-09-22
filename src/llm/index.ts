@@ -1,6 +1,6 @@
 export { LlmAdapter, type PreparedAdapterCall } from './adapter'
 export { LlmRuntime } from './runtime'
-export { LlmError, LlmBaseError, type LlmErrorOptions } from './error'
+export { LlmError, LlmBaseError, errorChain, type LlmErrorOptions } from './error'
 export * from './types'
 export * from './brand'
 export * from './message'

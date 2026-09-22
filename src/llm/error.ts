@@ -114,3 +114,103 @@ export class LlmError extends LlmBaseError {
     })
   }
 }
+
+
+/**
+ * 将捕获到的异常值及其完整的 `cause`（原因）链、AggregateError（聚合错误）
+ * 中包含的成员一起渲染出来。
+ *
+ * 这样，像 undici 的 `TypeError: fetch failed` 这类传输层包装错误，
+ * 就能够展示其底层真正的失败原因，而不是将其掩盖。
+ *
+ * 普通的结构化失败对象会渲染其自身由数据提供的 `message`。
+ *
+ * 此函数仅用于诊断信息展示（例如消息、通知、日志）——
+ * 永远不要解析该函数返回的字符串来进行程序逻辑判断；
+ * 错误路由应基于 {@link HarnessError.code}。
+ *
+ * @param value - 捕获到的值（catch 子句中的类型为 `unknown`）。
+ *
+ * @returns 最外层的错误消息放在最前面，每一级 cause 使用 `: ` 追加。
+ *          如果 cause 的消息与包装层消息完全相同，则跳过该 cause，
+ *          避免重复。
+ *          AggregateError 中的成员会放在方括号 `[]` 中，
+ *          并使用 `; ` 连接。
+ */
+export function errorChain(value: unknown): string {
+  // 记录当前正在递归处理的路径（退出递归时会删除对应条目），
+  // 因此只有真正出现循环引用时才会被标记。
+  // 如果只是多个节点共享同一个 cause（菱形共享结构），
+  // 该 cause 仍然能够被完整渲染。
+  const path = new Set<unknown>()
+
+  const render = (current: unknown): string => {
+    if (path.has(current)) return '<循环的 cause>'
+
+    path.add(current)
+
+    try {
+      if (!(current instanceof Error)) {
+        if (typeof current === 'object' && current !== null) {
+          const descriptor = Object.getOwnPropertyDescriptor(current, 'message')
+
+          if (
+            descriptor !== undefined &&
+            'value' in descriptor &&
+            typeof descriptor.value === 'string'
+          ) {
+            return descriptor.value
+          }
+        }
+
+        return String(current)
+      }
+
+      const message = current.message === ''
+        ? current.name
+        : current.message
+
+      const members =
+        current instanceof AggregateError && current.errors.length > 0
+          ? ` [${current.errors.map(render).join('; ')}]`
+          : ''
+
+      const causeText =
+        current.cause === undefined || current.cause === null
+          ? ''
+          : render(current.cause)
+
+      // 类似下面这样的包装：
+      //
+      // `new HarnessError(String(value), code, { cause: value })`
+      //
+      // 包装层的 message 可能会与 cause 的内容完全重复；
+      // 如果再次渲染 cause，只会产生没有意义的重复信息。
+      const cause =
+        causeText === '' || causeText === message
+          ? ''
+          : `: ${causeText}`
+
+      return `${message}${members}${cause}`
+    } catch {
+      // 这里只会处理一些“恶意”或异常的类型转换 / 属性访问情况，
+      // 例如：
+      //
+      // - 非 Error 对象具有会抛出异常的 toString
+      // - 非 Error 对象具有会抛出异常的 Symbol.toPrimitive
+      // - Error 子类中的 message / name / cause / errors getter 会抛出异常
+      //
+      // 由于该渲染函数用于 UI 通知和日志，
+      // 因此绝不能让异常继续向外传播。
+      //
+      // 内层递归调用会自行捕获自己的异常，
+      // 所以只会让当前这个异常节点退化为无法渲染，
+      // 而不会导致整个错误链都无法显示。
+      return '<无法渲染的值>'
+    } finally {
+      path.delete(current)
+    }
+  }
+
+  return render(value)
+}
