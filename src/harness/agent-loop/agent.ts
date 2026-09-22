@@ -87,6 +87,29 @@ export class ReactLoopAgent implements Agent {
 	}
 
 	/**
+	 * 调用模型前，取出待处理消息、准备上下文，并让插件决定是否执行这一步。
+	 * @param tartget 本次步骤的输入领取目标：
+	 *  - next-turn 用于新轮次首步，领取一条下一轮消息及全部下一步消息
+	 *  - next-step 用于当前轮次后续步骤，仅领取全部下一步消息
+	 * @param position 这一步所属的轮次编号和步骤编号
+	 * @returns 是否允许执行；允许时，同时返回准备好的消息和提示词组装结果
+	 */
+	private async preStep(tartget: InboxTarget, position:{turn:number;step:number}): Promise<PreparedStep>{
+		// Agent必须已经进入允许状态，才能准备下一步。
+		if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
+
+		// 获取当前任务的取消信号，用来检查用户是否已经停止任务。
+		const signal = this.phase.abort.signal
+
+		const claimed = this.inbox.claim(tartget,position.turn)
+
+		// 收集当前 Agent 需要的提示词、工具定义等内容
+		const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))
+
+    
+	}
+
+	/**
 	 * 执行一个轮次，包括步骤准备、模型请求、工具执行和轮次收尾。一个轮次可以包含多个步骤：领取首步输入前先记录轮次开始。
 	 * 
 	 * @returns 正常结束后仍有待处理输入时返回 true，通知驱动继续下一轮；

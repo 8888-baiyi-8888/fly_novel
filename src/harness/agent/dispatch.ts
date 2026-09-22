@@ -130,3 +130,14 @@ export function agentEvents(ctx: Context, agent: Agent, carrier: Scoped<Agent> =
     },
   }
 }
+
+/**
+ * Build the prompt assembly context with agent and scope set together, so
+ * agent-scoped prompt and tool contributions cannot be silently omitted.
+ * @param agent - the agent the assembly is for.
+ * @param signal - the current turn's explicit control signal, when assembly belongs to a turn.
+ * @returns the context to pass to `assemble()`.
+ */
+export function assembleContextFor(agent: Agent, signal?: AbortSignal): AssembleContext {
+  return { agent, scope: agent, ...signal === undefined ? {} : { signal } }
+}
