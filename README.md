@@ -8,6 +8,8 @@
 - Node.js `v24.20.0`
 - pnpm `12.4.1`
 
+TypeScript 编译目标为 ES2023，源码可使用 `toReversed()` 等 ES2023 标准 API；构建和测试配置统一继承根目录 `tsconfig.json` 的设置。
+
 ### 安装依赖
 
 ```bash
@@ -27,6 +29,8 @@ pnpm test          # 编译并运行 src/*/tests/ 下的测试
 `tsconfig.json` 为编辑器和类型检查提供包含源码与测试的统一配置，不生成产物。`pnpm run build` 按依赖顺序构建工作区包到各包的 `dist/`，再将应用源码编译到根目录 `dist/`；正式构建排除测试。`pnpm run build:tests` 先构建工作区包，再通过 `tsconfig.test.json` 将源码和测试编译到 `.test-dist/`。
 
 ## 本地工作区包
+
+Agent 执行框架的开发顺序与阶段验收见 [ReactLoopAgent 分阶段开发计划](docs/modules/react-loop-agent-plan.md)。
 
 相对导入支持 `.ts` 后缀，例如 `import { value } from './types.ts'`；编译时通过 `rewriteRelativeImportExtensions` 将输出路径改写为 `.js`。工作区包仍使用 `@fly-novel/llm` 等包名导入。
 
