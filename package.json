@@ -10,8 +10,7 @@
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
     "init-encryption-key": "pnpm run build && node dist/app/init-encryption-key.js",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && node --test .test-dist/*/tests/**/*.test.js",
-    "test:deepseek": "tsc -p tsconfig.test.json && node .test-dist/llm/tests/deepseek.manual.js"
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/*/tests/**/*.test.js"
   },
   "repository": {
     "type": "git",
@@ -26,8 +25,5 @@
   "devDependencies": {
     "@types/node": "^22.20.2",
     "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "@deepseek-ai/cordis": "^4.0.2"
   }
 }

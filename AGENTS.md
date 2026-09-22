@@ -1,4 +1,4 @@
-﻿# AGENTS.md
+# AGENTS.md
 
 `fly_novel` 是软件开发项目。默认使用简体中文交流和编写文档，代码标识符遵循项目语言惯例。修改代码前先阅读 `README.md`、相关实现及测试；建立架构文档后，架构变更须先阅读该文档。子目录若有 `AGENTS.md`，同时遵循其适用规则。
 
@@ -20,9 +20,8 @@
 .agents/           Agent 决策记录目录，存放非简单变更的重要工程决定
 .fly-novel/        模型配置样例与本机配置，仅样例提交 Git（见 src/config/README.md）
 docs/              开发文档目录，存放架构、模块设计、开发流程、决策背景、接口约定和排障记录（见 docs/AGENTS.md）
-src/               源码目录，包含应用组装、LLM 调用、Agent 运行框架、工作流引擎和小说业务（见 src/README.md）
+src/               源码目录，包含应用入口、配置与凭据工具，以及工作流和小说业务目录说明（见 src/README.md）
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
-src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件

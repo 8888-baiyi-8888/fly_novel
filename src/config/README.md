@@ -17,29 +17,11 @@
 | [settings.example.json](../../.fly-novel/settings.example.json) | `settings.json` | URL、默认模型和凭据引用。 |
 | [.credentials.example.json](../../.fly-novel/.credentials.example.json) | `.credentials.json` | 加密凭据，由用户复制密文填写，不手填明文。 |
 
-程序只读取本地文件，不读取样例。样例提交 Git；真实配置和加密密钥均被忽略。不要把真实密钥填入样例。文件缺失、格式错误、无效地址或凭据解密失败会在请求前报错。
+程序只读取本地文件，不读取样例。样例提交 Git；真实配置和加密密钥均被忽略。不要把真实密钥填入样例。文件缺失、JSON 格式错误或配置结构无效时，读取函数报错。
 
 `src/config/settings.ts` 的 `readSettings()` 一次读取两个配置文件，返回 `{ settings, credentials }`：`settings` 包含全部普通配置，`credentials` 包含 refs 下的全部原样密文。它只检查 JSON 对象结构和凭据值类型，不读取加密密钥、不解密、不写文件，也不限定模型提供商。配置不要求 version 字段。添加其他模型配置不需要新增读取函数。
 
-`src/app/call-llm.ts` 按调用参数 `provider` 从 `settings[provider]` 取得模型设置并校验，使用时才读取加密密钥、解密对应 API Key，再用连接参数从 `src/app/llm-adapters.ts` 注册表创建适配器并注册到 `LlmRuntime`，通过运行时执行调用并在结束后注销路由；调用参数中的 `model` 可覆盖文件默认值。LLM 模块与 Harness 均不直接读取应用配置。目前没有自动保存接口，不承诺与 DeepSeek Harness 配置格式互通。
-
-### 供应商与模型的选择
-
-`settings.json` 的顶层键就是供应商标识，不需要在对象中再填写一个重复的 provider 字段。例如以下配置对应调用参数 `provider: "deepseek"`：
-
-```json
-{
-  "deepseek": {
-    "baseURL": "https://api.deepseek.com",
-    "model": "你的模型ID",
-    "credentialRef": "DEEPSEEK_API_KEY"
-  }
-}
-```
-
-调用方式为 `callConfiguredLlm({ provider: "deepseek", messages })`。model 可以在调用时覆盖；不传则采用该供应商的配置值。供应商标识区分大小写。现有 DeepSeek 配置不需要迁移，密文与加密密钥也无需修改。
-
-新增供应商时，在 settings.json 添加对应顶层配置，并在 `src/app/llm-adapters.ts` 登记其适配器工厂；只填写配置不能自动支持新协议。目前仅注册 deepseek，未知供应商会在读取和解密前报错。DeepSeek 专有的 `thinking` 可选配置位于 `settings.deepseek` 中，值为 enabled 或 disabled，省略时使用服务端默认值。
+样例使用供应商标识作为 `settings.json` 的顶层键，保存地址、模型和凭据引用。配置读取函数原样返回这些字段；项目当前没有模型调用入口。
 
 ### 开发时加密与解密
 
@@ -57,7 +39,7 @@ pnpm run credentials encrypt
 pnpm run credentials decrypt
 ```
 
-`encrypt` 输入 API Key 时以圆点 `•` 回显，回车后仅输出密文，由用户复制到 `.credentials.json` 的 `refs.DEEPSEEK_API_KEY`。`decrypt` 提示粘贴密文，同样以圆点回显，回车后显示明文。长输入仅显示光标附近的一行圆点，不截断实际值。两种操作都不写文件，也不自动读取凭据文件。命令不再接收引用名称。Ctrl+C 取消，不支持管道输入；不要将 API Key 放入命令行参数。解密时避免录屏、共享终端和日志收集，普通模型调用不会输出明文。
+`encrypt` 输入 API Key 时以圆点 `•` 回显，回车后仅输出密文，由用户复制到 `.credentials.json` 的 `refs.DEEPSEEK_API_KEY`。`decrypt` 提示粘贴密文，同样以圆点回显，回车后显示明文。长输入仅显示光标附近的一行圆点，不截断实际值。两种操作都不写文件，也不自动读取凭据文件。命令不再接收引用名称。Ctrl+C 取消，不支持管道输入；不要将 API Key 放入命令行参数。解密时避免录屏、共享终端和日志收集。
 
 手动填写的结构如下，密文占位文字必须替换为函数实际返回的完整字符串：
 
