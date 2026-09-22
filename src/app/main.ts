@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 import { MemoryModel } from "../harness/adapters/models/memory-model";
-import { CreativeDraftAgent, CreativeDraftError } from "../novel/draft/creative-draft-agent";
+import { CreativeDraftAgent, CreativeDraftError, ClarifyUserAnswer } from "../novel/draft/creative-draft-agent";
 import { EXAMPLE_DRAFT_JSON, EXAMPLE_RAW_INPUT } from "../novel/draft/example";
 import { ConfiguredLlmModel } from "./configured-model";
 import { INPUT_GUIDE, USAGE } from "./input-guide";
@@ -32,6 +33,7 @@ interface CliArgs {
   file?: string;
   model?: "memory" | "real";
   output?: string;
+  clarify?: boolean;
   help?: boolean;
 }
 
@@ -55,15 +57,46 @@ function parseArgs(argv: string[]): CliArgs {
     } else if (token === "--output" && value !== undefined) {
       args.output = value;
       i += 1;
+    } else if (token === "--clarify") {
+      args.clarify = true;
     } else if (token === "--help") {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--output <路径>、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--output <路径>、--clarify、--help）`,
       );
     }
   }
   return args;
+}
+
+/** CLI 澄清问答实现：打印问题列表，用 readline 读一行回答。 */
+function createCliAsker(): { ask: ClarifyUserAnswer; close: () => void } {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return {
+    ask: async (questions: string[]) => {
+      console.log("\n以下是草案待澄清的问题（输入「够了/停止/就这样」可提前结束）：");
+      questions.forEach((question, index) => console.log(`  ${index + 1}. ${question}`));
+      return new Promise<string>((resolve) =>
+        rl.question("你的回答：", (value) => resolve(value.trim())),
+      );
+    },
+    close: () => rl.close(),
+  };
+}
+
+async function runReal(args: CliArgs, rawInput: string) {
+  const agent = buildRealCreativeDraftAgent();
+  console.log("正在调用真实模型，请稍候（首次可能需要 30~90 秒）...");
+  if (args.clarify === true) {
+    const asker = createCliAsker();
+    try {
+      return await agent.createDraftWithClarification(rawInput, asker.ask);
+    } finally {
+      asker.close();
+    }
+  }
+  return agent.createDraft(rawInput);
 }
 
 async function main(): Promise<void> {
@@ -77,11 +110,9 @@ async function main(): Promise<void> {
   const rawInput =
     args.file !== undefined ? readFileSync(args.file, "utf8") : (args.input ?? EXAMPLE_RAW_INPUT);
 
-  const agent = args.model === "real" ? buildRealCreativeDraftAgent() : buildCreativeDraftAgent();
-  if (args.model === "real") {
-    console.log("正在调用真实模型，请稍候（首次可能需要 30~90 秒）...");
-  }
-  const draft = await agent.createDraft(rawInput);
+  const draft =
+    args.model === "real" ? await runReal(args, rawInput) : await buildCreativeDraftAgent().createDraft(rawInput);
+
   const json = JSON.stringify(draft, null, 2);
   console.log(json);
   if (args.output !== undefined) {

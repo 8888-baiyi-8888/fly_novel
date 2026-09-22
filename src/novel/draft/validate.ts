@@ -191,3 +191,35 @@ export function parseAndValidateDraft(input: unknown): CreativeDraft {
     rawSummary: requireString(obj.rawSummary, "rawSummary"),
   };
 }
+
+
+/** 澄清轮解析结果：questions 是需要用户回答的问题；draft 存在即表示模型已给出完整草案。 */
+export interface ClarificationTurn {
+  /** 待用户回答的问题；为空数组表示无需再问。 */
+  questions: string[];
+  /** 模型给出的完整草案（协议要求与 questions 互斥：有问题时 draft 为 null）。 */
+  draft?: CreativeDraft;
+}
+
+/**
+ * 解析并校验澄清轮输出（{ questions, draft } 包装结构）。
+ * - questions 必须是字符串数组（允许空）；
+ * - draft 为 null / 缺失时按"提问轮"处理，draft 为对象时按完整草案校验；
+ * - 若模型同时给出问题与草案（违规），仍接受草案并把问题留给调用方决定是否并入。
+ */
+export function parseClarificationTurn(input: unknown): ClarificationTurn {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new DraftValidationError("澄清轮输出必须是 JSON 对象");
+  }
+  const obj = input as Record<string, unknown>;
+  if (!Array.isArray(obj.questions)) {
+    throw new DraftValidationError("字段 questions 必须是数组");
+  }
+  if (!obj.questions.every((item) => typeof item === "string" && item.trim().length > 0)) {
+    throw new DraftValidationError("字段 questions 的每项必须是非空字符串");
+  }
+  const questions: string[] = obj.questions.map((item) => (item as string).trim());
+  const draft =
+    obj.draft === null || obj.draft === undefined ? undefined : parseAndValidateDraft(obj.draft);
+  return { questions, ...(draft === undefined ? {} : { draft }) };
+}

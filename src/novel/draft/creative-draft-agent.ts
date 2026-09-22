@@ -1,8 +1,14 @@
-import { ChatRequest, ChatResponse, ModelClient } from "../../harness/model/contract";
-import { buildDraftMessages } from "./prompt";
-import { parseAndValidateDraft } from "./validate";
+import { ChatMessage, ChatRequest, ChatResponse, ModelClient } from "../../harness/model/contract";
+import {
+  buildClarifyAnswerMessage,
+  buildClarifyFinalMessage,
+  buildClarifyMessages,
+  buildClarifyQuestionsMessage,
+  buildDraftMessages,
+} from "./prompt";
+import { ClarificationTurn, parseAndValidateDraft, parseClarificationTurn } from "./validate";
 import { CreativeDraft } from "./types";
-import { DRAFT_JSON_DESCRIPTION } from "./schema";
+import { CLARIFY_JSON_DESCRIPTION, DRAFT_JSON_DESCRIPTION } from "./schema";
 
 export interface CreativeDraftAgentOptions {
   model: ModelClient;
@@ -20,6 +26,30 @@ export class CreativeDraftError extends Error {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** 澄清问答回调：接收问题清单，返回用户回答（由调用方决定交互载体，如 CLI readline）。 */
+export type ClarifyUserAnswer = (questions: string[]) => Promise<string>;
+
+export interface CreateDraftWithClarificationOptions {
+  /** 最多提问轮数，默认 3（达到后强制生成最终草案）。 */
+  maxRounds?: number;
+  /** 用户输入这些词视为提前结束，默认 ["够了","停止","就这样","不用了"]。 */
+  stopWords?: string[];
+}
+
+function isStopWord(answer: string, stopWords: string[]): boolean {
+  const trimmed = answer.trim();
+  return trimmed.length > 0 && stopWords.includes(trimmed);
+}
+
+/** 把"模型提问轮残留的问题"并入草案 openQuestions（去重，不修改已存在的问题）。 */
+function mergeRemainingQuestions(draft: CreativeDraft, questions: string[]): CreativeDraft {
+  if (questions.length === 0) return draft;
+  const existing = new Set(draft.openQuestions);
+  const added = questions.filter((question) => !existing.has(question));
+  if (added.length === 0) return draft;
+  return { ...draft, openQuestions: [...draft.openQuestions, ...added] };
 }
 
 /**
@@ -58,5 +88,71 @@ export class CreativeDraftAgent {
       }
     }
     throw new CreativeDraftError(`整理失败：${describeError(lastError)}`);
+  }
+
+  /** 澄清式整理：先问后生成，最多 maxRounds 轮提问，最后输出完整草案。 */
+  async createDraftWithClarification(
+    rawInput: string,
+    askUser: ClarifyUserAnswer,
+    options: CreateDraftWithClarificationOptions = {},
+  ): Promise<CreativeDraft> {
+    const maxRounds = options.maxRounds ?? 3;
+    const stopWords = options.stopWords ?? ["够了", "停止", "就这样", "不用了"];
+    const trimmed = rawInput.trim();
+    if (trimmed.length === 0) {
+      throw new CreativeDraftError("原始输入为空，无法整理创意草案");
+    }
+
+    const messages: ChatMessage[] = buildClarifyMessages(trimmed);
+    let rounds = 0;
+
+    for (;;) {
+      const turn = await this.callClarifyTurn(messages);
+      if (turn.draft !== undefined) {
+        return mergeRemainingQuestions(turn.draft, turn.questions);
+      }
+      if (rounds >= maxRounds) {
+        const finalTurn = await this.callClarifyTurn([...messages, buildClarifyFinalMessage()]);
+        if (finalTurn.draft === undefined) {
+          throw new CreativeDraftError("澄清达到最大轮数后模型仍未给出草案");
+        }
+        return mergeRemainingQuestions(finalTurn.draft, finalTurn.questions);
+      }
+      const answer = await askUser(turn.questions);
+      if (isStopWord(answer, stopWords)) {
+        const finalTurn = await this.callClarifyTurn([
+          ...messages,
+          buildClarifyQuestionsMessage(turn.questions),
+          buildClarifyAnswerMessage(answer),
+          buildClarifyFinalMessage(),
+        ]);
+        if (finalTurn.draft === undefined) {
+          throw new CreativeDraftError("用户提前结束但模型仍未给出草案");
+        }
+        return mergeRemainingQuestions(finalTurn.draft, finalTurn.questions);
+      }
+      messages.push(buildClarifyQuestionsMessage(turn.questions), buildClarifyAnswerMessage(answer));
+      rounds += 1;
+    }
+  }
+
+  /** 澄清轮模型调用：一次调用 + JSON 解析 + 澄清协议校验 + 失败重试。 */
+  private async callClarifyTurn(messages: ChatMessage[]): Promise<ClarificationTurn> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
+      try {
+        const request: ChatRequest = {
+          messages,
+          structured: { name: "clarification_turn", description: CLARIFY_JSON_DESCRIPTION },
+          temperature: 0.2,
+        };
+        const response = await this.model.chat(request);
+        const parsed: unknown = JSON.parse(response.content);
+        return parseClarificationTurn(parsed);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw new CreativeDraftError(`澄清轮整理失败：${describeError(lastError)}`);
   }
 }

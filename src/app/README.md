@@ -10,7 +10,7 @@
 
 当前已实现：
 
-- `main.ts`：CLI 入口，演示「创意草案整理」完整流程。参数：`--input <文本>` / `--file <路径>`（缺省使用示例输入）、`--model memory|real`（默认 memory；real 走项目正式 LLM 机制，当前供应商 qwen）、`--output <路径>`（草案保存到文件）、`--help`（用法与 N0 输入建议）。导出 `buildCreativeDraftAgent()` / `buildRealCreativeDraftAgent()` 供复用。
+- `main.ts`：CLI 入口，演示「创意草案整理」完整流程。参数：`--input <文本>` / `--file <路径>`（缺省使用示例输入）、`--model memory|real`（默认 memory；real 走项目正式 LLM 机制，当前供应商 qwen）、`--output <路径>`（草案保存到文件）、`--clarify`（进入多轮澄清：模型先提问最多 3 轮，用户回答后输出完整草案；仅 real 模式生效）、`--help`（用法与 N0 输入建议）。导出 `buildCreativeDraftAgent()` / `buildRealCreativeDraftAgent()` 供复用。
 - `configured-model.ts`：`ConfiguredLlmModel` 桥接——把 `ModelClient` 契约翻译为正式 LLM 机制调用（`src/config` 解密凭据 + `src/llm` 适配器路由 + `callConfiguredLlm`）。
 - `llm-adapters.ts`：供应商适配器工厂注册表（当前注册 `deepseek`、`qwen`）。
 - `call-llm.ts`：读取配置、按需解密凭据、按 provider 选择适配器并调用。
