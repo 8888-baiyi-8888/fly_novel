@@ -1,9 +1,9 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseAndValidateDraft, DraftValidationError } from "./validate";
-import { CreativeDraftAgent, CreativeDraftError } from "./creative-draft-agent";
+import { parseAndValidateDraft, DraftValidationError } from "../draft/validate";
+import { CreativeDraftAgent, CreativeDraftError } from "../draft/creative-draft-agent";
 import { MemoryModel } from "../../harness/adapters/models/memory-model";
-import { EXAMPLE_DRAFT, EXAMPLE_DRAFT_JSON } from "./example";
+import { EXAMPLE_DRAFT, EXAMPLE_DRAFT_JSON } from "../draft/example";
 
 test("合法草案对象通过校验并规范化", () => {
   const draft = parseAndValidateDraft(JSON.parse(EXAMPLE_DRAFT_JSON));

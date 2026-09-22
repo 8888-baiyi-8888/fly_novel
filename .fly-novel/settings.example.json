@@ -3,5 +3,11 @@
     "baseURL": "https://api.deepseek.com",
     "model": "deepseek-chat",
     "credentialRef": "DEEPSEEK_API_KEY"
+  },
+  "qwen": {
+    "baseURL": "https://<你的百炼兼容端点>/compatible-mode/v1",
+    "model": "qwen3.7-plus",
+    "credentialRef": "QWEN_API_KEY",
+    "responseFormat": "json_object"
   }
 }

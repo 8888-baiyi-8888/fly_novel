@@ -1,13 +1,12 @@
-import "dotenv/config";
 import { readFileSync, writeFileSync } from "node:fs";
 import { MemoryModel } from "../harness/adapters/models/memory-model";
-import { OpenAICompatibleModel } from "../harness/adapters/models/openai-compatible-model";
 import { CreativeDraftAgent, CreativeDraftError } from "../novel/draft/creative-draft-agent";
 import { EXAMPLE_DRAFT_JSON, EXAMPLE_RAW_INPUT } from "../novel/draft/example";
+import { ConfiguredLlmModel } from "./configured-model";
 import { INPUT_GUIDE, USAGE } from "./input-guide";
 
 /**
- * 组装「创意草案整理」应用 —— 内存模型版（演示/测试，原函数保留，可随时回切）。
+ * 组装「创意草案整理」应用 —— 内存模型版（演示/测试）。
  * 使用 MemoryModel 返回预置的《隐龙》草案 JSON，不发起真实网络请求。
  */
 export function buildCreativeDraftAgent(): CreativeDraftAgent {
@@ -16,30 +15,16 @@ export function buildCreativeDraftAgent(): CreativeDraftAgent {
 }
 
 /**
- * 组装「创意草案整理」应用 —— 真实模型版。
- * 配置从环境变量读取（.env 文件或系统环境变量），key 不写死在代码里。
- * 需要设置：FLY_NOVEL_API_KEY / FLY_NOVEL_BASE_URL / FLY_NOVEL_MODEL
- * 可选：FLY_NOVEL_TIMEOUT_MS（超时毫秒，默认 180000）
+ * 组装「创意草案整理」应用 —— 真实模型版（当前使用 qwen）。
+ * 走项目正式 LLM 机制：src/config 读取并解密凭据（settings.json + .credentials.json + .encryption-key），
+ * src/llm 适配器路由（OpenAICompatibleAdapter，由 src/app/llm-adapters.ts 注册）。
+ *
+ * 原实现（.env 明文 key + harness 自建 OpenAICompatibleModel）已弃用，见 git 历史；按需可回切：
+ *   const apiKey = process.env.FLY_NOVEL_API_KEY; ...
  */
 export function buildRealCreativeDraftAgent(): CreativeDraftAgent {
-  const apiKey = process.env.FLY_NOVEL_API_KEY;
-  const baseURL = process.env.FLY_NOVEL_BASE_URL;
-  const model = process.env.FLY_NOVEL_MODEL;
-  if (!apiKey || !baseURL || !model) {
-    throw new Error(
-      "缺少真实模型配置：请在 .env 或系统环境变量中设置 FLY_NOVEL_API_KEY / FLY_NOVEL_BASE_URL / FLY_NOVEL_MODEL",
-    );
-  }
-  const rawTimeout = process.env.FLY_NOVEL_TIMEOUT_MS;
-  const timeoutMs = rawTimeout !== undefined && rawTimeout.length > 0 ? Number(rawTimeout) : undefined;
-  const llm = new OpenAICompatibleModel({
-    apiKey,
-    baseURL,
-    model,
-    temperature: 0.2,
-    timeoutMs: timeoutMs !== undefined && Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined,
-  });
-  return new CreativeDraftAgent({ model: llm });
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
+  return new CreativeDraftAgent({ model });
 }
 
 interface CliArgs {

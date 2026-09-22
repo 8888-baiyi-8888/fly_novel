@@ -1,4 +1,4 @@
-# 配置读取与凭据加解密
+﻿# 配置读取与凭据加解密
 
 ## 一级子目录
 
@@ -8,7 +8,7 @@
 
 ## 配置文件
 
-应用数据目录固定为 `D:/mydata/GitHub/fly_novel/.fly-novel`，定义在 `src/config/paths.ts` 的 `APP_HOME` 中，与启动位置无关。迁移机器时需修改此常量。当前不读取环境变量。
+应用数据目录固定为 `E:/typescript/fly_novel/.fly-novel`，定义在 `src/config/paths.ts` 的 `APP_HOME` 中，与启动位置无关。迁移机器时需修改此常量。当前不读取环境变量。
 
 首次使用时，在该目录中复制两份样例（已有真实配置时不要覆盖）：
 

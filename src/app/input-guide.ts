@@ -35,9 +35,14 @@ export const INPUT_GUIDE = `
 /** 命令行用法说明。 */
 export const USAGE = `
 用法：node dist/app/main.js [选项]
-  --model memory|real   模型类型（默认 memory；real 需要 .env 配置）
+  --model memory|real   模型类型（默认 memory；real 走项目正式 LLM 机制）
   --input "文本"         直接传原始输入（短文本适用）
   --file <路径>          从 txt 文件读取原始输入（推荐，长文本）
   --output <路径>        把草案 JSON 保存到文件（可选，默认只打印到控制台）
   --help                 显示本帮助与 N0 输入建议
+
+真实模型（--model real）配置：不读取 .env，使用项目正式机制——
+  .fly-novel/settings.json 配置供应商（当前 qwen：baseURL / model / credentialRef / responseFormat）
+  .fly-novel/.credentials.json 存放加密凭据（先运行 pnpm run init-encryption-key 和 pnpm run credentials encrypt）
+  详见 src/config/README.md
 `;

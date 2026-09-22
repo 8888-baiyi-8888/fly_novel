@@ -1,4 +1,5 @@
 import { DeepSeekAdapter } from '../llm/adapters/deepseek';
+import { OpenAICompatibleAdapter } from '../llm/adapters/openai-compatible';
 import type { LlmAdapter } from '../llm/adapter';
 
 interface AdapterConnection {
@@ -16,6 +17,13 @@ const factories: Readonly<Record<string, AdapterFactory>> = {
       throw new Error('deepseek.thinking 必须为 enabled 或 disabled');
     }
     return new DeepSeekAdapter({ ...connection, thinking });
+  },
+  qwen(connection, config) {
+    const responseFormat = 'responseFormat' in config ? config.responseFormat : undefined;
+    if (responseFormat !== undefined && responseFormat !== 'json_object') {
+      throw new Error('qwen.responseFormat 必须为 json_object 或省略');
+    }
+    return new OpenAICompatibleAdapter({ ...connection, responseFormat });
   },
 };
 
