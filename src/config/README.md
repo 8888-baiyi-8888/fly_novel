@@ -21,7 +21,7 @@
 
 `src/config/settings.ts` 的 `readSettings()` 一次读取两个配置文件，返回 `{ settings, credentials }`：`settings` 包含全部普通配置，`credentials` 包含 refs 下的全部原样密文。它只检查 JSON 对象结构和凭据值类型，不读取加密密钥、不解密、不写文件，也不限定模型提供商。配置不要求 version 字段。添加其他模型配置不需要新增读取函数。
 
-样例使用供应商标识作为 `settings.json` 的顶层键，保存地址、模型和凭据引用。配置读取函数原样返回这些字段；项目当前没有模型调用入口。
+样例使用供应商标识作为 `settings.json` 的顶层键，保存地址、模型和凭据引用。配置读取函数原样返回这些字段。`pnpm run character-agent-example` 使用 `deepseek` 配置、对应加密凭据和 OpenAI 兼容的 LangChain 适配器创建模型，调试一次角色 Agent 的 Deep Agents 调用；该入口不保存角色状态或记忆。
 
 ### 开发时加密与解密
 

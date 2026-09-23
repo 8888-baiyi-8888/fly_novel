@@ -24,6 +24,7 @@ pnpm install
 pnpm run typecheck # 执行 TypeScript 类型检查，不生成构建产物
 pnpm run build     # 编译 TypeScript 源码到 dist/
 pnpm test          # 编译并运行 src/*/tests/ 下的测试
+pnpm run character-agent-example # 使用本机 DeepSeek 配置调试角色 Agent 模型调用
 ```
 
 `tsconfig.json` 为编辑器和类型检查提供包含源码与测试的统一配置，不生成产物；`tsconfig.build.json` 排除测试和独立包源码，将应用输出到 `dist/`；`tsconfig.test.json` 将源码和测试编译到 `.test-dist/`。

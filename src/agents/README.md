@@ -33,6 +33,8 @@ const evaluator = new EvaluatorAgent();
 
 应用启动时调用 `configureAgentRuntime({ resolveModel })` 注册 `modelId` 到 LangChain 模型对象的解析器。`CharacterAgent` 通过 `runtime/` 的 Deep Agents 调用函数执行模型请求；该函数不从包入口导出，不读取配置或凭据，并拒绝所有文件读写权限。
 
+可使用根项目的 `pnpm run character-agent-example` 手动调试当前角色模型调用。该入口负责读取本机 DeepSeek 配置与凭据，模型创建不属于 Agent 包。
+
 在仓库根目录执行：
 
 ```bash
