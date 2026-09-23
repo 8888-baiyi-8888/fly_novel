@@ -409,13 +409,13 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 
 ### 3.1 对外入口
 
-调用方通过 `@fly-novel/agents` 的公共入口创建一个绑定角色身份的 Agent。以下名称与参数是拟定接口，不代表当前包已导出这些符号。
+调用方通过 `@fly-novel/agents` 的公共入口创建一个绑定角色身份的 Agent。`CharacterAgent` 已导出以下构造参数、运行参数和类型。应用启动时通过 `configureAgentRuntime({ resolveModel })` 注册模型解析器；`run` 将 `modelId` 解析为 LangChain 模型对象并调用 Deep Agents。
 
 初始化只传入模型和角色定位所需的基本信息：
 
 | 参数 | 用途 |
 | --- | --- |
-| `modelName` | 使用的模型名称。模型适配、凭据和底层框架创建由 Agent 内部运行时处理。 |
+| `modelId` | 已注册模型的标识；省略时由 Agent 运行时选择默认模型。模型对象、凭据和 Deep Agents 创建由运行时处理。 |
 | `storyId` | 小说身份，用于定位小说数据与世界规则。 |
 | `branchId` | 剧情分支身份；省略时由应用确定当前默认分支。 |
 | `characterId` | 角色身份，用于加载该角色的档案、状态、记忆与性格。 |
@@ -428,22 +428,24 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 | `outputRequirements` | 本轮输出范围和形式，例如最多几句台词、允许几个动作、停止位置及是否需要内心活动。 |
 | `signal` | 可选取消信号。 |
 
-目标接口为 `new CharacterAgent({ modelName, storyId, branchId, characterId })` 和 `agent.run({ scene, outputRequirements }, { signal? })`。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
+接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId })` 和 `agent.run({ scene, outputRequirements }, { signal? })`。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
 
-这些内部材料由 Agent 根据初始化身份处理：加载当前快照，读取近期记忆及相关摘要，按场景线索唤回沉寂记忆，组装 Deep Agents 所需的模型与受限工具调用，校验输出，并将有效整轮结果按 F6、F9 保存。模型本身不会获得任意路径、任意记忆或文件写入权限；Agent 类只协调由应用预先配置的存储、模型和受限查询能力。
+当前 `run` 将 `scene` 和 `outputRequirements` 序列化后交给 Deep Agents，并将 `signal` 传给底层调用。模型由注册的 `resolveModel(modelId)` 返回；未注册解析器时调用失败。Deep Agents 文件读写权限全部拒绝。角色快照、三层记忆、性格提示、结构化结果校验和 F6、F9 持久化尚未接入。
+
+Deep Agents 的单次调用函数属于 Agent 共享运行时，不从 `@fly-novel/agents` 导出。它接收已解析的模型对象、场景提示和取消信号，不读取配置、凭据、角色文件或记忆，并拒绝所有文件读写权限。`CharacterAgent` 使用该函数；其他模板后续可复用它。
 
 执行超时、模型调用预算、检索材料预算和保存重试策略属于应用的 Agent 运行时配置，不暴露在每次角色调用参数中。它们在创建内部执行单元时校验并固定，提供商重试也计入预算，不额外执行隐式整轮重跑。精确 Deep Agents SDK 适配在实现时按安装版本验证。
 
 ### 3.2 创建、调用、采用和再次调用
 
-以下 TypeScript 是外部使用草案，不能直接运行。调用代码不接触 `novelService`、`memoryReader`、提交 ID 或快照版本；它们属于 `CharacterAgent` 的内部协作对象。应用启动时一次性完成模型、存储和 Deep Agents 运行时初始化，并将这些能力注册给 Agent 类，不能用此简化接口绕过应用初始化。
+以下 TypeScript 使用当前调用形式。调用代码不接触 `novelService`、`memoryReader`、提交 ID 或快照版本；它们属于 `CharacterAgent` 的内部协作对象。应用启动时一次性完成模型、存储和 Deep Agents 运行时初始化，并注册模型解析器，不能用此简化接口绕过应用初始化。
 
 ```ts
 import { CharacterAgent } from "@fly-novel/agents";
 
 async function runCharacterExample(scene: CharacterScene) {
   const agent = new CharacterAgent({
-    modelName: "deepseek-chat",
+    modelId: "default",
     storyId: "novel-river",
     branchId: "main",
     characterId: "character-lin-zhou",
@@ -464,7 +466,7 @@ async function runCharacterExample(scene: CharacterScene) {
     { signal: controller.signal },
   );
 
-  // result 已关联并保存本轮角色经历和状态；失败、取消或保存冲突会抛错。
+  // 当前返回 Deep Agents 的原始运行状态；角色经历、状态和持久化尚未接入。
   return result;
 }
 ```

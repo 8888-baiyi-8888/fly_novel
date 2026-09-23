@@ -4,18 +4,34 @@
 
 各模板的输入、处理逻辑与外部调用草案见[角色](../../docs/modules/agents/character-agent.md)、[导演](../../docs/modules/agents/director-agent.md)、[写作](../../docs/modules/agents/writer-agent.md)和[评估](../../docs/modules/agents/evaluator-agent.md)详细设计；文档示例不是当前可运行接口。
 
+## 源码布局
+
+- `core/`：所有 Agent 共享的抽象基类。
+- `runtime/`：应用注册的模型解析器，以及共享的受限 Deep Agents 调用。
+- `character/`、`director/`、`writer/`、`evaluator/`：各模板的业务实现与专属类型。
+- `tests/`：按包运行的自动化测试。
+
+模板之间不跨目录引用业务实现；它们仅通过 `core/` 与 `runtime/` 共享基础能力。`index.ts` 是唯一公共导出入口。
+
 ## 构建与引用
 
-公共入口导出抽象基类 `BaseAgent`，以及直接继承它的 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`EvaluatorAgent`。四个子类支持无参数实例化，仅提供类骨架，没有 `run` 方法、模型调用或文件读写。基础使用方式：
+公共入口导出抽象基类 `BaseAgent`，以及直接继承它的 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`EvaluatorAgent`。`CharacterAgent` 提供创建参数、`run(input, options)` 及相应类型，并通过应用启动时注册的模型解析器调用 Deep Agents。其余三个子类支持无参数实例化，仅提供类骨架，没有 `run` 方法、模型调用或文件读写。基础使用方式：
 
 ```ts
 import { CharacterAgent, DirectorAgent, WriterAgent, EvaluatorAgent } from "@fly-novel/agents";
 
-const character = new CharacterAgent();
+const character = new CharacterAgent({
+  modelId: "default",
+  storyId: "novel-river",
+  branchId: "main",
+  characterId: "character-lin-zhou",
+});
 const director = new DirectorAgent();
 const writer = new WriterAgent();
 const evaluator = new EvaluatorAgent();
 ```
+
+应用启动时调用 `configureAgentRuntime({ resolveModel })` 注册 `modelId` 到 LangChain 模型对象的解析器。`CharacterAgent` 通过 `runtime/` 的 Deep Agents 调用函数执行模型请求；该函数不从包入口导出，不读取配置或凭据，并拒绝所有文件读写权限。
 
 在仓库根目录执行：
 
