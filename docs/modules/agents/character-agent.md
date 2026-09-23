@@ -30,24 +30,24 @@ F1 至 F5、F7 和 F8 中的人物反应及状态变化由角色 Agent 自主产
 
 | 信息 | 必须包含什么 | 来源 |
 | --- | --- | --- |
-| `context` | 小说、人物、剧情版本、截止时点和状态版本。 | 调用方可信绑定，不能由模型指定。 |
+| `context` | 小说、人物、剧情版本、截止时点和状态版本。 | Agent 内部运行时根据初始化身份及已保存快照绑定，不能由模型或调用方场景覆盖。 |
 | `profile` | 姓名、身份和背景。过去的性格可以作为经历描述，不作为当前性格覆盖值。 | 初始设定和已保存档案。 |
 | `state` | 当前目标及轻重缓急、信念与人物底线、关系、能力、身体和情绪状态；重要判断附依据。 | 当前剧情版本的角色状态。 |
 | `knowledge` | 亲历或已知信息、他人转述和个人推测，区分来源与人物理解。 | 角色可知材料，不包含作者掌握但角色未知的真相。 |
 | `personality` | 当前性格与关系情境模式，结构见 F8。 | 当前人物快照。 |
 
-以上分组必须明确提供；无记录的集合可以为空，未知信息显式表达，不能把缺少字段当作角色失忆。关系是本人对特定对象的态度，不默认双方对称。
+以上分组由 Agent 内部运行时明确加载；无记录的集合可以为空，未知信息显式表达，不能把缺少字段当作角色失忆。关系是本人对特定对象的态度，不默认双方对称。调用方不传入这些快照字段。
 
 #### 处理逻辑
 
-1. 应用按 `context` 读取同一剧情版本和时点的档案与状态，拒绝不存在或无权访问的快照。
-2. 角色运行入口检查必需字段及类型。不同用途的 ID 使用专用类型；外部来源引用由所属读取入口检查，不能用类型断言替代验证。
+1. Agent 内部运行时按初始化身份读取同一剧情版本和时点的档案与状态，拒绝不存在或无权访问的快照。
+2. 角色运行入口检查已加载材料的必需字段及类型。不同用途的 ID 使用专用类型；外部来源引用由所属读取入口检查，不能用类型断言替代验证。
 3. 保留事实、转述与推测的区别。例如“苏晴说没有拿信”不能归一化为“苏晴没有拿信”，也不能附加角色不知道的真假判定。
 4. 为本次运行建立独立材料，不从复用 Agent 实例中继承人物数据，不给缺失背景自动补故事。
 
 #### 输出与状态影响
 
-得到本轮人物快照，交给 F4 使用。加载不改变正式档案；缺失必需资料时在模型调用前失败。人物不知道某件剧情事实属于合法认知状态，不等于输入错误。
+得到本轮人物快照，交给 F4 使用。加载不改变正式档案；内部资料缺失时在模型调用前失败。人物不知道某件剧情事实属于合法认知状态，不等于调用方输入错误。
 
 #### 验证
 
@@ -66,7 +66,7 @@ F1 至 F5、F7 和 F8 中的人物反应及状态变化由角色 Agent 自主产
 | 组装配置 | 近期范围、远期摘要范围、材料预算及检索容量。 | 应用配置入口校验，不在提示词中隐含固定天数。 |
 | 可选 `memoryReader` | 受限查询与按来源读取能力。 | 应用注入，供运行中补充历史；不提供时依靠显式记忆。 |
 
-应用准备这些材料后，在 `input.memories` 中提供 `recent`、`summaries`、`recalled` 三组；无内容时各传空列表。原始经历库、完整索引和组装配置不作为全量模型输入。
+Agent 内部运行时准备这些材料，并向底层框架组装 `memories.recent`、`memories.summaries`、`memories.recalled` 三组；无内容时各传空列表。原始经历库、完整索引和组装配置不作为全量模型输入，也不作为调用方运行参数。
 
 #### 处理逻辑
 
@@ -75,7 +75,7 @@ F1 至 F5、F7 和 F8 中的人物反应及状态变化由角色 Agent 自主产
 3. **保留仍有影响的事项。** 未兑现承诺和未解决冲突持续提供必要内容，直到事件明确解决。重要关系和信念保留在当前状态，历史细节不必永久加载全文。
 4. **生成较远摘要。** 对较远且与任务相关的经历提取参与者、事件、结果、人物理解和影响，附来源版本、覆盖范围与完整性说明。摘要是可重建材料，不覆盖原始记录，不能把推测写成事实或把尝试写成成功。
 5. **按线索唤回沉寂记忆。** 从当前可感知材料提取旧称呼、人物、地点、物件或事件主题，通过标识、别名和关键词索引关联旧事，结果放入 `recalled`。默认不加载沉寂正文或全量标题；不要求向量数据库，不保证未知别名或相似处境一定命中。
-6. **去重并控制材料量。** 相同来源去重，精确措辞需要核对时读取原文。超长场景仅压缩已经结束且不影响接续的片段；当前互动、未完成动作及必需反馈仍完整保留。必需材料超预算时明确失败，不能静默截断。
+6. **去重并控制材料量。** 相同来源去重，精确措辞需要核对时读取原文。超长场景仅压缩已经结束且不影响接续的片段；当前互动、未完成动作及必需反馈仍完整保留。必需材料超预算时明确失败，不能要求调用方手工裁剪记忆或静默截断。
 7. **运行中按需补充。** 模型可通过 `memoryReader` 提供检索内容或已有来源引用，身份与版本仍由程序绑定。返回来源、线索关联和截断标记；未命中返回空集合，查询失败报错，模糊命中不能强行确认事件或人物相同。
 
 摘要失效时不能跨版本复用。摘要生成失败后，只有原文能在预算内完整提供时才显式回退，否则报告准备失败。模型摘要若被引入，其生成与校验属于应用的记忆准备过程，预算不混入角色 `run`。
@@ -275,16 +275,16 @@ F1 至 F5、F7 和 F8 中的人物反应及状态变化由角色 Agent 自主产
 
 | 信息 | 必须包含什么 | 来源 |
 | --- | --- | --- |
-| 创建依赖 | 已初始化的 `model`，可选 `memoryReader`。 | 应用入口完成配置和凭据初始化后注入。 |
-| `execution` | 整次运行超时 `timeoutMs`、模型调用预算 `maxModelCalls`。 | 创建时解析并校验，提供商重试计入预算。 |
-| `input` | F1、F2、F3、F8 定义的人物、记忆、场景和任务。 | 每次独立提供。 |
+| 创建依赖 | 已初始化的模型适配器，可选 `memoryReader`。 | 应用入口完成配置和凭据初始化后，注册给 Agent 内部运行时。 |
+| `execution` | 整次运行超时 `timeoutMs`、模型调用预算 `maxModelCalls`。 | 内部运行时创建执行单元时解析并校验，提供商重试计入预算。 |
+| 内部执行输入 | F1、F2、F3、F8 定义的人物快照、记忆、场景和输出要求。 | Agent 每次根据初始化身份、调用方 `scene` 及 `outputRequirements` 独立组装。 |
 | `options.signal` | 可选取消信号。 | 调用方控制。 |
 | 模型输出与工具结果 | 待校验的外部数据。 | 本次执行，不信任类型断言。 |
 
 #### 处理逻辑
 
-1. 工厂校验依赖与执行配置；不在创建时绑定动态人物状态。正式启动遵循应用已声明入口。
-2. `run` 先检查取消和输入，失败时不启动模型；建立本次独立消息、预算与取消传播。
+1. 内部运行时校验已注册依赖与执行配置；角色实例在创建时绑定身份，不在实例中缓存动态人物状态。正式启动遵循应用已声明入口。
+2. `run` 先检查取消、场景和输出要求，再加载内部材料；任一步失败时不启动模型，并建立本次独立消息、预算与取消传播。
 3. 将材料交给 Deep Agents，按需调用受限查询工具。审计默认能力，不提供通用 shell、正式状态写入或其他角色自动调度。
 4. 执行期间累计调用预算，传播工具、模型与取消错误；不隐式整轮重跑，不把查询失败当成无记忆。
 5. 校验输出字段、封闭表现种类、本人可变字段及依据引用。字段或引用无效时整轮失败，不静默删除错误条目，不生成伪成功结果。
@@ -409,110 +409,73 @@ F1 至 F5、F7 和 F8 中的人物反应及状态变化由角色 Agent 自主产
 
 ### 3.1 对外入口
 
-调用方通过 `@fly-novel/agents` 的公共入口使用角色模板。以下名称与参数是拟定接口，不代表当前包已导出这些符号。
+调用方通过 `@fly-novel/agents` 的公共入口创建一个绑定角色身份的 Agent。以下名称与参数是拟定接口，不代表当前包已导出这些符号。
 
-| 入口或参数 | 用途 |
+初始化只传入模型和角色定位所需的基本信息：
+
+| 参数 | 用途 |
 | --- | --- |
-| `createCharacterAgent({ model, execution, memoryReader? })` | 注入已创建的模型、执行配置和可选记忆查询依赖，返回可复用执行单元。 |
-| `agent.run(input, { signal? })` | 根据当前人物、任务、记忆和场景生成候选结果，不保存正式经历。 |
-| `input.context` | 绑定小说、人物、剧情版本、截止时点和状态版本。 |
-| `input.profile / state / knowledge` | 提供人物快照和当前认知。 |
-| `input.memories` | 按 `recent`、`summaries`、`recalled` 提供近期原始记录、远期相关摘要及本次线索唤回记录。 |
-| `input.personality` | 提供当前性格和关系情境模式，由运行过程结合场景判断本轮表现。 |
-| `input.task / scene` | 提供本次任务和角色可感知场景，`scene.ongoingInteractions` 携带已采用但未完成的互动。 |
-| `result.basis / output` | 分别保存应用关联的依据版本和经过校验的业务结果。 |
+| `modelName` | 使用的模型名称。模型适配、凭据和底层框架创建由 Agent 内部运行时处理。 |
+| `storyId` | 小说身份，用于定位小说数据与世界规则。 |
+| `branchId` | 剧情分支身份；省略时由应用确定当前默认分支。 |
+| `characterId` | 角色身份，用于加载该角色的档案、状态、记忆与性格。 |
 
-`execution.timeoutMs` 表示整次运行超时，`execution.maxModelCalls` 表示本次运行允许的模型调用次数上限；底层提供商重试也须计入预算，不额外进行隐式整轮重跑。精确 SDK 适配在实现时按安装版本验证。
+运行时只传入当前小说生成所需的内容：
+
+| 参数 | 用途 |
+| --- | --- |
+| `scene` | 当前角色能看到、听到或已经获知的场景信息，以及本轮实际反馈。 |
+| `outputRequirements` | 本轮输出范围和形式，例如最多几句台词、允许几个动作、停止位置及是否需要内心活动。 |
+| `signal` | 可选取消信号。 |
+
+目标接口为 `new CharacterAgent({ modelName, storyId, branchId, characterId })` 和 `agent.run({ scene, outputRequirements }, { signal? })`。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
+
+这些内部材料由 Agent 根据初始化身份处理：加载当前快照，读取近期记忆及相关摘要，按场景线索唤回沉寂记忆，组装 Deep Agents 所需的模型与受限工具调用，校验输出，并将有效整轮结果按 F6、F9 保存。模型本身不会获得任意路径、任意记忆或文件写入权限；Agent 类只协调由应用预先配置的存储、模型和受限查询能力。
+
+执行超时、模型调用预算、检索材料预算和保存重试策略属于应用的 Agent 运行时配置，不暴露在每次角色调用参数中。它们在创建内部执行单元时校验并固定，提供商重试也计入预算，不额外执行隐式整轮重跑。精确 Deep Agents SDK 适配在实现时按安装版本验证。
 
 ### 3.2 创建、调用、采用和再次调用
 
-以下 TypeScript 是外部使用流程草案，不能直接运行。`createCharacterAgent` 和 `CharacterAgentOptions` 是拟定包接口；`novelService` 表示应用侧业务依赖，其 `loadCharacterInput` 和 `commitCharacterTurn` 仅用于说明加载与提交职责，不是 Agent 包导出，也不是已存在的业务 API。应用启动入口先完成配置、凭据和模型初始化，再调用此流程；不新增绕过初始化的启动方式。
-
-业务侧接口草案包含 `commitCharacterTurn({ characterRef, commitId, observedEvents, result })`、`getCharacterCommitStatus({ characterRef, commitId })` 和 `resumeCharacterCommit({ characterRef, commitId })`。后两者用于状态查询和恢复 F9 保存的冻结请求，不重新生成角色结果。以下示例的 `createCommitId` 是应用生成标识的占位函数，不是 Agent 包导出。
+以下 TypeScript 是外部使用草案，不能直接运行。调用代码不接触 `novelService`、`memoryReader`、提交 ID 或快照版本；它们属于 `CharacterAgent` 的内部协作对象。应用启动时一次性完成模型、存储和 Deep Agents 运行时初始化，并将这些能力注册给 Agent 类，不能用此简化接口绕过应用初始化。
 
 ```ts
-import {
-  createCharacterAgent,
-  type CharacterAgentOptions,
-} from "@fly-novel/agents";
+import { CharacterAgent } from "@fly-novel/agents";
 
-// 设计伪代码：novelService、characterRef、task、scene 由应用提供。
-async function runCharacterExample(dependencies: CharacterAgentOptions) {
-  const agent = createCharacterAgent(dependencies);
+async function runCharacterExample(scene: CharacterScene) {
+  const agent = new CharacterAgent({
+    modelName: "deepseek-chat",
+    storyId: "novel-river",
+    branchId: "main",
+    characterId: "character-lin-zhou",
+  });
   const controller = new AbortController();
-  // 应用的取消操作调用 controller.abort()。
 
-  // 1. 读取人物快照、可见场景并组装三层记忆，绑定当前版本。
-  // memories.recent 保留完整近期互动，summaries 提供相关旧事摘要，
-  // recalled 只包含本轮线索命中的历史；未命中时为空列表。
-  const input = await novelService.loadCharacterInput({
-    characterRef,
-    task: {
-      objective: "回应苏晴关于明天是否回来的询问",
-      scope: "最多两句台词和一个动作",
-      stopCondition: "回应后等待苏晴反应",
+  const result = await agent.run(
+    {
+      scene,
+      outputRequirements: {
+        scope: "回应苏晴关于明天是否回来的询问",
+        maxDialogueLines: 2,
+        maxActions: 1,
+        stopCondition: "回应后等待苏晴反应",
+        includeInnerActivity: true,
+      },
     },
-    scene,
-  });
+    { signal: controller.signal },
+  );
 
-  // 2. 生成候选；不自动写入正式记忆。
-  const result = await agent.run(input, { signal: controller.signal });
-
-  // 3. 提交前生成稳定 ID；失败重试和查询必须使用同一值。
-  const commitId = createCommitId();
-  // 校验并完整保存输入事件、本轮行为、私有体验和自主状态变化。
-  // 试演整体弃用时不提交；导演不挑选 stateChanges。
-  // 私有内容仅供授权视图使用。
-  const adopted = await novelService.commitCharacterTurn({
-    characterRef,
-    commitId,
-    observedEvents: input.scene.observedEvents,
-    result,
-  });
-
-  // 4. 提交成功后读取新快照，包含已采用经历、关系及仍未完成的互动。
-  // 若发生版本冲突或保存失败，上一步抛错，不进入下一轮。
-  const nextInput = await novelService.loadCharacterInput({
-    characterRef,
-    revision: adopted.revision,
-    task: nextTask,
-    scene: nextScene,
-  });
-
-  return agent.run(nextInput, { signal: controller.signal });
+  // result 已关联并保存本轮角色经历和状态；失败、取消或保存冲突会抛错。
+  return result;
 }
 ```
 
-应用组装 `dependencies` 时，提供已初始化的 `model`、经过配置读取的 `execution`，以及可选的 `memoryReader`。不注入 `memoryReader` 时，`loadCharacterInput` 提供足够的显式记忆。模型和记忆存储的具体适配不放入角色模板。
+Agent 内部在每次运行前按 F2 读取三层记忆、按 F8 加载性格模式，并将本轮 `scene` 中的可知事件与角色反应、状态变化一致保存。动作需要外部反馈时，本轮只保存实际发生的尝试；下一次 `run` 的 `scene` 提供实际反馈，Agent 再自行接续。调用方不需要传回上一轮结果、快照版本或未完成互动列表。
 
-应用启动时先按 F9 打开文件存储并恢复有效版本，再将其接入 `novelService` 和 `memoryReader`。`loadCharacterInput` 读取已提交快照与历史文件，`commitCharacterTurn` 将完整结果发布为一个新提交，成功返回的 `adopted.revision` 表示已经完成文件提交。应用退出时等待或终止未发布写入并释放存储锁；重启后继续使用同一数据根目录，不需要重新创建人物。初始化、打开与关闭均由应用声明的启动和退出流程管理，精确接口在业务实现时定义。
-
-`loadCharacterInput` 按 F2 的规则选择近期范围、摘要与线索检索结果，使用应用侧配置的材料预算。角色 `execution` 的超时和调用预算仍只约束 `run`；记忆准备失败时不进入 `run`。外部调用方不必逐条手工降层，也不新增“删除旧记忆”接口。
-
-`loadCharacterInput` 同时提供目标的轻重缓急、当前关系和未完成互动。例如上一轮夺信动作被采用但结果未明，下一轮从对应来源事件构造 `scene.ongoingInteractions`；新场景有对方躲闪的反馈时，角色据此调整行动。外部调用方式不变，不需要额外的“恢复动作”或“更新情绪”模型接口。
-
-示例第三步表示完整提交本轮结果。动作需要外部反馈时，本轮只保存实际发生的尝试和基于当前可知信息形成的变化，下一轮再接收环境或其他角色的回应；不能预先保存成功结果，也不能让导演指定角色如何理解反馈。第二轮返回值仍需同样校验与提交。运行错误向应用传播，由应用显示失败或取消，不能显示为已保存成功。
-
-提交回执丢失时，应用保留本轮 `commitId`，按以下流程恢复。`pending` 请求可能因其他提交产生版本冲突，恢复失败必须报告，不能静默换 ID 重试。`notFound` 仅在确实确认无活动写入、无请求和无正式提交时返回；原冻结请求仍在内存时可以原样重试，重启后若请求根本未落盘，则报告本轮无法恢复，不能伪造原结果。
-
-```ts
-// 设计伪代码：不重新调用 agent.run。
-const status = await novelService.getCharacterCommitStatus({ characterRef, commitId });
-switch (status.kind) {
-  case "committed":
-    return status.revision;
-  case "pending": {
-    const recovered = await novelService.resumeCharacterCommit({ characterRef, commitId });
-    return recovered.revision;
-  }
-  case "notFound":
-    throw new Error("未找到已提交记录或恢复请求，需要检查本轮保存情况");
-}
-```
+运行中的文件提交使用内部稳定提交 ID 和 F9 的冻结请求恢复。回执丢失、版本冲突或无法恢复会使 `run` 明确失败，不会向调用方暴露底层提交查询接口，也不会悄悄重新调用模型生成不同的角色反应。
 
 ### 3.3 配置特定关系下的性格表现
 
-以下是业务侧准备 `input.personality` 的 JSON 内容示意，不是现有配置文件。示例标识符为占位值，实际使用时必须对应有效人物和来源设定；场景与记忆也须提供角色可知的匹配依据。
+以下是 Agent 从角色文件读取的 `personality` 内容示意，不是调用方运行参数或现有配置文件。示例标识符为占位值，实际使用时必须对应有效人物和来源设定；Agent 结合当前 `scene` 和内部记忆判断是否满足条件。
 
 ```json
 {
@@ -540,7 +503,7 @@ switch (status.kind) {
 }
 ```
 
-调用仍使用 `agent.run(input, options)`，不需要调用方执行“切换到少年性格”的接口。相同人物快照分别传入“与苏晴私下重逢”“另一位旧友来访”“与苏晴在危险中碰面”三种场景，可评估是否仅在有依据的条件下出现旧有表现。更改场景测试时保持剧情版本和记忆对应，不把前一个弃用候选自动带入下一个场景。
+调用方只传入三种不同的场景，例如“与苏晴私下重逢”“另一位旧友来访”“与苏晴在危险中碰面”。Agent 读取同一角色的已保存快照和记忆后，判断是否仅在有依据的条件下出现旧有表现；调用方不执行“切换到少年性格”的接口，也不传入整个性格快照。
 
 ### 3.4 调用方能够得到的结果
 
