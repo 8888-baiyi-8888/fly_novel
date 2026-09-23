@@ -6,6 +6,17 @@
 
 ## 构建与引用
 
+公共入口导出抽象基类 `BaseAgent`，以及直接继承它的 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`EvaluatorAgent`。四个子类支持无参数实例化，仅提供类骨架，没有 `run` 方法、模型调用或文件读写。基础使用方式：
+
+```ts
+import { CharacterAgent, DirectorAgent, WriterAgent, EvaluatorAgent } from "@fly-novel/agents";
+
+const character = new CharacterAgent();
+const director = new DirectorAgent();
+const writer = new WriterAgent();
+const evaluator = new EvaluatorAgent();
+```
+
 在仓库根目录执行：
 
 ```bash
