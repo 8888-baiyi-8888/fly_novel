@@ -9,8 +9,10 @@ const RAW = "我想写一本都市隐龙流小说。";
 
 const questionsTurn = (questions: string[]): string =>
   JSON.stringify({ questions, draft: null });
+/** 问题全部澄清后的草案（openQuestions 清空，避免 EXAMPLE_DRAFT 自带的未决问题触发反问）。 */
+const cleanDraft = { ...EXAMPLE_DRAFT, openQuestions: [] };
 const draftTurn = (): string =>
-  JSON.stringify({ questions: [], draft: EXAMPLE_DRAFT });
+  JSON.stringify({ questions: [], draft: cleanDraft });
 
 test("澄清轮解析：有问题时 draft 为 null，问题清空时给出草案", () => {
   const asking = parseClarificationTurn({ questions: ["反派是谁？"], draft: null });
@@ -78,14 +80,40 @@ test("澄清：用户输入停止词后提前结束并生成草案", async () =>
   assert.equal(draft.schemaVersion, 2);
 });
 
-test("澄清：模型提问轮也给出草案时接受草案并把问题并入 openQuestions", async () => {
+test("澄清：模型提问轮违规给出草案时仍反问用户，满轮后接受草案并把问题并入 openQuestions", async () => {
   const model = new MemoryModel({
     responder: () => JSON.stringify({ questions: ["遗留问题"], draft: EXAMPLE_DRAFT }),
   });
+  let askedCount = 0;
   const agent = new CreativeDraftAgent({ model });
-  const draft = await agent.createDraftWithClarification(RAW, async () => "不会走到提问");
+  const draft = await agent.createDraftWithClarification(RAW, async () => {
+    askedCount += 1;
+    return "回答";
+  });
+  assert.equal(askedCount, 3);
   assert.equal(draft.schemaVersion, 2);
   assert.ok(draft.openQuestions.includes("遗留问题"));
+});
+
+test("澄清：模型给草案但 openQuestions 非空时反问用户，回答后输出干净草案", async () => {
+  let called = 0;
+  const model = new MemoryModel({
+    responder: () => {
+      called += 1;
+      return called === 1
+        ? JSON.stringify({ questions: [], draft: EXAMPLE_DRAFT })
+        : JSON.stringify({ questions: [], draft: cleanDraft });
+    },
+  });
+  const asked: string[][] = [];
+  const agent = new CreativeDraftAgent({ model });
+  const draft = await agent.createDraftWithClarification(RAW, async (questions) => {
+    asked.push(questions);
+    return "回答";
+  });
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].length, EXAMPLE_DRAFT.openQuestions.length);
+  assert.equal(draft.openQuestions.length, 0);
 });
 
 test("澄清：空输入直接失败，不调用模型", async () => {
@@ -101,6 +129,24 @@ test("澄清：空输入直接失败，不调用模型", async () => {
     name: "CreativeDraftError",
   });
   assert.equal(called, 0);
+});
+
+test("澄清：首次输出非法、重试带反馈后成功输出草案", async () => {
+  let called = 0;
+  const model = new MemoryModel({
+    responder: (request) => {
+      called += 1;
+      if (called === 1) {
+        return JSON.stringify({ questions: "不是数组", draft: null });
+      }
+      assert.equal(request.messages.length, 3); // 原 2 条 + 1 条重试反馈
+      return draftTurn();
+    },
+  });
+  const agent = new CreativeDraftAgent({ model });
+  const draft = await agent.createDraftWithClarification(RAW, async () => "回答");
+  assert.equal(called, 2);
+  assert.equal(draft.schemaVersion, 2);
 });
 
 test("澄清：模型反复输出非法结构时重试后抛 CreativeDraftError", async () => {

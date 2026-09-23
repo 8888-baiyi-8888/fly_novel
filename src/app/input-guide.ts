@@ -17,14 +17,16 @@ export const INPUT_GUIDE = `
   6. 目标平台与篇幅（如：番茄、100 章、每章 2500 字）
 
 推荐操作：把想法存成 txt 文件（UTF-8 编码），再运行：
-  node dist/app/main.js --model real --file 你的想法.txt --clarify --output 草案.json
+  node dist/app/main.js --model real --file 你的想法.txt --clarify
 
-注意事项：
+说明：
+- N0 会把你几句话的想法自主扩展成一段完整原始输入（主角/配角/主线/约束/平台篇幅由模型补全），
+  产物存 artifacts/n0-raw-input/；如果你对模型补全的内容不满意，可以直接改那个 md 文件再跑 N1（草案存 artifacts/n1-draft/）。
 - 详细设定（配角档案、分卷细纲、事件链、爽点具体场景）不需要写在第一步；
   后续节点（N3 架构师、N5 静态架构）会自动生成；你已有的详细设定可另存为
   "创作素材"文件，在 N5 阶段作为参考喂给架构师，不要塞进 N0 输入。
 - 拿不准/缺失/矛盾的地方，模型会写进草案的 openQuestions；配合 --clarify
-  会直接向你追问（最多 3 轮）。
+  在遇到矛盾时会直接向你追问（最多 3 轮）。
 
 《隐龙》示例输入（也是项目内置演示输入）：
 我想写一本都市隐龙流小说。主角叶凡，表面上是上门女婿，在江氏贸易当小职员，
@@ -40,10 +42,19 @@ export const USAGE = `
 用法：node dist/app/main.js [选项]
   --model memory|real   模型类型（默认 memory；real 走项目正式 LLM 机制）
   --input "文本"         直接传原始输入（短文本适用）
-  --file <路径>          从 txt 文件读取原始输入（推荐，长文本）
-  --output <路径>        把草案 JSON 保存到文件（可选，默认只打印到控制台）
-  --clarify              进入多轮澄清：模型先提问（最多 3 轮），用户回答后输出完整草案（仅 real 模式生效）
+  --file <路径>          从 txt 文件读取原始输入（推荐）
+  --step n0|n1|n2       只跑单个节点（默认全链路 N0→N1→N2）
+                           n0：扩展原始输入（有缓存跳过）；n1：读最新 N0 产物生成草案；
+                           n2：读最新 N1 草案生成 BookConfig（纯程序，不调 LLM）
+  --clarify              进入多轮反问（仅 real 模式的 N1 生效；N0 默认自主补全，只在遇到矛盾时才问）
   --help                 显示本帮助与 N0 输入建议
+
+real 模式全链路：N0 自主补全原始输入 → N1 生成创意草案 → N2 固化书籍配置
+  N0：把几句粗想法扩展成一段完整原始创作输入（主角/配角/主线/约束/平台篇幅由模型自主补全）
+  N1：把原始输入整理成结构化创意草案（含书名/题材/平台/字数/章节数/语言等运行参数）
+  N2：把草案中的运行参数固化成 BookConfig + bookId（书名拼音 ID，如 隐龙→yinlong），不调 LLM
+  产物自动落盘：N0 文本 → artifacts/n0-raw-input/；N1 草案 → artifacts/n1-draft/；
+                N2 配置 → artifacts/n2-book-config/
 
 真实模型（--model real）配置：不读取 .env，使用项目正式机制——
   .fly-novel/settings.json 配置供应商（当前 qwen：baseURL / model / credentialRef / responseFormat）

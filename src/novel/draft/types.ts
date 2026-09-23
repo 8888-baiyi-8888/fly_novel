@@ -12,6 +12,11 @@
  *
  * 版本说明：schemaVersion=2 起支持「多主角」（protagonists 数组），
  * 单主角文也写为长度为 1 的数组；v1 的 protagonist 字段在解析时自动并入数组。
+ *
+ * 必填说明：N0 已把用户想法扩展成完整原始输入（含书名/主角/分卷/约束/平台篇幅），
+ * 因此 N1 草案中对应文档输出实例的字段（Basics 全部、World.worldPremise、
+ * Characters.protagonists、Conflict.coreConflict/authorIntent、Structure.volumePlan/constraints）
+ * 均为必填；模型缺字段会校验失败并带反馈重试。
  */
 
 /** 主角草案（只记录相对稳定的属性；当前位置、伤势等动态信息属于运行状态）。 */
@@ -43,42 +48,42 @@ export interface SupportingCastDraft {
 export interface CreativeDraft {
   /** 草案 schema 版本，未来格式变化时用于迁移判断。v2：多主角数组。 */
   schemaVersion: 2;
-  /** 书名；用户未定时为 undefined。 */
-  title?: string;
+  /** 书名（N0 已补全，N1 必填）。 */
+  title: string;
   /** 题材，如「都市修仙」，至少一个。 */
   genre: string[];
   /**
-   * 主角们（数组，可多主角/双女主/群像；单主角也写为 [主角]）。
+   * 主角们（数组，可多主角/双女主/群像；单主角也写为 [主角]），至少一项。
    * v1 的 protagonist（单数）在解析时自动并入本数组。
    */
-  protagonists?: ProtagonistDraft[];
+  protagonists: ProtagonistDraft[];
   supportingCast?: SupportingCastDraft[];
   /** 世界前提：一句话说明这个世界是什么样（World.worldPremise）。 */
-  worldPremise?: string;
+  worldPremise: string;
   /** 世界观要点 / 补充设定（World.settingNotes 语义）。 */
   setting?: string[];
   /** 核心冲突 / 核心主题（Conflict.conflictCore）。 */
-  coreConflict?: string;
+  coreConflict: string;
   /** 简介 / 一句话故事卖点（Conflict.blurb）。 */
   blurb?: string;
   /** 作者意图：作者为什么这样写（Conflict.authorIntent；N4 长期创作控制的输入来源）。 */
-  authorIntent?: string;
+  authorIntent: string;
   /** 期望风格，如「现实、慢热」。 */
   tone: string[];
-  /** 卷规划（用户已表达的粗线条，如第一卷写什么）。 */
-  volumePlan?: string[];
+  /** 卷规划（N0 已补全的粗线条，如第一卷写什么），至少一项。 */
+  volumePlan: string[];
   /** 当前重点：最近一段时间主要解决什么（Structure.currentFocus）。 */
   currentFocus?: string[];
-  /** 创作约束（不能写什么）。 */
-  constraints?: string[];
+  /** 创作约束（不能写什么），至少一项。 */
+  constraints: string[];
   /** 目标平台（运行参数；第 2 步 N2 拆 BookConfig 用），如「番茄」。 */
-  platform?: string;
+  platform: string;
   /** 目标章节数（运行参数）。 */
-  targetChapters?: number;
+  targetChapters: number;
   /** 单章字数（运行参数）。 */
-  chapterWordCount?: number;
+  chapterWordCount: number;
   /** 语言（运行参数），如 "zh"。 */
-  language?: string;
+  language: string;
   /** 整理时发现的待澄清问题，供后续人工确认阶段使用。 */
   openQuestions: string[];
   /** 原始输入要点摘要，防止结构化丢失细节。 */

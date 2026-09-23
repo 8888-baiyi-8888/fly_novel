@@ -73,6 +73,14 @@ function optionalNumber(value: unknown, field: string): number | undefined {
   return value;
 }
 
+/** 必填数字：缺失或非有限数字都报错（N1 输出契约要求平台篇幅必填）。 */
+function requireNumber(value: unknown, field: string): number {
+  if (value === undefined || typeof value !== "number" || !Number.isFinite(value)) {
+    throw new DraftValidationError(`字段 ${field} 必须是数字`);
+  }
+  return value;
+}
+
 /**
  * 原版：只解析单个主角（返回 undefined 表示缺省）。
  * 保留注释，便于回切。v2 起主角是多主角数组，见 parseProtagonists。
@@ -111,13 +119,16 @@ function parseProtagonistObject(value: unknown, prefix: string): ProtagonistDraf
   };
 }
 
-/** 解析主角数组（v2）：每项必须是对象、name 必填；undefined 或缺省视为未填写。 */
-function parseProtagonists(value: unknown): ProtagonistDraft[] | undefined {
+/**
+ * 解析主角数组（v2 必填版）：必须是数组且至少一项，每项 name 必填；
+ * 缺失或空数组直接报错（N1 输出契约要求主角必填）。
+ */
+function parseProtagonists(value: unknown): ProtagonistDraft[] {
   if (value === undefined) {
-    return undefined;
+    throw new DraftValidationError("字段 protagonists 必须是数组且至少一项");
   }
-  if (!Array.isArray(value)) {
-    throw new DraftValidationError("字段 protagonists 必须是数组");
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new DraftValidationError("字段 protagonists 必须是数组且至少一项");
   }
   return value.map((item, index) => parseProtagonistObject(item, `protagonists[${index}]`));
 }
@@ -163,30 +174,30 @@ export function parseAndValidateDraft(input: unknown): CreativeDraft {
         ? Array.isArray(obj.protagonist)
           ? parseProtagonists(obj.protagonist)
           : [parseProtagonistObject(obj.protagonist, "protagonist")]
-        : undefined
+        : parseProtagonists(undefined)
       : parseProtagonists(
           obj.protagonists ?? (Array.isArray(obj.protagonist) ? obj.protagonist : undefined),
         );
 
   return {
     schemaVersion: 2,
-    title: optionalString(obj.title, "title"),
+    title: requireString(obj.title, "title"),
     genre: requireStringArray(obj.genre, "genre"),
     protagonists,
     supportingCast: parseSupportingCast(obj.supportingCast),
-    worldPremise: optionalString(obj.worldPremise, "worldPremise"),
+    worldPremise: requireString(obj.worldPremise, "worldPremise"),
     setting: optionalStringArray(obj.setting, "setting"),
-    coreConflict: optionalString(obj.coreConflict, "coreConflict"),
+    coreConflict: requireString(obj.coreConflict, "coreConflict"),
     blurb: optionalString(obj.blurb, "blurb"),
-    authorIntent: optionalString(obj.authorIntent, "authorIntent"),
+    authorIntent: requireString(obj.authorIntent, "authorIntent"),
     tone: requireStringArray(obj.tone, "tone"),
-    volumePlan: optionalStringArray(obj.volumePlan, "volumePlan"),
+    volumePlan: requireStringArray(obj.volumePlan, "volumePlan"),
     currentFocus: optionalStringArray(obj.currentFocus, "currentFocus"),
-    constraints: optionalStringArray(obj.constraints, "constraints"),
-    platform: optionalString(obj.platform, "platform"),
-    targetChapters: optionalNumber(obj.targetChapters, "targetChapters"),
-    chapterWordCount: optionalNumber(obj.chapterWordCount, "chapterWordCount"),
-    language: optionalString(obj.language, "language"),
+    constraints: requireStringArray(obj.constraints, "constraints"),
+    platform: requireString(obj.platform, "platform"),
+    targetChapters: requireNumber(obj.targetChapters, "targetChapters"),
+    chapterWordCount: requireNumber(obj.chapterWordCount, "chapterWordCount"),
+    language: requireString(obj.language, "language"),
     openQuestions: optionalStringArray(obj.openQuestions, "openQuestions") ?? [],
     rawSummary: requireString(obj.rawSummary, "rawSummary"),
   };

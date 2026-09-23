@@ -57,3 +57,11 @@ export function buildClarifyFinalMessage(): ChatMessage {
       "questions 必须为空数组，完整草案填入 draft 字段；如仍有无法澄清的问题，写入草案的 openQuestions 字段。",
   };
 }
+
+/** 重试反馈消息：告诉模型上一次输出哪里不符合协议，要求重新输出。 */
+export function buildClarifyRetryMessage(errorText: string): ChatMessage {
+  return {
+    role: "user",
+    content: `你上一次的输出不符合协议：${errorText}。请重新输出符合协议的 JSON：questions 必须是字符串数组（没有问题时为 []），draft 为 null（提问轮）或完整草案对象（交卷轮）。`,
+  };
+}

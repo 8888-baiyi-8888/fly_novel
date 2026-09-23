@@ -1,9 +1,28 @@
-﻿import { test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseAndValidateDraft, DraftValidationError } from "../draft/validate";
 import { CreativeDraftAgent, CreativeDraftError } from "../draft/creative-draft-agent";
 import { MemoryModel } from "../../harness/adapters/models/memory-model";
 import { EXAMPLE_DRAFT, EXAMPLE_DRAFT_JSON } from "../draft/example";
+
+/** 最小合法草案：N1 必填契约（对齐文档输出实例）要求字段齐全，各用例基于它覆盖/扩展。 */
+const MINIMAL_DRAFT = {
+  schemaVersion: 2,
+  title: "测试书名",
+  genre: ["都市"],
+  protagonists: [{ name: "叶凡" }],
+  worldPremise: "当代都市",
+  coreConflict: "核心冲突",
+  authorIntent: "作者意图",
+  tone: ["信息差"],
+  volumePlan: ["第一卷：借势反噬"],
+  constraints: ["不虐主"],
+  platform: "番茄",
+  targetChapters: 100,
+  chapterWordCount: 2500,
+  language: "zh",
+  rawSummary: "x",
+};
 
 test("合法草案对象通过校验并规范化", () => {
   const draft = parseAndValidateDraft(JSON.parse(EXAMPLE_DRAFT_JSON));
@@ -16,10 +35,7 @@ test("多主角数组通过校验（双女主场景）", () => {
   const draft = parseAndValidateDraft(
     JSON.parse(
       JSON.stringify({
-        schemaVersion: 2,
-        genre: ["都市", "职场"],
-        tone: ["现实慢热"],
-        rawSummary: "x",
+        ...MINIMAL_DRAFT,
         protagonists: [
           { name: "林小满", age: 22, identity: "应届生", coreNeed: "摆脱自我否定" },
           { name: "沈砚", age: 32, identity: "创意总监", coreNeed: "学会信任" },
@@ -34,10 +50,8 @@ test("多主角数组通过校验（双女主场景）", () => {
 
 test("v1 草案自动迁移：单数 protagonist 并入 protagonists 数组", () => {
   const draft = parseAndValidateDraft({
+    ...MINIMAL_DRAFT,
     schemaVersion: 1,
-    genre: ["都市"],
-    tone: ["信息差"],
-    rawSummary: "x",
     protagonist: { name: "叶凡", identity: "龙王殿殿主" },
   });
   assert.equal(draft.schemaVersion, 2);
@@ -48,10 +62,8 @@ test("v1 草案自动迁移：单数 protagonist 并入 protagonists 数组", ()
 
 test("模型误输出单数 protagonist 数组也能兜底并入（不丢主角）", () => {
   const draft = parseAndValidateDraft({
-    schemaVersion: 2,
-    genre: ["都市"],
-    tone: ["信息差"],
-    rawSummary: "x",
+    ...MINIMAL_DRAFT,
+    protagonists: undefined,
     protagonist: [{ name: "林小满" }, { name: "沈砚" }],
   });
   assert.equal(draft.protagonists?.length, 2);
@@ -63,16 +75,7 @@ test("新字段（运行参数/作者意图/配角）通过校验并保留", () 
   const draft = parseAndValidateDraft(
     JSON.parse(
       JSON.stringify({
-        schemaVersion: 2,
-        genre: ["都市"],
-        tone: ["信息差"],
-        rawSummary: "x",
-        platform: "番茄",
-        targetChapters: 100,
-        chapterWordCount: 2500,
-        language: "zh",
-        authorIntent: "信息差爽点",
-        worldPremise: "当代都市",
+        ...MINIMAL_DRAFT,
         currentFocus: ["立起离婚协议伏笔"],
         blurb: "龙王殿殿主隐姓埋名入赘",
         supportingCast: [{ name: "苏晴", identity: "江氏品牌部职员", relation: "妻子" }],
@@ -83,7 +86,7 @@ test("新字段（运行参数/作者意图/配角）通过校验并保留", () 
   assert.equal(draft.targetChapters, 100);
   assert.equal(draft.chapterWordCount, 2500);
   assert.equal(draft.language, "zh");
-  assert.equal(draft.authorIntent, "信息差爽点");
+  assert.equal(draft.authorIntent, "作者意图");
   assert.equal(draft.worldPremise, "当代都市");
   assert.deepEqual(draft.currentFocus, ["立起离婚协议伏笔"]);
   assert.equal(draft.blurb, "龙王殿殿主隐姓埋名入赘");
@@ -91,32 +94,24 @@ test("新字段（运行参数/作者意图/配角）通过校验并保留", () 
   assert.equal(draft.supportingCast?.[0]?.relation, "妻子");
 });
 
-test("空字符串 title 视为未填写，不报错", () => {
-  const draft = parseAndValidateDraft({
-    schemaVersion: 2,
-    genre: ["都市"],
-    tone: ["信息差"],
-    rawSummary: "x",
-    title: "",
-  });
-  assert.equal(draft.title, undefined);
+test("空字符串 title 视为必填缺失，校验失败", () => {
+  assert.throws(() => parseAndValidateDraft({ ...MINIMAL_DRAFT, title: "" }), DraftValidationError);
 });
 
-test("可选字段缺失时返回 undefined（不报错）", () => {
-  const draft = parseAndValidateDraft({ schemaVersion: 2, genre: ["都市"], tone: ["信息差"], rawSummary: "x" });
-  assert.equal(draft.platform, undefined);
-  assert.equal(draft.protagonists, undefined);
+test("可选字段缺失时返回 undefined（必填字段齐全）", () => {
+  const draft = parseAndValidateDraft({ ...MINIMAL_DRAFT });
+  assert.equal(draft.protagonists.length, 1);
   assert.equal(draft.supportingCast, undefined);
+  assert.equal(draft.setting, undefined);
+  assert.equal(draft.blurb, undefined);
+  assert.equal(draft.currentFocus, undefined);
 });
 
 test("protagonists 项缺 name 时校验失败", () => {
   assert.throws(
     () =>
       parseAndValidateDraft({
-        schemaVersion: 2,
-        genre: ["都市"],
-        tone: ["信息差"],
-        rawSummary: "x",
+        ...MINIMAL_DRAFT,
         protagonists: [{ identity: "没有名字" }],
       }),
     DraftValidationError,
@@ -127,10 +122,7 @@ test("supportingCast 项缺 name 时校验失败", () => {
   assert.throws(
     () =>
       parseAndValidateDraft({
-        schemaVersion: 2,
-        genre: ["都市"],
-        tone: ["信息差"],
-        rawSummary: "x",
+        ...MINIMAL_DRAFT,
         supportingCast: [{ identity: "没有名字" }],
       }),
     DraftValidationError,
@@ -139,20 +131,21 @@ test("supportingCast 项缺 name 时校验失败", () => {
 
 test("缺少必填字段时校验失败", () => {
   assert.throws(
-    () => parseAndValidateDraft({ schemaVersion: 2, genre: ["都市"], tone: [], rawSummary: "" }),
+    () =>
+      parseAndValidateDraft({
+        schemaVersion: 2,
+        genre: ["都市"],
+        tone: [],
+        rawSummary: "",
+        protagonists: [{ name: "叶凡" }],
+      }),
     DraftValidationError,
   );
 });
 
 test("版本不匹配时校验失败", () => {
   assert.throws(
-    () =>
-      parseAndValidateDraft({
-        schemaVersion: 3,
-        genre: ["都市"],
-        tone: ["信息差"],
-        rawSummary: "x",
-      }),
+    () => parseAndValidateDraft({ ...MINIMAL_DRAFT, schemaVersion: 3 }),
     DraftValidationError,
   );
 });

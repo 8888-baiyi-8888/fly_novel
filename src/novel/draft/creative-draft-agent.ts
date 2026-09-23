@@ -4,6 +4,7 @@ import {
   buildClarifyFinalMessage,
   buildClarifyMessages,
   buildClarifyQuestionsMessage,
+  buildClarifyRetryMessage,
   buildDraftMessages,
 } from "./prompt";
 import { ClarificationTurn, parseAndValidateDraft, parseClarificationTurn } from "./validate";
@@ -109,7 +110,27 @@ export class CreativeDraftAgent {
     for (;;) {
       const turn = await this.callClarifyTurn(messages);
       if (turn.draft !== undefined) {
-        return mergeRemainingQuestions(turn.draft, turn.questions);
+        // 模型给了草案：若仍有未决问题（本轮 questions 或草案 openQuestions）且还有提问预算 → 反问用户，而不是直接返回
+        const remaining = [...turn.questions, ...turn.draft.openQuestions];
+        if (remaining.length === 0 || rounds >= maxRounds) {
+          return mergeRemainingQuestions(turn.draft, turn.questions);
+        }
+        const answer = await askUser(remaining);
+        if (isStopWord(answer, stopWords)) {
+          const finalTurn = await this.callClarifyTurn([
+            ...messages,
+            buildClarifyQuestionsMessage(remaining),
+            buildClarifyAnswerMessage(answer),
+            buildClarifyFinalMessage(),
+          ]);
+          if (finalTurn.draft === undefined) {
+            throw new CreativeDraftError("用户提前结束但模型仍未给出草案");
+          }
+          return mergeRemainingQuestions(finalTurn.draft, finalTurn.questions);
+        }
+        messages.push(buildClarifyQuestionsMessage(remaining), buildClarifyAnswerMessage(answer));
+        rounds += 1;
+        continue;
       }
       if (rounds >= maxRounds) {
         const finalTurn = await this.callClarifyTurn([...messages, buildClarifyFinalMessage()]);
@@ -136,13 +157,15 @@ export class CreativeDraftAgent {
     }
   }
 
-  /** 澄清轮模型调用：一次调用 + JSON 解析 + 澄清协议校验 + 失败重试。 */
+  /** 澄清轮模型调用：一次调用 + JSON 解析 + 澄清协议校验 + 失败重试（重试时携带上次错误反馈）。 */
   private async callClarifyTurn(messages: ChatMessage[]): Promise<ClarificationTurn> {
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       try {
         const request: ChatRequest = {
-          messages,
+          // 第 1 次尝试用原消息；重试时把"上次输出哪里不符合协议"追加为反馈，引导模型修正格式
+          messages:
+            attempt === 0 ? messages : [...messages, buildClarifyRetryMessage(describeError(lastError))],
           structured: { name: "clarification_turn", description: CLARIFY_JSON_DESCRIPTION },
           temperature: 0.2,
         };

@@ -23,6 +23,8 @@ docs/              开发文档目录，存放架构、模块设计、开发流�
 src/               源码目录，包含应用组装、LLM 调用、Agent 运行框架、工作流引擎和小说业务（见 src/README.md）
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
+artifacts/         节点产物目录（N0 原始输入、N1 草案等生成物），不参与构建，路径常量见 src/config/paths.ts
+src/novel/raw-input/ N0 原始输入整理模块（几句粗话 → 一段完整原始创作输入文本，支持多轮反问）
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件
