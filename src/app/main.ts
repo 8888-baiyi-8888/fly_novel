@@ -7,7 +7,10 @@ import { CreativeDraftAgent, CreativeDraftError, ClarifyUserAnswer } from "../no
 import { EXAMPLE_DRAFT_JSON, EXAMPLE_RAW_INPUT } from "../novel/draft/example";
 import { RawInputAgent, RawInputError } from "../novel/raw-input/raw-input-agent";
 import { buildBookConfig, BookConfig } from "../novel/book-config";
-import { N0_RAW_INPUT_DIR, N1_DRAFT_DIR, N2_BOOK_CONFIG_DIR } from "../config/paths";
+import { ArchitectAgent, ArchitectError, buildBookRules, buildCreativeBrief } from "../novel/architect";
+import { EXAMPLE_ARCHITECT_JSON } from "../novel/architect/example";
+import { BookRules, StoryBible } from "../novel/architect/types";
+import { N0_RAW_INPUT_DIR, N1_DRAFT_DIR, N2_BOOK_CONFIG_DIR, N3_STORY_BIBLE_DIR } from "../config/paths";
 import { ConfiguredLlmModel } from "./configured-model";
 import { INPUT_GUIDE, USAGE } from "./input-guide";
 
@@ -18,6 +21,17 @@ import { INPUT_GUIDE, USAGE } from "./input-guide";
 export function buildCreativeDraftAgent(): CreativeDraftAgent {
   const model = new MemoryModel({ responses: { creative_draft: EXAMPLE_DRAFT_JSON } });
   return new CreativeDraftAgent({ model });
+}
+
+/**
+ * 组装「架构师基础设定」应用 —— 内存模型版（演示/测试）。
+ * 使用 MemoryModel 返回预置的《隐龙》故事圣经与书籍规则，不发起真实网络请求。
+ */
+export function buildMemoryArchitectAgent(): ArchitectAgent {
+  const model = new MemoryModel({
+    responses: { architect_foundation: EXAMPLE_ARCHITECT_JSON },
+  });
+  return new ArchitectAgent({ model });
 }
 
 /**
@@ -49,7 +63,15 @@ export function buildRealCreativeDraftAgent(): CreativeDraftAgent {
   return new CreativeDraftAgent({ model });
 }
 
-type Step = "n0" | "n1" | "n2";
+/**
+ * 组装「架构师基础设定」应用 —— 真实模型版（N3，当前使用 qwen）。
+ */
+export function buildRealArchitectAgent(): ArchitectAgent {
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
+  return new ArchitectAgent({ model });
+}
+
+type Step = "n0" | "n1" | "n2" | "n3";
 
 interface CliArgs {
   input?: string;
@@ -78,8 +100,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.model = value;
       i += 1;
     } else if (token === "--step" && value !== undefined) {
-      if (value !== "n0" && value !== "n1" && value !== "n2") {
-        throw new Error(`--step 只支持 n0、n1 或 n2，收到：${value}`);
+      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3") {
+        throw new Error(`--step 只支持 n0、n1、n2 或 n3，收到：${value}`);
       }
       args.step = value;
       i += 1;
@@ -89,7 +111,7 @@ function parseArgs(argv: string[]): CliArgs {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2、--clarify、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3、--clarify、--help）`,
       );
     }
   }
@@ -148,6 +170,24 @@ function saveBookConfig(config: BookConfig): string {
   return path;
 }
 
+/** 落盘 N3 故事圣经到 artifacts/n3-story-bible/。 */
+function saveStoryBible(bible: StoryBible): string {
+  mkdirSync(N3_STORY_BIBLE_DIR, { recursive: true });
+  const path = join(N3_STORY_BIBLE_DIR, `story-bible-${timestamp()}.json`);
+  writeFileSync(path, JSON.stringify(bible, null, 2), "utf8");
+  console.log(`已保存 N3 故事圣经到：${path}`);
+  return path;
+}
+
+/** 落盘 N3 书籍规则到 artifacts/n3-story-bible/。 */
+function saveBookRulesDoc(rules: BookRules): string {
+  mkdirSync(N3_STORY_BIBLE_DIR, { recursive: true });
+  const path = join(N3_STORY_BIBLE_DIR, `book-rules-${timestamp()}.json`);
+  writeFileSync(path, JSON.stringify(rules, null, 2), "utf8");
+  console.log(`已保存 N3 书籍规则到：${path}`);
+  return path;
+}
+
 /** 读取 artifacts/n0-raw-input/ 下最新的 N0 产物文件名；无产物返回 null。 */
 function latestRawInputArtifact(): string | null {
   mkdirSync(N0_RAW_INPUT_DIR, { recursive: true });
@@ -182,6 +222,19 @@ function readLatestDraft(): CreativeDraft | null {
     return null;
   }
   return JSON.parse(readFileSync(join(N1_DRAFT_DIR, file), "utf8")) as CreativeDraft;
+}
+
+/** 读取 artifacts/n2-book-config/ 下最新的 N2 书籍配置；无产物返回 null。 */
+function readLatestBookConfig(): BookConfig | null {
+  mkdirSync(N2_BOOK_CONFIG_DIR, { recursive: true });
+  const files = readdirSync(N2_BOOK_CONFIG_DIR, { encoding: "utf8" })
+    .filter((name) => name.startsWith("book-config-") && name.endsWith(".json"))
+    .sort();
+  if (files.length === 0) {
+    return null;
+  }
+  const path = join(N2_BOOK_CONFIG_DIR, files[files.length - 1]);
+  return JSON.parse(readFileSync(path, "utf8")) as BookConfig;
 }
 
 /**
@@ -231,6 +284,33 @@ async function runN2Only(): Promise<void> {
   saveBookConfig(config);
 }
 
+/** N3 单跑：读最新 N1 草案 + N2 BookConfig → 架构师生成故事圣经与书籍规则。persist=false 时只打印不落盘（memory 演示）。 */
+async function runN3Only(architect: ArchitectAgent, persist: boolean): Promise<void> {
+  const draft = readLatestDraft();
+  if (draft === null) {
+    throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step n1 或全链路");
+  }
+  const bookConfig = readLatestBookConfig();
+  if (bookConfig === null) {
+    throw new Error("没有找到 N2 书籍配置（artifacts/n2-book-config/），请先运行 --step n2 或全链路");
+  }
+  const brief = buildCreativeBrief(draft);
+  console.log(`\n【创作简报】\n${brief}\n`);
+  const { storyBible, bookRules } = await architect.createStoryFoundation(brief, draft, bookConfig);
+  console.log(`\n【N3 故事圣经】共 ${storyBible.sections.length} 节`);
+  console.log(JSON.stringify(storyBible, null, 2));
+  if (persist) {
+    saveStoryBible(storyBible);
+  }
+  console.log(
+    `\n【N3 书籍规则】书特定 ${bookRules.rules.filter((r) => r.category === "story").length} 条 + AI 红线 ${bookRules.rules.filter((r) => r.category === "ai-redline").length} 条`,
+  );
+  console.log(JSON.stringify(bookRules, null, 2));
+  if (persist) {
+    saveBookRulesDoc(bookRules);
+  }
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.help === true) {
@@ -248,6 +328,7 @@ async function main(): Promise<void> {
   const isReal = args.model === "real";
   const n0 = isReal ? buildRealRawInputAgent() : buildMemoryRawInputAgent();
   const n1 = isReal ? buildRealCreativeDraftAgent() : buildCreativeDraftAgent();
+  const architect = isReal ? buildRealArchitectAgent() : buildMemoryArchitectAgent();
   const initialInput =
     args.file !== undefined ? readFileSync(args.file, "utf8") : (args.input ?? EXAMPLE_RAW_INPUT);
 
@@ -278,7 +359,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 全链路：N0 → N1 → N2
+  if (args.step === "n3") {
+    await runN3Only(architect, isReal);
+    return;
+  }
+
+  // 全链路：N0 → N1 → N2 → N3
   const { rawInput, fromCache } = await resolveRawInput(n0, initialInput);
   if (isReal && !fromCache) {
     saveRawInput(rawInput);
@@ -294,6 +380,7 @@ async function main(): Promise<void> {
   if (isReal) {
     saveBookConfig(config);
   }
+  await runN3Only(architect, isReal);
 }
 
 main().catch((error: unknown) => {

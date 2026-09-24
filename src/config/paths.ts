@@ -17,3 +17,6 @@ export const N1_DRAFT_DIR = join(ARTIFACTS_ROOT, "n1-draft");
 
 /** N2 产物目录：书籍配置 BookConfig JSON。 */
 export const N2_BOOK_CONFIG_DIR = join(ARTIFACTS_ROOT, "n2-book-config");
+
+/** N3 产物目录：故事圣经 + 书籍规则 JSON。 */
+export const N3_STORY_BIBLE_DIR = join(ARTIFACTS_ROOT, "n3-story-bible");
