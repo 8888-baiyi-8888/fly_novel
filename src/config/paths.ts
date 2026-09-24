@@ -23,3 +23,6 @@ export const N3_STORY_BIBLE_DIR = join(ARTIFACTS_ROOT, "n3-story-bible");
 
 /** N4 产物目录：长期创作控制四件套 JSON。 */
 export const N4_CONTROLS_DIR = join(ARTIFACTS_ROOT, "n4-controls");
+
+/** N5 产物目录：小说静态架构五件套 JSON。 */
+export const N5_ARCHITECTURE_DIR = join(ARTIFACTS_ROOT, "n5-architecture");

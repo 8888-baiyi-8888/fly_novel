@@ -13,7 +13,17 @@ import { BookRules, StoryBible } from "../novel/architect/types";
 import { ControlsAgent, ControlsError } from "../novel/controls";
 import { EXAMPLE_CONTROLS_JSON } from "../novel/controls/example";
 import { LongTermControls } from "../novel/controls/types";
-import { N0_RAW_INPUT_DIR, N1_DRAFT_DIR, N2_BOOK_CONFIG_DIR, N3_STORY_BIBLE_DIR, N4_CONTROLS_DIR } from "../config/paths";
+import { ArchitectureAgent, DirectorAgent, StoryArchitectAgent } from "../novel/architecture";
+import { EXAMPLE_ARCHITECTURE_JSON, EXAMPLE_BEAT_BOARD_JSON } from "../novel/architecture/example";
+import { StoryArchitecture } from "../novel/architecture/types";
+import {
+  N0_RAW_INPUT_DIR,
+  N1_DRAFT_DIR,
+  N2_BOOK_CONFIG_DIR,
+  N3_STORY_BIBLE_DIR,
+  N4_CONTROLS_DIR,
+  N5_ARCHITECTURE_DIR,
+} from "../config/paths";
 import { ConfiguredLlmModel } from "./configured-model";
 import { INPUT_GUIDE, USAGE } from "./input-guide";
 
@@ -46,6 +56,20 @@ export function buildMemoryControlsAgent(): ControlsAgent {
     responses: { creative_controls: EXAMPLE_CONTROLS_JSON },
   });
   return new ControlsAgent({ model });
+}
+
+/**
+ * 组装「小说静态架构」应用 —— 内存模型版（演示/测试）。
+ * 架构师（前四件）与 Director（节拍板）都用 MemoryModel 返回预置《隐龙》五件套。
+ */
+export function buildMemoryArchitectureAgent(): ArchitectureAgent {
+  const architect = new StoryArchitectAgent({
+    model: new MemoryModel({ responses: { story_architecture: EXAMPLE_ARCHITECTURE_JSON } }),
+  });
+  const director = new DirectorAgent({
+    model: new MemoryModel({ responses: { beat_board: EXAMPLE_BEAT_BOARD_JSON } }),
+  });
+  return new ArchitectureAgent(architect, director);
 }
 
 /**
@@ -93,7 +117,21 @@ export function buildRealControlsAgent(): ControlsAgent {
   return new ControlsAgent({ model });
 }
 
-type Step = "n0" | "n1" | "n2" | "n3" | "n4";
+/**
+ * 组装「小说静态架构」应用 —— 真实模型版（N5，当前使用 qwen）。
+ * 架构师与 Director 各一次调用，共用 qwen 模型。
+ */
+export function buildRealArchitectureAgent(): ArchitectureAgent {
+  const architect = new StoryArchitectAgent({
+    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 }),
+  });
+  const director = new DirectorAgent({
+    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 }),
+  });
+  return new ArchitectureAgent(architect, director);
+}
+
+type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5";
 
 interface CliArgs {
   input?: string;
@@ -122,8 +160,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.model = value;
       i += 1;
     } else if (token === "--step" && value !== undefined) {
-      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4") {
-        throw new Error(`--step 只支持 n0、n1、n2、n3 或 n4，收到：${value}`);
+      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4" && value !== "n5") {
+        throw new Error(`--step 只支持 n0、n1、n2、n3、n4 或 n5，收到：${value}`);
       }
       args.step = value;
       i += 1;
@@ -133,7 +171,7 @@ function parseArgs(argv: string[]): CliArgs {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4、--clarify、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4|n5、--clarify、--help）`,
       );
     }
   }
@@ -219,6 +257,15 @@ function saveControls(controls: LongTermControls): string {
   return path;
 }
 
+/** 落盘 N5 小说静态架构到 artifacts/n5-architecture/。 */
+function saveArchitecture(architecture: StoryArchitecture): string {
+  mkdirSync(N5_ARCHITECTURE_DIR, { recursive: true });
+  const path = join(N5_ARCHITECTURE_DIR, `architecture-${timestamp()}.json`);
+  writeFileSync(path, JSON.stringify(architecture, null, 2), "utf8");
+  console.log(`已保存 N5 小说静态架构到：${path}`);
+  return path;
+}
+
 /** 读取 artifacts/n0-raw-input/ 下最新的 N0 产物文件名；无产物返回 null。 */
 function latestRawInputArtifact(): string | null {
   mkdirSync(N0_RAW_INPUT_DIR, { recursive: true });
@@ -266,6 +313,45 @@ function readLatestBookConfig(): BookConfig | null {
   }
   const path = join(N2_BOOK_CONFIG_DIR, files[files.length - 1]);
   return JSON.parse(readFileSync(path, "utf8")) as BookConfig;
+}
+
+/** 读取 artifacts/n3-story-bible/ 下最新的 N3 故事圣经；无产物返回 null。 */
+function readLatestStoryBible(): StoryBible | null {
+  mkdirSync(N3_STORY_BIBLE_DIR, { recursive: true });
+  const files = readdirSync(N3_STORY_BIBLE_DIR, { encoding: "utf8" })
+    .filter((name) => name.startsWith("story-bible-") && name.endsWith(".json"))
+    .sort();
+  if (files.length === 0) {
+    return null;
+  }
+  const path = join(N3_STORY_BIBLE_DIR, files[files.length - 1]);
+  return JSON.parse(readFileSync(path, "utf8")) as StoryBible;
+}
+
+/** 读取 artifacts/n3-story-bible/ 下最新的 N3 书籍规则；无产物返回 null。 */
+function readLatestBookRules(): BookRules | null {
+  mkdirSync(N3_STORY_BIBLE_DIR, { recursive: true });
+  const files = readdirSync(N3_STORY_BIBLE_DIR, { encoding: "utf8" })
+    .filter((name) => name.startsWith("book-rules-") && name.endsWith(".json"))
+    .sort();
+  if (files.length === 0) {
+    return null;
+  }
+  const path = join(N3_STORY_BIBLE_DIR, files[files.length - 1]);
+  return JSON.parse(readFileSync(path, "utf8")) as BookRules;
+}
+
+/** 读取 artifacts/n4-controls/ 下最新的 N4 长期创作控制；无产物返回 null。 */
+function readLatestControls(): LongTermControls | null {
+  mkdirSync(N4_CONTROLS_DIR, { recursive: true });
+  const files = readdirSync(N4_CONTROLS_DIR, { encoding: "utf8" })
+    .filter((name) => name.startsWith("controls-") && name.endsWith(".json"))
+    .sort();
+  if (files.length === 0) {
+    return null;
+  }
+  const path = join(N4_CONTROLS_DIR, files[files.length - 1]);
+  return JSON.parse(readFileSync(path, "utf8")) as LongTermControls;
 }
 
 /**
@@ -316,13 +402,14 @@ async function runN2Only(): Promise<void> {
 }
 
 /** N4 单跑：把草案创作意图整理为长期创作控制四件套（只依赖 N1 草案，与 N2/N3 并行）。 */
-async function runN4Only(controls: ControlsAgent, draft: CreativeDraft, persist: boolean): Promise<void> {
+async function runN4Only(controls: ControlsAgent, draft: CreativeDraft, persist: boolean): Promise<LongTermControls> {
   const result = await controls.createControls(draft);
   console.log("\n【N4 长期创作控制】");
   console.log(JSON.stringify(result, null, 2));
   if (persist) {
     saveControls(result);
   }
+  return result;
 }
 
 /** N4 单跑入口：读最新 N1 草案 → 长期创作控制。 */
@@ -336,22 +423,88 @@ async function runN4Step(controls: ControlsAgent, persist: boolean): Promise<voi
 
 /**
  * N3 与 N4 并行执行（文档数据流：N2/N3/N4 三路并行；N3 依赖 N2 产物已在内存/落盘，N4 只依赖草案）。
- * 并行后两个节点的耗时只取较慢者，不串行等待。
+ * 并行后两个节点的耗时只取较慢者，不串行等待。返回两者产物，供 N5 内存传递（memory 模式不落盘也能接续）。
  */
 async function runN3N4Parallel(
   architect: ArchitectAgent,
   controls: ControlsAgent,
   draft: CreativeDraft,
   isReal: boolean,
-): Promise<void> {
-  await Promise.all([
+): Promise<{ storyBible: StoryBible; bookRules: BookRules; controls: LongTermControls }> {
+  const [n3, n4] = await Promise.all([
     runN3Only(architect, isReal),
     runN4Only(controls, draft, isReal),
   ]);
+  return { storyBible: n3.storyBible, bookRules: n3.bookRules, controls: n4 };
+}
+
+/**
+ * N5：架构师前四件 → Director 节拍板 → 五件套。
+ * 优先使用内存传入的输入（全链路 memory 模式）；未传入时读 N1/N3/N4 落盘产物（--step n5 单跑）。
+ */
+async function runN5Only(
+  architecture: ArchitectureAgent,
+  persist: boolean,
+  input?: { draft: CreativeDraft; storyBible: StoryBible; bookRules: BookRules; controls: LongTermControls },
+): Promise<void> {
+  let draft: CreativeDraft;
+  let storyBible: StoryBible;
+  let bookRules: BookRules;
+  let controls: LongTermControls;
+  if (input !== undefined) {
+    ({ draft, storyBible, bookRules, controls } = input);
+  } else {
+    const latestDraft = readLatestDraft();
+    if (latestDraft === null) {
+      throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step n1 或全链路");
+    }
+    draft = latestDraft;
+    const latestBible = readLatestStoryBible();
+    if (latestBible === null) {
+      throw new Error("没有找到 N3 故事圣经（artifacts/n3-story-bible/），请先运行 --step n3 或全链路");
+    }
+    storyBible = latestBible;
+    const latestRules = readLatestBookRules();
+    if (latestRules === null) {
+      throw new Error("没有找到 N3 书籍规则（artifacts/n3-story-bible/），请先运行 --step n3 或全链路");
+    }
+    bookRules = latestRules;
+    const latestControls = readLatestControls();
+    if (latestControls === null) {
+      throw new Error("没有找到 N4 长期创作控制（artifacts/n4-controls/），请先运行 --step n4 或全链路");
+    }
+    controls = latestControls;
+  }
+  const result = await architecture.createArchitecture({ draft, storyBible, bookRules, controls });
+  console.log(`\n【N5 小说静态架构】五件套：故事框架 / 分卷规划（${result.volumeMap.length} 卷）/ 角色卡（${result.characterCards.length} 张）/ 叙事线地图（${result.threadMap.lines.length} 条线）/ 节拍板（${result.beatBoard.beats.length} 章）`);
+  console.log(JSON.stringify(
+    {
+      bookId: result.bookId,
+      title: result.title,
+      storyFrame: result.storyFrame,
+      volumeMap: result.volumeMap,
+      characterCards: result.characterCards,
+      threadMap: result.threadMap,
+      beatBoardSummary: {
+        chapterCount: result.beatBoard.beats.length,
+        sample: result.beatBoard.beats.slice(0, 3),
+      },
+    },
+    null,
+    2,
+  ));
+  if (persist) {
+    saveArchitecture(result);
+  }
+}
+
+/** N5 单跑入口（--step n5）：读落盘产物。 */
+async function runN5Step(architecture: ArchitectureAgent, persist: boolean): Promise<void> {
+  await runN5Only(architecture, persist);
 }
 
 /** N3 单跑：读最新 N1 草案 + N2 BookConfig → 架构师生成故事圣经与书籍规则。persist=false 时只打印不落盘（memory 演示）。 */
-async function runN3Only(architect: ArchitectAgent, persist: boolean): Promise<void> {
+async function runN3Only(architect: ArchitectAgent, persist: boolean): Promise<{ storyBible: StoryBible; bookRules: BookRules }> {
   const draft = readLatestDraft();
   if (draft === null) {
     throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step n1 或全链路");
@@ -375,6 +528,7 @@ async function runN3Only(architect: ArchitectAgent, persist: boolean): Promise<v
   if (persist) {
     saveBookRulesDoc(bookRules);
   }
+  return { storyBible, bookRules };
 }
 
 async function main(): Promise<void> {
@@ -395,6 +549,7 @@ async function main(): Promise<void> {
   const n0 = isReal ? buildRealRawInputAgent() : buildMemoryRawInputAgent();
   const n1 = isReal ? buildRealCreativeDraftAgent() : buildCreativeDraftAgent();
   const architect = isReal ? buildRealArchitectAgent() : buildMemoryArchitectAgent();
+  const architecture = isReal ? buildRealArchitectureAgent() : buildMemoryArchitectureAgent();
   const initialInput =
     args.file !== undefined ? readFileSync(args.file, "utf8") : (args.input ?? EXAMPLE_RAW_INPUT);
 
@@ -436,7 +591,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 全链路：N0 → N1 → N2 →（N3 ‖ N4 并行）
+  if (args.step === "n5") {
+    await runN5Step(architecture, isReal);
+    return;
+  }
+
+  // 全链路：N0 → N1 → N2 →（N3 ‖ N4 并行）→ N5
   const { rawInput, fromCache } = await resolveRawInput(n0, initialInput);
   if (isReal && !fromCache) {
     saveRawInput(rawInput);
@@ -453,7 +613,18 @@ async function main(): Promise<void> {
     saveBookConfig(config);
   }
   const controls = isReal ? buildRealControlsAgent() : buildMemoryControlsAgent();
-  await runN3N4Parallel(architect, controls, draft, isReal);
+  const parallel = await runN3N4Parallel(architect, controls, draft, isReal);
+  // N5：real 模式读 N3/N4 落盘产物；memory 模式直接复用并行段的返回值（避免串读旧产物）
+  if (isReal) {
+    await runN5Only(architecture, true);
+  } else {
+    await runN5Only(architecture, false, {
+      draft,
+      storyBible: parallel.storyBible,
+      bookRules: parallel.bookRules,
+      controls: parallel.controls,
+    });
+  }
 }
 
 main().catch((error: unknown) => {

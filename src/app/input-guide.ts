@@ -43,24 +43,28 @@ export const USAGE = `
   --model memory|real   模型类型（默认 memory；real 走项目正式 LLM 机制）
   --input "文本"         直接传原始输入（短文本适用）
   --file <路径>          从 txt 文件读取原始输入（推荐）
-  --step n0|n1|n2|n3|n4  只跑单个节点（默认全链路 N0→N1→N2→(N3‖N4 并行)）
+  --step n0|n1|n2|n3|n4|n5  只跑单个节点（默认全链路 N0→N1→N2→(N3‖N4 并行)→N5）
                            n0：扩展原始输入（有缓存跳过）；n1：读最新 N0 产物生成草案；
                            n2：读最新 N1 草案生成 BookConfig（纯程序，不调 LLM）；
                            n3：读最新草案+BookConfig，架构师生成故事圣经与书籍规则；
-                           n4：读最新 N1 草案，作者意图整理器生成长期创作控制四件套
+                           n4：读最新 N1 草案，作者意图整理器生成长期创作控制四件套；
+                           n5：读最新 N1+N3+N4 产物，架构师生成前四件、Director 生成节拍板
   --clarify              进入多轮反问（仅 real 模式的 N1 生效；N0 默认自主补全，只在遇到矛盾时才问）
   --help                 显示本帮助与 N0 输入建议
 
-real 模式全链路：N0 自主补全原始输入 → N1 生成创意草案 → N2 固化书籍配置 →（N3 架构师建世界 ‖ N4 长期创作控制）
+real 模式全链路：N0 自主补全原始输入 → N1 生成创意草案 → N2 固化书籍配置
+                 →（N3 架构师建世界 ‖ N4 长期创作控制 并行）→ N5 静态架构
   N0：把几句粗想法扩展成一段完整原始创作输入（主角/配角/主线/约束/平台篇幅由模型自主补全）
   N1：把原始输入整理成结构化创意草案（含书名/题材/平台/字数/章节数/语言等运行参数）
   N2：把草案中的运行参数固化成 BookConfig + bookId（书名拼音 ID，如 隐龙→yinlong），不调 LLM
   N3：架构师产出故事圣经（这个世界是什么）+ 书籍规则（允许怎么写，含内置 AI 写作红线 11 条）
   N4：作者意图整理器把草案创作意图扩展为四件套（作者意图/当前重点/分卷方向/创作约束），
       与世界事实、写作规则严格分离；与 N2/N3 并行，只依赖 N1 草案
+  N5：架构师把 N3+N4+草案组织成五件套（故事框架/分卷规划/角色卡/叙事线地图），
+      Director 再把前四件细化成全书节拍板（每章一句话蓝图，过验收闸门）
   产物自动落盘：N0 文本 → artifacts/n0-raw-input/；N1 草案 → artifacts/n1-draft/；
                 N2 配置 → artifacts/n2-book-config/；N3 圣经与规则 → artifacts/n3-story-bible/；
-                N4 四件套 → artifacts/n4-controls/
+                N4 四件套 → artifacts/n4-controls/；N5 五件套 → artifacts/n5-architecture/
 
 真实模型（--model real）配置：不读取 .env，使用项目正式机制——
   .fly-novel/settings.json 配置供应商（当前 qwen：baseURL / model / credentialRef / responseFormat）

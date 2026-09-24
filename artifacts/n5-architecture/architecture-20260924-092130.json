@@ -1,0 +1,2410 @@
+{
+  "bookId": "chuxiabuzhiqingqiuyi",
+  "title": "初夏不知清秋意",
+  "storyFrame": {
+    "coreStory": "职场小白林初夏进入头部广告公司，在创意总监沈清秋的魔鬼训练与极致双标下，凭借坚韧与努力成长为顶尖策划。两人在共同攻克项目的过程中感情自然升温，最终林初夏以独立成熟的姿态帮助沈清秋打破家族联姻的理性枷锁，实现双向救赎。",
+    "coreConflict": "职场内部的良性项目竞争与专业挑战；两人身份差距与心理拉扯；沈清秋面临的家族理性联姻压力与个人自由意志的冲突。",
+    "protagonistPath": [
+      "职场小白艰难求生",
+      "崭露头角建立信任",
+      "并肩作战灵魂契合",
+      "独当一面成为底气",
+      "打破枷锁双向救赎"
+    ]
+  },
+  "volumeMap": [
+    {
+      "volume": "第一卷",
+      "title": "初入职场，小白与高冷总监的碰撞与双标初显",
+      "goal": "完成林初夏的职场初步蜕变与两人信任的建立，展现沈清秋严师与双标的反差。",
+      "stages": [
+        "方案被毙与死磕复盘",
+        "私下指导与双标初显",
+        "小型提案配合与护短",
+        "日常细节与情绪价值"
+      ]
+    },
+    {
+      "volume": "第二卷",
+      "title": "并肩作战，攻克大客户项目，感情升温与身份拉扯",
+      "goal": "完成高强度项目下的默契配合与感情升温，展现灵魂契合与沈清秋因身份差距产生的内心拉扯。",
+      "stages": [
+        "大客户项目启动与高压挑战",
+        "默契配合与感情自然升温",
+        "身份差距引发的心理拉扯",
+        "项目成功与关系微妙转变"
+      ]
+    },
+    {
+      "volume": "第三卷",
+      "title": "破茧成蝶，应对家族联姻压力，互相救赎与确立关系",
+      "goal": "全面爆发并解决沈清秋的家族联姻压力，林初夏以独立姿态成为其底气，实现双向救赎与确立关系。",
+      "stages": [
+        "家族联姻压力全面爆发",
+        "沈清秋的内心挣扎与觉醒",
+        "林初夏以独立姿态提供底气",
+        "打破理性枷锁与确立关系"
+      ]
+    }
+  ],
+  "characterCards": [
+    {
+      "name": "林初夏",
+      "tier": "S",
+      "archetype": "坚韧成长的职场新星",
+      "traits": [
+        "坚韧乐观",
+        "纯粹热爱",
+        "敏锐真诚",
+        "不甘平庸"
+      ],
+      "speechStyle": "直率真诚，带点新人的青涩但逻辑清晰，汇报工作时专业干练。",
+      "secret": "自己其实对沈清秋高冷外表下隐藏的脆弱有着直觉般的察觉，并默默将其视为自己努力追赶的动力。",
+      "knowledgeBoundary": [
+        "不知道沈清秋家族联姻的具体商业细节与顾家背景（第二卷末 E-S102 才知晓）",
+        "不知道沈清秋私下为她修改方案时承受着家族催婚的巨大压力（第一卷中后期 E-S101 才察觉）"
+      ],
+      "relationships": [
+        {
+          "name": "沈清秋",
+          "relation": "上下级兼师徒，暗恋与倾慕"
+        },
+        {
+          "name": "苏柚",
+          "relation": "闺蜜"
+        },
+        {
+          "name": "赵佳妮",
+          "relation": "职场战友与良性竞争对手"
+        }
+      ]
+    },
+    {
+      "name": "沈清秋",
+      "tier": "S",
+      "archetype": "外冷内热的精英总监",
+      "traits": [
+        "高冷严厉",
+        "极致双标",
+        "专业极强",
+        "内心封闭"
+      ],
+      "speechStyle": "言简意赅，直击痛点，对下属要求严苛，但对林初夏会不自觉放缓语调并给出细致指导。",
+      "secret": "极度恐惧被家族联姻吞噬失去自我，内心渴望自由与真正的爱，林初夏的出现是她灰暗生活中的唯一变数。",
+      "knowledgeBoundary": [
+        "不知道林初夏已经察觉到自己对家族联姻的恐惧（第二卷中后期 E-S102 才确认）",
+        "不知道林初夏为了跟上她的步伐，私下付出了远超常人的努力（第一卷末 E-M03 才得知）"
+      ],
+      "relationships": [
+        {
+          "name": "林初夏",
+          "relation": "上下级兼师徒，偏爱与深爱"
+        },
+        {
+          "name": "顾明轩",
+          "relation": "联姻对象与利益共同体"
+        },
+        {
+          "name": "家族长辈",
+          "relation": "被控制与反抗"
+        }
+      ]
+    },
+    {
+      "name": "顾明轩",
+      "tier": "A",
+      "archetype": "温和理智的世家子弟",
+      "traits": [
+        "温和体面",
+        "理智清醒",
+        "尊重边界"
+      ],
+      "speechStyle": "礼貌克制，逻辑严密，不带情绪化字眼，始终保持世家子弟的体面。",
+      "secret": "其实对这场商业联姻同样没有浪漫期待，甚至暗中在寻找解除联姻的合理契机，以保全双方体面。",
+      "knowledgeBoundary": [
+        "不知道沈清秋已经对林初夏动心（第三卷 E-M07 才察觉）",
+        "不知道沈清秋内心对家族控制的真实恐惧程度（第三卷 E-S103 才知晓）"
+      ],
+      "relationships": [
+        {
+          "name": "沈清秋",
+          "relation": "联姻对象"
+        },
+        {
+          "name": "林初夏",
+          "relation": "职场交集"
+        }
+      ]
+    },
+    {
+      "name": "赵佳妮",
+      "tier": "B",
+      "archetype": "飒爽干练的职场前辈",
+      "traits": [
+        "飒爽干练",
+        "专业过硬",
+        "欣赏强者"
+      ],
+      "speechStyle": "干脆利落，就事论事，探讨方案时直击核心，不绕弯子。",
+      "secret": "其实非常羡慕林初夏身上那种未被职场完全磨平的纯粹与冲劲。",
+      "knowledgeBoundary": [
+        "不知道沈清秋对林初夏的双标背后是感情因素（全书未直接点破，只当是惜才）",
+        "不知道林初夏在方案被毙后偷偷哭过（第一卷 E-M01 细节）"
+      ],
+      "relationships": [
+        {
+          "name": "林初夏",
+          "relation": "同事与良性竞争对手"
+        },
+        {
+          "name": "沈清秋",
+          "relation": "上下级"
+        }
+      ]
+    },
+    {
+      "name": "苏柚",
+      "tier": "B",
+      "archetype": "开朗敏锐的闺蜜",
+      "traits": [
+        "开朗敏锐",
+        "共情力强",
+        "自由随性"
+      ],
+      "speechStyle": "活泼跳脱，善用网络梗，安慰人时温暖且一针见血。",
+      "secret": "早就看出沈清秋对林初夏的特殊对待，但为了不让初夏有压力，一直装作不知道。",
+      "knowledgeBoundary": [
+        "不知道沈清秋家族联姻的具体内情（第三卷 E-S103 才知晓）",
+        "不知道林初夏在职场上承受的具体高压细节（第二卷 E-M04 才倾诉）"
+      ],
+      "relationships": [
+        {
+          "name": "林初夏",
+          "relation": "闺蜜"
+        }
+      ]
+    }
+  ],
+  "threadMap": {
+    "lines": [
+      {
+        "id": "M",
+        "name": "职场成长与感情升温主线",
+        "goal": "展现林初夏从职场小白到顶尖策划的扎实成长，以及与沈清秋在共同攻坚中自然水到渠成的感情发展。",
+        "events": [
+          {
+            "id": "E-M01",
+            "content": "林初夏方案被毙，熬夜死磕竞品分析，在部门复盘会上引起沈清秋的初步注意。",
+            "volume": "第一卷",
+            "requires": [],
+            "merge": false
+          },
+          {
+            "id": "E-M02",
+            "content": "沈清秋在严厉驳回方案后，私下给予林初夏极其细致的逐字修改指导，展现双标偏爱。",
+            "volume": "第一卷",
+            "requires": [
+              "E-M01"
+            ],
+            "merge": false
+          },
+          {
+            "id": "E-M03",
+            "content": "首个小型客户提案中，林初夏临场应变化解危机，沈清秋在客户面前不动声色地护短，建立初步信任。",
+            "volume": "第一卷",
+            "requires": [
+              "E-M02"
+            ],
+            "merge": false
+          },
+          {
+            "id": "E-M04",
+            "content": "大客户项目启动，两人高强度并肩作战，默契配合，感情在解决专业问题中自然升温。",
+            "volume": "第二卷",
+            "requires": [
+              "E-M03"
+            ],
+            "merge": false
+          },
+          {
+            "id": "E-M05",
+            "content": "项目成功，两人灵魂契合度提升，但沈清秋因身份差距产生内心拉扯与防备。",
+            "volume": "第二卷",
+            "requires": [
+              "E-M04"
+            ],
+            "merge": false
+          },
+          {
+            "id": "E-M06",
+            "content": "林初夏成长为顶尖策划，以独立成熟的姿态成为沈清秋打破家族枷锁的底气。",
+            "volume": "第三卷",
+            "requires": [
+              "E-M05",
+              "E-S103"
+            ],
+            "merge": true
+          },
+          {
+            "id": "E-M07",
+            "content": "两人打破理性枷锁，确立关系，实现双向救赎。",
+            "volume": "第三卷",
+            "requires": [
+              "E-M06"
+            ],
+            "merge": false
+          }
+        ]
+      },
+      {
+        "id": "S1",
+        "name": "家族联姻压力与破局分线",
+        "goal": "层层递进展现沈清秋的家族压力，并最终依靠其自身觉醒与林初夏的支撑完成破局。",
+        "events": [
+          {
+            "id": "E-S101",
+            "content": "日常加班中，沈清秋被家族催婚消息打扰，林初夏以笨拙但真诚的方式提供情绪价值，初露家族压力端倪。",
+            "volume": "第一卷",
+            "requires": [
+              "E-M03"
+            ],
+            "merge": false
+          },
+          {
+            "id": "E-S102",
+            "content": "顾明轩出场，温和理智地推进联姻事宜，沈清秋内心挣扎，身份差距带来的心理拉扯加剧。",
+            "volume": "第二卷",
+            "requires": [
+              "E-S101",
+              "E-M04"
+            ],
+            "merge": true
+          },
+          {
+            "id": "E-S103",
+            "content": "家族联姻压力全面爆发，长辈施压，沈清秋面临失去自我的恐惧，决定觉醒反抗。",
+            "volume": "第三卷",
+            "requires": [
+              "E-S102"
+            ],
+            "merge": false
+          },
+          {
+            "id": "E-S104",
+            "content": "沈清秋依靠自身事业独立的底气与林初夏的支撑，与家族进行理性谈判，解除联姻。",
+            "volume": "第三卷",
+            "requires": [
+              "E-S103",
+              "E-M06"
+            ],
+            "merge": true
+          }
+        ]
+      }
+    ]
+  },
+  "beatBoard": {
+    "beats": [
+      {
+        "chapter": 1,
+        "title": "方案被毙",
+        "mainBeat": "初夏方案被毙熬夜死磕引起沈清秋注意",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "熬夜改方案"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "沮丧→振作",
+        "hookIntentions": [
+          "【ch1-h1】笔记本符号"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 2,
+        "title": "枯木逢春",
+        "mainBeat": "初夏观察到沈清秋桌上的枯木盆栽暗藏生机",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "观察盆栽"
+          },
+          {
+            "name": "沈清秋",
+            "action": "浇花"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "好奇→感悟",
+        "hookIntentions": [
+          "【ch2-h1】枯木逢春盆栽"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 3,
+        "title": "前徒传闻",
+        "mainBeat": "赵佳妮提及沈清秋前任徒弟中途离开的往事",
+        "characters": [
+          {
+            "name": "赵佳妮",
+            "action": "闲聊"
+          },
+          {
+            "name": "林初夏",
+            "action": "倾听"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "疑惑→警惕",
+        "hookIntentions": [
+          "【ch3-h1】前徒弟离开传闻"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 4,
+        "title": "逐字指导",
+        "mainBeat": "沈清秋私下给予初夏极其细致的逐字修改指导",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "细致指导"
+          },
+          {
+            "name": "林初夏",
+            "action": "认真记录"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "紧张→感动",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 5,
+        "title": "半块方糖",
+        "mainBeat": "初夏发现沈清秋喝咖啡只加半块糖的独特习惯",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "泡咖啡"
+          },
+          {
+            "name": "沈清秋",
+            "action": "喝咖啡"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "轻松→细腻",
+        "hookIntentions": [
+          "【ch5-h1】半块方糖习惯"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 6,
+        "title": "双标初显",
+        "mainBeat": "沈清秋在部门会上严厉驳回他人却温和指导初夏",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "开会"
+          },
+          {
+            "name": "林初夏",
+            "action": "汇报"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "忐忑→安心",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 7,
+        "title": "死磕复盘",
+        "mainBeat": "初夏针对驳回意见进行深度复盘并重新提交方案",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "复盘"
+          },
+          {
+            "name": "沈清秋",
+            "action": "审阅"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "专注→自信",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 8,
+        "title": "红色批注",
+        "mainBeat": "初夏注意到沈清秋修改方案时专用的红色批注笔",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "看批注"
+          },
+          {
+            "name": "沈清秋",
+            "action": "批改"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "敬畏→领悟",
+        "hookIntentions": [
+          "【ch8-h1】红色批注笔"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 9,
+        "title": "小型提案",
+        "mainBeat": "首个小型客户提案中初夏临场应变化解突发危机",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "临场应变"
+          },
+          {
+            "name": "沈清秋",
+            "action": "旁观"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "慌乱→镇定",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 10,
+        "title": "不动声色",
+        "mainBeat": "沈清秋在客户面前不动声色地护短建立初步信任",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "护短"
+          },
+          {
+            "name": "林初夏",
+            "action": "感激"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "紧张→温暖",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 11,
+        "title": "默契初成",
+        "mainBeat": "初夏与沈清秋在小型项目后续执行中配合愈发默契",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "执行"
+          },
+          {
+            "name": "沈清秋",
+            "action": "把控"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "平稳→愉悦",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 12,
+        "title": "沈家之名",
+        "mainBeat": "客户代表无意间提到沈清秋家族企业的名字",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "倾听"
+          },
+          {
+            "name": "沈清秋",
+            "action": "微怔"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "上升",
+        "emotionalArc": "好奇→敏锐",
+        "hookIntentions": [
+          "【ch12-h1】客户提沈家"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 13,
+        "title": "情绪价值",
+        "mainBeat": "初夏以笨拙但真诚的方式为疲惫的沈清秋提供情绪价值",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "安慰"
+          },
+          {
+            "name": "沈清秋",
+            "action": "放松"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "心疼→治愈",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 14,
+        "title": "催婚电话",
+        "mainBeat": "日常加班中沈清秋被家族催婚消息打扰神色凝重",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "接电话"
+          },
+          {
+            "name": "林初夏",
+            "action": "递水"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "释放",
+        "emotionalArc": "压抑→释然",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 15,
+        "title": "无名合影",
+        "mainBeat": "初夏在沈清秋办公室看到一张没有名字的旧合影",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "整理文件"
+          },
+          {
+            "name": "沈清秋",
+            "action": "进门"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "舒缓",
+        "emotionalArc": "疑惑→探究",
+        "hookIntentions": [
+          "【ch15-h1】无名合影"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 16,
+        "title": "初露端倪",
+        "mainBeat": "初夏初露对沈清秋家族压力的察觉并默默关心",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "默默关心"
+          },
+          {
+            "name": "沈清秋",
+            "action": "意外"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "铺垫",
+        "emotionalArc": "担忧→坚定",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 17,
+        "title": "薄荷糖",
+        "mainBeat": "苏柚提到初夏最近总买某种特定口味的薄荷糖",
+        "characters": [
+          {
+            "name": "苏柚",
+            "action": "调侃"
+          },
+          {
+            "name": "林初夏",
+            "action": "掩饰"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "轻松→羞涩",
+        "hookIntentions": [
+          "【ch18-h1】薄荷糖口味"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 18,
+        "title": "闺蜜洞察",
+        "mainBeat": "苏柚敏锐察觉初夏对沈清秋的特殊关注但装不知道",
+        "characters": [
+          {
+            "name": "苏柚",
+            "action": "观察"
+          },
+          {
+            "name": "林初夏",
+            "action": "倾诉"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "坦率→温暖",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 19,
+        "title": "深夜加班",
+        "mainBeat": "初夏为跟上沈清秋步伐私下付出远超常人的努力",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "加班"
+          },
+          {
+            "name": "沈清秋",
+            "action": "留灯"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "疲惫→充实",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 20,
+        "title": "无备注电话",
+        "mainBeat": "沈清秋接到一个没有备注的电话神色异常凝重",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "接电话"
+          },
+          {
+            "name": "林初夏",
+            "action": "担忧"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "舒缓",
+        "emotionalArc": "平静→不安",
+        "hookIntentions": [
+          "【ch22-h1】无备注电话"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 21,
+        "title": "信任加深",
+        "mainBeat": "初夏通过细节积累逐渐获得沈清秋更深的职场信任",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "汇报"
+          },
+          {
+            "name": "沈清秋",
+            "action": "点头"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "忐忑→自信",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 22,
+        "title": "隐藏压力",
+        "mainBeat": "初夏察觉沈清秋高冷外表下隐藏的家族压力与脆弱",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "观察"
+          },
+          {
+            "name": "沈清秋",
+            "action": "掩饰"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "上升",
+        "emotionalArc": "心疼→决心",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 23,
+        "title": "日常细节",
+        "mainBeat": "两人在日常办公细节中展现出无需多言的默契",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "递文件"
+          },
+          {
+            "name": "沈清秋",
+            "action": "接过"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "平淡→温馨",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 24,
+        "title": "第一卷末",
+        "mainBeat": "初夏完成职场初步蜕变与沈清秋建立稳固信任",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "总结"
+          },
+          {
+            "name": "沈清秋",
+            "action": "肯定"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "回顾→欣慰",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 25,
+        "title": "枯木发芽",
+        "mainBeat": "初夏发现沈清秋桌上的枯木盆栽真的发芽了",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "惊喜"
+          },
+          {
+            "name": "沈清秋",
+            "action": "微笑"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "期待→喜悦",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch2-h1"
+        ]
+      },
+      {
+        "chapter": 26,
+        "title": "大客户启动",
+        "mainBeat": "公司启动年度大客户项目初夏被选入核心项目组",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "宣布"
+          },
+          {
+            "name": "林初夏",
+            "action": "激动"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "紧张→兴奋",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 27,
+        "title": "高压挑战",
+        "mainBeat": "大客户项目需求苛刻初夏面临前所未有的高压挑战",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "查资料"
+          },
+          {
+            "name": "赵佳妮",
+            "action": "竞争"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "压力→斗志",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 28,
+        "title": "旧企划书",
+        "mainBeat": "初夏整理资料时意外发现一份被隐藏的旧企划书",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "翻阅"
+          },
+          {
+            "name": "沈清秋",
+            "action": "制止"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "好奇→震惊",
+        "hookIntentions": [
+          "【ch28-h1】旧企划书"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 29,
+        "title": "并肩作战",
+        "mainBeat": "初夏与沈清秋在大客户项目中高强度并肩作战",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "熬夜"
+          },
+          {
+            "name": "沈清秋",
+            "action": "陪伴"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "疲惫→默契",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 30,
+        "title": "专业碰撞",
+        "mainBeat": "两人在方案方向上产生专业碰撞最终融合出绝佳创意",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "辩论"
+          },
+          {
+            "name": "沈清秋",
+            "action": "融合"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "争执→契合",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 31,
+        "title": "项目攻坚",
+        "mainBeat": "大客户项目进入攻坚阶段初夏展现出惊人的成长",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "提案"
+          },
+          {
+            "name": "沈清秋",
+            "action": "赞赏"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "紧张→自信",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 32,
+        "title": "隐秘附件",
+        "mainBeat": "初夏在项目brief里发现一个不起眼的隐秘附件",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "分析"
+          },
+          {
+            "name": "沈清秋",
+            "action": "提示"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "疑惑→顿悟",
+        "hookIntentions": [
+          "【ch32-h1】brief附件"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 33,
+        "title": "感情升温",
+        "mainBeat": "在解决专业问题中两人的感情自然升温超越上下级",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "对视"
+          },
+          {
+            "name": "沈清秋",
+            "action": "移开"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "暧昧→克制",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 34,
+        "title": "深夜食堂",
+        "mainBeat": "项目加班后两人深夜吃宵夜聊起各自的职场初心",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "倾听"
+          },
+          {
+            "name": "沈清秋",
+            "action": "回忆"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "放松→交心",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 35,
+        "title": "符号成真",
+        "mainBeat": "初夏笔记本上的奇怪符号被沈清秋用作核心创意",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "展示"
+          },
+          {
+            "name": "林初夏",
+            "action": "惊喜"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "惊讶→感动",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch1-h1"
+        ]
+      },
+      {
+        "chapter": 36,
+        "title": "身份拉扯",
+        "mainBeat": "项目成功在望沈清秋因身份差距产生内心拉扯与防备",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "疏远"
+          },
+          {
+            "name": "林初夏",
+            "action": "失落"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "亲密→疏离",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 37,
+        "title": "理智回笼",
+        "mainBeat": "沈清秋试图用理智压制对初夏的特殊情感保持距离",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "冷脸"
+          },
+          {
+            "name": "林初夏",
+            "action": "反思"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "委屈→理解",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 38,
+        "title": "定制钢笔",
+        "mainBeat": "顾明轩出场送给沈清秋一支温和体面的定制钢笔",
+        "characters": [
+          {
+            "name": "顾明轩",
+            "action": "送礼"
+          },
+          {
+            "name": "沈清秋",
+            "action": "客气"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "平静→压抑",
+        "hookIntentions": [
+          "【ch38-h1】定制钢笔"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 39,
+        "title": "联姻端倪",
+        "mainBeat": "顾明轩温和理智地推进联姻事宜让初夏察觉异样",
+        "characters": [
+          {
+            "name": "顾明轩",
+            "action": "交谈"
+          },
+          {
+            "name": "林初夏",
+            "action": "旁观"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "释放",
+        "emotionalArc": "好奇→酸涩",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 40,
+        "title": "备用方案",
+        "mainBeat": "初夏为防万一熬夜做出的备用方案在关键时刻派上用场",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "提交"
+          },
+          {
+            "name": "沈清秋",
+            "action": "意外"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "紧张→自豪",
+        "hookIntentions": [
+          "【ch40-h1】备用方案"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 41,
+        "title": "默契破局",
+        "mainBeat": "两人凭借备用方案与默契配合成功化解客户刁难",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "讲解"
+          },
+          {
+            "name": "沈清秋",
+            "action": "配合"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "危机→畅快",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 42,
+        "title": "红色批注",
+        "mainBeat": "沈清秋用那支红色批注笔在初夏方案上写下肯定",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "批注"
+          },
+          {
+            "name": "林初夏",
+            "action": "珍藏"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "期待→喜悦",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch8-h1"
+        ]
+      },
+      {
+        "chapter": 43,
+        "title": "灵魂契合",
+        "mainBeat": "项目大获成功两人灵魂契合度达到前所未有的高度",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "庆祝"
+          },
+          {
+            "name": "沈清秋",
+            "action": "注视"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "激动→深情",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 44,
+        "title": "心理拉扯",
+        "mainBeat": "沈清秋因家族联姻压力与身份差距再次拉开心理距离",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "回避"
+          },
+          {
+            "name": "林初夏",
+            "action": "追问"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "释放",
+        "emotionalArc": "亲密→痛苦",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 45,
+        "title": "提前离场",
+        "mainBeat": "沈清秋在项目庆功宴上因家族电话提前黯然离场",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "离场"
+          },
+          {
+            "name": "林初夏",
+            "action": "担忧"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "舒缓",
+        "emotionalArc": "热闹→失落",
+        "hookIntentions": [
+          "【ch45-h1】提前离场"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 46,
+        "title": "沈家之名",
+        "mainBeat": "初夏从顾明轩口中彻底确认沈清秋家族联姻的具体背景",
+        "characters": [
+          {
+            "name": "顾明轩",
+            "action": "解释"
+          },
+          {
+            "name": "林初夏",
+            "action": "震惊"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "铺垫",
+        "emotionalArc": "疑惑→清醒",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch12-h1"
+        ]
+      },
+      {
+        "chapter": 47,
+        "title": "不甘平庸",
+        "mainBeat": "初夏不甘平庸决定以独立姿态成为沈清秋打破枷锁的底气",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "立志"
+          },
+          {
+            "name": "苏柚",
+            "action": "支持"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "迷茫→坚定",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 48,
+        "title": "前徒真相",
+        "mainBeat": "初夏得知前徒弟离开是因为无法承受沈家带来的压力",
+        "characters": [
+          {
+            "name": "赵佳妮",
+            "action": "告知"
+          },
+          {
+            "name": "林初夏",
+            "action": "理解"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "好奇→心疼",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch3-h1"
+        ]
+      },
+      {
+        "chapter": 49,
+        "title": "独立成长",
+        "mainBeat": "初夏开始独立负责重要子项目展现顶尖策划的潜质",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "主导"
+          },
+          {
+            "name": "沈清秋",
+            "action": "放手"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "压力→成长",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 50,
+        "title": "附件解密",
+        "mainBeat": "初夏彻底解密brief附件发现其与客户核心痛点相关",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "破解"
+          },
+          {
+            "name": "沈清秋",
+            "action": "欣慰"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "困惑→豁然",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch32-h1"
+        ]
+      },
+      {
+        "chapter": 51,
+        "title": "关系微妙",
+        "mainBeat": "两人关系在身份拉扯与灵魂契合中发生微妙转变",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "试探"
+          },
+          {
+            "name": "沈清秋",
+            "action": "默许"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "纠结→甜蜜",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 52,
+        "title": "沈家晚宴",
+        "mainBeat": "顾明轩提到沈家最近在筹备一场决定联姻的重要晚宴",
+        "characters": [
+          {
+            "name": "顾明轩",
+            "action": "邀请"
+          },
+          {
+            "name": "沈清秋",
+            "action": "沉默"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "上升",
+        "emotionalArc": "平静→压抑",
+        "hookIntentions": [
+          "【ch52-h1】沈家晚宴"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 53,
+        "title": "暗中支持",
+        "mainBeat": "初夏在沈清秋面临晚宴压力时默默提供专业与情绪支持",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "陪伴"
+          },
+          {
+            "name": "沈清秋",
+            "action": "依赖"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "焦虑→安心",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 54,
+        "title": "薄荷糖",
+        "mainBeat": "沈清秋在初夏疲惫时递上她最爱口味的薄荷糖",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "递糖"
+          },
+          {
+            "name": "林初夏",
+            "action": "感动"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "疲惫→温暖",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch18-h1"
+        ]
+      },
+      {
+        "chapter": 55,
+        "title": "感情确认",
+        "mainBeat": "两人在高压项目后确认彼此在对方心中的特殊位置",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "表白"
+          },
+          {
+            "name": "沈清秋",
+            "action": "回应"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "试探→确认",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 56,
+        "title": "旧车票",
+        "mainBeat": "初夏在沈清秋车里发现一张旧车票暗示其曾试图逃离",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "发现"
+          },
+          {
+            "name": "沈清秋",
+            "action": "夺过"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "铺垫",
+        "emotionalArc": "好奇→震惊",
+        "hookIntentions": [
+          "【ch56-h1】旧车票"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 57,
+        "title": "恐惧共鸣",
+        "mainBeat": "初夏理解沈清秋对失去自我的恐惧并承诺共同面对",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "拥抱"
+          },
+          {
+            "name": "沈清秋",
+            "action": "落泪"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "上升",
+        "emotionalArc": "心疼→坚定",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 58,
+        "title": "备用方案",
+        "mainBeat": "初夏的备用方案在家族企业竞标中意外发挥关键作用",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "展示"
+          },
+          {
+            "name": "沈清秋",
+            "action": "骄傲"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "紧张→自豪",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch40-h1"
+        ]
+      },
+      {
+        "chapter": 59,
+        "title": "半块方糖",
+        "mainBeat": "沈清秋开始喝加满糖的咖啡象征内心坚冰的融化",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "加糖"
+          },
+          {
+            "name": "林初夏",
+            "action": "微笑"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "克制→释然",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch5-h1"
+        ]
+      },
+      {
+        "chapter": 60,
+        "title": "第二卷末",
+        "mainBeat": "初夏完成职场蜕变与沈清秋感情升温确立灵魂契合",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "总结"
+          },
+          {
+            "name": "沈清秋",
+            "action": "肯定"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "回顾→幸福",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 61,
+        "title": "风暴前夕",
+        "mainBeat": "家族联姻压力全面爆发长辈直接介入沈清秋的工作",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "抗争"
+          },
+          {
+            "name": "林初夏",
+            "action": "担忧"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "铺垫",
+        "emotionalArc": "平静→紧张",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 62,
+        "title": "旧怀表",
+        "mainBeat": "沈清秋母亲寄来旧怀表施压要求其回归家族传统",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "拒收"
+          },
+          {
+            "name": "林初夏",
+            "action": "劝阻"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "上升",
+        "emotionalArc": "愤怒→冷静",
+        "hookIntentions": [
+          "【ch62-h1】旧怀表"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 63,
+        "title": "失去自我",
+        "mainBeat": "沈清秋面临失去自我的恐惧陷入深深的内心挣扎",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "崩溃"
+          },
+          {
+            "name": "林初夏",
+            "action": "安抚"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "恐惧→绝望",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 64,
+        "title": "觉醒反抗",
+        "mainBeat": "沈清秋在初夏的支撑下决定觉醒反抗家族理性枷锁",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "振作"
+          },
+          {
+            "name": "林初夏",
+            "action": "支持"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "释放",
+        "emotionalArc": "挣扎→坚定",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 65,
+        "title": "人脉名单",
+        "mainBeat": "赵佳妮离职前留下行业人脉名单助初夏独立破局",
+        "characters": [
+          {
+            "name": "赵佳妮",
+            "action": "交接"
+          },
+          {
+            "name": "林初夏",
+            "action": "感激"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "不舍→斗志",
+        "hookIntentions": [
+          "【ch65-h1】人脉名单"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 66,
+        "title": "独当一面",
+        "mainBeat": "初夏利用人脉名单独立策划出惊艳行业的破局方案",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "策划"
+          },
+          {
+            "name": "沈清秋",
+            "action": "旁观"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "压力→自信",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 67,
+        "title": "底气所在",
+        "mainBeat": "初夏以独立成熟的姿态成为沈清秋打破家族枷锁的底气",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "展示"
+          },
+          {
+            "name": "沈清秋",
+            "action": "震撼"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "忐忑→骄傲",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 68,
+        "title": "技术瓶颈",
+        "mainBeat": "初夏独立负责的新项目遇到技术瓶颈沈清秋暗中相助",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "攻坚"
+          },
+          {
+            "name": "沈清秋",
+            "action": "指导"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "焦虑→突破",
+        "hookIntentions": [
+          "【ch68-h1】技术瓶颈"
+        ],
+        "plannedPayoffOf": [
+          "ch45-h1"
+        ]
+      },
+      {
+        "chapter": 69,
+        "title": "提前离场",
+        "mainBeat": "沈清秋在家族施压的会议上提前离场选择站在初夏这边",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "离场"
+          },
+          {
+            "name": "林初夏",
+            "action": "追随"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "释放",
+        "emotionalArc": "压抑→畅快",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 70,
+        "title": "协议草案",
+        "mainBeat": "初夏在沈清秋抽屉发现一份未签署的联姻协议草案",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "发现"
+          },
+          {
+            "name": "沈清秋",
+            "action": "坦白"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "舒缓",
+        "emotionalArc": "震惊→理解",
+        "hookIntentions": [
+          "【ch70-h1】联姻草案"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 71,
+        "title": "全面爆发",
+        "mainBeat": "家族长辈亲自到场施压联姻压力达到全面爆发的顶点",
+        "characters": [
+          {
+            "name": "家族长辈",
+            "action": "施压"
+          },
+          {
+            "name": "沈清秋",
+            "action": "对峙"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "铺垫",
+        "emotionalArc": "平静→剑拔弩张",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 72,
+        "title": "无备注电话",
+        "mainBeat": "初夏得知那个无备注电话是沈清秋暗中寻找解约契机的记录",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "解释"
+          },
+          {
+            "name": "林初夏",
+            "action": "心疼"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "上升",
+        "emotionalArc": "疑惑→感动",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch22-h1"
+        ]
+      },
+      {
+        "chapter": 73,
+        "title": "对赌条款",
+        "mainBeat": "家族长辈提出苛刻的对赌条款作为解除联姻的条件",
+        "characters": [
+          {
+            "name": "家族长辈",
+            "action": "威胁"
+          },
+          {
+            "name": "沈清秋",
+            "action": "冷静"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "愤怒→理智",
+        "hookIntentions": [
+          "【ch73-h1】对赌条款"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 74,
+        "title": "理性谈判",
+        "mainBeat": "沈清秋依靠自身事业独立的底气与家族进行理性谈判",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "谈判"
+          },
+          {
+            "name": "林初夏",
+            "action": "旁听"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "释放",
+        "emotionalArc": "紧张→从容",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 75,
+        "title": "无名合影",
+        "mainBeat": "沈清秋解释无名合影是她已故的自由灵魂的象征",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "回忆"
+          },
+          {
+            "name": "林初夏",
+            "action": "共情"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "舒缓",
+        "emotionalArc": "好奇→释怀",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch15-h1"
+        ]
+      },
+      {
+        "chapter": 76,
+        "title": "核心数据",
+        "mainBeat": "初夏在谈判中抛出独立策划案中的核心数据作为筹码",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "展示"
+          },
+          {
+            "name": "家族长辈",
+            "action": "震惊"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "紧张→自信",
+        "hookIntentions": [
+          "【ch76-h1】核心数据"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 77,
+        "title": "打破枷锁",
+        "mainBeat": "沈清秋与初夏配合默契成功打破家族理性的联姻枷锁",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "签字"
+          },
+          {
+            "name": "林初夏",
+            "action": "握手"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "上升",
+        "emotionalArc": "压抑→释放",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 78,
+        "title": "沈家晚宴",
+        "mainBeat": "沈家晚宴上沈清秋正式宣布解除联姻并重获自由",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "宣布"
+          },
+          {
+            "name": "顾明轩",
+            "action": "祝福"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "忐忑→畅快",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch52-h1"
+        ]
+      },
+      {
+        "chapter": 79,
+        "title": "双向救赎",
+        "mainBeat": "两人在打破枷锁的过程中实现灵魂深处的双向救赎",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "拥抱"
+          },
+          {
+            "name": "沈清秋",
+            "action": "回应"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "感动→幸福",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 80,
+        "title": "商业证据",
+        "mainBeat": "顾明轩暗中收集的对沈家不利的商业证据交由沈清秋",
+        "characters": [
+          {
+            "name": "顾明轩",
+            "action": "交接"
+          },
+          {
+            "name": "沈清秋",
+            "action": "感激"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "舒缓",
+        "emotionalArc": "平静→释然",
+        "hookIntentions": [
+          "【ch80-h1】商业证据"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 81,
+        "title": "顶尖策划",
+        "mainBeat": "初夏凭借破局方案正式成长为行业认可的顶尖策划",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "领奖"
+          },
+          {
+            "name": "沈清秋",
+            "action": "注视"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "努力→荣耀",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 82,
+        "title": "人脉名单",
+        "mainBeat": "初夏利用人脉名单成功拓展新业务实现职场完全独立",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "签约"
+          },
+          {
+            "name": "沈清秋",
+            "action": "骄傲"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "紧张→喜悦",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch65-h1"
+        ]
+      },
+      {
+        "chapter": 83,
+        "title": "平等并肩",
+        "mainBeat": "初夏与沈清秋在职场上达到完全平等并肩作战的状态",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "探讨"
+          },
+          {
+            "name": "沈清秋",
+            "action": "倾听"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "紧张",
+        "emotionalArc": "敬畏→平等",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 84,
+        "title": "加密短信",
+        "mainBeat": "沈清秋在谈判前给初夏发加密短信表达最深的依赖",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "发短信"
+          },
+          {
+            "name": "林初夏",
+            "action": "回复"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "紧张→甜蜜",
+        "hookIntentions": [
+          "【ch84-h1】加密短信"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 85,
+        "title": "旧企划书",
+        "mainBeat": "初夏将旧企划书完善后作为两人共同理念的见证发表",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "发表"
+          },
+          {
+            "name": "沈清秋",
+            "action": "支持"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "回忆→坚定",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch28-h1"
+        ]
+      },
+      {
+        "chapter": 86,
+        "title": "确立关系",
+        "mainBeat": "两人在事业与灵魂完全契合后自然水到渠成确立关系",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "表白"
+          },
+          {
+            "name": "沈清秋",
+            "action": "答应"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "期待→幸福",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 87,
+        "title": "放弃自由",
+        "mainBeat": "初夏找到沈清秋当年放弃自由的真正原因是为了保护她",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "发现"
+          },
+          {
+            "name": "沈清秋",
+            "action": "坦白"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "上升",
+        "emotionalArc": "疑惑→震撼",
+        "hookIntentions": [
+          "【ch87-h1】放弃自由原因"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 88,
+        "title": "旧车票",
+        "mainBeat": "沈清秋将旧车票销毁象征彻底告别过去拥抱新生活",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "销毁"
+          },
+          {
+            "name": "林初夏",
+            "action": "陪伴"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "怀念→释然",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch56-h1"
+        ]
+      },
+      {
+        "chapter": 89,
+        "title": "温馨治愈",
+        "mainBeat": "两人开启温馨治愈的同居生活日常充满年上双标的宠溺",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "撒娇"
+          },
+          {
+            "name": "沈清秋",
+            "action": "宠溺"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "平淡→甜蜜",
+        "hookIntentions": [],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 90,
+        "title": "技术瓶颈",
+        "mainBeat": "初夏彻底解决技术瓶颈项目大获成功两人共同庆祝",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "庆祝"
+          },
+          {
+            "name": "沈清秋",
+            "action": "干杯"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "紧张→畅快",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch68-h1"
+        ]
+      },
+      {
+        "chapter": 91,
+        "title": "家族印章",
+        "mainBeat": "沈清秋交出家族印章彻底切断与家族控制的最后联系",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "交出"
+          },
+          {
+            "name": "林初夏",
+            "action": "握紧"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "铺垫",
+        "emotionalArc": "决绝→轻松",
+        "hookIntentions": [
+          "【ch91-h1】家族印章"
+        ],
+        "plannedPayoffOf": []
+      },
+      {
+        "chapter": 92,
+        "title": "定制钢笔",
+        "mainBeat": "沈清秋将定制钢笔送给初夏作为两人共同事业的见证",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "赠笔"
+          },
+          {
+            "name": "林初夏",
+            "action": "珍藏"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "感动→坚定",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch38-h1"
+        ]
+      },
+      {
+        "chapter": 93,
+        "title": "放弃自由",
+        "mainBeat": "初夏用爱彻底治愈沈清秋放弃自由带来的内心创伤",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "治愈"
+          },
+          {
+            "name": "沈清秋",
+            "action": "重生"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "心疼→圆满",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch87-h1"
+        ]
+      },
+      {
+        "chapter": 94,
+        "title": "商业证据",
+        "mainBeat": "顾明轩利用商业证据在海外开启新事业两人保持体面",
+        "characters": [
+          {
+            "name": "顾明轩",
+            "action": "告别"
+          },
+          {
+            "name": "沈清秋",
+            "action": "祝福"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "释放",
+        "emotionalArc": "平静→释怀",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch80-h1"
+        ]
+      },
+      {
+        "chapter": 95,
+        "title": "旧怀表",
+        "mainBeat": "沈清秋将旧怀表改造为现代腕表象征传统与现代的融合",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "改造"
+          },
+          {
+            "name": "林初夏",
+            "action": "赞赏"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "舒缓",
+        "emotionalArc": "怀念→向前",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch62-h1"
+        ]
+      },
+      {
+        "chapter": 96,
+        "title": "对赌条款",
+        "mainBeat": "初夏帮沈清秋完美达成对赌条款彻底赢得家族尊重",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "达成"
+          },
+          {
+            "name": "沈清秋",
+            "action": "骄傲"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "铺垫",
+        "emotionalArc": "紧张→胜利",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch73-h1"
+        ]
+      },
+      {
+        "chapter": 97,
+        "title": "加密短信",
+        "mainBeat": "初夏回复加密短信承诺未来无论风雨都并肩同行",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "回复"
+          },
+          {
+            "name": "沈清秋",
+            "action": "微笑"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "上升",
+        "emotionalArc": "感动→坚定",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch84-h1"
+        ]
+      },
+      {
+        "chapter": 98,
+        "title": "联姻草案",
+        "mainBeat": "沈清秋将联姻草案粉碎象征彻底粉碎过去的理性枷锁",
+        "characters": [
+          {
+            "name": "沈清秋",
+            "action": "粉碎"
+          },
+          {
+            "name": "林初夏",
+            "action": "拥抱"
+          }
+        ],
+        "threadId": "S1",
+        "pacing": "紧张",
+        "emotionalArc": "决绝→自由",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch70-h1"
+        ]
+      },
+      {
+        "chapter": 99,
+        "title": "核心数据",
+        "mainBeat": "初夏的核心数据成为行业标杆两人共同站在领奖台上",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "领奖"
+          },
+          {
+            "name": "沈清秋",
+            "action": "同台"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "释放",
+        "emotionalArc": "努力→荣耀",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch76-h1"
+        ]
+      },
+      {
+        "chapter": 100,
+        "title": "初夏清秋",
+        "mainBeat": "两人打破所有枷锁实现双向救赎迎来真正的初夏清秋",
+        "characters": [
+          {
+            "name": "林初夏",
+            "action": "相视"
+          },
+          {
+            "name": "沈清秋",
+            "action": "牵手"
+          }
+        ],
+        "threadId": "M",
+        "pacing": "舒缓",
+        "emotionalArc": "圆满→永恒",
+        "hookIntentions": [],
+        "plannedPayoffOf": [
+          "ch91-h1"
+        ]
+      }
+    ]
+  }
+}
