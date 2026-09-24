@@ -10,7 +10,10 @@ import { buildBookConfig, BookConfig } from "../novel/book-config";
 import { ArchitectAgent, ArchitectError, buildBookRules, buildCreativeBrief } from "../novel/architect";
 import { EXAMPLE_ARCHITECT_JSON } from "../novel/architect/example";
 import { BookRules, StoryBible } from "../novel/architect/types";
-import { N0_RAW_INPUT_DIR, N1_DRAFT_DIR, N2_BOOK_CONFIG_DIR, N3_STORY_BIBLE_DIR } from "../config/paths";
+import { ControlsAgent, ControlsError } from "../novel/controls";
+import { EXAMPLE_CONTROLS_JSON } from "../novel/controls/example";
+import { LongTermControls } from "../novel/controls/types";
+import { N0_RAW_INPUT_DIR, N1_DRAFT_DIR, N2_BOOK_CONFIG_DIR, N3_STORY_BIBLE_DIR, N4_CONTROLS_DIR } from "../config/paths";
 import { ConfiguredLlmModel } from "./configured-model";
 import { INPUT_GUIDE, USAGE } from "./input-guide";
 
@@ -32,6 +35,17 @@ export function buildMemoryArchitectAgent(): ArchitectAgent {
     responses: { architect_foundation: EXAMPLE_ARCHITECT_JSON },
   });
   return new ArchitectAgent({ model });
+}
+
+/**
+ * 组装「长期创作控制」应用 —— 内存模型版（演示/测试）。
+ * 使用 MemoryModel 返回预置的《隐龙》四件套，不发起真实网络请求。
+ */
+export function buildMemoryControlsAgent(): ControlsAgent {
+  const model = new MemoryModel({
+    responses: { creative_controls: EXAMPLE_CONTROLS_JSON },
+  });
+  return new ControlsAgent({ model });
 }
 
 /**
@@ -71,7 +85,15 @@ export function buildRealArchitectAgent(): ArchitectAgent {
   return new ArchitectAgent({ model });
 }
 
-type Step = "n0" | "n1" | "n2" | "n3";
+/**
+ * 组装「长期创作控制」应用 —— 真实模型版（N4，当前使用 qwen）。
+ */
+export function buildRealControlsAgent(): ControlsAgent {
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
+  return new ControlsAgent({ model });
+}
+
+type Step = "n0" | "n1" | "n2" | "n3" | "n4";
 
 interface CliArgs {
   input?: string;
@@ -100,8 +122,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.model = value;
       i += 1;
     } else if (token === "--step" && value !== undefined) {
-      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3") {
-        throw new Error(`--step 只支持 n0、n1、n2 或 n3，收到：${value}`);
+      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4") {
+        throw new Error(`--step 只支持 n0、n1、n2、n3 或 n4，收到：${value}`);
       }
       args.step = value;
       i += 1;
@@ -111,7 +133,7 @@ function parseArgs(argv: string[]): CliArgs {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3、--clarify、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4、--clarify、--help）`,
       );
     }
   }
@@ -185,6 +207,15 @@ function saveBookRulesDoc(rules: BookRules): string {
   const path = join(N3_STORY_BIBLE_DIR, `book-rules-${timestamp()}.json`);
   writeFileSync(path, JSON.stringify(rules, null, 2), "utf8");
   console.log(`已保存 N3 书籍规则到：${path}`);
+  return path;
+}
+
+/** 落盘 N4 长期创作控制到 artifacts/n4-controls/。 */
+function saveControls(controls: LongTermControls): string {
+  mkdirSync(N4_CONTROLS_DIR, { recursive: true });
+  const path = join(N4_CONTROLS_DIR, `controls-${timestamp()}.json`);
+  writeFileSync(path, JSON.stringify(controls, null, 2), "utf8");
+  console.log(`已保存 N4 长期创作控制到：${path}`);
   return path;
 }
 
@@ -284,6 +315,41 @@ async function runN2Only(): Promise<void> {
   saveBookConfig(config);
 }
 
+/** N4 单跑：把草案创作意图整理为长期创作控制四件套（只依赖 N1 草案，与 N2/N3 并行）。 */
+async function runN4Only(controls: ControlsAgent, draft: CreativeDraft, persist: boolean): Promise<void> {
+  const result = await controls.createControls(draft);
+  console.log("\n【N4 长期创作控制】");
+  console.log(JSON.stringify(result, null, 2));
+  if (persist) {
+    saveControls(result);
+  }
+}
+
+/** N4 单跑入口：读最新 N1 草案 → 长期创作控制。 */
+async function runN4Step(controls: ControlsAgent, persist: boolean): Promise<void> {
+  const draft = readLatestDraft();
+  if (draft === null) {
+    throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step n1 或全链路");
+  }
+  await runN4Only(controls, draft, persist);
+}
+
+/**
+ * N3 与 N4 并行执行（文档数据流：N2/N3/N4 三路并行；N3 依赖 N2 产物已在内存/落盘，N4 只依赖草案）。
+ * 并行后两个节点的耗时只取较慢者，不串行等待。
+ */
+async function runN3N4Parallel(
+  architect: ArchitectAgent,
+  controls: ControlsAgent,
+  draft: CreativeDraft,
+  isReal: boolean,
+): Promise<void> {
+  await Promise.all([
+    runN3Only(architect, isReal),
+    runN4Only(controls, draft, isReal),
+  ]);
+}
+
 /** N3 单跑：读最新 N1 草案 + N2 BookConfig → 架构师生成故事圣经与书籍规则。persist=false 时只打印不落盘（memory 演示）。 */
 async function runN3Only(architect: ArchitectAgent, persist: boolean): Promise<void> {
   const draft = readLatestDraft();
@@ -364,7 +430,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 全链路：N0 → N1 → N2 → N3
+  if (args.step === "n4") {
+    const controls = isReal ? buildRealControlsAgent() : buildMemoryControlsAgent();
+    await runN4Step(controls, isReal);
+    return;
+  }
+
+  // 全链路：N0 → N1 → N2 →（N3 ‖ N4 并行）
   const { rawInput, fromCache } = await resolveRawInput(n0, initialInput);
   if (isReal && !fromCache) {
     saveRawInput(rawInput);
@@ -380,7 +452,8 @@ async function main(): Promise<void> {
   if (isReal) {
     saveBookConfig(config);
   }
-  await runN3Only(architect, isReal);
+  const controls = isReal ? buildRealControlsAgent() : buildMemoryControlsAgent();
+  await runN3N4Parallel(architect, controls, draft, isReal);
 }
 
 main().catch((error: unknown) => {

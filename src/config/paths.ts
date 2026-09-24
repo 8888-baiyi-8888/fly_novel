@@ -20,3 +20,6 @@ export const N2_BOOK_CONFIG_DIR = join(ARTIFACTS_ROOT, "n2-book-config");
 
 /** N3 产物目录：故事圣经 + 书籍规则 JSON。 */
 export const N3_STORY_BIBLE_DIR = join(ARTIFACTS_ROOT, "n3-story-bible");
+
+/** N4 产物目录：长期创作控制四件套 JSON。 */
+export const N4_CONTROLS_DIR = join(ARTIFACTS_ROOT, "n4-controls");
