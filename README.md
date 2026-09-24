@@ -2,7 +2,7 @@
 
 `fly_novel` 是一个已初始化 TypeScript 环境的 Node.js 项目。
 
-开发设计见[模块文档索引](docs/modules/README.md)。
+开发时先阅读[项目架构](docs/architecture.md)，模块接口与详细设计见[模块文档索引](docs/modules/README.md)。
 
 
 ## 环境要求
