@@ -35,6 +35,7 @@ export const BEAT_BOARD_JSON_DESCRIPTION = `输出 JSON 对象，字段如下：
   - plannedPayoffOf: 本章预期回收的 hook tag 数组，如 ["ch2-h1"]；只引用前面章节埋下的 tag。
 - 全书节奏要求（必须满足）：
   - 相邻 3 章 pacing 不能全部是 "释放"；
+  - pacing 分布必须跟随卷目标与情绪曲线自然起伏，不允许五档平均分配（100 章时避免各档恰好 20 章这种规整分布）；开局卷以 "铺垫/上升" 为主，中段冲突卷以 "紧张/释放" 为主，收束卷以 "舒缓/铺垫" 为主；
   - hookIntentions 总数 ÷ 总章数 必须落在 0.2 到 0.5 之间（100 章 → 全书埋 20~50 条伏笔意图）；
   - 每一条 hookIntention 的 tag 都必须在某章的 plannedPayoffOf 中被引用（只埋不收 → 不合格）；
   - 每个埋设与回收之间要留出合理的章距，回收不能紧贴着埋设章。

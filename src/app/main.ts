@@ -14,8 +14,11 @@ import { ControlsAgent, ControlsError } from "../novel/controls";
 import { EXAMPLE_CONTROLS_JSON } from "../novel/controls/example";
 import { LongTermControls } from "../novel/controls/types";
 import { ArchitectureAgent, DirectorAgent, StoryArchitectAgent } from "../novel/architecture";
-import { EXAMPLE_ARCHITECTURE_JSON, EXAMPLE_BEAT_BOARD_JSON } from "../novel/architecture/example";
+import { EXAMPLE_ARCHITECTURE, EXAMPLE_ARCHITECTURE_JSON, EXAMPLE_BEAT_BOARD_JSON } from "../novel/architecture/example";
 import { StoryArchitecture } from "../novel/architecture/types";
+import { State0Agent } from "../novel/state0";
+import { EXAMPLE_STATE0_JSON } from "../novel/state0/example";
+import { State0 } from "../novel/state0/types";
 import {
   N0_RAW_INPUT_DIR,
   N1_DRAFT_DIR,
@@ -23,6 +26,7 @@ import {
   N3_STORY_BIBLE_DIR,
   N4_CONTROLS_DIR,
   N5_ARCHITECTURE_DIR,
+  N6_STATE0_DIR,
 } from "../config/paths";
 import { ConfiguredLlmModel } from "./configured-model";
 import { INPUT_GUIDE, USAGE } from "./input-guide";
@@ -70,6 +74,17 @@ export function buildMemoryArchitectureAgent(): ArchitectureAgent {
     model: new MemoryModel({ responses: { beat_board: EXAMPLE_BEAT_BOARD_JSON } }),
   });
   return new ArchitectureAgent(architect, director);
+}
+
+/**
+ * 组装「初始化运行状态」应用 —— 内存模型版（演示/测试）。
+ * TruthOracle + Hook Ledger 用 MemoryModel 返回预置《隐龙》State₀。
+ */
+export function buildMemoryState0Agent(): State0Agent {
+  const model = new MemoryModel({
+    responses: { state0: EXAMPLE_STATE0_JSON },
+  });
+  return new State0Agent({ model });
 }
 
 /**
@@ -131,7 +146,15 @@ export function buildRealArchitectureAgent(): ArchitectureAgent {
   return new ArchitectureAgent(architect, director);
 }
 
-type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5";
+/**
+ * 组装「初始化运行状态」应用 —— 真实模型版（N6，当前使用 qwen）。
+ */
+export function buildRealState0Agent(): State0Agent {
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
+  return new State0Agent({ model });
+}
+
+type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5" | "n6";
 
 interface CliArgs {
   input?: string;
@@ -160,8 +183,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.model = value;
       i += 1;
     } else if (token === "--step" && value !== undefined) {
-      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4" && value !== "n5") {
-        throw new Error(`--step 只支持 n0、n1、n2、n3、n4 或 n5，收到：${value}`);
+      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4" && value !== "n5" && value !== "n6") {
+        throw new Error(`--step 只支持 n0、n1、n2、n3、n4、n5 或 n6，收到：${value}`);
       }
       args.step = value;
       i += 1;
@@ -171,7 +194,7 @@ function parseArgs(argv: string[]): CliArgs {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4|n5、--clarify、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4|n5|n6、--clarify、--help）`,
       );
     }
   }
@@ -263,6 +286,15 @@ function saveArchitecture(architecture: StoryArchitecture): string {
   const path = join(N5_ARCHITECTURE_DIR, `architecture-${timestamp()}.json`);
   writeFileSync(path, JSON.stringify(architecture, null, 2), "utf8");
   console.log(`已保存 N5 小说静态架构到：${path}`);
+  return path;
+}
+
+/** 落盘 N6 State₀ 到 artifacts/n6-state0/。 */
+function saveState0(state0: State0): string {
+  mkdirSync(N6_STATE0_DIR, { recursive: true });
+  const path = join(N6_STATE0_DIR, `state0-${timestamp()}.json`);
+  writeFileSync(path, JSON.stringify(state0, null, 2), "utf8");
+  console.log(`已保存 N6 State₀ 到：${path}`);
   return path;
 }
 
@@ -446,7 +478,7 @@ async function runN5Only(
   architecture: ArchitectureAgent,
   persist: boolean,
   input?: { draft: CreativeDraft; storyBible: StoryBible; bookRules: BookRules; controls: LongTermControls },
-): Promise<void> {
+): Promise<StoryArchitecture> {
   let draft: CreativeDraft;
   let storyBible: StoryBible;
   let bookRules: BookRules;
@@ -496,11 +528,57 @@ async function runN5Only(
   if (persist) {
     saveArchitecture(result);
   }
+  return result;
 }
 
 /** N5 单跑入口（--step n5）：读落盘产物。 */
 async function runN5Step(architecture: ArchitectureAgent, persist: boolean): Promise<void> {
   await runN5Only(architecture, persist);
+}
+
+/** 读取 artifacts/n5-architecture/ 下最新的 N5 五件套；无产物返回 null。 */
+function readLatestArchitecture(): StoryArchitecture | null {
+  mkdirSync(N5_ARCHITECTURE_DIR, { recursive: true });
+  const files = readdirSync(N5_ARCHITECTURE_DIR, { encoding: "utf8" })
+    .filter((name) => name.startsWith("architecture-") && name.endsWith(".json"))
+    .sort();
+  if (files.length === 0) {
+    return null;
+  }
+  const path = join(N5_ARCHITECTURE_DIR, files[files.length - 1]);
+  return JSON.parse(readFileSync(path, "utf8")) as StoryArchitecture;
+}
+
+/**
+ * N6：把 N5 五件套转成初始运行状态 State₀（六类）。
+ * 优先使用内存传入的架构（全链路）；未传入时读最新 N5 产物（--step n6 单跑）。
+ */
+async function runN6Only(
+  state0Agent: State0Agent,
+  persist: boolean,
+  architecture?: StoryArchitecture,
+): Promise<void> {
+  let input: StoryArchitecture;
+  if (architecture !== undefined) {
+    input = architecture;
+  } else {
+    const latest = readLatestArchitecture();
+    if (latest === null) {
+      throw new Error("没有找到 N5 小说静态架构（artifacts/n5-architecture/），请先运行 --step n5 或全链路");
+    }
+    input = latest;
+  }
+  const result = await state0Agent.createState0(input);
+  console.log(`\n【N6 State₀ 初始化运行状态】人物状态 ${result.characterStates.length} 条 / 关系状态 ${result.relationshipStates.length} 条 / 世界状态 ${result.worldState.length} 条 / 伏笔种子 ${result.hookSeeds.length} 条 / 线状态板 ${result.threadBoard.length} 条 / 进度`);
+  console.log(JSON.stringify(result, null, 2));
+  if (persist) {
+    saveState0(result);
+  }
+}
+
+/** N6 单跑入口（--step n6）。memory 模式直接复用内存示例架构（与全链路 memory 一致，不读盘）；real 模式读落盘 N5 产物。 */
+async function runN6Step(state0Agent: State0Agent, persist: boolean, memoryArchitecture?: StoryArchitecture): Promise<void> {
+  await runN6Only(state0Agent, persist, memoryArchitecture);
 }
 
 /** N3 单跑：读最新 N1 草案 + N2 BookConfig → 架构师生成故事圣经与书籍规则。persist=false 时只打印不落盘（memory 演示）。 */
@@ -550,6 +628,7 @@ async function main(): Promise<void> {
   const n1 = isReal ? buildRealCreativeDraftAgent() : buildCreativeDraftAgent();
   const architect = isReal ? buildRealArchitectAgent() : buildMemoryArchitectAgent();
   const architecture = isReal ? buildRealArchitectureAgent() : buildMemoryArchitectureAgent();
+  const state0Agent = isReal ? buildRealState0Agent() : buildMemoryState0Agent();
   const initialInput =
     args.file !== undefined ? readFileSync(args.file, "utf8") : (args.input ?? EXAMPLE_RAW_INPUT);
 
@@ -596,7 +675,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 全链路：N0 → N1 → N2 →（N3 ‖ N4 并行）→ N5
+  if (args.step === "n6") {
+    await runN6Step(state0Agent, isReal, isReal ? undefined : EXAMPLE_ARCHITECTURE);
+    return;
+  }
+
+  // 全链路：N0 → N1 → N2 →（N3 ‖ N4 并行）→ N5 → N6
   const { rawInput, fromCache } = await resolveRawInput(n0, initialInput);
   if (isReal && !fromCache) {
     saveRawInput(rawInput);
@@ -614,17 +698,15 @@ async function main(): Promise<void> {
   }
   const controls = isReal ? buildRealControlsAgent() : buildMemoryControlsAgent();
   const parallel = await runN3N4Parallel(architect, controls, draft, isReal);
-  // N5：real 模式读 N3/N4 落盘产物；memory 模式直接复用并行段的返回值（避免串读旧产物）
-  if (isReal) {
-    await runN5Only(architecture, true);
-  } else {
-    await runN5Only(architecture, false, {
-      draft,
-      storyBible: parallel.storyBible,
-      bookRules: parallel.bookRules,
-      controls: parallel.controls,
-    });
-  }
+  // N5：real 模式读 N3/N4 落盘产物；memory 模式直接复用并行段的返回值（避免串读旧产物）。
+  // runN5Only 返回五件套，N6 直接接续，不需要二次读盘。
+  const architectureResult = await runN5Only(
+    architecture,
+    isReal,
+    isReal ? undefined : { draft, storyBible: parallel.storyBible, bookRules: parallel.bookRules, controls: parallel.controls },
+  );
+  // N6：memory 模式直接复用内存五件套；real 模式读落盘产物
+  await runN6Only(state0Agent, isReal, architectureResult);
 }
 
 main().catch((error: unknown) => {

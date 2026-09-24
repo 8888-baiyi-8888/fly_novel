@@ -26,3 +26,6 @@ export const N4_CONTROLS_DIR = join(ARTIFACTS_ROOT, "n4-controls");
 
 /** N5 产物目录：小说静态架构五件套 JSON。 */
 export const N5_ARCHITECTURE_DIR = join(ARTIFACTS_ROOT, "n5-architecture");
+
+/** N6 产物目录：初始化运行状态 State₀ 六类 JSON。 */
+export const N6_STATE0_DIR = join(ARTIFACTS_ROOT, "n6-state0");

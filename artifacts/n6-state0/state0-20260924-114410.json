@@ -1,0 +1,289 @@
+{
+  "bookId": "chuxiabuzhiqingqiuyi",
+  "title": "初夏不知清秋意",
+  "characterStates": [
+    {
+      "name": "林初夏",
+      "location": "头部广告公司办公区工位",
+      "identity": "刚入职的初级策划",
+      "emotion": "紧张、充满干劲又有些忐忑",
+      "cognition": "知道沈清秋是高冷严厉的总监；不知道沈清秋家族联姻细节及私下承受的压力",
+      "resources": "微薄的新人工资，一本记满笔记的本子"
+    },
+    {
+      "name": "沈清秋",
+      "location": "创意总监独立办公室",
+      "identity": "头部广告公司创意总监",
+      "emotion": "平静冷淡，内心压抑着家族催婚的烦躁",
+      "cognition": "知道林初夏是需要带的新人；不知道林初夏已察觉自己的脆弱及私下付出的努力",
+      "resources": "丰厚的年薪，行业顶尖人脉，但受制于家族"
+    },
+    {
+      "name": "顾明轩",
+      "location": "顾家或某高档会所",
+      "identity": "世家子弟与联姻对象",
+      "emotion": "温和理智，按部就班",
+      "cognition": "知道联姻是商业合作；不知道沈清秋对林初夏动心及对家族控制的真实恐惧",
+      "resources": "家族财富，商业资源"
+    },
+    {
+      "name": "赵佳妮",
+      "location": "广告公司办公区",
+      "identity": "资深策划与职场前辈",
+      "emotion": "干练、专注",
+      "cognition": "知道林初夏是新人；不知道沈清秋双标背后的感情因素及林初夏偷偷哭过",
+      "resources": "丰富的项目经验，职场人脉"
+    },
+    {
+      "name": "苏柚",
+      "location": "某咖啡馆或自己住处",
+      "identity": "林初夏闺蜜",
+      "emotion": "轻松、关心闺蜜",
+      "cognition": "看出沈清秋对林初夏特殊对待但装不知道；不知道沈清秋联姻内情及林初夏职场具体高压细节",
+      "resources": "充裕的时间，提供情绪价值的能力"
+    }
+  ],
+  "relationshipStates": [
+    {
+      "subjects": [
+        "林初夏",
+        "沈清秋"
+      ],
+      "relation": "上下级兼师徒",
+      "trust": "低（刚入职的敬畏）",
+      "knowledge": "林不知沈家族压力，沈不知林私下努力"
+    },
+    {
+      "subjects": [
+        "林初夏",
+        "苏柚"
+      ],
+      "relation": "闺蜜",
+      "trust": "高",
+      "knowledge": "苏不知林具体职场高压，林不知苏已看穿沈的特殊对待"
+    },
+    {
+      "subjects": [
+        "林初夏",
+        "赵佳妮"
+      ],
+      "relation": "同事与良性竞争对手",
+      "trust": "中（专业认可）",
+      "knowledge": "赵不知沈双标感情因素，不知林偷偷哭"
+    },
+    {
+      "subjects": [
+        "沈清秋",
+        "顾明轩"
+      ],
+      "relation": "联姻对象与利益共同体",
+      "trust": "表面客气实则防备",
+      "knowledge": "顾不知沈对林动心及真实恐惧"
+    },
+    {
+      "subjects": [
+        "沈清秋",
+        "家族长辈"
+      ],
+      "relation": "被控制与反抗",
+      "trust": "极低",
+      "knowledge": "长辈以为沈会屈服，沈在暗中寻找解约契机"
+    },
+    {
+      "subjects": [
+        "赵佳妮",
+        "沈清秋"
+      ],
+      "relation": "上下级",
+      "trust": "中（专业认可）",
+      "knowledge": "赵不知沈双标原因"
+    }
+  ],
+  "worldState": [
+    {
+      "key": "时间",
+      "value": "当代·初夏"
+    },
+    {
+      "key": "地点",
+      "value": "一线城市·头部广告公司"
+    },
+    {
+      "key": "公众是否知道沈清秋家族联姻",
+      "value": "否（仅限核心圈子）"
+    },
+    {
+      "key": "林初夏是否知道沈清秋家族背景",
+      "value": "否"
+    },
+    {
+      "key": "沈清秋是否打算解除联姻",
+      "value": "是（暗中寻找契机）"
+    },
+    {
+      "key": "顾明轩对联姻的态度",
+      "value": "无浪漫期待，寻找体面解约契机"
+    }
+  ],
+  "hookSeeds": [
+    {
+      "hookId": "H001",
+      "beatTag": "ch1-h1",
+      "plantedChapter": 1,
+      "type": "物件",
+      "timing": "slow-burn",
+      "core": "笔记本符号",
+      "expectedPayoff": 35,
+      "payoffNote": "初夏笔记本上的奇怪符号被沈清秋用作核心创意",
+      "notes": "初夏笔记本上的奇怪符号"
+    },
+    {
+      "hookId": "H002",
+      "beatTag": "ch2-h1",
+      "plantedChapter": 2,
+      "type": "物件",
+      "timing": "slow-burn",
+      "core": "枯木逢春盆栽",
+      "expectedPayoff": 25,
+      "payoffNote": "初夏发现沈清秋桌上的枯木盆栽真的发芽了",
+      "notes": "初夏观察到沈清秋桌上的枯木盆栽暗藏生机"
+    },
+    {
+      "hookId": "H003",
+      "beatTag": "ch5-h1",
+      "plantedChapter": 5,
+      "type": "信息差",
+      "timing": "endgame",
+      "core": "半块方糖习惯",
+      "expectedPayoff": 59,
+      "payoffNote": "沈清秋开始喝加满糖的咖啡——半块糖习惯的反转",
+      "notes": "初夏发现沈清秋喝咖啡只加半块糖的独特习惯"
+    },
+    {
+      "hookId": "H004",
+      "beatTag": "ch12-h1",
+      "plantedChapter": 12,
+      "type": "信息差",
+      "timing": "slow-burn",
+      "core": "客户提沈家",
+      "expectedPayoff": 46,
+      "payoffNote": "初夏从顾明轩口中彻底确认沈清秋家族联姻的具体背景",
+      "notes": "客户代表无意间提到沈清秋家族企业的名字"
+    },
+    {
+      "hookId": "H005",
+      "beatTag": "ch32-h1",
+      "plantedChapter": 32,
+      "type": "物件",
+      "timing": "mid-arc",
+      "core": "brief附件",
+      "expectedPayoff": 50,
+      "payoffNote": "初夏彻底解密brief附件发现其与客户核心痛点相关",
+      "notes": "初夏在项目brief里发现一个不起眼的隐秘附件"
+    },
+    {
+      "hookId": "H006",
+      "beatTag": "ch40-h1",
+      "plantedChapter": 40,
+      "type": "能力",
+      "timing": "mid-arc",
+      "core": "备用方案",
+      "expectedPayoff": 58,
+      "payoffNote": "初夏的备用方案在家族企业竞标中意外发挥关键作用",
+      "notes": "初夏为防万一熬夜做出的备用方案在关键时刻派上用场"
+    },
+    {
+      "hookId": "H007",
+      "beatTag": "ch56-h1",
+      "plantedChapter": 56,
+      "type": "物件",
+      "timing": "slow-burn",
+      "core": "旧车票",
+      "expectedPayoff": 88,
+      "payoffNote": "沈清秋将旧车票销毁象征彻底告别过去拥抱新生活",
+      "notes": "初夏在沈清秋车里发现一张旧车票暗示其曾试图逃离"
+    },
+    {
+      "hookId": "H008",
+      "beatTag": "ch65-h1",
+      "plantedChapter": 65,
+      "type": "物件",
+      "timing": "mid-arc",
+      "core": "人脉名单",
+      "expectedPayoff": 82,
+      "payoffNote": "初夏利用人脉名单成功拓展新业务实现职场完全独立",
+      "notes": "赵佳妮离职前留下行业人脉名单助初夏独立破局"
+    },
+    {
+      "hookId": "H009",
+      "beatTag": "ch70-h1",
+      "plantedChapter": 70,
+      "type": "秘密",
+      "timing": "slow-burn",
+      "core": "联姻草案",
+      "expectedPayoff": 98,
+      "payoffNote": "沈清秋将联姻草案粉碎象征彻底粉碎过去的理性枷锁",
+      "notes": "初夏在沈清秋抽屉发现一份未签署的联姻协议草案"
+    },
+    {
+      "hookId": "H010",
+      "beatTag": "ch80-h1",
+      "plantedChapter": 80,
+      "type": "物件",
+      "timing": "mid-arc",
+      "core": "商业证据",
+      "expectedPayoff": 94,
+      "payoffNote": "顾明轩利用商业证据在海外开启新事业两人保持体面",
+      "notes": "顾明轩暗中收集的对沈家不利的商业证据交由沈清秋"
+    },
+    {
+      "hookId": "H011",
+      "beatTag": "ch87-h1",
+      "plantedChapter": 87,
+      "type": "秘密",
+      "timing": "near-term",
+      "core": "放弃自由原因",
+      "expectedPayoff": 93,
+      "payoffNote": "初夏用爱彻底治愈沈清秋放弃自由带来的内心创伤",
+      "notes": "初夏找到沈清秋当年放弃自由的真正原因是为了保护她"
+    },
+    {
+      "hookId": "H012",
+      "beatTag": "ch91-h1",
+      "plantedChapter": 91,
+      "type": "物件",
+      "timing": "near-term",
+      "core": "家族印章",
+      "expectedPayoff": 100,
+      "payoffNote": "两人打破所有枷锁实现双向救赎迎来真正的初夏清秋",
+      "notes": "沈清秋交出家族印章彻底切断与家族控制的最后联系"
+    }
+  ],
+  "threadBoard": [
+    {
+      "lineId": "M",
+      "status": "进行中",
+      "currentEvent": "E-M01",
+      "nextEvent": "E-M02",
+      "waitingFor": [],
+      "estimatedWake": "方案被毙后引起沈清秋注意，进入私下指导阶段"
+    },
+    {
+      "lineId": "S1",
+      "status": "冷藏",
+      "currentEvent": null,
+      "nextEvent": "E-S101",
+      "waitingFor": [
+        "E-M03"
+      ],
+      "estimatedWake": "小型提案配合建立初步信任后，日常加班中初露家族压力端倪"
+    }
+  ],
+  "progressState": {
+    "currentChapter": 0,
+    "currentVolume": "第一卷",
+    "stage": "故事开端",
+    "completedEvents": [],
+    "nextDirection": "林初夏方案被毙，熬夜死磕引起沈清秋注意，开启职场蜕变与感情线"
+  }
+}
