@@ -19,6 +19,8 @@ import { StoryArchitecture } from "../novel/architecture/types";
 import { State0Agent } from "../novel/state0";
 import { EXAMPLE_STATE0_JSON } from "../novel/state0/example";
 import { State0 } from "../novel/state0/types";
+import { buildWorkspace } from "../novel/workspace";
+import { WorkspaceInputs } from "../novel/workspace/types";
 import {
   N0_RAW_INPUT_DIR,
   N1_DRAFT_DIR,
@@ -27,6 +29,7 @@ import {
   N4_CONTROLS_DIR,
   N5_ARCHITECTURE_DIR,
   N6_STATE0_DIR,
+  N7_WORKSPACE_DIR,
 } from "../config/paths";
 import { ConfiguredLlmModel } from "./configured-model";
 import { INPUT_GUIDE, USAGE } from "./input-guide";
@@ -154,7 +157,7 @@ export function buildRealState0Agent(): State0Agent {
   return new State0Agent({ model });
 }
 
-type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5" | "n6";
+type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5" | "n6" | "n7";
 
 interface CliArgs {
   input?: string;
@@ -162,6 +165,7 @@ interface CliArgs {
   model?: "memory" | "real";
   clarify?: boolean;
   step?: Step;
+  force?: boolean;
   help?: boolean;
 }
 
@@ -183,18 +187,20 @@ function parseArgs(argv: string[]): CliArgs {
       args.model = value;
       i += 1;
     } else if (token === "--step" && value !== undefined) {
-      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4" && value !== "n5" && value !== "n6") {
-        throw new Error(`--step 只支持 n0、n1、n2、n3、n4、n5 或 n6，收到：${value}`);
+      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4" && value !== "n5" && value !== "n6" && value !== "n7") {
+        throw new Error(`--step 只支持 n0、n1、n2、n3、n4、n5、n6 或 n7，收到：${value}`);
       }
       args.step = value;
       i += 1;
     } else if (token === "--clarify") {
       args.clarify = true;
+    } else if (token === "--force") {
+      args.force = true;
     } else if (token === "--help") {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4|n5|n6、--clarify、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4|n5|n6|n7、--clarify、--force、--help）`,
       );
     }
   }
@@ -557,7 +563,7 @@ async function runN6Only(
   state0Agent: State0Agent,
   persist: boolean,
   architecture?: StoryArchitecture,
-): Promise<void> {
+): Promise<State0> {
   let input: StoryArchitecture;
   if (architecture !== undefined) {
     input = architecture;
@@ -574,11 +580,73 @@ async function runN6Only(
   if (persist) {
     saveState0(result);
   }
+  return result;
 }
 
 /** N6 单跑入口（--step n6）。memory 模式直接复用内存示例架构（与全链路 memory 一致，不读盘）；real 模式读落盘 N5 产物。 */
 async function runN6Step(state0Agent: State0Agent, persist: boolean, memoryArchitecture?: StoryArchitecture): Promise<void> {
   await runN6Only(state0Agent, persist, memoryArchitecture);
+}
+
+/** 读取 artifacts/n6-state0/ 下最新的 N6 State₀；无产物返回 null。 */
+function readLatestState0(): State0 | null {
+  mkdirSync(N6_STATE0_DIR, { recursive: true });
+  const files = readdirSync(N6_STATE0_DIR, { encoding: "utf8" })
+    .filter((name) => name.startsWith("state0-") && name.endsWith(".json"))
+    .sort();
+  if (files.length === 0) {
+    return null;
+  }
+  const path = join(N6_STATE0_DIR, files[files.length - 1]);
+  return JSON.parse(readFileSync(path, "utf8")) as State0;
+}
+
+/**
+ * N7：把 N1~N6 产物序列化成书籍项目目录（纯程序，不调 LLM）。
+ * 全链路时直接使用内存产物；--step n7 单跑时读取落盘产物。
+ * persist=false（memory 演示）时 dry-run：生成全部文件内容但不落盘，打印目录树。
+ */
+async function runN7Only(
+  inputs: WorkspaceInputs,
+  persist: boolean,
+  force: boolean,
+): Promise<void> {
+  const result = buildWorkspace(inputs, { force, dryRun: !persist });
+  if (result.skipped) {
+    console.log(`N7 跳过：书目录已存在（${result.workspaceDir}），要重建请加 --force`);
+    return;
+  }
+  console.log(`\n【N7 持久化工作空间】${persist ? "已生成" : "dry-run 预览（未落盘）"}：${result.workspaceDir}`);
+  for (const relPath of result.filesWritten) {
+    console.log(`  ${relPath}`);
+  }
+}
+
+/** N7 单跑入口（--step n7）：读取全部落盘产物 → 生成书目录。 */
+async function runN7Step(persist: boolean, force: boolean): Promise<void> {
+  const draft = readLatestDraft();
+  const bookConfig = readLatestBookConfig();
+  const storyBible = readLatestStoryBible();
+  const bookRules = readLatestBookRules();
+  const controls = readLatestControls();
+  const architecture = readLatestArchitecture();
+  const state0 = readLatestState0();
+  const missing: string[] = [];
+  if (draft === null) missing.push("N1 草案");
+  if (bookConfig === null) missing.push("N2 书籍配置");
+  if (storyBible === null) missing.push("N3 故事圣经");
+  if (bookRules === null) missing.push("N3 书籍规则");
+  if (controls === null) missing.push("N4 长期创作控制");
+  if (architecture === null) missing.push("N5 静态架构");
+  if (state0 === null) missing.push("N6 State₀");
+  if (missing.length > 0) {
+    throw new Error(`N7 需要 N1~N6 全部产物，缺少：${missing.join("、")}。请先运行对应节点或全链路。`);
+  }
+  await runN7Only(
+    { draft: draft!, bookConfig: bookConfig!, storyBible: storyBible!, bookRules: bookRules!, controls: controls!, architecture: architecture!, state0: state0! },
+    persist,
+    force,
+  );
 }
 
 /** N3 单跑：读最新 N1 草案 + N2 BookConfig → 架构师生成故事圣经与书籍规则。persist=false 时只打印不落盘（memory 演示）。 */
@@ -680,6 +748,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (args.step === "n7") {
+    await runN7Step(isReal, args.force === true);
+    return;
+  }
+
   // 全链路：N0 → N1 → N2 →（N3 ‖ N4 并行）→ N5 → N6
   const { rawInput, fromCache } = await resolveRawInput(n0, initialInput);
   if (isReal && !fromCache) {
@@ -706,7 +779,21 @@ async function main(): Promise<void> {
     isReal ? undefined : { draft, storyBible: parallel.storyBible, bookRules: parallel.bookRules, controls: parallel.controls },
   );
   // N6：memory 模式直接复用内存五件套；real 模式读落盘产物
-  await runN6Only(state0Agent, isReal, architectureResult);
+  const state0Result = await runN6Only(state0Agent, isReal, architectureResult);
+  // N7：纯程序，把 N1~N6 内存产物序列化成书目录（real 落盘；memory dry-run 预览）
+  await runN7Only(
+    {
+      draft,
+      bookConfig: config,
+      storyBible: parallel.storyBible,
+      bookRules: parallel.bookRules,
+      controls: parallel.controls,
+      architecture: architectureResult,
+      state0: state0Result,
+    },
+    isReal,
+    false,
+  );
 }
 
 main().catch((error: unknown) => {

@@ -1,0 +1,48 @@
+{
+  "bookId": "chuxiabuzhiqingqiuyi",
+  "title": "初夏不知清秋意",
+  "bookConfig": {
+    "bookId": "chuxiabuzhiqingqiuyi",
+    "title": "初夏不知清秋意",
+    "genre": "都市",
+    "platform": "晋江",
+    "targetChapters": 100,
+    "chapterWordCount": 3000,
+    "language": "zh",
+    "chapterReviewMode": "auto",
+    "maxHookRetries": 2,
+    "createdAt": "2026-09-23T03:28:32.524Z",
+    "updatedAt": "2026-09-23T03:28:32.524Z"
+  },
+  "platformProfile": {
+    "platform": "jinjiang",
+    "hook": {
+      "densityPerChapter": [
+        0.15,
+        0.3
+      ],
+      "maxActive": 10,
+      "timingMix": {
+        "immediate": 0.05,
+        "near-term": 0.2,
+        "mid-arc": 0.35,
+        "slow-burn": 0.35,
+        "endgame": 0.05
+      }
+    },
+    "pacing": {
+      "consecutiveLowPressureMax": 3,
+      "climaxMultiple": 4
+    },
+    "chapterEndHook": {
+      "required": true
+    },
+    "payoffSpacing": {
+      "minor": 8,
+      "medium": 20,
+      "major": 40
+    },
+    "coreHookMax": 4
+  },
+  "createdAt": "2026-09-26T00:48:17.026Z"
+}

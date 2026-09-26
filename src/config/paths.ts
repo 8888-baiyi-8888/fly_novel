@@ -29,3 +29,6 @@ export const N5_ARCHITECTURE_DIR = join(ARTIFACTS_ROOT, "n5-architecture");
 
 /** N6 产物目录：初始化运行状态 State₀ 六类 JSON。 */
 export const N6_STATE0_DIR = join(ARTIFACTS_ROOT, "n6-state0");
+
+/** N7 产物目录：持久化工作空间（书项目目录，bookId 子目录）。 */
+export const N7_WORKSPACE_DIR = join(ARTIFACTS_ROOT, "n7-workspace");

@@ -1,0 +1,23 @@
+{
+  "bookId": "chuxiabuzhiqingqiuyi",
+  "threadBoard": [
+    {
+      "lineId": "M",
+      "status": "进行中",
+      "currentEvent": "E-M01",
+      "nextEvent": "E-M02",
+      "waitingFor": [],
+      "estimatedWake": "方案被毙后引起沈清秋注意，进入私下指导阶段"
+    },
+    {
+      "lineId": "S1",
+      "status": "冷藏",
+      "currentEvent": null,
+      "nextEvent": "E-S101",
+      "waitingFor": [
+        "E-M03"
+      ],
+      "estimatedWake": "小型提案配合建立初步信任后，日常加班中初露家族压力端倪"
+    }
+  ]
+}

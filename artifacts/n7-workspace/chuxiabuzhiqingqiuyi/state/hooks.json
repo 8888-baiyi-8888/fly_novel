@@ -1,0 +1,138 @@
+{
+  "bookId": "chuxiabuzhiqingqiuyi",
+  "hooks": [
+    {
+      "hookId": "H001",
+      "beatTag": "ch1-h1",
+      "plantedChapter": 1,
+      "type": "物件",
+      "timing": "slow-burn",
+      "core": "笔记本符号",
+      "expectedPayoff": 35,
+      "payoffNote": "初夏笔记本上的奇怪符号被沈清秋用作核心创意",
+      "notes": "初夏笔记本上的奇怪符号"
+    },
+    {
+      "hookId": "H002",
+      "beatTag": "ch2-h1",
+      "plantedChapter": 2,
+      "type": "物件",
+      "timing": "slow-burn",
+      "core": "枯木逢春盆栽",
+      "expectedPayoff": 25,
+      "payoffNote": "初夏发现沈清秋桌上的枯木盆栽真的发芽了",
+      "notes": "初夏观察到沈清秋桌上的枯木盆栽暗藏生机"
+    },
+    {
+      "hookId": "H003",
+      "beatTag": "ch5-h1",
+      "plantedChapter": 5,
+      "type": "信息差",
+      "timing": "endgame",
+      "core": "半块方糖习惯",
+      "expectedPayoff": 59,
+      "payoffNote": "沈清秋开始喝加满糖的咖啡——半块糖习惯的反转",
+      "notes": "初夏发现沈清秋喝咖啡只加半块糖的独特习惯"
+    },
+    {
+      "hookId": "H004",
+      "beatTag": "ch12-h1",
+      "plantedChapter": 12,
+      "type": "信息差",
+      "timing": "slow-burn",
+      "core": "客户提沈家",
+      "expectedPayoff": 46,
+      "payoffNote": "初夏从顾明轩口中彻底确认沈清秋家族联姻的具体背景",
+      "notes": "客户代表无意间提到沈清秋家族企业的名字"
+    },
+    {
+      "hookId": "H005",
+      "beatTag": "ch32-h1",
+      "plantedChapter": 32,
+      "type": "物件",
+      "timing": "mid-arc",
+      "core": "brief附件",
+      "expectedPayoff": 50,
+      "payoffNote": "初夏彻底解密brief附件发现其与客户核心痛点相关",
+      "notes": "初夏在项目brief里发现一个不起眼的隐秘附件"
+    },
+    {
+      "hookId": "H006",
+      "beatTag": "ch40-h1",
+      "plantedChapter": 40,
+      "type": "能力",
+      "timing": "mid-arc",
+      "core": "备用方案",
+      "expectedPayoff": 58,
+      "payoffNote": "初夏的备用方案在家族企业竞标中意外发挥关键作用",
+      "notes": "初夏为防万一熬夜做出的备用方案在关键时刻派上用场"
+    },
+    {
+      "hookId": "H007",
+      "beatTag": "ch56-h1",
+      "plantedChapter": 56,
+      "type": "物件",
+      "timing": "slow-burn",
+      "core": "旧车票",
+      "expectedPayoff": 88,
+      "payoffNote": "沈清秋将旧车票销毁象征彻底告别过去拥抱新生活",
+      "notes": "初夏在沈清秋车里发现一张旧车票暗示其曾试图逃离"
+    },
+    {
+      "hookId": "H008",
+      "beatTag": "ch65-h1",
+      "plantedChapter": 65,
+      "type": "物件",
+      "timing": "mid-arc",
+      "core": "人脉名单",
+      "expectedPayoff": 82,
+      "payoffNote": "初夏利用人脉名单成功拓展新业务实现职场完全独立",
+      "notes": "赵佳妮离职前留下行业人脉名单助初夏独立破局"
+    },
+    {
+      "hookId": "H009",
+      "beatTag": "ch70-h1",
+      "plantedChapter": 70,
+      "type": "秘密",
+      "timing": "slow-burn",
+      "core": "联姻草案",
+      "expectedPayoff": 98,
+      "payoffNote": "沈清秋将联姻草案粉碎象征彻底粉碎过去的理性枷锁",
+      "notes": "初夏在沈清秋抽屉发现一份未签署的联姻协议草案"
+    },
+    {
+      "hookId": "H010",
+      "beatTag": "ch80-h1",
+      "plantedChapter": 80,
+      "type": "物件",
+      "timing": "mid-arc",
+      "core": "商业证据",
+      "expectedPayoff": 94,
+      "payoffNote": "顾明轩利用商业证据在海外开启新事业两人保持体面",
+      "notes": "顾明轩暗中收集的对沈家不利的商业证据交由沈清秋"
+    },
+    {
+      "hookId": "H011",
+      "beatTag": "ch87-h1",
+      "plantedChapter": 87,
+      "type": "秘密",
+      "timing": "near-term",
+      "core": "放弃自由原因",
+      "expectedPayoff": 93,
+      "payoffNote": "初夏用爱彻底治愈沈清秋放弃自由带来的内心创伤",
+      "notes": "初夏找到沈清秋当年放弃自由的真正原因是为了保护她"
+    },
+    {
+      "hookId": "H012",
+      "beatTag": "ch91-h1",
+      "plantedChapter": 91,
+      "type": "物件",
+      "timing": "near-term",
+      "core": "家族印章",
+      "expectedPayoff": 100,
+      "payoffNote": "两人打破所有枷锁实现双向救赎迎来真正的初夏清秋",
+      "notes": "沈清秋交出家族印章彻底切断与家族控制的最后联系"
+    }
+  ],
+  "archive": []
+}
