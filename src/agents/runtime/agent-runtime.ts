@@ -7,15 +7,20 @@ export interface AgentRuntime {
 
 let runtime: AgentRuntime | undefined;
 
-/** 注册所有 Agent 共用的模型解析能力；传入 `undefined` 可清理注册。 */
+/** 注册模型解析器；传入 `undefined` 清理注册。 */
 export function configureAgentRuntime(nextRuntime: AgentRuntime | undefined): void {
-  runtime = nextRuntime;
+  if (nextRuntime === undefined) {
+    runtime = undefined;
+    return;
+  }
+  runtime = { ...nextRuntime };
 }
 
-/** 根据已注册运行时解析一个模型对象。 */
-export async function resolveAgentModel(modelId: string | undefined): Promise<BaseLanguageModel> {
+/** 从当前运行时配置解析模型，避免异步解析期间重新注册造成混用。 */
+export async function resolveAgentResources(modelId: string | undefined): Promise<{ model: BaseLanguageModel }> {
   if (runtime === undefined) {
     throw new Error("Agent 运行时尚未配置模型解析器。");
   }
-  return runtime.resolveModel(modelId);
+  const current = runtime;
+  return { model: await current.resolveModel(modelId) };
 }

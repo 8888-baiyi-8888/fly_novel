@@ -1,86 +1,131 @@
 import { BaseAgent } from "../core/base-agent.js";
-import { resolveAgentModel } from "../runtime/agent-runtime.js";
-import { runDeepAgent, type DeepAgentRunResult } from "../runtime/run-deep-agent.js";
+import { toolStrategy } from "langchain";
+import { z } from "zod";
+import type { SupportedResponseFormat } from "deepagents";
+import { resolveAgentResources } from "../runtime/agent-runtime.js";
+import { createModelAgent, runDeepAgent, type DeepAgentInstance, type DeepAgentRunResult } from "../runtime/run-deep-agent.js";
+import type { CharacterAgentOptions, CharacterAgentRunInput, CharacterAgentRunOptions, CharacterContextSection, CharacterScene } from "./types.js";
 
-/** 创建角色 Agent 时固定的角色定位。 */
-export interface CharacterAgentOptions {
-  /** 已注册模型的标识；省略时由 Agent 运行时选择默认模型。 */
-  readonly modelId?: string;
-  /** 小说身份。 */
-  readonly storyId: string;
-  /** 剧情分支身份；省略时由 Agent 运行时选择默认分支。 */
-  readonly branchId?: string;
-  /** 角色身份。 */
-  readonly characterId: string;
-}
+export type CharacterAgentRunResult<TOutput = Record<string, unknown>> = Omit<DeepAgentRunResult, "structuredResponse"> & {
+  structuredResponse: TOutput;
+};
 
-/** 角色在本轮可见、可听到或已经获知的场景材料。 */
-export type CharacterScene = Readonly<Record<string, unknown>>;
-
-/** 本轮角色输出的范围与形式。 */
-export interface CharacterOutputRequirements {
-  readonly scope: string;
-  readonly maxDialogueLines?: number;
-  readonly maxActions?: number;
-  readonly stopCondition?: string;
-  readonly includeInnerActivity?: boolean;
-}
-
-/** 单次角色运行的业务输入。 */
-export interface CharacterAgentRunInput {
-  readonly scene: CharacterScene;
-  readonly outputRequirements: CharacterOutputRequirements;
-}
-
-/** 单次角色运行的调用控制参数。 */
-export interface CharacterAgentRunOptions {
-  readonly signal?: AbortSignal;
-}
-
-function requireIdentifier(value: unknown, fieldName: string): string {
+function requireIdentifier(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError(`${fieldName} 必须是非空字符串。`);
+    throw new TypeError(`${field} 必须是非空字符串。`);
   }
   return value;
 }
 
-function createModelPrompt(input: CharacterAgentRunInput): string {
-  return JSON.stringify({
-    scene: input.scene,
-    outputRequirements: input.outputRequirements,
-  });
-}
-
-/**
- * 角色 Agent 的外部调用入口。
- *
- * 当前只把场景和输出要求交给 Deep Agents；记忆读取、角色提示、结构化结果校验和持久化尚未接入。
- */
+/** 调用 Deep Agent 并校验响应结构；会话历史仅保存在实例的内存检查点中。 */
 export class CharacterAgent extends BaseAgent {
   readonly #options: Readonly<CharacterAgentOptions>;
+  #session: { agent: DeepAgentInstance; format: { current: SupportedResponseFormat } } | undefined;
+  #running = false;
 
   public constructor(options: CharacterAgentOptions) {
     super();
-    const modelId = options.modelId === undefined ? undefined : requireIdentifier(options.modelId, "modelId");
     this.#options = Object.freeze({
-      modelId,
+      modelId: options.modelId === undefined ? undefined : requireIdentifier(options.modelId, "modelId"),
       storyId: requireIdentifier(options.storyId, "storyId"),
-      branchId: options.branchId === undefined ? undefined : requireIdentifier(options.branchId, "branchId"),
+      branchId: options.branchId === undefined ? "main" : requireIdentifier(options.branchId, "branchId"),
       characterId: requireIdentifier(options.characterId, "characterId"),
     });
   }
 
-  /** 返回创建时固定的模型选择与角色定位。 */
+  /** 固定的角色定位，供内部加载方法使用。 */
   public get options(): Readonly<CharacterAgentOptions> {
     return this.#options;
   }
 
-  /** 执行一次只包含场景与输出要求的 Deep Agents 调用。 */
-  public async run(
-    input: CharacterAgentRunInput,
-    options: CharacterAgentRunOptions = {},
-  ): Promise<DeepAgentRunResult> {
-    const model = await resolveAgentModel(this.#options.modelId);
-    return runDeepAgent(model, createModelPrompt(input), options.signal);
+  /** 人物身份与背景接口；待接入角色档案。 */
+  protected async loadProfile(): Promise<CharacterContextSection> {
+    return { content: "" };
+  }
+
+  /** 当前目标、关系、身体与情绪接口；待接入状态读取。 */
+  protected async loadState(): Promise<CharacterContextSection> {
+    return { content: "" };
+  }
+
+  /** 按场景准备性格及关系模式；待接入性格资料。 */
+  protected async loadPersonality(_scene: CharacterScene): Promise<CharacterContextSection> {
+    return { content: "" };
+  }
+
+  /** 跳过空白片段，保留有效内容原文与顺序。 */
+  protected combineContext(sections: readonly CharacterContextSection[]): string {
+    return sections.filter(({ content }) => content.trim() !== "").map(({ content }) => content).join("\n\n");
+  }
+
+  /** 顺序准备内部资料并附加场景；输出结构通过框架 responseFormat 指定。 */
+  protected async buildModelPrompt(input: CharacterAgentRunInput): Promise<string> {
+    const sections = [
+      await this.loadProfile(),
+      await this.loadState(),
+      await this.loadPersonality(input.scene),
+    ];
+    return this.combineContext([
+      ...sections,
+      { content: `场景：${JSON.stringify(input.scene)}` },
+    ]);
+  }
+
+  /** 生成阶段；框架与模型错误直接传播。 */
+  protected async generateReaction(prompt: string, responseFormat: SupportedResponseFormat, options: CharacterAgentRunOptions): Promise<DeepAgentRunResult> {
+    if (this.#session === undefined) {
+      const { model } = await resolveAgentResources(this.#options.modelId);
+      options.signal?.throwIfAborted();
+      const format = { current: responseFormat };
+      this.#session = {
+        agent: createModelAgent(model, "你扮演当前绑定的小说角色，根据自身资料和场景作出反应。调用本轮结构化输出工具提交最终响应，参数遵循该工具的输出 Schema，不用普通文本代替工具调用。",
+          () => format.current),
+        format,
+      };
+    }
+    this.#session.format.current = responseFormat;
+    return await runDeepAgent(this.#session.agent, prompt, options.signal);
+  }
+
+  /** 人物一致性等业务校验接口；run 仅校验输出结构，不调用此占位接口。 */
+  protected async validateResult(_result: DeepAgentRunResult): Promise<void> {
+    throw new Error("角色结果校验尚未实现。");
+  }
+
+  /** 校验后的记忆、状态更新与一致保存接口；未实现，run 不调用它。 */
+  protected async saveExperienceAndState(_input: CharacterAgentRunInput, _result: DeepAgentRunResult): Promise<void> {
+    throw new Error("角色经历与状态持久化尚未实现。");
+  }
+
+  /**
+   * 准备上下文并延续本实例的会话；同一实例不允许并发运行。
+   * 执行失败时输出错误提示和异常，并将原异常继续抛给调用方。
+   * @param input 外部可知场景与调用方定义的 Zod 对象 Schema。
+   * @param options 本次调用的取消信号。
+   * @returns 框架状态及通过 Schema 校验的 structuredResponse；失败或取消不回滚框架检查点。
+   */
+  public async run<TSchema extends z.ZodObject>(input: CharacterAgentRunInput<TSchema>, options: CharacterAgentRunOptions = {}): Promise<CharacterAgentRunResult<z.output<TSchema>>> {
+    options.signal?.throwIfAborted();
+    if (this.#running) {
+      throw new Error("同一个 CharacterAgent 不允许并发运行，请等待当前调用结束。");
+    }
+    this.#running = true;
+    try {
+      const schema = input.responseFormat;
+      if (!(schema instanceof z.ZodObject)) {
+        throw new TypeError("responseFormat 必须是调用方提供的 Zod 对象 Schema。");
+      }
+      // 将调用方的字段约束和额外字段规则一并传给框架。
+      const responseFormat = toolStrategy(z.toJSONSchema(schema), { handleError: false });
+      const prompt = await this.buildModelPrompt(input);
+      options.signal?.throwIfAborted();
+      const result = await this.generateReaction(prompt, responseFormat, options);
+      return { ...result, structuredResponse: schema.parse(result.structuredResponse) };
+    } catch (error) {
+      console.error("CharacterAgent 运行失败：", error);
+      throw error;
+    } finally {
+      this.#running = false;
+    }
   }
 }

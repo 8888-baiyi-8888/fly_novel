@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@fly-novel/agents": "workspace:*",
-    "@langchain/openai": "^1.5.13"
+    "@langchain/openai": "^1.5.13",
+    "zod": "^4.6.5"
   }
 }

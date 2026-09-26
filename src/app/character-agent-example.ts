@@ -1,4 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
+import { z } from "zod";
 import { CharacterAgent, configureAgentRuntime } from "@fly-novel/agents";
 import { decryptSecret } from "../config/credentials";
 import { readEncryptionKey, readSettings } from "../config/settings";
@@ -63,14 +64,24 @@ async function main(): Promise<void> {
       location: "雨后的渡口",
       visibleEvents: ["苏晴问林舟：明天还会回来吗？"],
     },
-    outputRequirements: {
-      scope: "以林舟身份作出简短回应。",
-      maxDialogueLines: 2,
-      maxActions: 1,
-      includeInnerActivity: true,
-    },
+    responseFormat: z.strictObject({
+      dialogue: z.string().describe("角色实际说出的台词"),
+      action: z.string().describe("角色实际做出的动作"),
+    }),
   });
-  console.dir(result, { depth: null });
+  console.dir(result.structuredResponse, { depth: null });
+
+  // 复用同一实例；框架自动带入上一轮历史，无需传回 result。
+  const nextResult = await agent.run({
+    scene: {
+      location: "雨后的渡口",
+      visibleEvents: ["苏晴追问：你刚才是怎么回答我的？"],
+    },
+    responseFormat: z.strictObject({
+      reply: z.string().describe("角色对追问的回应"),
+    }),
+  });
+  console.dir(nextResult.structuredResponse, { depth: null });
 }
 
 if (require.main === module) {

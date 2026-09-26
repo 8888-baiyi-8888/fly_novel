@@ -277,7 +277,7 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 | --- | --- | --- |
 | 创建依赖 | 已初始化的模型适配器，可选 `memoryReader`。 | 应用入口完成配置和凭据初始化后，注册给 Agent 内部运行时。 |
 | `execution` | 整次运行超时 `timeoutMs`、模型调用预算 `maxModelCalls`。 | 内部运行时创建执行单元时解析并校验，提供商重试计入预算。 |
-| 内部执行输入 | F1、F2、F3、F8 定义的人物快照、记忆、场景和输出要求。 | Agent 每次根据初始化身份、调用方 `scene` 及 `outputRequirements` 独立组装。 |
+| 内部执行输入 | F1、F2、F3、F8 定义的人物快照、记忆、场景和输出要求。 | Agent 每次根据初始化身份、调用方 `scene` 及 `responseFormat` 独立组装。 |
 | `options.signal` | 可选取消信号。 | 调用方控制。 |
 | 模型输出与工具结果 | 待校验的外部数据。 | 本次执行，不信任类型断言。 |
 
@@ -409,7 +409,7 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 
 ### 3.1 对外入口
 
-调用方通过 `@fly-novel/agents` 的公共入口创建一个绑定角色身份的 Agent。`CharacterAgent` 已导出以下构造参数、运行参数和类型。应用启动时通过 `configureAgentRuntime({ resolveModel })` 注册模型解析器；`run` 将 `modelId` 解析为 LangChain 模型对象并调用 Deep Agents。
+调用方通过 `@fly-novel/agents` 的公共入口创建一个绑定角色身份的 Agent。应用启动时通过 `configureAgentRuntime({ resolveModel })` 注册模型解析器；`run` 将 `modelId` 解析为 LangChain 模型对象并调用 Deep Agents。
 
 初始化只传入模型和角色定位所需的基本信息：
 
@@ -417,7 +417,7 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 | --- | --- |
 | `modelId` | 已注册模型的标识；省略时由 Agent 运行时选择默认模型。模型对象、凭据和 Deep Agents 创建由运行时处理。 |
 | `storyId` | 小说身份，用于定位小说数据与世界规则。 |
-| `branchId` | 剧情分支身份；省略时由应用确定当前默认分支。 |
+| `branchId` | 剧情分支身份；省略时固定为 `main`。该标识不触发文件存储。 |
 | `characterId` | 角色身份，用于加载该角色的档案、状态、记忆与性格。 |
 
 运行时只传入当前小说生成所需的内容：
@@ -425,23 +425,36 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 | 参数 | 用途 |
 | --- | --- |
 | `scene` | 当前角色能看到、听到或已经获知的场景信息，以及本轮实际反馈。 |
-| `outputRequirements` | 本轮输出范围和形式，例如最多几句台词、允许几个动作、停止位置及是否需要内心活动。 |
+| `responseFormat` | 调用方提供的 Zod 4 对象 Schema，定义本轮输出字段、类型、含义、必需项和额外字段处理规则。Agent 不预设字段名或字段集合。Schema 描述表达数据含义，不指定角色必须作出的选择。 |
 | `signal` | 可选取消信号。 |
 
-接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId })` 和 `agent.run({ scene, outputRequirements }, { signal? })`。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
+接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId })` 和 `agent.run({ scene, responseFormat }, { signal? })`。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
 
-当前 `run` 将 `scene` 和 `outputRequirements` 序列化后交给 Deep Agents，并将 `signal` 传给底层调用。模型由注册的 `resolveModel(modelId)` 返回；未注册解析器时调用失败。Deep Agents 文件读写权限全部拒绝。角色快照、三层记忆、性格提示、结构化结果校验和 F6、F9 持久化尚未接入。
+`run` 将场景组织为本轮消息，使用 `z.toJSONSchema(schema)` 保留调用方约束，再交给框架 `toolStrategy`，并将 `signal` 传给底层调用。Schema 必须是可转换为 JSON Schema 的 Zod 对象；缺失或类型不符在模型初始化前拒绝。首次运行通过注册的 `resolveModel(modelId)` 解析模型并创建框架实例；后续运行复用该实例，由模型调用中间件设置本轮 Schema，不重建会话。重新注册运行时不改变已创建实例的模型。
 
-Deep Agents 的单次调用函数属于 Agent 共享运行时，不从 `@fly-novel/agents` 导出。它接收已解析的模型对象、场景提示和取消信号，不读取配置、凭据、角色文件或记忆，并拒绝所有文件读写权限。`CharacterAgent` 使用该函数；其他模板后续可复用它。
+结果中的 `structuredResponse` 按调用方 Schema 校验，其余字段保留框架状态。`CharacterAgentRunInput<TSchema>` 接收外部 Schema，`run()` 返回的 `CharacterAgentRunResult<z.output<TSchema>>` 推导对应输出类型，必需字段不会统一退化为可选字段。字段名称、嵌套结构、数组、可选项和描述均属于调用方；F4、F5 的字段是业务设计参考，不是类内置的输出约束。正式业务提交仍未接入。
+
+结构化输出采用工具调用策略，模型需要支持工具调用；未依赖供应商原生 JSON Schema 模式。模型调用中间件显式设置 `toolChoice: "auto"`，避免框架默认强制工具调用与 DeepSeek 思考模式冲突。模型调用中间件将普通工具列表设为空，仅由框架提供本轮结构化输出工具；自动选择不保证模型一定调用输出工具，程序只接受通过校验的结构化结果。违反外部 Schema 或未生成结构化结果会使调用失败，结构化解析错误不自动重试。框架先按转换后的 JSON Schema 校验，再按调用方 Zod Schema 解析；使用 `z.strictObject()` 拒绝额外字段，`z.looseObject()` 允许保留额外字段，不能假定框架会自动剔除 `z.object()` 未声明的字段。每轮清空框架状态中的旧 `structuredResponse`，防止缺失本轮结果时返回上轮内容。结构校验不保证人物一致性、事实正确性或状态变化依据有效。
+
+每个实例拥有独立的框架 `MemorySaver`，调用使用固定 `thread_id` 延续该实例的会话；每轮只传新增消息，由框架读取历史。不同实例不共享会话检查点；程序退出后检查点丢失。同一实例并发 `run` 会立即拒绝，失败或取消后释放运行状态。
+
+框架检查点不等同于 F6、F9 的正式经历提交。调用失败或取消时不回滚检查点，也不隐式重试整轮。返回值经过结构校验，未经过业务校验。框架可能压缩长上下文，检查点不保证最近经历永远完整。
+
+角色类为人物资料、当前状态和性格准备保留统一的 `{ content: string }` 接口。`buildModelPrompt()` 顺序准备这些资料，`combineContext()` 跳过空白片段，再附加外部场景和输出字段；`generateReaction()` 负责调用框架。会话历史不通过 `loadMemory()` 手工检索或拼接。`validateResult()` 与 `saveExperienceAndState()` 是业务校验和正式经历提交接口，直接调用会报告未实现，`run()` 不调用它们。
+
+角色运行不加载记忆摘要，不挂载磁盘存储后端，也不向模型提供文件读写工具。已有角色记忆文件不删除、不读取；业务记忆策略仍由 F2、F8、F9 描述。
 
 执行超时、模型调用预算、检索材料预算和保存重试策略属于应用的 Agent 运行时配置，不暴露在每次角色调用参数中。它们在创建内部执行单元时校验并固定，提供商重试也计入预算，不额外执行隐式整轮重跑。精确 Deep Agents SDK 适配在实现时按安装版本验证。
 
 ### 3.2 创建、调用、采用和再次调用
 
-以下 TypeScript 使用当前调用形式。调用代码不接触 `novelService`、`memoryReader`、提交 ID 或快照版本；它们属于 `CharacterAgent` 的内部协作对象。应用启动时一次性完成模型、存储和 Deep Agents 运行时初始化，并注册模型解析器，不能用此简化接口绕过应用初始化。
+以下 TypeScript 使用当前调用形式。调用代码不接触 `novelService`、`memoryReader`、提交 ID 或快照版本；它们属于 `CharacterAgent` 的内部协作对象。应用启动时一次性完成模型和 Deep Agents 运行时初始化，并注册模型解析器，不能用此简化接口绕过应用初始化。
+
+以下字段仅为调用样例，由调用方在运行时定义；可以替换字段名、类型或整个 Schema，无需修改 `CharacterAgent`。调用方需声明 `zod` 依赖，可运行的应用样例见[character-agent-example.ts](../../../src/app/character-agent-example.ts)。
 
 ```ts
-import { CharacterAgent } from "@fly-novel/agents";
+import { CharacterAgent, type CharacterScene } from "@fly-novel/agents";
+import { z } from "zod";
 
 async function runCharacterExample(scene: CharacterScene) {
   const agent = new CharacterAgent({
@@ -455,25 +468,22 @@ async function runCharacterExample(scene: CharacterScene) {
   const result = await agent.run(
     {
       scene,
-      outputRequirements: {
-        scope: "回应苏晴关于明天是否回来的询问",
-        maxDialogueLines: 2,
-        maxActions: 1,
-        stopCondition: "回应后等待苏晴反应",
-        includeInnerActivity: true,
-      },
+      responseFormat: z.strictObject({
+        dialogue: z.string().describe("角色实际说出的台词"),
+        action: z.string().describe("角色实际做出的动作"),
+      }),
     },
     { signal: controller.signal },
   );
 
-  // 当前返回 Deep Agents 的原始运行状态；角色经历、状态和持久化尚未接入。
-  return result;
+  // dialogue、action 的类型从调用方 Schema 推导为 string。
+  return result.structuredResponse;
 }
 ```
 
-Agent 内部在每次运行前按 F2 读取三层记忆、按 F8 加载性格模式，并将本轮 `scene` 中的可知事件与角色反应、状态变化一致保存。动作需要外部反馈时，本轮只保存实际发生的尝试；下一次 `run` 的 `scene` 提供实际反馈，Agent 再自行接续。调用方不需要传回上一轮结果、快照版本或未完成互动列表。
+同一实例的下一次 `run` 只提供新场景、实际反馈和输出字段，不需要传回上一轮结果。三层记忆读取、性格模式和正式状态提交属于 F2、F8、F9 的业务接入目标，不是当前会话检查点的功能。行动尝试不能仅因进入会话历史就视为外部结果已经发生。
 
-运行中的文件提交使用内部稳定提交 ID 和 F9 的冻结请求恢复。回执丢失、版本冲突或无法恢复会使 `run` 明确失败，不会向调用方暴露底层提交查询接口，也不会悄悄重新调用模型生成不同的角色反应。
+接入 F9 文件提交时，使用内部稳定提交 ID 和冻结请求恢复；回执丢失、版本冲突或无法恢复应使调用明确失败，不能重新调用模型替代提交恢复。当前 `run` 不执行文件提交。
 
 ### 3.3 配置特定关系下的性格表现
 

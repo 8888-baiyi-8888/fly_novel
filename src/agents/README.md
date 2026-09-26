@@ -31,9 +31,13 @@ const writer = new WriterAgent();
 const evaluator = new EvaluatorAgent();
 ```
 
-应用启动时调用 `configureAgentRuntime({ resolveModel })` 注册 `modelId` 到 LangChain 模型对象的解析器。`CharacterAgent` 通过 `runtime/` 的 Deep Agents 调用函数执行模型请求；该函数不从包入口导出，不读取配置或凭据，并拒绝所有文件读写权限。
+应用启动时调用 `configureAgentRuntime({ resolveModel })` 注册模型解析器。`CharacterAgent` 首次运行时固定模型，后续运行复用框架实例及内存会话检查点；不加载或写入角色记忆文件。框架创建和调用函数位于 `runtime/`，不从包入口导出，不读取应用配置或凭据。会话边界见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。
 
-可使用根项目的 `pnpm run character-agent-example` 手动调试当前角色模型调用。该入口负责读取本机 DeepSeek 配置与凭据，模型创建不属于 Agent 包。
+人物资料、当前状态和性格准备保留统一的 `{ content: string }` 业务接口，`combineContext()` 跳过空白片段。会话记忆交给框架检查点处理，不通过业务接口手工拼接。`validateResult()` 与 `saveExperienceAndState()` 是业务校验和正式经历提交的占位接口，不参与当前 `run()`；框架保存会话状态不代表正式角色经历已采用。
+
+调用方通过 `run({ scene, responseFormat: schema })` 提供 Zod 对象 Schema，自行定义输出字段；Agent 没有内置字段枚举或预设输出结构。模型调用中间件支持每轮不同 Schema，复用会话实例。使用 `result.structuredResponse` 读取通过结构校验的结果，返回类型从外部 Schema 推导。调用样例及错误语义见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。业务一致性校验与结构校验分开。
+
+可使用根项目的 `pnpm run character-agent-example` 手动调试同一实例的连续两轮模型调用。该入口负责读取本机 DeepSeek 配置与凭据，模型创建不属于 Agent 包。
 
 在仓库根目录执行：
 
