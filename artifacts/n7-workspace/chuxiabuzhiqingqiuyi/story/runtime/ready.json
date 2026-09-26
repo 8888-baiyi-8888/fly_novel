@@ -1,0 +1,94 @@
+{
+  "bookId": "chuxiabuzhiqingqiuyi",
+  "status": "ready",
+  "checkedAt": "2026-09-26T01:26:44.621Z",
+  "checks": [
+    {
+      "name": "inkos.json（BookConfig+节奏尺子）",
+      "ok": true,
+      "detail": "初夏不知清秋意 / 晋江 / 100 章 / 尺子 jinjiang"
+    },
+    {
+      "name": "story/story_bible.md",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/book_rules.md（含 AI 红线）",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/characters.md",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/story_frame.md",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/volume_map.md",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/threads.md + state/threads.json",
+      "ok": true,
+      "detail": "逻辑层+调度层"
+    },
+    {
+      "name": "story/beats/beats.json（节拍板）",
+      "ok": true,
+      "detail": "100 章 = targetChapters 100"
+    },
+    {
+      "name": "story/author_intent.md",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/current_focus.md",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/volume_direction.md",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/constraints.md",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "state/hooks.json + story/hooks.md（伏笔账本）",
+      "ok": true,
+      "detail": "机器权威+人读投影"
+    },
+    {
+      "name": "state/facts.json（事实库）",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "chapters/（正文存放）",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "story/runtime/（运行痕迹）",
+      "ok": true,
+      "detail": "存在"
+    },
+    {
+      "name": "export/（成品导出）",
+      "ok": true,
+      "detail": "存在"
+    }
+  ],
+  "redlineFixes": [],
+  "note": "N9 章节级工作流以此书目录为唯一事实源；Settler 划账等运行期更新只写本目录。"
+}

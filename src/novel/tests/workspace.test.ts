@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { buildWorkspace, buildWorkspaceFiles, PLATFORM_PROFILE, resolvePlatformProfile } from "../workspace";
+import { buildWorkspace, buildWorkspaceFiles, PLATFORM_PROFILE, resolvePlatformProfile, verifyWorkspace, scanAndFixRedlines } from "../workspace";
 import { WorkspaceInputs } from "../workspace/types";
 import { hooksToMd, threadsToMd, beatsByVolumeToMd, charactersToMd } from "../workspace/markdown";
 
@@ -153,4 +153,96 @@ test("N7：hooksToMd 表格含 beatTag 列（与节拍板对账信息可追溯�
   const md = hooksToMd(EXAMPLE_STATE0.hookSeeds);
   assert.ok(md.includes("beatTag"));
   assert.ok(md.includes("ch2-h1"));
+});
+
+test("N8：验收八类内容物齐全（verifyWorkspace 对合法书目录全过）", () => {
+  const root = mkdtempSync(join(tmpdir(), "n8-verify-"));
+  const result = buildWorkspace(inputs(), { dryRun: false, workspaceRoot: root });
+  assert.equal(result.skipped, false);
+  const v = verifyWorkspace(result.workspaceDir);
+  assert.equal(v.ok, true);
+  // 八类关键检查项都出现
+  const names = v.checks.map((c) => c.name).join("|");
+  assert.ok(names.includes("inkos.json"));
+  assert.ok(names.includes("story_bible"));
+  assert.ok(names.includes("characters"));
+  assert.ok(names.includes("beats.json"));
+  assert.ok(names.includes("chapters/"));
+  assert.ok(names.includes("export/"));
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("N8：验收能揪出缺失文件（删掉 beats.json 后不通过）", () => {
+  const root = mkdtempSync(join(tmpdir(), "n8-verify-missing-"));
+  const result = buildWorkspace(inputs(), { dryRun: false, workspaceRoot: root });
+  rmSync(join(result.workspaceDir, "story", "beats", "beats.json"), { force: true });
+  const v = verifyWorkspace(result.workspaceDir);
+  assert.equal(v.ok, false);
+  assert.ok(v.checks.find((c) => !c.ok && c.name.includes("beats.json")));
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("N8：红线消毒自动替换并记录「从什么改成什么」，book_rules.md 不动，幂等", () => {
+  const root = mkdtempSync(join(tmpdir(), "n8-redline-"));
+  const result = buildWorkspace(inputs(), { dryRun: false, workspaceRoot: root });
+  const dir = result.workspaceDir;
+
+  // 造红线词：写进 story_bible.md 追加一行；facts.json 的值里塞一个短语；beats.json 塞正则条目标
+  const biblePath = join(dir, "story", "story_bible.md");
+  const bible = readFileSync(biblePath, "utf8");
+  writeFileSync(biblePath, bible + "\n瞳孔缩成针尖的沈清秋像一面镜子，林初夏的温暖逐渐融化沈清秋的内心。\n", "utf8");
+  const factsPath = join(dir, "state", "facts.json");
+  const facts = JSON.parse(readFileSync(factsPath, "utf8"));
+  facts.facts.push({ subject: "测试", predicate: "测试", value: "他说这话时喉结滚了滚，几不可察" });
+  writeFileSync(factsPath, JSON.stringify(facts, null, 2), "utf8");
+
+  const scan = scanAndFixRedlines(dir);
+  // 4 条命中：瞳孔缩成针尖 / 像一面镜子 / 融化沈清秋的内心（正则）/ 喉结滚了滚 / 几不可察 → 至少 5 条
+  assert.ok(scan.fixes.length >= 5, `实际 ${scan.fixes.length} 条`);
+  assert.equal(scan.damaged.length, 0);
+
+  // from/to 可追溯：每条 fix 都带 file/line/from/to
+  for (const f of scan.fixes) {
+    assert.ok(f.from.length > 0 && f.to.length > 0, `fix 缺 from/to: ${JSON.stringify(f)}`);
+    assert.ok(f.from !== f.to);
+  }
+  const phraseFix = scan.fixes.find((f) => f.from === "瞳孔缩成针尖");
+  assert.ok(phraseFix, "应有瞳孔缩成针尖的替换记录");
+  assert.equal(phraseFix!.to, "瞳孔骤缩");
+  assert.ok(phraseFix!.line >= 1, "fix 应带有效行号");
+  const patternFix = scan.fixes.find((f) => f.from === "融化沈清秋的内心");
+  assert.ok(patternFix, "正则条目也应被记录");
+  assert.equal(patternFix!.to, "松动沈清秋的防备");
+
+  // 替换后的文件内容不含红线词
+  const patchedBible = readFileSync(biblePath, "utf8");
+  assert.ok(!patchedBible.includes("瞳孔缩成针尖"));
+  assert.ok(!patchedBible.includes("像一面镜子"));
+  assert.ok(!patchedBible.includes("融化沈清秋的内心"));
+  // JSON 仍可解析
+  assert.doesNotThrow(() => JSON.parse(readFileSync(factsPath, "utf8")));
+
+  // book_rules.md 里 A02 定义含「瞳孔缩成针尖」，必须原样保留（规则定义不是违规）
+  const rules = readFileSync(join(dir, "story", "book_rules.md"), "utf8");
+  assert.ok(rules.includes("瞳孔缩成针尖"), "book_rules.md 的规则定义不能被消毒");
+
+  // 幂等：再扫一次无新命中
+  const again = scanAndFixRedlines(dir);
+  assert.equal(again.fixes.length, 0, `二次扫描应有 0 处，实际 ${again.fixes.length}`);
+
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("N8：替换破坏 JSON 时回滚并标记 damaged（不写坏文件）", () => {
+  const root = mkdtempSync(join(tmpdir(), "n8-damaged-"));
+  const result = buildWorkspace(inputs(), { dryRun: false, workspaceRoot: root });
+  const dir = result.workspaceDir;
+  // 手写一个坏 JSON（值里未闭合引号），但含红线词 → 替换后仍坏 → 回滚标记
+  const badPath = join(dir, "state", "facts.json");
+  writeFileSync(badPath, '{"bookId":"yinlong","facts":[{"value":"瞳孔缩成针尖未闭合}]\n', "utf8");
+  const scan = scanAndFixRedlines(dir);
+  assert.ok(scan.damaged.some((d) => d.includes("facts.json")), `damaged 应为 facts.json，实际 ${scan.damaged.join(",")}`);
+  // 原文件未被写回（保持原样）
+  assert.equal(readFileSync(badPath, "utf8"), '{"bookId":"yinlong","facts":[{"value":"瞳孔缩成针尖未闭合}]\n');
+  rmSync(root, { recursive: true, force: true });
 });

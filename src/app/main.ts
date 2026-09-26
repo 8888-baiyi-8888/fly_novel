@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { MemoryModel } from "../harness/adapters/models/memory-model";
@@ -19,7 +19,7 @@ import { StoryArchitecture } from "../novel/architecture/types";
 import { State0Agent } from "../novel/state0";
 import { EXAMPLE_STATE0_JSON } from "../novel/state0/example";
 import { State0 } from "../novel/state0/types";
-import { buildWorkspace } from "../novel/workspace";
+import { buildWorkspace, verifyWorkspace, scanAndFixRedlines } from "../novel/workspace";
 import { WorkspaceInputs } from "../novel/workspace/types";
 import {
   N0_RAW_INPUT_DIR,
@@ -157,7 +157,7 @@ export function buildRealState0Agent(): State0Agent {
   return new State0Agent({ model });
 }
 
-type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5" | "n6" | "n7";
+type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5" | "n6" | "n7" | "n8";
 
 interface CliArgs {
   input?: string;
@@ -166,6 +166,7 @@ interface CliArgs {
   clarify?: boolean;
   step?: Step;
   force?: boolean;
+  book?: string;
   help?: boolean;
 }
 
@@ -187,8 +188,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.model = value;
       i += 1;
     } else if (token === "--step" && value !== undefined) {
-      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4" && value !== "n5" && value !== "n6" && value !== "n7") {
-        throw new Error(`--step 只支持 n0、n1、n2、n3、n4、n5、n6 或 n7，收到：${value}`);
+      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4" && value !== "n5" && value !== "n6" && value !== "n7" && value !== "n8") {
+        throw new Error(`--step 只支持 n0、n1、n2、n3、n4、n5、n6、n7 或 n8，收到：${value}`);
       }
       args.step = value;
       i += 1;
@@ -196,11 +197,14 @@ function parseArgs(argv: string[]): CliArgs {
       args.clarify = true;
     } else if (token === "--force") {
       args.force = true;
+    } else if (token === "--book" && value !== undefined) {
+      args.book = value;
+      i += 1;
     } else if (token === "--help") {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4|n5|n6|n7、--clarify、--force、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4|n5|n6|n7|n8、--clarify、--force、--book <bookId>、--help）`,
       );
     }
   }
@@ -649,6 +653,72 @@ async function runN7Step(persist: boolean, force: boolean): Promise<void> {
   );
 }
 
+/** 定位 N8 要处理的书目录：--book 指定 bookId，缺省取 n7-workspace 下最新书目录。 */
+function resolveWorkspaceBookId(bookIdArg?: string): { bookId: string; dir: string } {
+  if (bookIdArg !== undefined && bookIdArg !== "") {
+    return { bookId: bookIdArg, dir: join(N7_WORKSPACE_DIR, bookIdArg) };
+  }
+  mkdirSync(N7_WORKSPACE_DIR, { recursive: true });
+  const books = readdirSync(N7_WORKSPACE_DIR, { encoding: "utf8" })
+    .filter((name) => name !== ".gitkeep" && !name.startsWith("."))
+    .sort();
+  if (books.length === 0) {
+    throw new Error(`artifacts/n7-workspace 下没有书目录，请先运行 --step n7。也可用 --book <bookId> 指定。`);
+  }
+  return { bookId: books[books.length - 1], dir: join(N7_WORKSPACE_DIR, books[books.length - 1]) };
+}
+
+/**
+ * N8：Book Runtime Ready（交接点，纯程序不调 LLM）。
+ * ① 验收八类内容物 → ② AI 红线扫描消毒（自动替换并打印「从什么改成什么」）→ ③ 写交接凭据 ready.json。
+ */
+async function runN8Step(bookIdArg?: string): Promise<void> {
+  const { bookId, dir } = resolveWorkspaceBookId(bookIdArg);
+  if (!existsSync(dir)) {
+    throw new Error(`书目录不存在：${dir}。请先运行 --step n7 生成，或检查 --book <bookId>。`);
+  }
+  console.log(`\n【N8 Book Runtime Ready】交接点：小说级终点 = 章节级起点`);
+  console.log(`  书：${bookId} @ ${dir}\n`);
+
+  // ① 验收八类内容物
+  const verify = verifyWorkspace(dir);
+  const bad = verify.checks.filter((c) => !c.ok);
+  for (const c of verify.checks) {
+    console.log(`  ${c.ok ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
+  // ② AI 红线扫描消毒
+  console.log(`\n【N8 红线消毒】扫描全部 .md/.json（排除 book_rules.md 规则定义与 story/runtime/ 运行日志）…`);
+  const scan = scanAndFixRedlines(dir);
+  if (scan.damaged.length > 0) {
+    console.log(`  ⚠ 替换后 JSON 无法解析（已回滚，需人工处理）：${scan.damaged.join("、")}`);
+  }
+  if (scan.fixes.length === 0) {
+    console.log("  未发现红线词，无需修改 ✓");
+  } else {
+    console.log(`  共 ${scan.fixes.length} 处自动替换（扫 ${scan.scannedFiles} 个文件）：`);
+    for (const f of scan.fixes) {
+      console.log(`    ${f.file}:${f.line}（${f.ruleId}）「${f.from}」→「${f.to}」`);
+    }
+  }
+
+  // ③ 写交接凭据
+  const ready = {
+    bookId,
+    status: verify.ok && scan.damaged.length === 0 ? "ready" : "warn",
+    checkedAt: new Date().toISOString(),
+    checks: verify.checks,
+    redlineFixes: scan.fixes,
+    note: "N9 章节级工作流以此书目录为唯一事实源；Settler 划账等运行期更新只写本目录。",
+  };
+  const readyPath = join(dir, "story", "runtime", "ready.json");
+  mkdirSync(join(dir, "story", "runtime"), { recursive: true });
+  writeFileSync(readyPath, JSON.stringify(ready, null, 2), "utf8");
+
+  console.log(`\n交接结果：${ready.status === "ready" ? "READY ✓（可进入 N9 章节执行）" : "WARN ⚠（存在缺失/损坏，请修复后再进 N9）"}`);
+  console.log(`交接凭据已写入：${readyPath}`);
+}
+
 /** N3 单跑：读最新 N1 草案 + N2 BookConfig → 架构师生成故事圣经与书籍规则。persist=false 时只打印不落盘（memory 演示）。 */
 async function runN3Only(architect: ArchitectAgent, persist: boolean): Promise<{ storyBible: StoryBible; bookRules: BookRules }> {
   const draft = readLatestDraft();
@@ -750,6 +820,11 @@ async function main(): Promise<void> {
 
   if (args.step === "n7") {
     await runN7Step(isReal, args.force === true);
+    return;
+  }
+
+  if (args.step === "n8") {
+    await runN8Step(args.book);
     return;
   }
 
