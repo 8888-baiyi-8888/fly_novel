@@ -25,17 +25,19 @@ const character = new CharacterAgent({
   storyId: "novel-river",
   branchId: "main",
   characterId: "character-lin-zhou",
+  worldBackgroundPath: "./novel-data/novel-river/world-background.md",
+  characterInfoPath: "./novel-data/novel-river/characters/character-lin-zhou/profile.md",
 });
 const director = new DirectorAgent();
 const writer = new WriterAgent();
 const evaluator = new EvaluatorAgent();
 ```
 
-应用启动时调用 `configureAgentRuntime({ resolveModel, characterMemoryDirectory })` 注册模型解析器和可选记忆目录。每次 `CharacterAgent.run()` 都创建独立的框架执行实例；启用记忆目录后，角色以 `<characterId>.json` 读写持久记忆，`getAllMemories()` 返回全部已保存记录。框架创建和调用函数位于 `runtime/`，不从包入口导出，不读取应用配置或凭据。会话边界见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。
+应用启动时调用 `configureAgentRuntime({ resolveModel, characterMemoryDirectory })` 注册模型解析器和记忆根目录。`CharacterAgent.run()` 每次接收稳定的 `sceneId`；记忆按 `<根目录>/<storyId>/character_agent/<branchId>/<characterId>/memory/<sceneId>.json` 隔离，同一场景多轮记录追加到同一文件。`getAllMemories()` 合并该小说、分支和角色下所有场景文件的记录。框架创建和调用函数位于 `runtime/`，不从包入口导出，不读取应用配置或凭据。会话边界见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。
 
-人物资料、当前状态和性格准备保留统一的 `{ content: string }` 业务接口，`combineContext()` 跳过空白片段。启用持久记忆后，每轮均从文件记忆重建历史消息；不存在实例内会话检查点。`validateResult()` 与 `saveExperienceAndState()` 是业务校验和正式经历提交的占位接口，不参与当前 `run()`。
+创建 `CharacterAgent` 时通过 `worldBackgroundPath` 和 `characterInfoPath` 指定世界背景与角色个人信息文件；构造阶段读取 UTF-8 文本并初始化 `system_prompts`，文件缺失或内容为空时立即失败。启用持久记忆后，每轮均从文件记忆重建历史消息；不存在实例内会话检查点。
 
-调用方通过 `run({ scene, responseFormat: schema })` 提供 Zod 对象 Schema，自行定义输出字段；Agent 没有内置字段枚举或预设输出结构。模型调用中间件支持每轮不同 Schema。使用 `result.structuredResponse` 读取通过结构校验的结果，返回类型从外部 Schema 推导。调用样例及错误语义见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。业务一致性校验与结构校验分开。
+调用方通过 `run({ sceneId, scene, responseFormat: schema })` 提供稳定场景 ID、当前场景和 Zod 对象 Schema，自行定义输出字段；Agent 没有内置字段枚举或预设输出结构。模型调用中间件支持每轮不同 Schema。使用 `result.structuredResponse` 读取通过结构校验的结果，返回类型从外部 Schema 推导。调用样例及错误语义见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。业务一致性校验与结构校验分开。
 
 可使用根项目的 `pnpm run character-agent-example` 手动调试同一实例的连续两轮模型调用。该入口负责读取本机 DeepSeek 配置与凭据，模型创建不属于 Agent 包。
 

@@ -45,9 +45,10 @@ async function main(): Promise<void> {
     model: deepseek.model,
     apiKey,
     configuration: { baseURL: deepseek.baseURL },
+    modelKwargs: { thinking: { type: "disabled" } },
   });
   configureAgentRuntime({
-    characterMemoryDirectory: join(APP_HOME, "memories", "characters"),
+    characterMemoryDirectory: join(APP_HOME, "novel_data"),
     resolveModel(modelId) {
       if (modelId !== undefined && modelId !== "deepseek") {
         throw new Error(`样例只注册 deepseek 模型，不能解析：${modelId}`);
@@ -61,8 +62,11 @@ async function main(): Promise<void> {
     storyId: "debug-story",
     branchId: "main",
     characterId: "debug-character",
+    worldBackgroundPath: join(APP_HOME, "novel_data", "debug-story", "world-background.md"),
+    characterInfoPath: join(APP_HOME, "novel_data", "debug-story", "characters", "debug-character", "profile.md"),
   });
   const result = await agent.run({
+    sceneId: "scene-ferry",
     scene: {
       location: "雨后的渡口",
       visibleEvents: ["苏晴问林舟：明天还会回来吗？"],
@@ -76,6 +80,7 @@ async function main(): Promise<void> {
 
   // 复用同一实例；框架自动带入上一轮历史，无需传回 result。
   const nextResult = await agent.run({
+    sceneId: "scene-ferry",
     scene: {
       location: "雨后的渡口",
       visibleEvents: ["苏晴追问：你刚才是怎么回答我的？"],

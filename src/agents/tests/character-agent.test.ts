@@ -19,13 +19,17 @@ const { FakeListChatModel: BaseFakeListChatModel }: typeof import("@langchain/co
 const { AIMessage }: typeof import("@langchain/core/messages") = requireFromAgentsPackage("@langchain/core/messages");
 const { z }: typeof import("zod") = requireFromAgentsPackage("zod");
 const performanceSchema = z.strictObject({ performance: z.string() }).meta({ title: "character_response" });
+const promptFiles = {
+  worldBackgroundPath: join(process.cwd(), "src/agents/tests/fixtures/world-background.md"),
+  characterInfoPath: join(process.cwd(), "src/agents/tests/fixtures/character-info.md"),
+};
 
 class FakeListChatModel extends BaseFakeListChatModel {
   private outputFields: string[] = [];
   private outputName = "";
   override bindTools(tools: unknown[], options?: this["ParsedCallOptions"]): this {
-    // 在真实框架的模型边界拒绝导致 DeepSeek 思考模式报错的强制工具选择。
-    assert.equal(options?.tool_choice, "auto");
+    // 结构化输出必须调用工具，避免模型改为普通文本回答。
+    assert.equal(options?.tool_choice, "required");
     const format = z.object({ type: z.literal("function"), function: z.object({
       name: z.string().regex(/^(character_response|custom_response|extract-\d+)$/),
       parameters: z.object({ properties: z.record(z.string(), z.unknown()) }),
@@ -76,8 +80,9 @@ test("内部资料先于外部场景拼接，空资料不产生占位文本", as
       return { content: "性格：谨慎" };
     }
   }
-  const agent = new PreparedAgent({ storyId: "story", characterId: "lin" });
+  const agent = new PreparedAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
   assert.equal(await agent.prompt({
+    sceneId: "scene-ferry",
     scene: { location: "渡口" },
     responseFormat: z.strictObject({ performance: z.string(), innerActivity: z.string() }).meta({ title: "character_response" }),
   }), '人物：林舟\n\n性格：谨慎\n\n场景：{"location":"渡口"}');
@@ -87,6 +92,7 @@ test("内部资料先于外部场景拼接，空资料不产生占位文本", as
 test("角色 Agent 固定外部身份并在未配置运行时时拒绝", async () => {
   configureAgentRuntime(undefined);
   const agent = new CharacterAgent({
+    ...promptFiles,
     modelId: "default",
     storyId: "novel-river",
     branchId: "main",
@@ -94,30 +100,32 @@ test("角色 Agent 固定外部身份并在未配置运行时时拒绝", async (
   });
 
   assert.deepEqual(agent.options, {
+    ...promptFiles,
     modelId: "default",
     storyId: "novel-river",
     branchId: "main",
     characterId: "character-lin-zhou",
   });
   await assert.rejects(
-    agent.run({ scene: { location: "渡口" }, responseFormat: performanceSchema }),
+    agent.run({ sceneId: "scene-ferry", scene: { location: "渡口" }, responseFormat: performanceSchema }),
     /尚未配置模型解析器/,
   );
 });
 
 test("角色 Agent 拒绝空的外部身份标识", () => {
   assert.throws(
-    () => new CharacterAgent({ storyId: " ", characterId: "character-lin-zhou" }),
+    () => new CharacterAgent({ ...promptFiles, storyId: " ", characterId: "character-lin-zhou" }),
     /storyId 必须是非空字符串/,
   );
   assert.throws(
-    () => new CharacterAgent({ modelId: "", storyId: "novel-river", characterId: "character-lin-zhou" }),
+    () => new CharacterAgent({ ...promptFiles, modelId: "", storyId: "novel-river", characterId: "character-lin-zhou" }),
     /modelId 必须是非空字符串/,
   );
 });
 
 test("角色子功能只拼接有内容的片段并保留顺序", () => {
   const agent = new CharacterAgentProbe({
+    ...promptFiles,
     storyId: "novel-river",
     characterId: "character-lin-zhou",
   });
@@ -129,26 +137,32 @@ test("角色子功能只拼接有内容的片段并保留顺序", () => {
   ]), "人物设定\n\n场景");
 });
 
-test("角色记忆仅按 characterId 落盘，并可由新实例读取全部记录", async (t) => {
+test("角色记忆按小说、分支、角色和场景隔离，并可由新实例读取", async (t) => {
   const memoryDirectory = await mkdtemp(join(tmpdir(), "fly-novel-character-memory-"));
   t.after(async () => { await rm(memoryDirectory, { recursive: true, force: true }); });
   configureAgentRuntime({
     characterMemoryDirectory: memoryDirectory,
     resolveModel: () => new FakeListChatModel({ responses: ["记住了。"] }),
   });
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
-  await agent.run({ scene: { location: "渡口" }, responseFormat: performanceSchema });
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
+  await agent.run({ sceneId: "scene-ferry", scene: { location: "渡口" }, responseFormat: performanceSchema });
   const memories = await agent.getAllMemories();
   assert.deepEqual(memories, [{
+    createdAt: memories[0]?.createdAt,
+    sceneId: "scene-ferry",
     input: { location: "渡口" },
     output: { performance: "记住了。" },
   }]);
   assert.deepEqual(
-    JSON.parse(await readFile(join(memoryDirectory, "lin.json"), "utf8")),
-    { records: memories },
+    JSON.parse(await readFile(join(memoryDirectory, "story", "character_agent", "main", "lin", "memory", "scene-ferry.json"), "utf8")),
+    { records: [memories[0]] },
   );
-  const recovered = await new CharacterAgent({ storyId: "another-story", characterId: "lin" }).getAllMemories();
-  assert.deepEqual(recovered, memories);
+  const recovered = await new CharacterAgent({ ...promptFiles, storyId: "another-story", characterId: "lin" }).getAllMemories();
+  assert.deepEqual(recovered, []);
+  const differentBranch = await new CharacterAgent({ ...promptFiles, storyId: "story", branchId: "alternate", characterId: "lin" }).getAllMemories();
+  assert.deepEqual(differentBranch, []);
+  await agent.run({ sceneId: "scene-inn", scene: { location: "客栈" }, responseFormat: performanceSchema });
+  assert.equal((await agent.getAllMemories()).length, 2);
 });
 
 test("每轮从角色记忆重建历史，不保留实例内会话", async (t) => {
@@ -169,14 +183,14 @@ test("每轮从角色记忆重建历史，不保留实例内会话", async (t) =
   });
   t.after(() => configureAgentRuntime(undefined));
   t.after(async () => { await rm(memoryDirectory, { recursive: true, force: true }); });
-  const identity = { storyId: "story", characterId: "lin" };
+  const identity = { ...promptFiles, storyId: "story", characterId: "lin" };
   const agent = new CharacterAgent(identity);
   const input: CharacterAgentRunInput = {
-    scene: { location: "渡口" }, responseFormat: performanceSchema,
+    sceneId: "scene-ferry", scene: { location: "渡口" }, responseFormat: performanceSchema,
   };
   const controller = new AbortController();
   const first = await agent.run(input);
-  const second = await agent.run({ ...input, scene: { location: "客栈" } }, { signal: controller.signal });
+  const second = await agent.run({ ...input, sceneId: "scene-inn", scene: { location: "客栈" } }, { signal: controller.signal });
   assert.equal(resolutions, 2);
   assert.equal(create.mock.callCount(), 2);
   assert.equal(first.messages.filter((m: BaseMessage) => m.type === "human").length, 1);
@@ -203,8 +217,8 @@ test("同一会话拒绝并发调用，取消初始化后可重新运行", async
     return model;
   } });
   t.after(() => configureAgentRuntime(undefined));
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
-  const input: CharacterAgentRunInput = { scene: {}, responseFormat: performanceSchema };
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
+  const input: CharacterAgentRunInput = { sceneId: "scene", scene: {}, responseFormat: performanceSchema };
   const controller = new AbortController();
   const cancelled = agent.run(input, { signal: controller.signal });
   await started;
@@ -225,8 +239,8 @@ test("模型解析失败后释放运行状态，预取消不解析模型", async
     return new FakeListChatModel({ responses: ["成功。"] });
   } });
   t.after(() => configureAgentRuntime(undefined));
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
-  const input: CharacterAgentRunInput = { scene: {}, responseFormat: performanceSchema };
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
+  const input: CharacterAgentRunInput = { sceneId: "scene", scene: {}, responseFormat: performanceSchema };
   await assert.rejects(agent.run(input, { signal: AbortSignal.abort() }), { name: "AbortError" });
   assert.equal(calls, 0);
   await assert.rejects(agent.run(input), /模型解析失败/);
@@ -250,13 +264,13 @@ test("每轮通过 Schema 切换输出字段，并从记忆保留历史", async 
   const memoryDirectory = await mkdtemp(join(tmpdir(), "fly-novel-character-memory-"));
   t.after(async () => { await rm(memoryDirectory, { recursive: true, force: true }); });
   configureAgentRuntime({ characterMemoryDirectory: memoryDirectory, resolveModel: () => model });
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
-  const first = await agent.run({ scene: {}, responseFormat: performanceSchema });
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
+  const first = await agent.run({ sceneId: "scene", scene: {}, responseFormat: performanceSchema });
   assert.deepEqual(first.structuredResponse, { performance: "第一轮" });
-  const second = await agent.run({ scene: {}, responseFormat: z.strictObject({ innerActivity: z.string() }).meta({ title: "character_response" }) });
+  const second = await agent.run({ sceneId: "scene", scene: {}, responseFormat: z.strictObject({ innerActivity: z.string() }).meta({ title: "character_response" }) });
   assert.deepEqual(second.structuredResponse, { innerActivity: "第二轮" });
   assert.ok(second.messages.some((m: BaseMessage) => m.text.includes("第一轮")));
-  const third = await agent.run({ scene: {}, responseFormat: z.strictObject({ stateChanges: z.array(z.string()) }).meta({ title: "character_response" }) });
+  const third = await agent.run({ sceneId: "scene", scene: {}, responseFormat: z.strictObject({ stateChanges: z.array(z.string()) }).meta({ title: "character_response" }) });
   assert.deepEqual(third.structuredResponse, { stateChanges: [] });
   assert.equal(create.mock.callCount(), 3);
 });
@@ -267,8 +281,8 @@ test("缺失字段、错误类型和额外字段均拒绝，后续调用可以�
     id: "invalid", name: "character_response", args: response,
   }] }));
   configureAgentRuntime({ resolveModel: () => model });
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
-  const input: CharacterAgentRunInput = { scene: {}, responseFormat: performanceSchema };
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
+  const input: CharacterAgentRunInput = { sceneId: "scene", scene: {}, responseFormat: performanceSchema };
   for (const invalid of [{}, { performance: 42 }, { performance: "有效", innerActivity: "未选择" }]) {
     response = invalid;
     await assert.rejects(agent.run(input));
@@ -286,8 +300,8 @@ test("新一轮未生成结构化结果时不能返回上一轮结果", async ()
     }
   }
   configureAgentRuntime({ resolveModel: () => new SometimesPlainModel({ responses: ["上一轮"] }) });
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
-  const input: CharacterAgentRunInput = { scene: {}, responseFormat: performanceSchema };
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
+  const input: CharacterAgentRunInput = { sceneId: "scene", scene: {}, responseFormat: performanceSchema };
   assert.deepEqual((await agent.run(input)).structuredResponse, { performance: "上一轮" });
   plain = true;
   await assert.rejects(agent.run(input));
@@ -296,11 +310,11 @@ test("新一轮未生成结构化结果时不能返回上一轮结果", async ()
 test("缺失或无效 Schema 在初始化模型前拒绝", async () => {
   let calls = 0;
   configureAgentRuntime({ resolveModel() { calls++; return new FakeListChatModel({ responses: ["未调用"] }); } });
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
   for (const json of ['null', '{}', '"performance"']) {
-    await assert.rejects(agent.run({ scene: {}, responseFormat: JSON.parse(json) }), /Zod 对象 Schema/);
+    await assert.rejects(agent.run({ sceneId: "scene", scene: {}, responseFormat: JSON.parse(json) }), /Zod 对象 Schema/);
   }
-  await assert.rejects(agent.run(JSON.parse('{"scene":{}}')), /Zod 对象 Schema/);
+  await assert.rejects(agent.run(JSON.parse('{"sceneId":"scene","scene":{}}')), /Zod 对象 Schema/);
   assert.equal(calls, 0);
 });
 
@@ -314,7 +328,7 @@ test("调用方定义任意字段、嵌套类型及必需项，返回类型从 S
   configureAgentRuntime({ resolveModel: () => new ScriptedChatModel(() => new AIMessage({
     content: "", tool_calls: [{ id: "custom", name: "custom_response", args: response }],
   })) });
-  const result = await new CharacterAgent({ storyId: "story", characterId: "lin" }).run({ scene: {}, responseFormat });
+  const result = await new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" }).run({ sceneId: "scene", scene: {}, responseFormat });
   const words: string[] = result.structuredResponse.spokenWords;
   const shouldWait: boolean = result.structuredResponse.decision.shouldWait;
   const priority: number = result.structuredResponse.decision.priority;
@@ -328,8 +342,8 @@ test("调用方定义任意字段、嵌套类型及必需项，返回类型从 S
 
 test("调用方无需指定 Schema 标题", async () => {
   configureAgentRuntime({ resolveModel: () => new FakeListChatModel({ responses: ["任意回复"] }) });
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
-  const result = await agent.run({ scene: {}, responseFormat: z.object({ reply: z.string() }) });
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
+  const result = await agent.run({ sceneId: "scene", scene: {}, responseFormat: z.object({ reply: z.string() }) });
   assert.equal(result.structuredResponse.reply, "任意回复");
 });
 
@@ -338,8 +352,8 @@ test("额外字段拒绝或保留由调用方 Schema 决定", async () => {
   configureAgentRuntime({ resolveModel: () => new ScriptedChatModel(() => new AIMessage({
     content: "", tool_calls: [{ id: "custom", name: "custom_response", args: response }],
   })) });
-  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
-  await assert.rejects(agent.run({ scene: {}, responseFormat: z.strictObject({ reply: z.string() }).meta({ title: "custom_response" }) }));
-  const retained = await agent.run({ scene: {}, responseFormat: z.looseObject({ reply: z.string() }).meta({ title: "custom_response" }) });
+  const agent = new CharacterAgent({ ...promptFiles, storyId: "story", characterId: "lin" });
+  await assert.rejects(agent.run({ sceneId: "scene", scene: {}, responseFormat: z.strictObject({ reply: z.string() }).meta({ title: "custom_response" }) }));
+  const retained = await agent.run({ sceneId: "scene", scene: {}, responseFormat: z.looseObject({ reply: z.string() }).meta({ title: "custom_response" }) });
   assert.deepEqual(retained.structuredResponse, response);
 });

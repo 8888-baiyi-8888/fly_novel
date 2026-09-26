@@ -8,7 +8,7 @@
 
 | 编号 | 功能 | 需要达到的效果 |
 | --- | --- | --- |
-| F1 | 人物设定与状态加载 | 使用人物身份、性格、表达习惯、目标、关系及身体情绪状态。 |
+| F1 | 系统提示词与设定组装 | 将角色个人信息和必要的世界背景组装为本轮系统提示词。 |
 | F2 | 分层记忆与线索唤回 | 近期互动完整提供，较远经历以摘要提供，沉寂记忆遇到相关线索才检索加载。 |
 | F3 | 任务与场景感知 | 理解本次要回应什么，承接未完成互动，只接收人物可知的信息，并在指定范围内行动。 |
 | F4 | 角色反应生成 | 处理目标、关系和底线之间的动机冲突，按顺序生成台词和动作，单独输出内心活动。 |
@@ -24,34 +24,30 @@ F1 至 F5、F7 和 F8 中的人物反应及状态变化由角色 Agent 自主产
 
 以下按“输入信息、处理逻辑、输出与状态影响、验证”描述每项功能。字段是目标契约，不表示已有代码实现。F1、F2、F3 准备本轮材料，F4 结合 F5、F8 的规则生成角色反应，F7 管理整个运行，F6 定义保存语义，F9 在应用侧实现文件读写。功能划分不要求分别调用模型，也不要求建立九个独立类。
 
-### F1：人物设定与状态加载
+### F1：系统提示词与设定组装
 
 #### 输入信息
 
-| 信息 | 必须包含什么 | 来源 |
+| 提示词部分 | 必须包含什么 | 来源 |
 | --- | --- | --- |
-| `context` | 小说、人物、剧情版本、截止时点和状态版本。 | Agent 内部运行时根据初始化身份及已保存快照绑定，不能由模型或调用方场景覆盖。 |
-| `profile` | 姓名、身份和背景。过去的性格可以作为经历描述，不作为当前性格覆盖值。 | 初始设定和已保存档案。 |
-| `state` | 当前目标及轻重缓急、信念与人物底线、关系、能力、身体和情绪状态；重要判断附依据。 | 当前剧情版本的角色状态。 |
-| `knowledge` | 亲历或已知信息、他人转述和个人推测，区分来源与人物理解。 | 角色可知材料，不包含作者掌握但角色未知的真相。 |
-| `personality` | 当前性格与关系情境模式，结构见 F8。 | 当前人物快照。 |
+| 角色个人信息 | 当前角色（主角）的姓名、身份、背景、性格、表达习惯、目标、关系、能力、身体和情绪状态；关系只描述主角自身的态度。 | `characterInfoPath` 指定的 UTF-8 文本文件。 |
+| 世界背景 | 世界规则、专有名词和背景事实；文件不应放入整部小说正文或完整剧情梗概。 | `worldBackgroundPath` 指定的 UTF-8 文本文件。 |
 
-以上分组由 Agent 内部运行时明确加载；无记录的集合可以为空，未知信息显式表达，不能把缺少字段当作角色失忆。关系是本人对特定对象的态度，不默认双方对称。调用方不传入这些快照字段。
+F1 在构造时读取两个文件并将角色个人信息与世界背景组装为系统提示词，实例运行期间保持不变。场景、角色可知信息和任务要求由 F3 提供，历史经历由 F2 提供。小说、分支和人物标识用于内部读取与隔离，不作为提示词内容。调用方不直接传入人物快照字段。
 
 #### 处理逻辑
 
-1. Agent 内部运行时按初始化身份读取同一剧情版本和时点的档案与状态，拒绝不存在或无权访问的快照。
-2. 角色运行入口检查已加载材料的必需字段及类型。不同用途的 ID 使用专用类型；外部来源引用由所属读取入口检查，不能用类型断言替代验证。
-3. 保留事实、转述与推测的区别。例如“苏晴说没有拿信”不能归一化为“苏晴没有拿信”，也不能附加角色不知道的真假判定。
-4. 为本次运行建立独立材料，不从复用 Agent 实例中继承人物数据，不给缺失背景自动补故事。
+1. 校验两个文件路径为非空字符串，并在构造时以 UTF-8 读取文件。
+2. 文件无法读取或内容为空时立即报告错误，不静默生成缺少设定的提示词。
+3. 按固定顺序将世界背景和角色个人信息加入 `system_prompts`；场景和历史不混入这份初始化提示词。
 
 #### 输出与状态影响
 
-得到本轮人物快照，交给 F4 使用。加载不改变正式档案；内部资料缺失时在模型调用前失败。人物不知道某件剧情事实属于合法认知状态，不等于调用方输入错误。
+得到由角色个人信息和必要世界背景组成的系统提示词，供 F4 使用。加载不改变正式档案；必需资料缺失或版本不匹配时，在模型调用前失败。
 
 #### 验证
 
-验证人物隔离、版本不匹配拒绝、必需字段缺失拒绝，以及转述和猜测没有被转换成客观事实。
+验证两个文件内容按约定顺序出现在 `system_prompts` 中；空路径、缺失文件和空文件在构造时失败，场景和历史不混入初始化系统提示词。
 
 ### F2：分层记忆与线索唤回
 
@@ -419,30 +415,33 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 | `storyId` | 小说身份，用于定位小说数据与世界规则。 |
 | `branchId` | 剧情分支身份；省略时固定为 `main`。该标识不触发文件存储。 |
 | `characterId` | 角色身份，用于加载该角色的档案、状态、记忆与性格。 |
+| `worldBackgroundPath` | 世界背景 UTF-8 文本文件路径；相对路径以进程工作目录为基准，构造时读取。 |
+| `characterInfoPath` | 角色个人信息 UTF-8 文本文件路径；相对路径以进程工作目录为基准，构造时读取。 |
 
 运行时只传入当前小说生成所需的内容：
 
 | 参数 | 用途 |
 | --- | --- |
+| `sceneId` | 当前场景的稳定标识；同一场景的多轮调用共用该值，并用于定位场景记忆文件。 |
 | `scene` | 当前角色能看到、听到或已经获知的场景信息，以及本轮实际反馈。 |
 | `responseFormat` | 调用方提供的 Zod 4 对象 Schema，定义本轮输出字段、类型、含义、必需项和额外字段处理规则。Agent 不预设字段名或字段集合。Schema 描述表达数据含义，不指定角色必须作出的选择。 |
 | `signal` | 可选取消信号。 |
 
-接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId })`、`agent.run({ scene, responseFormat }, { signal? })` 和 `agent.getAllMemories()`。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
+接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId, worldBackgroundPath, characterInfoPath })`、`agent.run({ sceneId, scene, responseFormat }, { signal? })` 和 `agent.getAllMemories()`。构造时同步读取两个设定文件并执行 `this.system_prompts = this.buildSystemPrompt()`；文件不可读或内容为空时构造失败。`system_prompts` 固定为世界背景与角色个人信息的组合。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
 
 `run` 将已保存记忆和当前场景组织为本轮完整消息，使用 `z.toJSONSchema(schema)` 保留调用方约束，再交给框架 `toolStrategy`，并将 `signal` 传给底层调用。Schema 必须是可转换为 JSON Schema 的 Zod 对象；缺失或类型不符在模型初始化前拒绝。每次运行都通过注册的 `resolveModel(modelId)` 解析模型并创建独立框架实例，不保留实例内会话。
 
 结果中的 `structuredResponse` 按调用方 Schema 校验，其余字段保留框架状态。`CharacterAgentRunInput<TSchema>` 接收外部 Schema，`run()` 返回的 `CharacterAgentRunResult<z.output<TSchema>>` 推导对应输出类型，必需字段不会统一退化为可选字段。字段名称、嵌套结构、数组、可选项和描述均属于调用方；F4、F5 的字段是业务设计参考，不是类内置的输出约束。正式业务提交仍未接入。
 
-结构化输出采用工具调用策略，模型需要支持工具调用；未依赖供应商原生 JSON Schema 模式。模型调用中间件显式设置 `toolChoice: "auto"`，避免框架默认强制工具调用与 DeepSeek 思考模式冲突。模型调用中间件将普通工具列表设为空，仅由框架提供本轮结构化输出工具；自动选择不保证模型一定调用输出工具，程序只接受通过校验的结构化结果。违反外部 Schema 或未生成结构化结果会使调用失败，结构化解析错误不自动重试。框架先按转换后的 JSON Schema 校验，再按调用方 Zod Schema 解析；使用 `z.strictObject()` 拒绝额外字段，`z.looseObject()` 允许保留额外字段，不能假定框架会自动剔除 `z.object()` 未声明的字段。每轮清空框架状态中的旧 `structuredResponse`，防止缺失本轮结果时返回上轮内容。结构校验不保证人物一致性、事实正确性或状态变化依据有效。
+结构化输出采用工具调用策略，模型需要支持工具调用；未依赖供应商原生 JSON Schema 模式。模型调用中间件显式设置 `toolChoice: "required"`，并将普通工具列表设为空，仅允许框架提供的本轮结构化输出工具。DeepSeek 思考模式不支持 `required`，应用使用该模式时须在模型请求参数中关闭思考模式；调试样例使用 `modelKwargs: { thinking: { type: "disabled" } }`。若模型仍未返回结构化结果，Agent 抛出明确错误，不把缺失结果交给 Zod 解析。框架先按转换后的 JSON Schema 校验，再按调用方 Zod Schema 解析；使用 `z.strictObject()` 拒绝额外字段，`z.looseObject()` 允许保留额外字段，不能假定框架会自动剔除 `z.object()` 未声明的字段。每轮清空框架状态中的旧 `structuredResponse`，防止缺失本轮结果时返回上轮内容。结构校验不保证人物一致性、事实正确性或状态变化依据有效。
 
 每次运行创建独立框架实例，并从角色持久记忆生成完整历史消息；不存在 `MemorySaver`、固定 `thread_id` 或实例内会话。启用文件记忆时，同 ID 的新实例会读取相同历史。同一实例并发 `run` 会立即拒绝，失败或取消后释放运行状态。
 
 调用失败或取消不写入角色记忆，也不隐式重试整轮。返回值经过结构校验，未经过业务校验。
 
-角色类为人物资料、当前状态和性格准备保留统一的 `{ content: string }` 接口。`buildModelPrompt()` 顺序准备这些资料，`combineContext()` 跳过空白片段，再附加外部场景和输出字段；`generateReaction()` 负责调用框架。`validateResult()` 与 `saveExperienceAndState()` 是业务校验和正式经历提交接口，直接调用会报告未实现，`run()` 不调用它们。
+`system_prompts` 在构造时由两个文件初始化，并作为 Deep Agent 的系统提示词；`buildModelPrompt()` 准备本轮场景消息，`combineContext()` 跳过空白片段，`generateReaction()` 将系统提示词、场景消息和输出 Schema 交给框架。
 
-应用在 `configureAgentRuntime()` 中注册 `characterMemoryDirectory` 后，角色记忆保存为 `<characterMemoryDirectory>/<characterId>.json`。当前布局只使用角色 ID，不区分小说或分支；角色 ID 含路径分隔符时拒绝。每次仅在结构化输出校验成功后追加本轮 `scene` 对象和结构化响应对象；每次运行都将全部历史记录序列化为消息。`getAllMemories()` 返回保持原始 JSON 结构的全部记录。未注册目录时不读写磁盘，因此每轮只使用当前场景。模型没有文件读写工具。
+应用在 `configureAgentRuntime()` 中注册 `characterMemoryDirectory` 作为记忆根目录。每轮输入提供稳定的 `sceneId`，文件布局为 `<characterMemoryDirectory>/<storyId>/character_agent/<branchId>/<characterId>/memory/<sceneId>.json`；小说、分支、角色和场景 ID 均拒绝空值及路径分隔符。同一场景的多轮调用追加到同一文件，不同场景分别保存。记录包含写入时间，`getAllMemories()` 与模型历史按写入时间合并各场景记录。每次仅在结构化输出校验成功后保存本轮场景对象与结构化响应对象。未注册目录时不读写磁盘，因此每轮只使用当前场景。模型没有文件读写工具。
 
 执行超时、模型调用预算、检索材料预算和保存重试策略属于应用的 Agent 运行时配置，不暴露在每次角色调用参数中。它们在创建内部执行单元时校验并固定，提供商重试也计入预算，不额外执行隐式整轮重跑。精确 Deep Agents SDK 适配在实现时按安装版本验证。
 
@@ -462,11 +461,14 @@ async function runCharacterExample(scene: CharacterScene) {
     storyId: "novel-river",
     branchId: "main",
     characterId: "character-lin-zhou",
+    worldBackgroundPath: "./novel-data/novel-river/world-background.md",
+    characterInfoPath: "./novel-data/novel-river/characters/character-lin-zhou/profile.md",
   });
   const controller = new AbortController();
 
   const result = await agent.run(
     {
+      sceneId: "scene-ferry",
       scene,
       responseFormat: z.strictObject({
         dialogue: z.string().describe("角色实际说出的台词"),

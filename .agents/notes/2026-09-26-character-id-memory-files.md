@@ -1,9 +1,9 @@
 # 按角色 ID 保存角色记忆
 
-问题：角色记忆需要在重启或重建 Agent 后恢复，并允许应用读取该角色的全部已保存记录，同时保持 CharacterAgent 的公开构造参数不增加存储路径。
+问题：角色记忆需要在重启或重建 Agent 后恢复，并允许应用读取该角色的全部已保存记录，同时避免不同小说、分支或场景的数据混用。
 
-决定：应用注册 Agent 运行时时提供 `characterMemoryDirectory`，样例使用 `APP_HOME/memories/characters`。每个角色仅以安全的 `characterId` 定位 `<characterId>.json`，不加入小说或分支层级。CharacterAgent 在结构化响应校验成功后原子写入本轮 `scene` 对象与结构化响应对象；每轮从文件记忆重建完整历史，不保留实例内 session；`getAllMemories()` 返回全部记录。未配置目录时每轮只使用当前场景。
+决定：应用注册 Agent 运行时时提供 `characterMemoryDirectory` 记忆根目录。路径按 `<root>/<storyId>/character_agent/<branchId>/<characterId>/memory/<sceneId>.json` 分层；所有 ID 拒绝空值和路径分隔符。每轮调用提供稳定 `sceneId`，同场景多轮追加到同一文件，不同场景分文件保存。成功校验后记录场景输入、结构化响应及写入时间；跨场景历史按写入时间合并。`getAllMemories()` 返回当前小说、分支和角色的全部记录。未配置目录时每轮只使用当前场景。
 
-影响：相同角色 ID 在不同小说或分支之间共享文件，这是当前用户明确选择的首版范围。模型不获得文件工具；读取和写入由应用代码完成。文件属于 `.fly-novel`，不会提交 Git。
+影响：早期布局不做兼容或迁移。模型不获得文件工具；读取和写入由应用代码完成。文件属于 `.fly-novel`，不会提交 Git。
 
-验证：角色 Agent 聚焦测试覆盖成功写入、按角色 ID 的文件名和新实例恢复；同时运行类型检查、构建测试与空白检查。
+验证：角色 Agent 测试覆盖目标路径结构、场景分文件、小说与分支隔离，以及新实例恢复。

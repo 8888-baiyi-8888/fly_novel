@@ -16,8 +16,8 @@ export function createModelAgent(model: BaseLanguageModel, systemPrompt: string,
     responseFormat: getResponseFormat(),
     middleware: [createMiddleware({
       name: "RunResponseFormat",
-      // 仅提供框架生成的结构化输出工具；思考模型可能拒绝 required。
-      wrapModelCall: (request, handler) => handler({ ...request, tools: [], responseFormat: getResponseFormat(), toolChoice: "auto" }),
+      // 仅提供框架生成的结构化输出工具，并要求模型提交本轮结果。
+      wrapModelCall: (request, handler) => handler({ ...request, tools: [], responseFormat: getResponseFormat(), toolChoice: "required" }),
     })],
   });
 }
