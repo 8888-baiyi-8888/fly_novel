@@ -1,13 +1,20 @@
-import { join, sep } from "node:path";
-import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { join, sep } from "node:path";
 import {
   AIMessage,
   HumanMessage,
   type BaseMessage,
 } from "@langchain/core/messages";
 import { BaseMemory } from "../core/base-memory.js";
+import { getCharacterMemoryDirectory } from "../runtime/agent-runtime.js";
 import type { CharacterScene } from "./types.js";
+
+export interface CharacterMemoryScope {
+  readonly storyId: string;
+  readonly branchId: string;
+  readonly characterId: string;
+}
 
 /** 一次完整的角色反应单元。 */
 export interface CharacterReactionMemory {
@@ -25,92 +32,133 @@ export interface CharacterReactionMemory {
 }
 
 /**
- * 角色记忆。
+ * 当前角色的完整记忆。
  *
- * 保存角色经历过的完整反应单元，并在 Agent 执行时
- * 将其转换为 LangChain / Deep Agents 使用的消息历史。
+ * 创建时一次性加载该角色所有场景的记忆；运行期间在内存中维护完整历史，
+ * 新经历按场景归档到对应文件。
  */
-export class CharacterMemory extends BaseMemory<CharacterReactionMemory> {
-  readonly #characterId: string;
+export class CharacterMemory {
+  readonly #scope: CharacterMemoryScope;
+  readonly #memoryRoot: string | undefined;
+  readonly #records: CharacterReactionMemory[];
 
   private constructor(
-    characterId: string,
-    filePath: string,
+    scope: CharacterMemoryScope,
+    memoryRoot: string | undefined,
     records: CharacterReactionMemory[],
   ) {
-    super(filePath, records);
-    this.#characterId = characterId;
+    this.#scope = scope;
+    this.#memoryRoot = memoryRoot;
+    this.#records = records;
   }
 
-  /**
-   * 创建角色记忆。
-   *
-   * 创建时从本地文件恢复已有记忆；
-   * 后续记忆保存在内存中，不需要重复读取文件。
-   */
-  static async create(
-    storyId: string,
-    branchId: string,
-    characterId: string,
-    sceneId: string,
-    memoryRoot: string,
-  ): Promise<CharacterMemory> {
-    const safeStoryId = requireSafeId(storyId, "storyId");
-    const safeBranchId = requireSafeId(branchId, "branchId");
-    const safeCharacterId = requireSafeId(characterId, "characterId");
-    const safeSceneId = requireSafeId(sceneId, "sceneId");
-    const filePath = join(
-      memoryRoot,
-      safeStoryId,
-      "character_agent",
-      safeBranchId,
-      safeCharacterId,
-      "memory",
-      `${safeSceneId}.json`,
-    );
-    const records = await BaseMemory.load<CharacterReactionMemory>(filePath);
-
-    return new CharacterMemory(
-      safeCharacterId,
-      filePath,
-      records,
-    );
+  /** 加载绑定角色的全部记忆；未配置持久化目录时从空记忆开始。 */
+  static async create(scope: CharacterMemoryScope): Promise<CharacterMemory> {
+    const safeScope = {
+      storyId: requireSafeId(scope.storyId, "storyId"),
+      branchId: requireSafeId(scope.branchId, "branchId"),
+      characterId: requireSafeId(scope.characterId, "characterId"),
+    };
+    const memoryRoot = getCharacterMemoryDirectory();
+    const records = memoryRoot === undefined
+      ? []
+      : await CharacterMemory.loadAll(safeScope, memoryRoot);
+    return new CharacterMemory(safeScope, memoryRoot, [...records]);
   }
 
-  /** 当前记忆所属的角色 ID。 */
-  get characterId(): string {
-    return this.#characterId;
+  /** 返回当前角色实例持有的完整记忆。 */
+  getAll(): readonly CharacterReactionMemory[] {
+    return this.#records;
   }
 
-  /** 将合并后的跨场景记忆转换为模型消息历史。 */
-  static toMessages(records: readonly CharacterReactionMemory[]): BaseMessage[] {
-    return records.flatMap(({ input, output }) => [
+  /** 将完整记忆转换为模型消息历史。 */
+  toMessages(): BaseMessage[] {
+    return this.#records.flatMap(({ input, output }) => [
       new HumanMessage(`历史场景：${JSON.stringify(input)}`),
       new AIMessage(JSON.stringify(output)),
     ]);
   }
 
-  /** 读取当前角色在所有场景文件中的记忆，并按写入时间合并。 */
-  static async loadAll(
-    storyId: string,
-    branchId: string,
-    characterId: string,
+  /** 追加一段角色经历；场景 ID 只决定持久化文件，不筛选记忆历史。 */
+  async append(sceneId: string, record: CharacterReactionMemory): Promise<void> {
+    const safeSceneId = requireSafeId(sceneId, "sceneId");
+    if (record.sceneId !== safeSceneId) {
+      throw new TypeError("记忆记录的 sceneId 必须与归档场景一致。");
+    }
+    if (this.#memoryRoot !== undefined) {
+      const sceneMemory = await CharacterSceneMemory.create(
+        this.#scope,
+        safeSceneId,
+        this.#memoryRoot,
+      );
+      await sceneMemory.append(record);
+    }
+    this.#records.push(record);
+  }
+
+  /** 读取指定角色在持久化目录中的完整记忆。 */
+  static async getAllMemories(
+    scope: CharacterMemoryScope,
+  ): Promise<readonly CharacterReactionMemory[]> {
+    return (await CharacterMemory.create(scope)).getAll();
+  }
+
+  private static async loadAll(
+    scope: CharacterMemoryScope,
     memoryRoot: string,
   ): Promise<readonly CharacterReactionMemory[]> {
-    const safeStoryId = requireSafeId(storyId, "storyId");
-    const safeBranchId = requireSafeId(branchId, "branchId");
-    const safeCharacterId = requireSafeId(characterId, "characterId");
-    const memoryDirectory = join(memoryRoot, safeStoryId, "character_agent", safeBranchId, safeCharacterId, "memory");
+    const memoryDirectory = join(
+      memoryRoot,
+      scope.storyId,
+      "character_agent",
+      scope.branchId,
+      scope.characterId,
+      "memory",
+    );
     const currentFiles = await readDirectory(memoryDirectory);
     const currentMemories = await Promise.all(currentFiles
       .filter(entry => entry.isFile() && entry.name.endsWith(".json"))
       .map(async entry => {
         const sceneId = requireSafeId(entry.name.slice(0, -5), "sceneId");
-        const filePath = join(memoryDirectory, entry.name);
-        const records = await BaseMemory.load<CharacterReactionMemory>(filePath);
-        return records.map(record => ({ ...record, sceneId }));
+        const sceneMemory = await CharacterSceneMemory.createFromPath(
+          scope.characterId,
+          join(memoryDirectory, entry.name),
+        );
+        return sceneMemory.getAll().map(record => ({ ...record, sceneId }));
       }));
     return currentMemories.flat().sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+}
+
+class CharacterSceneMemory extends BaseMemory<CharacterReactionMemory> {
+  private constructor(filePath: string, records: CharacterReactionMemory[]) {
+    super(filePath, records);
+  }
+
+  static async create(
+    scope: CharacterMemoryScope,
+    sceneId: string,
+    memoryRoot: string,
+  ): Promise<CharacterSceneMemory> {
+    const filePath = join(
+      memoryRoot,
+      scope.storyId,
+      "character_agent",
+      scope.branchId,
+      scope.characterId,
+      "memory",
+      `${sceneId}.json`,
+    );
+    return CharacterSceneMemory.createFromPath(scope.characterId, filePath);
+  }
+
+  static async createFromPath(
+    characterId: string,
+    filePath: string,
+  ): Promise<CharacterSceneMemory> {
+    requireSafeId(characterId, "characterId");
+    const records = await BaseMemory.load<CharacterReactionMemory>(filePath);
+    return new CharacterSceneMemory(filePath, records);
   }
 }
 
@@ -123,16 +171,16 @@ async function readDirectory(directory: string): Promise<Dirent[]> {
   }
 }
 
-function requireSafeId(characterId: string, field: string): string {
+function requireSafeId(value: string, field: string): string {
   if (
-    characterId.trim() === ""
-    || characterId === "."
-    || characterId === ".."
-    || characterId.includes("/")
-    || characterId.includes("\\")
-    || characterId.includes(sep)
+    value.trim() === ""
+    || value === "."
+    || value === ".."
+    || value.includes("/")
+    || value.includes("\\")
+    || value.includes(sep)
   ) {
     throw new TypeError(`${field} 必须是不包含路径分隔符的非空字符串。`);
   }
-  return characterId;
+  return value;
 }

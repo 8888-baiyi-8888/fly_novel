@@ -30,14 +30,14 @@ F1 至 F5、F7 和 F8 中的人物反应及状态变化由角色 Agent 自主产
 
 | 提示词部分 | 必须包含什么 | 来源 |
 | --- | --- | --- |
-| 角色个人信息 | 当前角色（主角）的姓名、身份、背景、性格、表达习惯、目标、关系、能力、身体和情绪状态；关系只描述主角自身的态度。 | `characterInfoPath` 指定的 UTF-8 文本文件。 |
-| 世界背景 | 世界规则、专有名词和背景事实；文件不应放入整部小说正文或完整剧情梗概。 | `worldBackgroundPath` 指定的 UTF-8 文本文件。 |
+| 角色个人信息 | 当前角色（主角）的姓名、身份、背景、性格、表达习惯、目标、关系、能力、身体和情绪状态；关系只描述主角自身的态度。 | `<数据根目录>/<storyId>/character_agent/<branchId>/<characterId>/profile.md`。 |
+| 世界背景 | 世界规则、专有名词和背景事实；文件不应放入整部小说正文或完整剧情梗概。 | `<数据根目录>/<storyId>/world-background.md`。 |
 
 F1 在构造时读取两个文件并将角色个人信息与世界背景组装为系统提示词，实例运行期间保持不变。场景、角色可知信息和任务要求由 F3 提供，历史经历由 F2 提供。小说、分支和人物标识用于内部读取与隔离，不作为提示词内容。调用方不直接传入人物快照字段。
 
 #### 处理逻辑
 
-1. 校验两个文件路径为非空字符串，并在构造时以 UTF-8 读取文件。
+1. 按 `storyId`、`branchId` 和 `characterId` 在系统提示词模块中拼接固定文件路径，并在构造时以 UTF-8 读取文件。
 2. 文件无法读取或内容为空时立即报告错误，不静默生成缺少设定的提示词。
 3. 按固定顺序将世界背景和角色个人信息加入 `system_prompts`；场景和历史不混入这份初始化提示词。
 
@@ -405,7 +405,7 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 
 ### 3.1 对外入口
 
-调用方通过 `@fly-novel/agents` 的公共入口创建一个绑定角色身份的 Agent。应用启动时通过 `configureAgentRuntime({ resolveModel })` 注册模型解析器；`run` 将 `modelId` 解析为 LangChain 模型对象并调用 Deep Agents。
+调用方通过 `@fly-novel/agents` 的公共入口创建一个绑定角色身份的 Agent。应用启动时通过 `configureAgentRuntime({ resolveModel, characterDataDirectory })` 注册模型解析器与小说数据根目录；`run` 将 `modelId` 解析为 LangChain 模型对象并调用 Deep Agents。
 
 初始化只传入模型和角色定位所需的基本信息：
 
@@ -415,8 +415,6 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 | `storyId` | 小说身份，用于定位小说数据与世界规则。 |
 | `branchId` | 剧情分支身份；省略时固定为 `main`。该标识不触发文件存储。 |
 | `characterId` | 角色身份，用于加载该角色的档案、状态、记忆与性格。 |
-| `worldBackgroundPath` | 世界背景 UTF-8 文本文件路径；相对路径以进程工作目录为基准，构造时读取。 |
-| `characterInfoPath` | 角色个人信息 UTF-8 文本文件路径；相对路径以进程工作目录为基准，构造时读取。 |
 
 运行时只传入当前小说生成所需的内容：
 
@@ -427,7 +425,7 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 | `responseFormat` | 调用方提供的 Zod 4 对象 Schema，定义本轮输出字段、类型、含义、必需项和额外字段处理规则。Agent 不预设字段名或字段集合。Schema 描述表达数据含义，不指定角色必须作出的选择。 |
 | `signal` | 可选取消信号。 |
 
-接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId, worldBackgroundPath, characterInfoPath })`、`agent.run({ sceneId, scene, responseFormat }, { signal? })` 和 `agent.getAllMemories()`。构造时同步读取两个设定文件并执行 `this.system_prompts = this.buildSystemPrompt()`；文件不可读或内容为空时构造失败。`system_prompts` 固定为世界背景与角色个人信息的组合。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
+接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId })`、`agent.run({ sceneId, scene, responseFormat }, { signal? })` 和 `CharacterMemory.getAllMemories({ storyId, branchId, characterId })`。构造时调用独立的 `buildSystemPrompt()` 根据 `storyId`、`branchId` 和 `characterId` 拼接固定目录并同步读取两个设定文件，并将结果赋给 `this.system_prompts`；文件不可读或内容为空时构造失败。`system_prompts` 固定为世界背景与角色个人信息的组合。记忆查询由独立的 `CharacterMemory` 提供，未配置记忆目录时返回空列表。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
 
 `run` 将已保存记忆和当前场景组织为本轮完整消息，使用 `z.toJSONSchema(schema)` 保留调用方约束，再交给框架 `toolStrategy`，并将 `signal` 传给底层调用。Schema 必须是可转换为 JSON Schema 的 Zod 对象；缺失或类型不符在模型初始化前拒绝。每次运行都通过注册的 `resolveModel(modelId)` 解析模型并创建独立框架实例，不保留实例内会话。
 
@@ -439,9 +437,9 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 
 调用失败或取消不写入角色记忆，也不隐式重试整轮。返回值经过结构校验，未经过业务校验。
 
-`system_prompts` 在构造时由两个文件初始化，并作为 Deep Agent 的系统提示词；`buildModelPrompt()` 准备本轮场景消息，`combineContext()` 跳过空白片段，`generateReaction()` 将系统提示词、场景消息和输出 Schema 交给框架。
+`system_prompts` 在构造时由两个文件初始化，并作为 Deep Agent 的系统提示词；每轮将完整记忆历史与当前场景组成消息，`generateReaction()` 将消息和输出 Schema 交给框架。
 
-应用在 `configureAgentRuntime()` 中注册 `characterMemoryDirectory` 作为记忆根目录。每轮输入提供稳定的 `sceneId`，文件布局为 `<characterMemoryDirectory>/<storyId>/character_agent/<branchId>/<characterId>/memory/<sceneId>.json`；小说、分支、角色和场景 ID 均拒绝空值及路径分隔符。同一场景的多轮调用追加到同一文件，不同场景分别保存。记录包含写入时间，`getAllMemories()` 与模型历史按写入时间合并各场景记录。每次仅在结构化输出校验成功后保存本轮场景对象与结构化响应对象。未注册目录时不读写磁盘，因此每轮只使用当前场景。模型没有文件读写工具。
+应用在 `configureAgentRuntime()` 中注册 `characterDataDirectory` 小说数据根目录和 `characterMemoryDirectory`。`CharacterAgent` 初始化时创建绑定小说、分支和角色身份的 `CharacterMemory`，一次性加载该角色在所有场景文件中的完整历史；后续运行复用这一个记忆对象，成功采用新反应后由它更新内存副本。每轮输入提供稳定的 `sceneId`，仅用于将本轮经历归档到 `<characterMemoryDirectory>/<storyId>/character_agent/<branchId>/<characterId>/memory/<sceneId>.json`，不用于筛选模型可见记忆。小说、分支、角色和场景 ID 均拒绝空值及路径分隔符。同一场景的多轮记录追加到同一文件，不同场景分别保存。未注册记忆目录时，实例仍在内存中保留本次运行产生的经历，但不会持久化；新实例不会继承这部分记忆。模型没有文件读写工具。
 
 执行超时、模型调用预算、检索材料预算和保存重试策略属于应用的 Agent 运行时配置，不暴露在每次角色调用参数中。它们在创建内部执行单元时校验并固定，提供商重试也计入预算，不额外执行隐式整轮重跑。精确 Deep Agents SDK 适配在实现时按安装版本验证。
 
@@ -461,8 +459,6 @@ async function runCharacterExample(scene: CharacterScene) {
     storyId: "novel-river",
     branchId: "main",
     characterId: "character-lin-zhou",
-    worldBackgroundPath: "./novel-data/novel-river/world-background.md",
-    characterInfoPath: "./novel-data/novel-river/characters/character-lin-zhou/profile.md",
   });
   const controller = new AbortController();
 

@@ -48,6 +48,7 @@ async function main(): Promise<void> {
     modelKwargs: { thinking: { type: "disabled" } },
   });
   configureAgentRuntime({
+    characterDataDirectory: join(APP_HOME, "novel_data"),
     characterMemoryDirectory: join(APP_HOME, "novel_data"),
     resolveModel(modelId) {
       if (modelId !== undefined && modelId !== "deepseek") {
@@ -62,8 +63,6 @@ async function main(): Promise<void> {
     storyId: "debug-story",
     branchId: "main",
     characterId: "debug-character",
-    worldBackgroundPath: join(APP_HOME, "novel_data", "debug-story", "world-background.md"),
-    characterInfoPath: join(APP_HOME, "novel_data", "debug-story", "characters", "debug-character", "profile.md"),
   });
   const result = await agent.run({
     sceneId: "scene-ferry",
