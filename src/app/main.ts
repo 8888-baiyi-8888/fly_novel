@@ -869,6 +869,13 @@ async function main(): Promise<void> {
     isReal,
     false,
   );
+  // N8：交接点——验收八类内容物 + AI 红线扫描消毒 + 写交接凭据（纯程序，不调 LLM）。
+  // memory 模式 N7 是 dry-run 未落盘，没有书目录可交接，跳过并提示。
+  if (isReal) {
+    await runN8Step(config.bookId);
+  } else {
+    console.log("（memory 模式 N7 为 dry-run 未落盘，跳过 N8 交接）");
+  }
 }
 
 main().catch((error: unknown) => {

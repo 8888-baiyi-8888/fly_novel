@@ -34,14 +34,16 @@ export const DRAFT_JSON_DESCRIPTION = `输出 JSON 对象，字段如下：
  * 问题清空后给出完整草案；最后一轮必须给出草案、未决问题写入草案 openQuestions。
  */
 export const CLARIFY_JSON_DESCRIPTION = `输出 JSON 对象，用于澄清与生成两个阶段，字段如下：
-- questions: 需要用户进一步回答的问题数组（每项是非空字符串；没有问题时必须为空数组 []）
+- questions: 需要用户进一步回答的问题数组（每项是非空字符串；没有问题时可以省略该字段，缺省视为空数组）
 - draft: 创意草案对象或 null（草案字段见下方说明）
 
 协议规则（必须遵守）：
 - 还有需要澄清的问题时：questions 填写问题列表，draft 必须为 null；
 - 非最后一轮时，拿不准/缺失的信息必须放入 questions（draft 为 null），不要写进草案的 openQuestions；openQuestions 只在最后一轮使用；
-- 所有问题都已澄清、可以直接给出草案时：questions 必须为 []，draft 填写完整创意草案；
-- 最后一轮（用户表示不再回答）时：无论问题是否全部澄清，都必须给出完整草案；无法澄清的问题写入草案的 openQuestions 字段，questions 为 []。
+- 提问边界：只问用户必须拍板的问题（平台/雷点/篇幅偏好/必须包含或排除的元素）；书名、分卷规划、配角、主线细节等你能自主生成的内容不要问，自己规划完整；
+- 所有问题都已澄清、可以直接给出草案时：questions 可省略或为 []，draft 填写完整创意草案；
+- 最后一轮（用户表示不再回答）时：无论问题是否全部澄清，都必须给出完整草案；无法澄清的问题写入草案的 openQuestions 字段，questions 可省略或为 []。
+- 所有必填字段必须填写完整：volumePlan/constraints/tone 等数组字段必须为非空数组。
 
 草案字段（draft 非 null 时按此结构）：
 ${DRAFT_JSON_DESCRIPTION}`;

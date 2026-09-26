@@ -24,9 +24,22 @@ test("澄清轮解析：有问题时 draft 为 null，问题清空时给出草�
   assert.equal(done.draft?.schemaVersion, 2);
 });
 
-test("澄清轮解析：questions 非数组时抛 DraftValidationError", () => {
-  assert.throws(() => parseClarificationTurn({ questions: "不是数组", draft: null }), DraftValidationError);
-  assert.throws(() => parseClarificationTurn({ questions: [""], draft: null }), DraftValidationError);
+test("澄清轮解析：模型省略 questions 直接给草案（更新草案轮常见行为）→ 视为无新问题", () => {
+  const turn = parseClarificationTurn({ draft: EXAMPLE_DRAFT });
+  assert.deepEqual(turn.questions, []);
+  assert.equal(turn.draft?.schemaVersion, 2);
+});
+
+test("澄清轮解析：questions 容错——字符串视为单问题、数组过滤空项/非字符串项", () => {
+  const single = parseClarificationTurn({ questions: "反派是谁？", draft: null });
+  assert.deepEqual(single.questions, ["反派是谁？"]);
+  const dirty = parseClarificationTurn({ questions: [null, "合法问题", ""], draft: null });
+  assert.deepEqual(dirty.questions, ["合法问题"]);
+});
+
+test("澄清轮解析：questions 为数字等不可用类型时仍抛 DraftValidationError", () => {
+  assert.throws(() => parseClarificationTurn({ questions: 123, draft: null }), DraftValidationError);
+  assert.throws(() => parseClarificationTurn({ questions: { a: 1 }, draft: null }), DraftValidationError);
 });
 
 test("澄清：一轮问清后输出完整草案", async () => {
@@ -116,6 +129,69 @@ test("澄清：模型给草案但 openQuestions 非空时反问用户，回答�
   assert.equal(draft.openQuestions.length, 0);
 });
 
+test("澄清：模型给空问题列表且无草案（{questions:[],draft:null}）→ 不再问用户，强制交卷", async () => {
+  let called = 0;
+  const model = new MemoryModel({
+    responder: (request) => {
+      called += 1;
+      if (called === 1) return questionsTurn(["q1"]);
+      if (called === 2) return JSON.stringify({ questions: [], draft: null });
+      // 强制交卷轮：给出草案
+      assert.ok(request.messages.some((m) => m.content.includes("最终创意草案")));
+      return draftTurn();
+    },
+  });
+  const asked: string[][] = [];
+  const agent = new CreativeDraftAgent({ model });
+  const draft = await agent.createDraftWithClarification(RAW, async (questions) => {
+    asked.push(questions);
+    return "回答";
+  });
+  assert.equal(asked.length, 1, "只在第一轮问用户，空问题轮不再问");
+  assert.deepEqual(asked[0], ["q1"]);
+  assert.equal(draft.schemaVersion, 2);
+});
+
+test("澄清：模型给空问题列表且强制交卷轮仍无草案 → 降级为直接草案输出兜底成功", async () => {
+  let called = 0;
+  const model = new MemoryModel({
+    responder: () => {
+      called += 1;
+      if (called === 1) return questionsTurn(["q1"]);
+      // 空问题轮 + 强制交卷轮都只给空包装不给草案
+      return JSON.stringify({ questions: [], draft: null });
+    },
+  });
+  const agent = new CreativeDraftAgent({ model, maxRetries: 1 });
+  // 注意：fallback 也在 responder 里返回 {questions:[],draft:null}，不符合草案结构 → 会走 retry → 最终抛错
+  await assert.rejects(agent.createDraftWithClarification(RAW, async () => "x"), {
+    name: "CreativeDraftError",
+  });
+});
+
+test("澄清：空问题强制交卷 → 交卷轮仍无草案 → fallback 直接输出草案成功", async () => {
+  let called = 0;
+  const model = new MemoryModel({
+    responder: () => {
+      called += 1;
+      if (called === 1) return questionsTurn(["q1"]);
+      if (called === 2) return JSON.stringify({ questions: [], draft: null });
+      if (called === 3) return JSON.stringify({ questions: [], draft: null }); // 强制交卷轮仍不给
+      // fallback 轮：直接输出草案对象（不带包装）
+      return JSON.stringify(cleanDraft);
+    },
+  });
+  const asked: string[][] = [];
+  const agent = new CreativeDraftAgent({ model });
+  const draft = await agent.createDraftWithClarification(RAW, async (questions) => {
+    asked.push(questions);
+    return "回答";
+  });
+  assert.equal(asked.length, 1, "只在第一轮问用户");
+  assert.equal(called, 4, "1 提问轮 + 1 空问题轮 + 1 交卷轮 + 1 fallback");
+  assert.equal(draft.schemaVersion, 2);
+});
+
 test("澄清：空输入直接失败，不调用模型", async () => {
   let called = 0;
   const model = new MemoryModel({
@@ -137,7 +213,7 @@ test("澄清：首次输出非法、重试带反馈后成功输出草案", async
     responder: (request) => {
       called += 1;
       if (called === 1) {
-        return JSON.stringify({ questions: "不是数组", draft: null });
+        return JSON.stringify({ questions: 123, draft: null });
       }
       assert.equal(request.messages.length, 3); // 原 2 条 + 1 条重试反馈
       return draftTurn();
@@ -151,7 +227,7 @@ test("澄清：首次输出非法、重试带反馈后成功输出草案", async
 
 test("澄清：模型反复输出非法结构时重试后抛 CreativeDraftError", async () => {
   const model = new MemoryModel({
-    responder: () => JSON.stringify({ questions: "非法" }),
+    responder: () => JSON.stringify({ questions: 123 }),
   });
   const agent = new CreativeDraftAgent({ model });
   await assert.rejects(agent.createDraftWithClarification(RAW, async () => "x"), {

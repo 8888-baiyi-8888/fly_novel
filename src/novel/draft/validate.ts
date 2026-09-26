@@ -214,7 +214,8 @@ export interface ClarificationTurn {
 
 /**
  * 解析并校验澄清轮输出（{ questions, draft } 包装结构）。
- * - questions 必须是字符串数组（允许空）；
+ * - questions 容错：模型在「更新草案」轮经常省略该字段 → 缺失/null 视为空数组；
+ *   字符串视为单个问题；数组过滤掉空项/非字符串项；其他类型才报错。
  * - draft 为 null / 缺失时按"提问轮"处理，draft 为对象时按完整草案校验；
  * - 若模型同时给出问题与草案（违规），仍接受草案并把问题留给调用方决定是否并入。
  */
@@ -223,13 +224,19 @@ export function parseClarificationTurn(input: unknown): ClarificationTurn {
     throw new DraftValidationError("澄清轮输出必须是 JSON 对象");
   }
   const obj = input as Record<string, unknown>;
-  if (!Array.isArray(obj.questions)) {
-    throw new DraftValidationError("字段 questions 必须是数组");
+  let questions: string[];
+  if (obj.questions === undefined || obj.questions === null) {
+    questions = [];
+  } else if (typeof obj.questions === "string") {
+    const text = obj.questions.trim();
+    questions = text.length > 0 ? [text] : [];
+  } else if (Array.isArray(obj.questions)) {
+    questions = (obj.questions as unknown[])
+      .filter((item) => typeof item === "string" && item.trim().length > 0)
+      .map((item) => (item as string).trim());
+  } else {
+    throw new DraftValidationError("字段 questions 必须是数组、字符串或省略");
   }
-  if (!obj.questions.every((item) => typeof item === "string" && item.trim().length > 0)) {
-    throw new DraftValidationError("字段 questions 的每项必须是非空字符串");
-  }
-  const questions: string[] = obj.questions.map((item) => (item as string).trim());
   const draft =
     obj.draft === null || obj.draft === undefined ? undefined : parseAndValidateDraft(obj.draft);
   return { questions, ...(draft === undefined ? {} : { draft }) };

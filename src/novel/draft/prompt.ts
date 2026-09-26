@@ -26,6 +26,11 @@ const CLARIFY_SYSTEM_PROMPT = [
   "要求：",
   "- 忠实保留用户原意，不擅自新增设定，不编造用户没有表达的内容；",
   "- 输出只包含 JSON，不包含任何解释文字。",
+  "提问边界（必须遵守）：",
+  "- 只问「用户必须拍板、你无法合理推断」的问题：平台偏好、雷点/禁区、篇幅与节奏偏好、必须包含或必须排除的元素等；",
+  "- 不要问你能自主生成的内容：书名、分卷规划、配角姓名与定位、主线细节、剧情走向等——这些你自己规划；",
+  "- 用户回答「你定/你规划/你帮我想/都可以」时，视为授权你自主决定，把该字段规划完整，不要留空；",
+  "- 拿不准但可合理推断的，自己生成，写入草案 openQuestions 供用户事后确认，不要占用提问轮。",
   CLARIFY_JSON_DESCRIPTION,
 ].join("\n");
 
@@ -54,7 +59,8 @@ export function buildClarifyFinalMessage(): ChatMessage {
     role: "user",
     content:
       "用户已回答完所有问题（或表示不再回答）。现在请基于以上全部信息输出最终创意草案：" +
-      "questions 必须为空数组，完整草案填入 draft 字段；如仍有无法澄清的问题，写入草案的 openQuestions 字段。",
+      "questions 可省略或为空数组，完整草案填入 draft 字段；如仍有无法澄清的问题，写入草案的 openQuestions 字段。" +
+      "所有必填字段必须填写完整：volumePlan/constraints/tone 等数组字段必须为非空数组，分卷规划（volumePlan）由你自主完成，每卷一条。",
   };
 }
 
@@ -62,6 +68,6 @@ export function buildClarifyFinalMessage(): ChatMessage {
 export function buildClarifyRetryMessage(errorText: string): ChatMessage {
   return {
     role: "user",
-    content: `你上一次的输出不符合协议：${errorText}。请重新输出符合协议的 JSON：questions 必须是字符串数组（没有问题时为 []），draft 为 null（提问轮）或完整草案对象（交卷轮）。`,
+    content: `你上一次的输出不符合协议：${errorText}。请重新输出符合协议的 JSON：questions 为需要用户回答的问题数组（没有问题时可省略或为 []），draft 为 null（提问轮）或完整草案对象（交卷轮）。`,
   };
 }

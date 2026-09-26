@@ -117,44 +117,68 @@ export class CreativeDraftAgent {
         }
         const answer = await askUser(remaining);
         if (isStopWord(answer, stopWords)) {
-          const finalTurn = await this.callClarifyTurn([
-            ...messages,
-            buildClarifyQuestionsMessage(remaining),
-            buildClarifyAnswerMessage(answer),
-            buildClarifyFinalMessage(),
-          ]);
-          if (finalTurn.draft === undefined) {
-            throw new CreativeDraftError("用户提前结束但模型仍未给出草案");
-          }
-          return mergeRemainingQuestions(finalTurn.draft, finalTurn.questions);
+          return this.finalizeDraft(messages, remaining);
         }
         messages.push(buildClarifyQuestionsMessage(remaining), buildClarifyAnswerMessage(answer));
         rounds += 1;
         continue;
       }
+      // 提问轮：模型给了问题列表但没给草案。若问题列表为空（如 {questions: [], draft: null}，
+      // 模型认为信息够了却没给 draft）→ 不再问用户，直接强制交卷。
+      if (turn.questions.length === 0) {
+        return this.finalizeDraft(messages, []);
+      }
       if (rounds >= maxRounds) {
-        const finalTurn = await this.callClarifyTurn([...messages, buildClarifyFinalMessage()]);
-        if (finalTurn.draft === undefined) {
-          throw new CreativeDraftError("澄清达到最大轮数后模型仍未给出草案");
-        }
-        return mergeRemainingQuestions(finalTurn.draft, finalTurn.questions);
+        return this.finalizeDraft(messages, turn.questions);
       }
       const answer = await askUser(turn.questions);
       if (isStopWord(answer, stopWords)) {
-        const finalTurn = await this.callClarifyTurn([
-          ...messages,
-          buildClarifyQuestionsMessage(turn.questions),
-          buildClarifyAnswerMessage(answer),
-          buildClarifyFinalMessage(),
-        ]);
-        if (finalTurn.draft === undefined) {
-          throw new CreativeDraftError("用户提前结束但模型仍未给出草案");
-        }
-        return mergeRemainingQuestions(finalTurn.draft, finalTurn.questions);
+        return this.finalizeDraft(messages, turn.questions);
       }
       messages.push(buildClarifyQuestionsMessage(turn.questions), buildClarifyAnswerMessage(answer));
       rounds += 1;
     }
+  }
+
+  /**
+   * 强制交卷：追加"输出最终草案"指令让模型交卷。
+   * 若模型仍不给草案（常见：反复输出 {questions: [], draft: null} 却不肯填 draft），
+   * 降级为「直接草案输出」调用（去掉 questions/draft 包装协议），兜底保证澄清流程一定产出草案。
+   */
+  private async finalizeDraft(messages: ChatMessage[], leftoverQuestions: string[]): Promise<CreativeDraft> {
+    const finalTurn = await this.callClarifyTurn([...messages, buildClarifyFinalMessage()]);
+    if (finalTurn.draft !== undefined) {
+      return mergeRemainingQuestions(finalTurn.draft, finalTurn.questions);
+    }
+    const leftover = [...leftoverQuestions, ...finalTurn.questions];
+    return mergeRemainingQuestions(await this.callDraftFallback(messages), leftover);
+  }
+
+  /** 兜底：不带澄清包装，直接要求模型输出完整草案对象（模型最擅长的形态，基本必成）。 */
+  private async callDraftFallback(messages: ChatMessage[]): Promise<CreativeDraft> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
+      try {
+        const request: ChatRequest = {
+          messages: [
+            ...messages,
+            {
+              role: "user",
+              content:
+                "澄清已结束。请直接输出完整创意草案 JSON 对象本身（不要 questions/draft 包装字段，直接按草案结构输出）。" +
+                "所有必填字段必须填写完整：volumePlan 等数组字段必须为非空数组，分卷规划由你自主完成，每卷一条。",
+            },
+          ],
+          structured: { name: "creative_draft", description: DRAFT_JSON_DESCRIPTION },
+          temperature: 0.2,
+        };
+        const response = await this.model.chat(request);
+        return parseAndValidateDraft(JSON.parse(response.content));
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw new CreativeDraftError(`澄清交卷失败：${describeError(lastError)}`);
   }
 
   /** 澄清轮模型调用：一次调用 + JSON 解析 + 澄清协议校验 + 失败重试（重试时携带上次错误反馈）。 */
