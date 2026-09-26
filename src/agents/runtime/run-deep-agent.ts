@@ -1,6 +1,5 @@
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import { createDeepAgent } from "deepagents";
-import { MemorySaver } from "@langchain/langgraph-checkpoint";
 import { createMiddleware } from "langchain";
 import type { SupportedResponseFormat } from "deepagents";
 
@@ -9,11 +8,10 @@ export type DeepAgentInstance = ReturnType<typeof createDeepAgent>;
 /** 单次 Deep Agents 调用返回的原始运行状态。 */
 export type DeepAgentRunResult = Awaited<ReturnType<ReturnType<typeof createDeepAgent>["invoke"]>>;
 
-/** 创建独立会话；检查点仅保存在内存中，模型只使用结构化输出工具。 */
+/** 创建单轮执行实例；模型只使用结构化输出工具。 */
 export function createModelAgent(model: BaseLanguageModel, systemPrompt: string, getResponseFormat: () => SupportedResponseFormat): DeepAgentInstance {
   return createDeepAgent({
     model,
-    checkpointer: new MemorySaver(),
     systemPrompt,
     responseFormat: getResponseFormat(),
     middleware: [createMiddleware({
@@ -26,7 +24,7 @@ export function createModelAgent(model: BaseLanguageModel, systemPrompt: string,
 
 import type { BaseMessage } from "@langchain/core/messages";
 
-/** 调用 Deep Agent；仅提交新增消息，后续历史由实例检查点读取。 */
+/** 调用 Deep Agent；调用方提交包含持久历史的完整消息。 */
 export async function runDeepAgent(
   agent: DeepAgentInstance,
   messages: BaseMessage[],
@@ -37,6 +35,6 @@ export async function runDeepAgent(
       messages,
       structuredResponse: undefined,
     },
-    { signal, configurable: { thread_id: "character-session" } },
+    { signal },
   );
 }

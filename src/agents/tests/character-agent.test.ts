@@ -16,7 +16,6 @@ import type { CharacterAgentRunInput } from "@fly-novel/agents";
 const requireFromAgentsPackage = createRequire(require.resolve("@fly-novel/agents"));
 const deepagents: typeof import("deepagents") = requireFromAgentsPackage("deepagents");
 const { FakeListChatModel: BaseFakeListChatModel }: typeof import("@langchain/core/utils/testing") = requireFromAgentsPackage("@langchain/core/utils/testing");
-const { MemorySaver }: typeof import("@langchain/langgraph-checkpoint") = requireFromAgentsPackage("@langchain/langgraph-checkpoint");
 const { AIMessage }: typeof import("@langchain/core/messages") = requireFromAgentsPackage("@langchain/core/messages");
 const { z }: typeof import("zod") = requireFromAgentsPackage("zod");
 const performanceSchema = z.strictObject({ performance: z.string() }).meta({ title: "character_response" });
@@ -152,7 +151,7 @@ test("角色记忆仅按 characterId 落盘，并可由新实例读取全部记�
   assert.deepEqual(recovered, memories);
 });
 
-test("框架检查点延续本实例历史，新实例即使身份相同也不共享会话", async (t) => {
+test("每轮从角色记忆重建历史，不保留实例内会话", async (t) => {
   class RecordingModel extends FakeListChatModel {
     readonly seen: BaseMessage[][] = [];
     override async _generate(messages: BaseMessage[], options: this["ParsedCallOptions"]) {
@@ -163,8 +162,13 @@ test("框架检查点延续本实例历史，新实例即使身份相同也不�
   const model = new RecordingModel({ responses: ["我会回来。", "记得渡口的约定。", "新的会话。"] });
   const create = t.mock.method(deepagents, "createDeepAgent");
   let resolutions = 0;
-  configureAgentRuntime({ resolveModel() { resolutions++; return model; } });
+  const memoryDirectory = await mkdtemp(join(tmpdir(), "fly-novel-character-memory-"));
+  configureAgentRuntime({
+    characterMemoryDirectory: memoryDirectory,
+    resolveModel() { resolutions++; return model; },
+  });
   t.after(() => configureAgentRuntime(undefined));
+  t.after(async () => { await rm(memoryDirectory, { recursive: true, force: true }); });
   const identity = { storyId: "story", characterId: "lin" };
   const agent = new CharacterAgent(identity);
   const input: CharacterAgentRunInput = {
@@ -172,22 +176,17 @@ test("框架检查点延续本实例历史，新实例即使身份相同也不�
   };
   const controller = new AbortController();
   const first = await agent.run(input);
-  const created = create.mock.calls[0];
-  assert.ok(created?.result);
   const second = await agent.run({ ...input, scene: { location: "客栈" } }, { signal: controller.signal });
-  assert.equal(resolutions, 1);
-  assert.equal(create.mock.callCount(), 1);
+  assert.equal(resolutions, 2);
+  assert.equal(create.mock.callCount(), 2);
   assert.equal(first.messages.filter((m: BaseMessage) => m.type === "human").length, 1);
   assert.equal(second.messages.filter((m: BaseMessage) => m.type === "human").length, 2);
-  assert.ok(model.seen[1]?.some(message => message.content === "我会回来。"));
+  assert.ok(model.seen[1]?.some(message => typeof message.content === "string" && message.content.includes("我会回来。")));
   assert.ok(model.seen[1]?.some(message => typeof message.content === "string" && message.content.includes("渡口")));
-  assert.ok(created.arguments[0]?.checkpointer instanceof MemorySaver);
-  assert.equal(created.arguments[0]?.memory, undefined);
-  assert.equal(created.arguments[0]?.backend, undefined);
   const fresh = await new CharacterAgent(identity).run({ ...input, scene: { location: "新场景" } });
-  assert.equal(fresh.messages.filter((m: BaseMessage) => m.type === "human").length, 1);
-  assert.ok(!model.seen[2]?.some(message => message.content === "我会回来。"));
-  assert.notEqual(create.mock.calls[1]?.arguments[0]?.checkpointer, created.arguments[0]?.checkpointer);
+  assert.equal(fresh.messages.filter((m: BaseMessage) => m.type === "human").length, 3);
+  assert.ok(model.seen[2]?.some(message => typeof message.content === "string" && message.content.includes("我会回来。")));
+  assert.equal(create.mock.callCount(), 3);
 });
 
 test("同一会话拒绝并发调用，取消初始化后可重新运行", async (t) => {
@@ -245,19 +244,21 @@ class ScriptedChatModel extends FakeListChatModel {
   }
 }
 
-test("每轮通过 Schema 切换输出字段，复用 Agent 并保留历史", async (t) => {
+test("每轮通过 Schema 切换输出字段，并从记忆保留历史", async (t) => {
   const create = t.mock.method(deepagents, "createDeepAgent");
   const model = new FakeListChatModel({ responses: ["第一轮", "第二轮", "第三轮"] });
-  configureAgentRuntime({ resolveModel: () => model });
+  const memoryDirectory = await mkdtemp(join(tmpdir(), "fly-novel-character-memory-"));
+  t.after(async () => { await rm(memoryDirectory, { recursive: true, force: true }); });
+  configureAgentRuntime({ characterMemoryDirectory: memoryDirectory, resolveModel: () => model });
   const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
   const first = await agent.run({ scene: {}, responseFormat: performanceSchema });
   assert.deepEqual(first.structuredResponse, { performance: "第一轮" });
   const second = await agent.run({ scene: {}, responseFormat: z.strictObject({ innerActivity: z.string() }).meta({ title: "character_response" }) });
   assert.deepEqual(second.structuredResponse, { innerActivity: "第二轮" });
-  assert.ok(second.messages.some((m: BaseMessage) => m.text === "第一轮"));
+  assert.ok(second.messages.some((m: BaseMessage) => m.text.includes("第一轮")));
   const third = await agent.run({ scene: {}, responseFormat: z.strictObject({ stateChanges: z.array(z.string()) }).meta({ title: "character_response" }) });
   assert.deepEqual(third.structuredResponse, { stateChanges: [] });
-  assert.equal(create.mock.callCount(), 1);
+  assert.equal(create.mock.callCount(), 3);
 });
 
 test("缺失字段、错误类型和额外字段均拒绝，后续调用可以恢复", async () => {

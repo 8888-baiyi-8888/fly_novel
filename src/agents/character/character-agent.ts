@@ -3,7 +3,7 @@ import { toolStrategy } from "langchain";
 import { z } from "zod";
 import type { SupportedResponseFormat } from "deepagents";
 import { getCharacterMemoryDirectory, resolveAgentResources } from "../runtime/agent-runtime.js";
-import { createModelAgent, runDeepAgent, type DeepAgentInstance, type DeepAgentRunResult } from "../runtime/run-deep-agent.js";
+import { createModelAgent, runDeepAgent, type DeepAgentRunResult } from "../runtime/run-deep-agent.js";
 import type { CharacterAgentOptions, CharacterAgentRunInput, CharacterAgentRunOptions, CharacterContextSection, CharacterScene } from "./types.js";
 import { CharacterMemory, type CharacterReactionMemory } from "./memory.js";
 import {
@@ -22,11 +22,10 @@ function requireIdentifier(value: unknown, field: string): string {
   return value;
 }
 
-/** 调用 Deep Agent 并校验响应结构；会话历史仅保存在实例的内存检查点中。 */
+/** 调用 Deep Agent 并校验响应结构；历史仅来自角色持久记忆。 */
 export class CharacterAgent extends BaseAgent {
   readonly #options: Readonly<CharacterAgentOptions>;
   #memory: Promise<CharacterMemory> | undefined;
-  #session: { agent: DeepAgentInstance; format: { current: SupportedResponseFormat } } | undefined;
   #running = false;
 
   public constructor(options: CharacterAgentOptions) {
@@ -101,27 +100,16 @@ export class CharacterAgent extends BaseAgent {
     responseFormat: SupportedResponseFormat,
     options: CharacterAgentRunOptions,
   ): Promise<DeepAgentRunResult> {
-    if (this.#session === undefined) {
-      const { model } = await resolveAgentResources(this.#options.modelId);
-
-      options.signal?.throwIfAborted();
-
-      const format = { current: responseFormat };
-
-      this.#session = {
-        agent: createModelAgent(
-          model,
-          "你扮演当前绑定的小说角色，根据自身资料、过去经历和当前场景作出反应。调用本轮结构化输出工具提交最终响应，参数遵循该工具的输出 Schema，不用普通文本代替工具调用。",
-          () => format.current,
-        ),
-        format,
-      };
-    }
-
-    this.#session.format.current = responseFormat;
+    const { model } = await resolveAgentResources(this.#options.modelId);
+    options.signal?.throwIfAborted();
+    const agent = createModelAgent(
+      model,
+      "你扮演当前绑定的小说角色，根据自身资料、过去经历和当前场景作出反应。调用本轮结构化输出工具提交最终响应，参数遵循该工具的输出 Schema，不用普通文本代替工具调用。",
+      () => responseFormat,
+    );
 
     return await runDeepAgent(
-      this.#session.agent,
+      agent,
       messages,
       options.signal,
     );
@@ -181,9 +169,9 @@ public async run<TSchema extends z.ZodObject>(
 
     const memory = this.getMemory();
 
-    // 首次创建会话时加载磁盘记忆；后续消息由实例检查点延续，避免重复注入。
+    // 每轮从持久记忆重建完整历史，避免保留另一份实例内会话状态。
     const messages: BaseMessage[] = [
-      ...(this.#session === undefined && memory !== undefined ? (await memory).toMessages() : []),
+      ...(memory === undefined ? [] : (await memory).toMessages()),
       new HumanMessage(prompt),
     ];
 

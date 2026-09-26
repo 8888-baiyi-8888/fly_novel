@@ -430,19 +430,19 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 
 接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId })`、`agent.run({ scene, responseFormat }, { signal? })` 和 `agent.getAllMemories()`。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
 
-`run` 将场景组织为本轮消息，使用 `z.toJSONSchema(schema)` 保留调用方约束，再交给框架 `toolStrategy`，并将 `signal` 传给底层调用。Schema 必须是可转换为 JSON Schema 的 Zod 对象；缺失或类型不符在模型初始化前拒绝。首次运行通过注册的 `resolveModel(modelId)` 解析模型并创建框架实例；后续运行复用该实例，由模型调用中间件设置本轮 Schema，不重建会话。重新注册运行时不改变已创建实例的模型。
+`run` 将已保存记忆和当前场景组织为本轮完整消息，使用 `z.toJSONSchema(schema)` 保留调用方约束，再交给框架 `toolStrategy`，并将 `signal` 传给底层调用。Schema 必须是可转换为 JSON Schema 的 Zod 对象；缺失或类型不符在模型初始化前拒绝。每次运行都通过注册的 `resolveModel(modelId)` 解析模型并创建独立框架实例，不保留实例内会话。
 
 结果中的 `structuredResponse` 按调用方 Schema 校验，其余字段保留框架状态。`CharacterAgentRunInput<TSchema>` 接收外部 Schema，`run()` 返回的 `CharacterAgentRunResult<z.output<TSchema>>` 推导对应输出类型，必需字段不会统一退化为可选字段。字段名称、嵌套结构、数组、可选项和描述均属于调用方；F4、F5 的字段是业务设计参考，不是类内置的输出约束。正式业务提交仍未接入。
 
 结构化输出采用工具调用策略，模型需要支持工具调用；未依赖供应商原生 JSON Schema 模式。模型调用中间件显式设置 `toolChoice: "auto"`，避免框架默认强制工具调用与 DeepSeek 思考模式冲突。模型调用中间件将普通工具列表设为空，仅由框架提供本轮结构化输出工具；自动选择不保证模型一定调用输出工具，程序只接受通过校验的结构化结果。违反外部 Schema 或未生成结构化结果会使调用失败，结构化解析错误不自动重试。框架先按转换后的 JSON Schema 校验，再按调用方 Zod Schema 解析；使用 `z.strictObject()` 拒绝额外字段，`z.looseObject()` 允许保留额外字段，不能假定框架会自动剔除 `z.object()` 未声明的字段。每轮清空框架状态中的旧 `structuredResponse`，防止缺失本轮结果时返回上轮内容。结构校验不保证人物一致性、事实正确性或状态变化依据有效。
 
-每个实例拥有独立的框架 `MemorySaver`，调用使用固定 `thread_id` 延续该实例的会话；每轮只传新增消息，由框架读取历史。不同实例不共享会话检查点；程序退出后检查点丢失。同一实例并发 `run` 会立即拒绝，失败或取消后释放运行状态。
+每次运行创建独立框架实例，并从角色持久记忆生成完整历史消息；不存在 `MemorySaver`、固定 `thread_id` 或实例内会话。启用文件记忆时，同 ID 的新实例会读取相同历史。同一实例并发 `run` 会立即拒绝，失败或取消后释放运行状态。
 
-框架检查点不等同于 F6、F9 的正式经历提交。调用失败或取消时不回滚检查点，也不隐式重试整轮。返回值经过结构校验，未经过业务校验。框架可能压缩长上下文，检查点不保证最近经历永远完整。
+调用失败或取消不写入角色记忆，也不隐式重试整轮。返回值经过结构校验，未经过业务校验。
 
 角色类为人物资料、当前状态和性格准备保留统一的 `{ content: string }` 接口。`buildModelPrompt()` 顺序准备这些资料，`combineContext()` 跳过空白片段，再附加外部场景和输出字段；`generateReaction()` 负责调用框架。`validateResult()` 与 `saveExperienceAndState()` 是业务校验和正式经历提交接口，直接调用会报告未实现，`run()` 不调用它们。
 
-应用在 `configureAgentRuntime()` 中注册 `characterMemoryDirectory` 后，角色记忆保存为 `<characterMemoryDirectory>/<characterId>.json`。当前布局只使用角色 ID，不区分小说或分支；角色 ID 含路径分隔符时拒绝。每次仅在结构化输出校验成功后追加本轮 `scene` 对象和结构化响应对象；新实例的首次运行将全部历史记录序列化为消息，后续调用仍由框架检查点延续。`getAllMemories()` 返回保持原始 JSON 结构的全部记录。未注册目录时不读写磁盘，保留仅实例内会话行为。模型没有文件读写工具。
+应用在 `configureAgentRuntime()` 中注册 `characterMemoryDirectory` 后，角色记忆保存为 `<characterMemoryDirectory>/<characterId>.json`。当前布局只使用角色 ID，不区分小说或分支；角色 ID 含路径分隔符时拒绝。每次仅在结构化输出校验成功后追加本轮 `scene` 对象和结构化响应对象；每次运行都将全部历史记录序列化为消息。`getAllMemories()` 返回保持原始 JSON 结构的全部记录。未注册目录时不读写磁盘，因此每轮只使用当前场景。模型没有文件读写工具。
 
 执行超时、模型调用预算、检索材料预算和保存重试策略属于应用的 Agent 运行时配置，不暴露在每次角色调用参数中。它们在创建内部执行单元时校验并固定，提供商重试也计入预算，不额外执行隐式整轮重跑。精确 Deep Agents SDK 适配在实现时按安装版本验证。
 
@@ -481,7 +481,7 @@ async function runCharacterExample(scene: CharacterScene) {
 }
 ```
 
-同一实例的下一次 `run` 只提供新场景、实际反馈和输出字段，不需要传回上一轮结果。三层记忆读取、性格模式和正式状态提交属于 F2、F8、F9 的业务接入目标，不是当前会话检查点的功能。行动尝试不能仅因进入会话历史就视为外部结果已经发生。
+同一实例的下一次 `run` 只提供新场景、实际反馈和输出字段，不需要传回上一轮结果；已保存记忆会自动重新加载。三层记忆读取、性格模式和正式状态提交属于 F2、F8、F9 的业务接入目标。行动尝试不能仅因进入历史消息就视为外部结果已经发生。
 
 接入 F9 文件提交时，使用内部稳定提交 ID 和冻结请求恢复；回执丢失、版本冲突或无法恢复应使调用明确失败，不能重新调用模型替代提交恢复。当前 `run` 不执行文件提交。
 
