@@ -21,7 +21,7 @@
 
 `src/config/settings.ts` 的 `readSettings()` 一次读取两个配置文件，返回 `{ settings, credentials }`：`settings` 包含全部普通配置，`credentials` 包含 refs 下的全部原样密文。它只检查 JSON 对象结构和凭据值类型，不读取加密密钥、不解密、不写文件，也不限定模型提供商。配置不要求 version 字段。添加其他模型配置不需要新增读取函数。
 
-样例使用供应商标识作为 `settings.json` 的顶层键，保存地址、模型和凭据引用。配置读取函数原样返回这些字段。`pnpm run character-agent-example` 使用 `deepseek` 配置、对应加密凭据和 OpenAI 兼容的 LangChain 适配器创建模型，连续执行两轮角色调用。入口仅注册模型解析器，不读取或写入角色记忆目录。会话行为见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。
+样例使用供应商标识作为 `settings.json` 的顶层键，保存地址、模型和凭据引用。配置读取函数原样返回这些字段。`pnpm run character-agent-example` 使用 `deepseek` 配置、对应加密凭据和 OpenAI 兼容的 LangChain 适配器创建模型，连续执行两轮角色调用。入口还注册 `.fly-novel/memories/characters` 作为角色记忆目录；每个角色的文件名为 `<characterId>.json`，该目录受现有 `.fly-novel` 忽略规则保护。会话行为见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。
 
 ### 开发时加密与解密
 

@@ -428,7 +428,7 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 | `responseFormat` | 调用方提供的 Zod 4 对象 Schema，定义本轮输出字段、类型、含义、必需项和额外字段处理规则。Agent 不预设字段名或字段集合。Schema 描述表达数据含义，不指定角色必须作出的选择。 |
 | `signal` | 可选取消信号。 |
 
-接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId })` 和 `agent.run({ scene, responseFormat }, { signal? })`。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
+接口为 `new CharacterAgent({ modelId, storyId, branchId, characterId })`、`agent.run({ scene, responseFormat }, { signal? })` 和 `agent.getAllMemories()`。`modelId` 可省略。调用方不传人物快照、三层记忆、性格模式、状态版本、查询工具、执行预算或文件提交标识。
 
 `run` 将场景组织为本轮消息，使用 `z.toJSONSchema(schema)` 保留调用方约束，再交给框架 `toolStrategy`，并将 `signal` 传给底层调用。Schema 必须是可转换为 JSON Schema 的 Zod 对象；缺失或类型不符在模型初始化前拒绝。首次运行通过注册的 `resolveModel(modelId)` 解析模型并创建框架实例；后续运行复用该实例，由模型调用中间件设置本轮 Schema，不重建会话。重新注册运行时不改变已创建实例的模型。
 
@@ -440,9 +440,9 @@ Agent 内部运行时准备这些材料，并向底层框架组装 `memories.rec
 
 框架检查点不等同于 F6、F9 的正式经历提交。调用失败或取消时不回滚检查点，也不隐式重试整轮。返回值经过结构校验，未经过业务校验。框架可能压缩长上下文，检查点不保证最近经历永远完整。
 
-角色类为人物资料、当前状态和性格准备保留统一的 `{ content: string }` 接口。`buildModelPrompt()` 顺序准备这些资料，`combineContext()` 跳过空白片段，再附加外部场景和输出字段；`generateReaction()` 负责调用框架。会话历史不通过 `loadMemory()` 手工检索或拼接。`validateResult()` 与 `saveExperienceAndState()` 是业务校验和正式经历提交接口，直接调用会报告未实现，`run()` 不调用它们。
+角色类为人物资料、当前状态和性格准备保留统一的 `{ content: string }` 接口。`buildModelPrompt()` 顺序准备这些资料，`combineContext()` 跳过空白片段，再附加外部场景和输出字段；`generateReaction()` 负责调用框架。`validateResult()` 与 `saveExperienceAndState()` 是业务校验和正式经历提交接口，直接调用会报告未实现，`run()` 不调用它们。
 
-角色运行不加载记忆摘要，不挂载磁盘存储后端，也不向模型提供文件读写工具。已有角色记忆文件不删除、不读取；业务记忆策略仍由 F2、F8、F9 描述。
+应用在 `configureAgentRuntime()` 中注册 `characterMemoryDirectory` 后，角色记忆保存为 `<characterMemoryDirectory>/<characterId>.json`。当前布局只使用角色 ID，不区分小说或分支；角色 ID 含路径分隔符时拒绝。每次仅在结构化输出校验成功后追加本轮 `scene` 对象和结构化响应对象；新实例的首次运行将全部历史记录序列化为消息，后续调用仍由框架检查点延续。`getAllMemories()` 返回保持原始 JSON 结构的全部记录。未注册目录时不读写磁盘，保留仅实例内会话行为。模型没有文件读写工具。
 
 执行超时、模型调用预算、检索材料预算和保存重试策略属于应用的 Agent 运行时配置，不暴露在每次角色调用参数中。它们在创建内部执行单元时校验并固定，提供商重试也计入预算，不额外执行隐式整轮重跑。精确 Deep Agents SDK 适配在实现时按安装版本验证。
 

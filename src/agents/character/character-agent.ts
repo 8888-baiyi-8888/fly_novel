@@ -2,10 +2,15 @@ import { BaseAgent } from "../core/base-agent.js";
 import { toolStrategy } from "langchain";
 import { z } from "zod";
 import type { SupportedResponseFormat } from "deepagents";
-import { resolveAgentResources } from "../runtime/agent-runtime.js";
+import { getCharacterMemoryDirectory, resolveAgentResources } from "../runtime/agent-runtime.js";
 import { createModelAgent, runDeepAgent, type DeepAgentInstance, type DeepAgentRunResult } from "../runtime/run-deep-agent.js";
 import type { CharacterAgentOptions, CharacterAgentRunInput, CharacterAgentRunOptions, CharacterContextSection, CharacterScene } from "./types.js";
-
+import { CharacterMemory, type CharacterReactionMemory } from "./memory.js";
+import {
+  AIMessage,
+  HumanMessage,
+  type BaseMessage,
+} from "@langchain/core/messages";
 export type CharacterAgentRunResult<TOutput = Record<string, unknown>> = Omit<DeepAgentRunResult, "structuredResponse"> & {
   structuredResponse: TOutput;
 };
@@ -20,6 +25,7 @@ function requireIdentifier(value: unknown, field: string): string {
 /** 调用 Deep Agent 并校验响应结构；会话历史仅保存在实例的内存检查点中。 */
 export class CharacterAgent extends BaseAgent {
   readonly #options: Readonly<CharacterAgentOptions>;
+  #memory: Promise<CharacterMemory> | undefined;
   #session: { agent: DeepAgentInstance; format: { current: SupportedResponseFormat } } | undefined;
   #running = false;
 
@@ -36,6 +42,24 @@ export class CharacterAgent extends BaseAgent {
   /** 固定的角色定位，供内部加载方法使用。 */
   public get options(): Readonly<CharacterAgentOptions> {
     return this.#options;
+  }
+
+  /** 返回该角色已持久化的全部记忆，不暴露本机存储路径。 */
+  public async getAllMemories(): Promise<readonly CharacterReactionMemory[]> {
+    const memory = this.getMemory();
+    if (memory === undefined) {
+      throw new Error("Agent 运行时尚未配置角色记忆目录。");
+    }
+    return (await memory).getAll();
+  }
+
+  private getMemory(): Promise<CharacterMemory> | undefined {
+    const directory = getCharacterMemoryDirectory();
+    if (directory === undefined) {
+      return undefined;
+    }
+    this.#memory ??= CharacterMemory.create(this.#options.characterId, directory);
+    return this.#memory;
   }
 
   /** 人物身份与背景接口；待接入角色档案。 */
@@ -72,19 +96,35 @@ export class CharacterAgent extends BaseAgent {
   }
 
   /** 生成阶段；框架与模型错误直接传播。 */
-  protected async generateReaction(prompt: string, responseFormat: SupportedResponseFormat, options: CharacterAgentRunOptions): Promise<DeepAgentRunResult> {
+  protected async generateReaction(
+    messages: BaseMessage[],
+    responseFormat: SupportedResponseFormat,
+    options: CharacterAgentRunOptions,
+  ): Promise<DeepAgentRunResult> {
     if (this.#session === undefined) {
       const { model } = await resolveAgentResources(this.#options.modelId);
+
       options.signal?.throwIfAborted();
+
       const format = { current: responseFormat };
+
       this.#session = {
-        agent: createModelAgent(model, "你扮演当前绑定的小说角色，根据自身资料和场景作出反应。调用本轮结构化输出工具提交最终响应，参数遵循该工具的输出 Schema，不用普通文本代替工具调用。",
-          () => format.current),
+        agent: createModelAgent(
+          model,
+          "你扮演当前绑定的小说角色，根据自身资料、过去经历和当前场景作出反应。调用本轮结构化输出工具提交最终响应，参数遵循该工具的输出 Schema，不用普通文本代替工具调用。",
+          () => format.current,
+        ),
         format,
       };
     }
+
     this.#session.format.current = responseFormat;
-    return await runDeepAgent(this.#session.agent, prompt, options.signal);
+
+    return await runDeepAgent(
+      this.#session.agent,
+      messages,
+      options.signal,
+    );
   }
 
   /** 人物一致性等业务校验接口；run 仅校验输出结构，不调用此占位接口。 */
@@ -97,35 +137,88 @@ export class CharacterAgent extends BaseAgent {
     throw new Error("角色经历与状态持久化尚未实现。");
   }
 
-  /**
-   * 准备上下文并延续本实例的会话；同一实例不允许并发运行。
-   * 执行失败时输出错误提示和异常，并将原异常继续抛给调用方。
-   * @param input 外部可知场景与调用方定义的 Zod 对象 Schema。
-   * @param options 本次调用的取消信号。
-   * @returns 框架状态及通过 Schema 校验的 structuredResponse；失败或取消不回滚框架检查点。
-   */
-  public async run<TSchema extends z.ZodObject>(input: CharacterAgentRunInput<TSchema>, options: CharacterAgentRunOptions = {}): Promise<CharacterAgentRunResult<z.output<TSchema>>> {
-    options.signal?.throwIfAborted();
-    if (this.#running) {
-      throw new Error("同一个 CharacterAgent 不允许并发运行，请等待当前调用结束。");
-    }
-    this.#running = true;
-    try {
-      const schema = input.responseFormat;
-      if (!(schema instanceof z.ZodObject)) {
-        throw new TypeError("responseFormat 必须是调用方提供的 Zod 对象 Schema。");
-      }
-      // 将调用方的字段约束和额外字段规则一并传给框架。
-      const responseFormat = toolStrategy(z.toJSONSchema(schema), { handleError: false });
-      const prompt = await this.buildModelPrompt(input);
-      options.signal?.throwIfAborted();
-      const result = await this.generateReaction(prompt, responseFormat, options);
-      return { ...result, structuredResponse: schema.parse(result.structuredResponse) };
-    } catch (error) {
-      console.error("CharacterAgent 运行失败：", error);
-      throw error;
-    } finally {
-      this.#running = false;
-    }
+/**
+ * 准备角色上下文与历史记忆并执行本轮反应；同一实例不允许并发运行。
+ *
+ * 执行失败时输出错误并将原异常继续抛给调用方；
+ * 仅在响应通过 Schema 校验后更新角色经历与状态。
+ *
+ * @param input 当前场景及调用方定义的 Zod 输出 Schema。
+ * @param options 本次调用选项。
+ * @returns 框架运行状态及通过 Schema 校验的 structuredResponse。
+ */
+public async run<TSchema extends z.ZodObject>(
+  input: CharacterAgentRunInput<TSchema>,
+  options: CharacterAgentRunOptions = {},
+): Promise<CharacterAgentRunResult<z.output<TSchema>>> {
+  options.signal?.throwIfAborted();
+
+  if (this.#running) {
+    throw new Error(
+      "同一个 CharacterAgent 不允许并发运行，请等待当前调用结束。",
+    );
   }
+
+  this.#running = true;
+
+  try {
+    const schema = input.responseFormat;
+
+    if (!(schema instanceof z.ZodObject)) {
+      throw new TypeError(
+        "responseFormat 必须是调用方提供的 Zod 对象 Schema。",
+      );
+    }
+
+    // 将调用方的字段约束和额外字段规则一并传给框架。
+    const responseFormat = toolStrategy(
+      z.toJSONSchema(schema),
+      { handleError: false },
+    );
+
+    // 构建本轮角色上下文。
+    const prompt = await this.buildModelPrompt(input);
+
+    const memory = this.getMemory();
+
+    // 首次创建会话时加载磁盘记忆；后续消息由实例检查点延续，避免重复注入。
+    const messages: BaseMessage[] = [
+      ...(this.#session === undefined && memory !== undefined ? (await memory).toMessages() : []),
+      new HumanMessage(prompt),
+    ];
+
+    options.signal?.throwIfAborted();
+
+    const result = await this.generateReaction(
+      messages,
+      responseFormat,
+      options,
+    );
+
+    // 先完成输出结构校验，校验失败的结果不得写入角色记忆。
+    const structuredResponse = schema.parse(
+      result.structuredResponse,
+    );
+
+    const validatedResult = {
+      ...result,
+      structuredResponse,
+    } as CharacterAgentRunResult<z.output<TSchema>>;
+
+    // 仅保存已通过结构校验的本轮输入与响应；失败或取消不产生记忆。
+    if (memory !== undefined) {
+      await (await memory).append({
+        input: input.scene,
+        output: structuredResponse,
+      });
+    }
+
+    return validatedResult;
+  } catch (error) {
+    console.error("CharacterAgent 运行失败：", error);
+    throw error;
+  } finally {
+    this.#running = false;
+  }
+}
 }

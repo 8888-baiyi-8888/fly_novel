@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { join } from "node:path";
 import { afterEach, test } from "node:test";
+import { tmpdir } from "node:os";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { ChatResult } from "@langchain/core/outputs";
 import {
@@ -125,6 +128,28 @@ test("角色子功能只拼接有内容的片段并保留顺序", () => {
     { content: "  " },
     { content: "场景" },
   ]), "人物设定\n\n场景");
+});
+
+test("角色记忆仅按 characterId 落盘，并可由新实例读取全部记录", async (t) => {
+  const memoryDirectory = await mkdtemp(join(tmpdir(), "fly-novel-character-memory-"));
+  t.after(async () => { await rm(memoryDirectory, { recursive: true, force: true }); });
+  configureAgentRuntime({
+    characterMemoryDirectory: memoryDirectory,
+    resolveModel: () => new FakeListChatModel({ responses: ["记住了。"] }),
+  });
+  const agent = new CharacterAgent({ storyId: "story", characterId: "lin" });
+  await agent.run({ scene: { location: "渡口" }, responseFormat: performanceSchema });
+  const memories = await agent.getAllMemories();
+  assert.deepEqual(memories, [{
+    input: { location: "渡口" },
+    output: { performance: "记住了。" },
+  }]);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(memoryDirectory, "lin.json"), "utf8")),
+    { records: memories },
+  );
+  const recovered = await new CharacterAgent({ storyId: "another-story", characterId: "lin" }).getAllMemories();
+  assert.deepEqual(recovered, memories);
 });
 
 test("框架检查点延续本实例历史，新实例即使身份相同也不共享会话", async (t) => {

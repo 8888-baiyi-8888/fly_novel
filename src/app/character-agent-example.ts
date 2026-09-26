@@ -2,7 +2,9 @@ import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 import { CharacterAgent, configureAgentRuntime } from "@fly-novel/agents";
 import { decryptSecret } from "../config/credentials";
+import { APP_HOME } from "../config/paths";
 import { readEncryptionKey, readSettings } from "../config/settings";
+import { join } from "node:path";
 
 interface DeepSeekSettings {
   readonly baseURL: string;
@@ -45,6 +47,7 @@ async function main(): Promise<void> {
     configuration: { baseURL: deepseek.baseURL },
   });
   configureAgentRuntime({
+    characterMemoryDirectory: join(APP_HOME, "memories", "characters"),
     resolveModel(modelId) {
       if (modelId !== undefined && modelId !== "deepseek") {
         throw new Error(`样例只注册 deepseek 模型，不能解析：${modelId}`);

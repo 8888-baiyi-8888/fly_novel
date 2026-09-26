@@ -24,14 +24,19 @@ export function createModelAgent(model: BaseLanguageModel, systemPrompt: string,
   });
 }
 
-/** 延续此实例的会话，仅提交本轮消息；历史由框架检查点读取。 */
+import type { BaseMessage } from "@langchain/core/messages";
+
+/** 调用 Deep Agent；仅提交新增消息，后续历史由实例检查点读取。 */
 export async function runDeepAgent(
   agent: DeepAgentInstance,
-  prompt: string,
+  messages: BaseMessage[],
   signal?: AbortSignal,
 ): Promise<DeepAgentRunResult> {
   return agent.invoke(
-    { messages: [{ role: "user", content: prompt }], structuredResponse: undefined },
+    {
+      messages,
+      structuredResponse: undefined,
+    },
     { signal, configurable: { thread_id: "character-session" } },
   );
 }
