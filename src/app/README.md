@@ -2,6 +2,13 @@
 
 `director-agent-example.ts` 从本地配置读取所选模型提供商、API 地址和加密凭据，创建模型后调用 `DirectorAgent`。默认提供商为 `deepseek`，也可将 settings.json 中的提供商名作为命令行参数传入。运行前按[配置模块说明](../config/README.md)准备 `settings.json`、`.credentials.json` 和 `.encryption-key`，再在仓库根目录执行 `pnpm run director-agent-example` 或 `pnpm run director-agent-example <provider>`。
 
+`writer-agent-example.ts` 和 `evaluator-agent-example.ts` 使用相同的本地模型及凭据配置，分别调用写作与评估 Agent；也可用命令行参数选择 `settings.json` 中的其他提供商：
+
+```bash
+pnpm run writer-agent-example [provider]
+pnpm run evaluator-agent-example [provider]
+```
+
 ## 一级子目录
 
 | 子目录 | 作用 |

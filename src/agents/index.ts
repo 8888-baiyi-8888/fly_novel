@@ -9,6 +9,6 @@ export {
   type CharacterScene,
 } from "./character/types.js";
 export { configureAgentRuntime, type AgentRuntime } from "./runtime/agent-runtime.js";
-export { DirectorAgent } from "./director/director-agent.js";
-export { WriterAgent } from "./writer/writer-agent.js";
-export { EvaluatorAgent } from "./evaluator/evaluator-agent.js";
+export { DirectorAgent, type DirectorAgentOptions } from "./director/director-agent.js";
+export { WriterAgent, type WriterAgentOptions } from "./writer/writer-agent.js";
+export { EvaluatorAgent, type EvaluatorAgentOptions } from "./evaluator/evaluator-agent.js";
