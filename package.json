@@ -9,6 +9,7 @@
     "build": "pnpm --filter @fly-novel/agents build && tsc -p tsconfig.build.json",
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
     "character-agent-example": "pnpm run build && node dist/app/character-agent-example.js",
+    "director-agent-example": "pnpm run build && node dist/app/director-agent-example.js",
     "init-encryption-key": "pnpm run build && node dist/app/init-encryption-key.js",
     "typecheck": "pnpm --filter @fly-novel/agents typecheck && tsc -p tsconfig.json",
     "build:tests": "pnpm --filter @fly-novel/agents build && tsc -p tsconfig.test.json",
