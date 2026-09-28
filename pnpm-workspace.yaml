@@ -1,2 +1,4 @@
 packages:
   - src/agents
+allowBuilds:
+  better-sqlite3: true

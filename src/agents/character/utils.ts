@@ -1,7 +1,8 @@
 import path from "node:path"
 import { readFileSync } from "node:fs"
 import type { CharacterInfos } from "./types.js"
-
+import type { CharacterAgentOptions } from "./types.js";
+import { DEFAULT_BRANCH_ID } from "./types.js";
 /**
  * 读取指定小说分支下的角色档案内容。
  *
@@ -31,4 +32,20 @@ export function getCharacterInfos(
   )
 
   return readFileSync(filePath, "utf-8")
+}
+
+export function resolveCharacterAgentOptions(
+  options: CharacterAgentOptions,
+): CharacterAgentOptions {
+  let basePath = options.basePath ?? process.cwd()
+
+  if (path.basename(basePath) !== ".fly-novel") {
+    basePath = path.join(basePath, ".fly-novel")
+  }
+
+  return {
+    ...options,
+    branchId: options.branchId ?? DEFAULT_BRANCH_ID,
+    basePath,
+  }
 }

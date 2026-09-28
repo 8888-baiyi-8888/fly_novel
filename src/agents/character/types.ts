@@ -19,4 +19,7 @@ export interface CharacterAgentOptions {
 
   /** 角色信息，可为文本描述或结构化对象。 */
   characterInfos?: CharacterInfos;
+
+  /** 基础路径；未提供时默认使用当前工作目录。 */
+  basePath?: string
 }

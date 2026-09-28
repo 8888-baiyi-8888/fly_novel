@@ -33,6 +33,8 @@
   },
   "dependencies": {
     "@fly-novel/agents": "workspace:*",
+    "@langchain/langgraph": "^1.4.18",
+    "@langchain/langgraph-checkpoint-sqlite": "^1.0.4",
     "@langchain/openai": "^1.5.13",
     "zod": "^4.6.5"
   }
