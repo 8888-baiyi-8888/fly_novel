@@ -22,6 +22,8 @@ import { ChapterWorkflow } from './engine.ts'
 import { createJsonFileStore } from './file-store.ts'
 import { createOpenAICompatibleAgent } from './openai-compatible-agent.ts'
 import type { WorkflowEvent } from './types.ts'
+import { readSettings, readEncryptionKey } from '../config/settings.ts'
+import { decryptSecret } from '../config/credentials.ts'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -71,15 +73,39 @@ function parseArgs(argv: readonly string[]): Partial<CliOptions> {
   }
 }
 
-async function main(): Promise<void> {
-  const cli = parseArgs(process.argv.slice(2))
+/**
+ * 模型连接解析（与小说流统一配置源）：
+ * 优先级 CLI 参数 > 环境变量（FLY_NOVEL_BASE_URL / FLY_NOVEL_API_KEY / FLY_NOVEL_MODEL）>
+ * settings.json 的 qwen（baseURL / model / credentialRef + 加密凭据）。
+ * 因此小说流与章节流只维护 .fly-novel/settings.json 一处模型配置。
+ */
+async function resolveModelConnection(cli: Partial<CliOptions>): Promise<{ baseUrl: string; apiKey: string; model: string }> {
   const baseUrl = cli.baseUrl ?? process.env.FLY_NOVEL_BASE_URL
   const apiKey = cli.apiKey ?? process.env.FLY_NOVEL_API_KEY
   const model = cli.model ?? process.env.FLY_NOVEL_MODEL
-  if (baseUrl === undefined || apiKey === undefined || model === undefined) {
-    console.error('缺少参数：--base-url / --model（或环境变量 FLY_NOVEL_BASE_URL / FLY_NOVEL_MODEL）与 --api-key（或 FLY_NOVEL_API_KEY）')
-    process.exit(1)
+  if (baseUrl !== undefined && apiKey !== undefined && model !== undefined) {
+    return { baseUrl, apiKey, model }
   }
+  const { settings, credentials } = await readSettings()
+  const cfg = settings.qwen as { baseURL?: string; model?: string; credentialRef?: string } | undefined
+  if (cfg?.baseURL === undefined || cfg.model === undefined || cfg.credentialRef === undefined) {
+    throw new Error('缺少模型参数（--base-url/--model/--api-key 或 FLY_NOVEL_* 环境变量），且 settings.json 无完整 qwen 配置')
+  }
+  if (!Object.hasOwn(credentials, cfg.credentialRef)) {
+    throw new Error(`凭据缺失：${cfg.credentialRef}（请更新 .fly-novel/.credentials.json）`)
+  }
+  const encryptionKey = await readEncryptionKey()
+  return {
+    baseUrl: cfg.baseURL,
+    apiKey: decryptSecret(credentials[cfg.credentialRef], encryptionKey).trim(),
+    model: cfg.model,
+  }
+}
+
+async function main(): Promise<void> {
+  const cli = parseArgs(process.argv.slice(2))
+  const connection = await resolveModelConnection(cli)
+  const { baseUrl, apiKey, model } = connection
 
   const book: BookId = (cli.book ?? 'demo-book') as BookId
   const chapter = cli.chapter ?? 1

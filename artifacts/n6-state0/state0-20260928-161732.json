@@ -1,0 +1,265 @@
+{
+  "bookId": "daiding",
+  "title": "待定",
+  "characterStates": [
+    {
+      "name": "周野",
+      "location": "街头",
+      "identity": "无业/暗中观察者",
+      "emotion": "冷硬克制",
+      "cognition": "知道将死之人倒计时异能的存在，不知道殡仪馆组织，不知道异能流转真相",
+      "resources": "微薄积蓄、倒计时异能"
+    },
+    {
+      "name": "苏遥",
+      "location": "法医鉴定中心",
+      "identity": "法医",
+      "emotion": "专注多疑",
+      "cognition": "察觉近期连环意外案有非自然关联端倪，不知道周野异能，不知道殡仪馆",
+      "resources": "法医勘验权限、专业设备"
+    },
+    {
+      "name": "陈叔",
+      "location": "修表铺/出租屋",
+      "identity": "修表匠/房东",
+      "emotion": "隐忍旁观",
+      "cognition": "知晓异能代价与部分流转机制，不知道周野当前对抗的细节，不知道苏遥",
+      "resources": "修表铺、异能过往经验"
+    },
+    {
+      "name": "殡仪馆业务员",
+      "location": "暗处/伪装身份中",
+      "identity": "底层执行者/伪装者",
+      "emotion": "冷血谨慎",
+      "cognition": "掌握改写倒计时的执行手段，不知道周野能看见倒计时，不知道高层核心机密",
+      "resources": "暗杀工具、伪装资源、组织庇护"
+    }
+  ],
+  "relationshipStates": [
+    {
+      "subjects": [
+        "周野",
+        "苏遥"
+      ],
+      "relation": "嫌疑人/非官方合作者",
+      "trust": "极低",
+      "knowledge": "苏遥不知道周野拥有异能及介入案件的真实动机"
+    },
+    {
+      "subjects": [
+        "周野",
+        "陈叔"
+      ],
+      "relation": "房客/异能继任者",
+      "trust": "中等",
+      "knowledge": "周野不知道陈叔是异能前任拥有者及流转真相"
+    },
+    {
+      "subjects": [
+        "周野",
+        "殡仪馆业务员"
+      ],
+      "relation": "猎物/未知破坏者",
+      "trust": "无",
+      "knowledge": "业务员不知道周野能看见倒计时及真实身份"
+    },
+    {
+      "subjects": [
+        "苏遥",
+        "殡仪馆业务员"
+      ],
+      "relation": "暗中调查对象",
+      "trust": "无",
+      "knowledge": "业务员不知道苏遥已暗中锁定其伪装的意外"
+    }
+  ],
+  "worldState": [
+    {
+      "key": "时间",
+      "value": "当代·春季"
+    },
+    {
+      "key": "公众对连环意外的认知",
+      "value": "认为是普通意外"
+    },
+    {
+      "key": "殡仪馆组织暴露程度",
+      "value": "完全隐藏"
+    },
+    {
+      "key": "异能存在认知",
+      "value": "仅极少数人知晓"
+    }
+  ],
+  "hookSeeds": [
+    {
+      "hookId": "H001",
+      "beatTag": "ch1-h1",
+      "plantedChapter": 1,
+      "type": "物件",
+      "timing": "near-term",
+      "core": "半截车票",
+      "expectedPayoff": 8,
+      "payoffNote": "周野通过半截车票逆向推理出意外制造的破绽",
+      "notes": "受害者死前紧握的半截车票——后续推理起点"
+    },
+    {
+      "hookId": "H002",
+      "beatTag": "ch3-h1",
+      "plantedChapter": 3,
+      "type": "秘密",
+      "timing": "mid-arc",
+      "core": "异能反噬",
+      "expectedPayoff": 16,
+      "payoffNote": "周野逼问业务员时察觉异能反噬",
+      "notes": "陈叔提到代价不仅是记忆剥离，还有更深层的反噬"
+    },
+    {
+      "hookId": "H003",
+      "beatTag": "ch5-h1",
+      "plantedChapter": 5,
+      "type": "信息差",
+      "timing": "near-term",
+      "core": "冷峻女性面孔",
+      "expectedPayoff": 12,
+      "payoffNote": "周野发现失忆的面孔正是苏遥",
+      "notes": "周野剥离的记忆中闪过一张冷峻的女性面孔"
+    },
+    {
+      "hookId": "H004",
+      "beatTag": "ch9-h1",
+      "plantedChapter": 9,
+      "type": "物件",
+      "timing": "near-term",
+      "core": "福尔马林异味",
+      "expectedPayoff": 14,
+      "payoffNote": "周野利用气味逆向拆解业务员的完美意外陷阱",
+      "notes": "业务员身上散发的微弱福尔马林异味"
+    },
+    {
+      "hookId": "H005",
+      "beatTag": "ch11-h1",
+      "plantedChapter": 11,
+      "type": "信息差",
+      "timing": "immediate",
+      "core": "勘验标记",
+      "expectedPayoff": 13,
+      "payoffNote": "周野点破标记达成博弈",
+      "notes": "苏遥在现场留下的隐蔽勘验标记"
+    },
+    {
+      "hookId": "H006",
+      "beatTag": "ch18-h1",
+      "plantedChapter": 18,
+      "type": "秘密",
+      "timing": "near-term",
+      "core": "殡仪馆徽记倒影",
+      "expectedPayoff": 26,
+      "payoffNote": "周野发现受害者瞳孔异象",
+      "notes": "倒计时归零瞬间，受害者瞳孔出现极淡的殡仪馆徽记倒影"
+    },
+    {
+      "hookId": "H007",
+      "beatTag": "ch20-h2",
+      "plantedChapter": 20,
+      "type": "信息差",
+      "timing": "mid-arc",
+      "core": "潜意识坐标",
+      "expectedPayoff": 30,
+      "payoffNote": "坐标指向陈叔旧居",
+      "notes": "周野救人失忆后，潜意识画出一个从未见过的坐标"
+    },
+    {
+      "hookId": "H008",
+      "beatTag": "ch22-h3",
+      "plantedChapter": 22,
+      "type": "信息差",
+      "timing": "near-term",
+      "core": "旧剪报",
+      "expectedPayoff": 29,
+      "payoffNote": "陈叔透露异能过往",
+      "notes": "苏遥档案中夹着一张旧剪报，报道了十年前的一起离奇意外"
+    },
+    {
+      "hookId": "H009",
+      "beatTag": "ch25-h4",
+      "plantedChapter": 25,
+      "type": "威胁",
+      "timing": "near-term",
+      "core": "休眠触发剂",
+      "expectedPayoff": 31,
+      "payoffNote": "殡仪馆高层启动休眠灭口程序",
+      "notes": "业务员暴露后吞服的毒药并非致死，而是某种休眠触发剂"
+    },
+    {
+      "hookId": "H010",
+      "beatTag": "ch26-h5",
+      "plantedChapter": 26,
+      "type": "物件",
+      "timing": "near-term",
+      "core": "特制齿轮",
+      "expectedPayoff": 30,
+      "payoffNote": "周野在陈叔旧居发现齿轮同源零件",
+      "notes": "业务员身上发现的特制齿轮，与陈叔修表铺的零件同源"
+    },
+    {
+      "hookId": "H011",
+      "beatTag": "ch33-h6",
+      "plantedChapter": 33,
+      "type": "秘密",
+      "timing": "mid-arc",
+      "core": "守夜人交接期",
+      "expectedPayoff": 42,
+      "payoffNote": "陈叔透露异能流转周期",
+      "notes": "账本最后一页写着“守夜人交接期”，暗示异能流转周期"
+    },
+    {
+      "hookId": "H012",
+      "beatTag": "ch35-h1",
+      "plantedChapter": 35,
+      "type": "秘密",
+      "timing": "mid-arc",
+      "core": "极淡编号",
+      "expectedPayoff": 50,
+      "payoffNote": "潜意识画出的编号与闪回编号重合",
+      "notes": "周野闪回中发现自己最初觉醒时，倒计时上方曾有一串极淡的编号"
+    }
+  ],
+  "threadBoard": [
+    {
+      "lineId": "M",
+      "status": "进行中",
+      "currentEvent": "E-M01",
+      "nextEvent": "E-M02",
+      "waitingFor": [],
+      "estimatedWake": "故事开始即触发"
+    },
+    {
+      "lineId": "S1",
+      "status": "冷藏",
+      "currentEvent": null,
+      "nextEvent": "E-S101",
+      "waitingFor": [
+        "第一起车祸发生"
+      ],
+      "estimatedWake": "第一卷早期"
+    },
+    {
+      "lineId": "F1",
+      "status": "冷藏",
+      "currentEvent": null,
+      "nextEvent": "E-F101",
+      "waitingFor": [
+        "周野经历失忆代价"
+      ],
+      "estimatedWake": "第一卷前期"
+    }
+  ],
+  "progressState": {
+    "currentChapter": 0,
+    "currentVolume": "第一卷：归零的完美意外",
+    "stage": "故事开端",
+    "completedEvents": [],
+    "nextDirection": "周野目睹车祸受害者头顶倒计时归零，确立异能视觉与规则"
+  }
+}

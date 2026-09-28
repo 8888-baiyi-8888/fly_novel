@@ -9,10 +9,11 @@
  * 块之间注入「上一块尾 5 章 + 已埋未收伏笔清单」保证衔接；
  * 合并后仍跑全书级验收闸门（validateBeatBoard），产物结构不变。
  */
+import { extractHookTag } from "./validate";
 import { Beat, BeatBoard, ThreadEvent, ThreadMap, VolumeMapItem } from "./types";
 
-/** 每块最大章数：40 章 ≈ 30KB 输出，真实模型一次调用可稳定完成。 */
-export const MAX_CHUNK_SIZE = 40;
+/** 每块最大章数：20 章 ≈ 15KB 输出，慢速模型（glm 系）单次调用可稳定完成。 */
+export const MAX_CHUNK_SIZE = 20;
 
 /** 节拍板分块：一次生成一节的章区间与卷信息。 */
 export interface BeatChunk {
@@ -127,25 +128,55 @@ export function mergeChunkBeats(chunks: BeatChunk[], chunkBeatsList: Beat[][]): 
   const beats: Beat[] = [];
   for (let i = 0; i < chunks.length; i += 1) {
     const chunk = chunks[i];
-    const offset = chunk.startChapter - 1;
-    for (const beat of chunkBeatsList[i]) {
-      beats.push({
-        ...beat,
-        chapter: beat.chapter + offset,
-        hookIntentions: beat.hookIntentions.map((intention) => renumberHookIntention(intention, offset)),
-        plannedPayoffOf: beat.plannedPayoffOf.map((tag) => renumberTagRef(tag, offset)),
-      });
+    const chunkBeats = chunkBeatsList[i];
+    // 本块已埋 tag（块内号集合）：plannedPayoffOf 引用命中它才重编号；
+    // 引用 openHooks 全局号（不在本块已埋）必须保留原样，否则二次偏移变孤儿。
+    const buriedTags = new Set<string>();
+    for (const beat of chunkBeats) {
+      for (const intention of beat.hookIntentions) {
+        const tag = extractHookTag(intention);
+        if (tag !== null) {
+          buriedTags.add(tag);
+        }
+      }
+    }
+    for (const beat of chunkBeats) {
+      beats.push(renumberBeatToGlobal(beat, chunk, buriedTags));
     }
   }
   return { beats };
 }
 
-/** 【chN-…】→【ch(N+offset)-…】（只改开头 tag 的章号，正文不动）。 */
-function renumberHookIntention(intention: string, offset: number): string {
-  return intention.replace(/^【ch(\d+)/, (_match, num: string) => `【ch${Number(num) + offset}`);
+/**
+ * 块内号 → 全局号：tag 命中 buriedTags（本块已埋，块内号）→ 加 offset；
+ * 否则视为 openHooks 全局引用（不重编号）。
+ */
+export function renumberTagToGlobal(tag: string, chunk: BeatChunk, buriedTags?: Set<string>): string {
+  const chunkLength = chunk.endChapter - chunk.startChapter + 1;
+  return tag.replace(/^ch(\d+)/, (_match, num: string) => {
+    const blockLocal = Number(num);
+    const isBlockLocal = buriedTags === undefined ? blockLocal <= chunkLength : buriedTags.has(tag);
+    const global = isBlockLocal ? blockLocal + chunk.startChapter - 1 : blockLocal;
+    return `ch${global}`;
+  });
 }
 
-/** chN-… → ch(N+offset)-…（plannedPayoffOf 引用整体就是 tag）。 */
-function renumberTagRef(tag: string, offset: number): string {
-  return tag.replace(/^ch(\d+)/, (_match, num: string) => `ch${Number(num) + offset}`);
+/** 【chN-…】→ 全局号（只改开头 tag 的章号，正文不动）。埋设侧无条件块内→全局。 */
+export function renumberIntentionToGlobal(intention: string, chunk: BeatChunk): string {
+  const chunkLength = chunk.endChapter - chunk.startChapter + 1;
+  return intention.replace(/^【ch(\d+)/, (_match, num: string) => {
+    const blockLocal = Number(num);
+    const global = blockLocal <= chunkLength ? blockLocal + chunk.startChapter - 1 : blockLocal;
+    return `【ch${global}`;
+  });
+}
+
+/** 块内节拍 → 全局节拍（章号 + 所有 tag 引用），供合并、prevTail 注入、openHooks 提取统一使用。 */
+export function renumberBeatToGlobal(beat: Beat, chunk: BeatChunk, buriedTags?: Set<string>): Beat {
+  return {
+    ...beat,
+    chapter: beat.chapter + chunk.startChapter - 1,
+    hookIntentions: beat.hookIntentions.map((intention) => renumberIntentionToGlobal(intention, chunk)),
+    plannedPayoffOf: beat.plannedPayoffOf.map((tag) => renumberTagToGlobal(tag, chunk, buriedTags)),
+  };
 }

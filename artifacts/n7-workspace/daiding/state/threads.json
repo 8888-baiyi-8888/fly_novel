@@ -1,0 +1,33 @@
+{
+  "bookId": "daiding",
+  "threadBoard": [
+    {
+      "lineId": "M",
+      "status": "进行中",
+      "currentEvent": "E-M01",
+      "nextEvent": "E-M02",
+      "waitingFor": [],
+      "estimatedWake": "故事开始即触发"
+    },
+    {
+      "lineId": "S1",
+      "status": "冷藏",
+      "currentEvent": null,
+      "nextEvent": "E-S101",
+      "waitingFor": [
+        "第一起车祸发生"
+      ],
+      "estimatedWake": "第一卷早期"
+    },
+    {
+      "lineId": "F1",
+      "status": "冷藏",
+      "currentEvent": null,
+      "nextEvent": "E-F101",
+      "waitingFor": [
+        "周野经历失忆代价"
+      ],
+      "estimatedWake": "第一卷前期"
+    }
+  ]
+}

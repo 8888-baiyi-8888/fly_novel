@@ -15,6 +15,7 @@ import {
 } from "../architecture";
 import { EXAMPLE_ARCHITECTURE, EXAMPLE_ARCHITECTURE_JSON, EXAMPLE_BEAT_BOARD_JSON } from "../architecture/example";
 import { Beat, BeatBoard } from "../architecture/types";
+import { validateChunkHookRefs } from "../architecture/validate";
 import { EXAMPLE_DRAFT_JSON } from "../draft/example";
 import { CreativeDraftAgent } from "../draft/creative-draft-agent";
 import { CreativeDraft } from "../draft/types";
@@ -249,22 +250,26 @@ test("architecture/chunk：volumeNumber 兼容「第一卷/第1卷/第三卷」"
   assert.equal(volumeNumber("卷末"), null);
 });
 
-test("architecture/chunk：100 章 3 卷均分 → 34/33/33，首尾相连", () => {
+test("architecture/chunk：100 章 3 卷均分 → 每卷按 ≤20 拆块，首尾相连", () => {
   const volumes = [
     { volume: "第一卷", title: "t1", goal: "g1", stages: ["s"] },
     { volume: "第二卷", title: "t2", goal: "g2", stages: ["s"] },
     { volume: "第三卷", title: "t3", goal: "g3", stages: ["s"] },
   ];
   const chunks = planBeatChunks(100, volumes);
-  assert.equal(chunks.length, 3);
+  assert.equal(chunks.length, 6);
   assert.deepEqual(chunks.map((c) => [c.startChapter, c.endChapter]), [
-    [1, 34],
-    [35, 67],
-    [68, 100],
+    [1, 17],
+    [18, 34],
+    [35, 51],
+    [52, 67],
+    [68, 84],
+    [85, 100],
   ]);
+  assert.ok(chunks.every((c) => c.endChapter - c.startChapter + 1 <= 20));
 });
 
-test("architecture/chunk：150 章 4 卷均分 → 38/38/37/37，首尾相连", () => {
+test("architecture/chunk：150 章 4 卷均分 → 每卷按 ≤20 拆块，首尾相连", () => {
   const volumes = Array.from({ length: 4 }, (_, i) => ({
     volume: `第${i + 1}卷`,
     title: `t${i + 1}`,
@@ -272,17 +277,21 @@ test("architecture/chunk：150 章 4 卷均分 → 38/38/37/37，首尾相连", 
     stages: ["s"],
   }));
   const chunks = planBeatChunks(150, volumes);
-  assert.equal(chunks.length, 4);
+  assert.equal(chunks.length, 8);
   assert.deepEqual(chunks.map((c) => [c.startChapter, c.endChapter]), [
-    [1, 38],
-    [39, 76],
-    [77, 113],
-    [114, 150],
+    [1, 19],
+    [20, 38],
+    [39, 57],
+    [58, 76],
+    [77, 95],
+    [96, 113],
+    [114, 132],
+    [133, 150],
   ]);
-  assert.ok(chunks.every((c) => c.endChapter - c.startChapter + 1 <= 40));
+  assert.ok(chunks.every((c) => c.endChapter - c.startChapter + 1 <= 20));
 });
 
-test("architecture/chunk：100 章 2 卷（每卷 50 章）→ 每卷拆 25/25，共 4 块且每块 ≤40", () => {
+test("architecture/chunk：100 章 2 卷（每卷 50 章）→ 每卷拆 17/17/16，共 6 块且每块 ≤20", () => {
   const volumes = Array.from({ length: 2 }, (_, i) => ({
     volume: `第${i + 1}卷`,
     title: `t${i + 1}`,
@@ -290,13 +299,15 @@ test("architecture/chunk：100 章 2 卷（每卷 50 章）→ 每卷拆 25/25�
     stages: ["s"],
   }));
   const chunks = planBeatChunks(100, volumes);
-  assert.equal(chunks.length, 4);
-  assert.deepEqual(chunks.map((c) => c.id), ["V1-1", "V1-2", "V2-1", "V2-2"]);
+  assert.equal(chunks.length, 6);
+  assert.deepEqual(chunks.map((c) => c.id), ["V1-1", "V1-2", "V1-3", "V2-1", "V2-2", "V2-3"]);
   assert.deepEqual(chunks.map((c) => [c.startChapter, c.endChapter]), [
-    [1, 25],
-    [26, 50],
-    [51, 75],
-    [76, 100],
+    [1, 17],
+    [18, 34],
+    [35, 50],
+    [51, 67],
+    [68, 84],
+    [85, 100],
   ]);
 });
 
@@ -362,6 +373,16 @@ function makeLegitBeats(chapters: number): Beat[] {
   return beats;
 }
 
+/** 把全局号节拍切片转块内号（chapter 与 tag 章号同时减 from），模拟真实模型输出的块内数据。 */
+function sliceBlockToLocal(full: Beat[], from: number, len: number): Beat[] {
+  return full.slice(from, from + len).map((b) => ({
+    ...b,
+    chapter: b.chapter - from,
+    hookIntentions: b.hookIntentions.map((it) => it.replace(/^【ch(\d+)/, (_m, n: string) => `【ch${Number(n) - from}`)),
+    plannedPayoffOf: b.plannedPayoffOf.map((t) => t.replace(/^ch(\d+)/, (_m, n: string) => `ch${Number(n) - from}`)),
+  }));
+}
+
 test("architecture：chunked Director 分块生成 → 合并 → 全书闸门通过", async () => {
   const draft = await exampleDraft();
   draft.targetChapters = 30;
@@ -370,9 +391,7 @@ test("architecture：chunked Director 分块生成 → 合并 → 全书闸门�
   const model = new MemoryModel({
     responder: () => {
       calls += 1;
-      const slice = full.slice((calls - 1) * 10, calls * 10);
-      const chunkBeats = slice.map((b) => ({ ...b, chapter: b.chapter - (calls - 1) * 10 }));
-      return JSON.stringify({ beats: chunkBeats });
+      return JSON.stringify({ beats: sliceBlockToLocal(full, (calls - 1) * 10, 10) });
     },
   });
   const director = new DirectorAgent({ model, chunked: true });
@@ -399,9 +418,31 @@ test("architecture：chunked Director 块内输出长度错误 → 块内重试 
         return JSON.stringify({ beats: full.slice(0, 5).map((b) => ({ ...b, chapter: b.chapter })) });
       }
       const blockIndex = calls <= 2 ? 0 : calls - 2; // calls=2 → 块0 重试；calls=3 → 块1；calls=4 → 块2
-      const slice = full.slice(blockIndex * 10, blockIndex * 10 + 10);
-      const chunkBeats = slice.map((b) => ({ ...b, chapter: b.chapter - blockIndex * 10 }));
-      return JSON.stringify({ beats: chunkBeats });
+      return JSON.stringify({ beats: sliceBlockToLocal(full, blockIndex * 10, 10) });
+    },
+  });
+  const director = new DirectorAgent({ model, chunked: true });
+  const parts = parseArchitectureOutput(JSON.parse(EXAMPLE_ARCHITECTURE_JSON));
+  const board = await director.createBeatBoard(draft, parts);
+  assert.equal(calls, 4); // 块0 重试 1 次 + 块1 + 块2
+  assert.equal(board.beats.length, 30);
+});
+test("architecture：chunked Director 块内孤儿引用（编造 tag）→ 块内重试 → 成功", async () => {
+  const draft = await exampleDraft();
+  draft.targetChapters = 30;
+  const full = makeLegitBeats(30);
+  let calls = 0;
+  const model = new MemoryModel({
+    responder: () => {
+      calls += 1;
+      if (calls === 1) {
+        // 第一块第一次：第 1 章引用不存在的 ch999-h1 → 触发块内校验重试
+        const bad = full.slice(0, 10).map((b) => ({ ...b, chapter: b.chapter }));
+        bad[0] = { ...bad[0], plannedPayoffOf: ["ch999-h1"] };
+        return JSON.stringify({ beats: bad });
+      }
+      const blockIndex = calls <= 2 ? 0 : calls - 2;
+      return JSON.stringify({ beats: sliceBlockToLocal(full, blockIndex * 10, 10) });
     },
   });
   const director = new DirectorAgent({ model, chunked: true });
@@ -411,7 +452,7 @@ test("architecture：chunked Director 块内输出长度错误 → 块内重试 
   assert.equal(board.beats.length, 30);
 });
 
-test("architecture：chunked Director 合并后全书校验失败（只埋不收）→ 抛 DirectorError", async () => {
+test("architecture：chunked Director 合并后全书校验失败（只埋不收）→ 整书重试后仍抛 DirectorError", async () => {
   const draft = await exampleDraft();
   draft.targetChapters = 30;
   const bad = makeLegitBeats(30);
@@ -423,16 +464,75 @@ test("architecture：chunked Director 合并后全书校验失败（只埋不收
   const model = new MemoryModel({
     responder: () => {
       calls += 1;
-      const slice = bad.slice((calls - 1) * 10, calls * 10);
-      return JSON.stringify({ beats: slice.map((b) => ({ ...b, chapter: b.chapter - (calls - 1) * 10 })) });
+      const sliceIndex = (calls - 1) % 3; // 整书重试时按轮循环返回同一组坏板
+      const slice = bad.slice(sliceIndex * 10, sliceIndex * 10 + 10);
+      return JSON.stringify({ beats: slice.map((b) => ({ ...b, chapter: b.chapter - sliceIndex * 10 })) });
     },
   });
-  const director = new DirectorAgent({ model, chunked: true });
+  const director = new DirectorAgent({ model, chunked: true }); // 默认 wholeBoardRetries=1 → 最多 2 轮全书
   const parts = parseArchitectureOutput(JSON.parse(EXAMPLE_ARCHITECTURE_JSON));
   await assert.rejects(() => director.createBeatBoard(draft, parts), DirectorError);
-  assert.equal(calls, 3);
+  assert.equal(calls, 6); // 3 块 × 2 轮全书（首轮失败后整书重跑一轮，仍失败 → 抛）
 });
 
+test("architecture/chunk：openHooks 全局号引用不被二次偏移（跨块回收闭环）", () => {
+  const volumes = [
+    { volume: "第一卷", title: "t1", goal: "g1", stages: ["s"] },
+    { volume: "第二卷", title: "t2", goal: "g2", stages: ["s"] },
+  ];
+  const chunks = planBeatChunks(20, volumes); // 10 + 10
+  const makeBeat = (ch: number, hooks: string[], payoffs: string[]): Beat => ({
+    chapter: ch,
+    title: `c${ch}`,
+    mainBeat: `第 ${ch} 章事件`,
+    characters: [],
+    threadId: "M",
+    pacing: "铺垫",
+    emotionalArc: "x",
+    hookIntentions: hooks,
+    plannedPayoffOf: payoffs,
+  });
+  // 块 1（全局 1-10）：ch1 埋【ch1-h1】+ch4 回收（块内闭环）；ch5 埋【ch5-h1】；ch10 埋【ch10-h1】
+  const chunk1: Beat[] = Array.from({ length: 10 }, (_, i) => {
+    const ch = i + 1;
+    const hooks = ch === 1 ? ["【ch1-h1】块内闭环伏笔"] : ch === 5 ? ["【ch5-h1】跨块回收伏笔"] : ch === 10 ? ["【ch10-h1】跨块回收伏笔二"] : [];
+    const payoffs = ch === 4 ? ["ch1-h1"] : [];
+    return makeBeat(ch, hooks, payoffs);
+  });
+  // 块 2（全局 11-20）：ch1 回收 openHooks 全局号 ch5-h1/ch10-h1；ch5 埋【ch5-h2】+ch6 回收；ch10 埋【ch10-h2】+ch10 回收
+  const chunk2: Beat[] = Array.from({ length: 10 }, (_, i) => {
+    const ch = i + 1;
+    const hooks = ch === 5 ? ["【ch5-h2】块内闭环伏笔二"] : ch === 10 ? ["【ch10-h2】块内末章伏笔"] : [];
+    const payoffs = ch === 1 ? ["ch5-h1", "ch10-h1"] : ch === 6 ? ["ch5-h2"] : ch === 10 ? ["ch10-h2"] : [];
+    return makeBeat(ch, hooks, payoffs);
+  });
+  const merged = mergeChunkBeats(chunks, [chunk1, chunk2]);
+  const violations = validateBeatBoard(merged, 20);
+  assert.deepEqual(violations, []);
+  // 关键断言：openHooks 全局引用 ch5-h1/ch10-h1 未被二次偏移（保持原 tag）
+  assert.ok(merged.beats[10].plannedPayoffOf.includes("ch5-h1")); // ch11 引 ch5-h1（不是 ch15-h1）
+  assert.ok(merged.beats[10].plannedPayoffOf.includes("ch10-h1")); // ch11 引 ch10-h1（不是 ch20-h1）
+  // 块内引用 ch5-h2/ch10-h2 正常偏移到全局 ch15-h2/ch20-h2
+  assert.ok(merged.beats[15].plannedPayoffOf.includes("ch15-h2"));
+  assert.ok(merged.beats[19].plannedPayoffOf.includes("ch20-h2"));
+});
+
+test("architecture/chunk：越界块内号引用（ch17 于 16 章块）被块内校验拦截", () => {
+  const beats: Beat[] = Array.from({ length: 16 }, (_, i) => ({
+    chapter: i + 1,
+    title: `c${i + 1}`,
+    mainBeat: `第 ${i + 1} 章事件`,
+    characters: [],
+    threadId: "M",
+    pacing: "铺垫",
+    emotionalArc: "x",
+    hookIntentions: i === 0 ? ["【ch1-h1】开头埋设"] : [],
+    plannedPayoffOf: i === 0 ? ["ch17-h7"] : [], // 引用了块内不存在的第 17 章 tag
+  }));
+  const violations = validateChunkHookRefs(beats, []);
+  assert.equal(violations.length, 1);
+  assert.match(violations[0], /ch17-h7/);
+});
 test("architecture/chunk：合并时 hook tag 与 payoff 引用按块内号重编号为全局号", () => {
   const volumes = [
     { volume: "第一卷", title: "t1", goal: "g1", stages: ["s"] },

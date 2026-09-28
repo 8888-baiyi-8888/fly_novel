@@ -71,3 +71,14 @@ export function buildClarifyRetryMessage(errorText: string): ChatMessage {
     content: `你上一次的输出不符合协议：${errorText}。请重新输出符合协议的 JSON：questions 为需要用户回答的问题数组（没有问题时可省略或为 []），draft 为 null（提问轮）或完整草案对象（交卷轮）。`,
   };
 }
+
+/** 直接草案模式的重试反馈：把上次校验错误回喂模型，要求重新输出完整草案 JSON。 */
+export function buildDraftRetryMessage(errorText: string): ChatMessage {
+  return {
+    role: "user",
+    content:
+      `你上一次的输出不符合协议：${errorText}。请重新输出一个完整合法的创意草案 JSON 对象（不要 questions/draft 包装，直接输出草案对象本身）：` +
+      "所有【必填】字段必须齐全且非空；数组字段（genre/tone/volumePlan/constraints）必须是非空数组，且 volumePlan 每项必须是字符串；" +
+      "protagonists 每项的 coreNeed 必须是非空字符串，不得输出 null 或空字符串；不得使用 Markdown 围栏，只输出 JSON。",
+  };
+}

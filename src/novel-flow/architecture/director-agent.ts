@@ -7,19 +7,21 @@ import {
   buildBeatBoardRetryMessage,
 } from "./prompt";
 import { BEAT_BOARD_JSON_DESCRIPTION } from "./schema";
-import { parseBeatBoardOutput, validateBeatBoard, extractHookTag } from "./validate";
+import { parseBeatBoardOutput, validateBeatBoard, validateChunkHookRefs, extractHookTag } from "./validate";
 import { ArchitectureParts, Beat, BeatBoard } from "./types";
-import { BeatChunk, mergeChunkBeats, planBeatChunks } from "./chunk";
+import { BeatChunk, mergeChunkBeats, planBeatChunks, renumberBeatToGlobal, renumberTagToGlobal } from "./chunk";
 
 export interface DirectorAgentOptions {
   model: ModelClient;
-  /** 结构化输出校验失败后的重试次数，默认 1。 */
+  /** 结构化输出校验失败后的重试次数（块内），默认 1。 */
   maxRetries?: number;
   /**
-   * 分块生成节拍板（按卷切块，单块 ≤40 章，块间注入衔接上下文，合并后全书校验）。
+   * 分块生成节拍板（按卷切块，单块 ≤20 章，块间注入衔接上下文，合并后全书校验）。
    * 真实模型大书推荐开启；内存模型演示保持单次调用。
    */
   chunked?: boolean;
+  /** 全书合并验收闸门失败后的整书重试轮数，默认 1（即最多共 2 轮全书生成）。 */
+  wholeBoardRetries?: number;
 }
 
 /** Director（节拍板）失败。 */
@@ -53,11 +55,13 @@ export class DirectorAgent {
   private readonly model: ModelClient;
   private readonly maxRetries: number;
   private readonly chunked: boolean;
+  private readonly wholeBoardRetries: number;
 
   constructor(options: DirectorAgentOptions) {
     this.model = options.model;
     this.maxRetries = options.maxRetries ?? 1;
     this.chunked = options.chunked ?? false;
+    this.wholeBoardRetries = options.wholeBoardRetries ?? 1;
   }
 
   /** 生成节拍板（内部按 chunked 选项路由到单次或分块）。 */
@@ -96,27 +100,37 @@ export class DirectorAgent {
     throw new DirectorError(`节拍板生成失败：${describeError(lastError)}`);
   }
 
-  /** 分块生成：每块一次调用，块间注入前尾 + 未回收伏笔，合并后全书校验。 */
+  /** 分块生成：每块一次调用，块间注入前尾 + 未回收伏笔，合并后全书校验；闸门失败整书重试。 */
   private async createBeatBoardChunked(draft: CreativeDraft, parts: ArchitectureParts): Promise<BeatBoard> {
     const chunks = planBeatChunks(draft.targetChapters, parts.volumeMap);
     if (chunks.length === 0) {
       throw new DirectorError(`无法分块：目标章数 ${draft.targetChapters} 或分卷数无效`);
     }
-    const chunkBeatsList: Beat[][] = [];
-    const openHooks: OpenHook[] = [];
-    let prevTail: Beat[] = [];
-    for (const chunk of chunks) {
-      const beats = await this.callChunkOnce(draft, parts, chunk, prevTail, openHooks);
-      updateOpenHooks(openHooks, beats);
-      chunkBeatsList.push(beats);
-      prevTail = beats.slice(-5);
+    let lastViolations: string[] = [];
+    for (let round = 0; round <= this.wholeBoardRetries; round += 1) {
+      const chunkBeatsList: Beat[][] = [];
+      const openHooks: OpenHook[] = [];
+      let prevTail: Beat[] = [];
+      for (const chunk of chunks) {
+        const beats = await this.callChunkOnce(draft, parts, chunk, prevTail, openHooks);
+        updateOpenHooks(openHooks, beats, chunk);
+        chunkBeatsList.push(beats);
+        // 注入下一块的前尾用全局号（否则块长不同时块内号错位）
+        prevTail = beats.slice(-5).map((beat) => renumberBeatToGlobal(beat, chunk));
+      }
+      const merged = mergeChunkBeats(chunks, chunkBeatsList);
+      const violations = validateBeatBoard(merged, draft.targetChapters);
+      if (violations.length === 0) {
+        return merged;
+      }
+      lastViolations = violations;
+      if (round < this.wholeBoardRetries) {
+        console.warn(`节拍板全书闸门未过（第 ${round + 1} 轮，${violations.length} 处），整书重跑第 ${round + 2} 轮…`);
+      }
     }
-    const merged = mergeChunkBeats(chunks, chunkBeatsList);
-    const violations = validateBeatBoard(merged, draft.targetChapters);
-    if (violations.length > 0) {
-      throw new DirectorError(`节拍板验收闸门未通过（分块合并后）：\n${violations.join("\n")}`);
-    }
-    return merged;
+    throw new DirectorError(
+      `节拍板验收闸门未通过（分块合并后，重试 ${this.wholeBoardRetries} 轮仍失败）：\n${lastViolations.join("\n")}`,
+    );
   }
 
   /** 单块调用：一次模型调用生成某块的节拍（块内章号 1..n），带块内重试。 */
@@ -148,6 +162,11 @@ export class DirectorAgent {
         if (board.beats.length !== chunkLength) {
           throw new DirectorError(`本块节拍数 ${board.beats.length} 不等于块章数 ${chunkLength}`);
         }
+        // 块内 hook 引用校验：拦截编造 tag（孤儿回收），块内重试，避免全书闸门失败整书重跑
+        const chunkViolations = validateChunkHookRefs(board.beats, openHooks);
+        if (chunkViolations.length > 0) {
+          throw new DirectorError(`本块 hook 引用校验未过：\n${chunkViolations.join("\n")}`);
+        }
         return board.beats;
       } catch (error) {
         lastError = error;
@@ -159,13 +178,13 @@ export class DirectorAgent {
   }
 }
 
-/** 维护已埋未收伏笔清单：埋设加入、回收移除（供下一块衔接与跨块闭环）。 */
-function updateOpenHooks(openHooks: OpenHook[], beats: Beat[]): void {
+/** 维护已埋未收伏笔清单：埋设加入、回收移除（供下一块衔接与跨块闭环）。tag 统一存全局号。 */
+function updateOpenHooks(openHooks: OpenHook[], beats: Beat[], chunk: BeatChunk): void {
   for (const beat of beats) {
     for (const intention of beat.hookIntentions) {
       const tag = extractHookTag(intention);
       if (tag !== null) {
-        openHooks.push({ tag, intention });
+        openHooks.push({ tag: renumberTagToGlobal(tag, chunk), intention });
       }
     }
     for (const tag of beat.plannedPayoffOf) {

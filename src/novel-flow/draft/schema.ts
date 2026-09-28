@@ -9,7 +9,7 @@ export const DRAFT_JSON_DESCRIPTION = `输出 JSON 对象，字段如下：
 - schemaVersion: 数字，固定 2
 - title: 书名（字符串，【必填】）
 - genre: 题材数组，至少一个元素，如 ["都市","隐龙流"]（【必填】）
-- protagonists: 主角们数组，至少一项，每项 { name: 姓名【必填】, age: 年龄(可选), identity: 身份/职业(可选), traits: 长期性格数组(可选), coreNeed: 核心需求(可选), coreFear: 核心恐惧(可选) }；单主角也写成数组，如 [{ "name": "叶凡" }]；两个主角就写两项
+- protagonists: 主角们数组，至少一项，每项 { name: 姓名【必填】, age: 年龄(可选), identity: 身份/职业(可选), traits: 长期性格数组(可选), coreNeed: 核心需求（字符串，必须是非空字符串，不要输出 null 或空字符串）, coreFear: 核心恐惧(可选) }；单主角也写成数组，如 [{ "name": "叶凡" }]；两个主角就写两项
 - supportingCast: 配角数组（可选）：[{ name: 姓名, identity: 身份/定位(可选), traits: 长期性格数组(可选), relation: 与主角关系(可选) }]
 - worldPremise: 世界前提（字符串，【必填】）——一句话说明这个世界是什么样
 - setting: 世界观要点/补充设定数组（可选）
@@ -17,7 +17,7 @@ export const DRAFT_JSON_DESCRIPTION = `输出 JSON 对象，字段如下：
 - blurb: 简介/一句话故事卖点（字符串，可选）
 - authorIntent: 作者意图——作者为什么这样写（字符串，【必填】）
 - tone: 期望风格数组，至少一个元素，如 ["现实","慢热"]（【必填】）
-- volumePlan: 卷规划数组，至少一项（【必填】）
+- volumePlan: 卷规划数组，至少一项，每项是一句字符串（如 "第一卷：xxx"）（【必填】）
 - currentFocus: 当前重点数组（可选）——最近一段时间主要解决什么
 - constraints: 创作约束数组，至少一项（【必填】）
 - platform: 目标平台（字符串，【必填】），如 "番茄"

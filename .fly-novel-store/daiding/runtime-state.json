@@ -1,0 +1,556 @@
+{
+  "ledger": {
+    "H001": {
+      "hookId": "H001",
+      "startChapter": 1,
+      "type": "物件",
+      "status": "progressing",
+      "lastAdvancedChapter": 1,
+      "advancedCount": 1,
+      "expectedPayoff": "周野通过半截车票逆向推理出意外制造的破绽",
+      "payoffTiming": "near-term",
+      "coreHook": true,
+      "notes": "受害者死前紧握的半截车票——后续推理起点"
+    },
+    "H002": {
+      "hookId": "H002",
+      "startChapter": 3,
+      "type": "秘密",
+      "status": "progressing",
+      "lastAdvancedChapter": 1,
+      "advancedCount": 1,
+      "expectedPayoff": "周野逼问业务员时察觉异能反噬",
+      "payoffTiming": "mid-arc",
+      "coreHook": true,
+      "notes": "陈叔提到代价不仅是记忆剥离，还有更深层的反噬"
+    },
+    "H003": {
+      "hookId": "H003",
+      "startChapter": 5,
+      "type": "信息差",
+      "status": "progressing",
+      "lastAdvancedChapter": 1,
+      "advancedCount": 1,
+      "expectedPayoff": "周野发现失忆的面孔正是苏遥",
+      "payoffTiming": "near-term",
+      "coreHook": true,
+      "notes": "周野剥离的记忆中闪过一张冷峻的女性面孔"
+    },
+    "H004": {
+      "hookId": "H004",
+      "startChapter": 9,
+      "type": "物件",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "advancedCount": 0,
+      "expectedPayoff": "周野利用气味逆向拆解业务员的完美意外陷阱",
+      "payoffTiming": "near-term",
+      "coreHook": true,
+      "notes": "业务员身上散发的微弱福尔马林异味"
+    },
+    "H005": {
+      "hookId": "H005",
+      "startChapter": 11,
+      "type": "信息差",
+      "status": "progressing",
+      "lastAdvancedChapter": 1,
+      "advancedCount": 1,
+      "expectedPayoff": "周野点破标记达成博弈",
+      "payoffTiming": "immediate",
+      "coreHook": true,
+      "notes": "苏遥在现场留下的隐蔽勘验标记"
+    },
+    "H006": {
+      "hookId": "H006",
+      "startChapter": 18,
+      "type": "秘密",
+      "status": "progressing",
+      "lastAdvancedChapter": 1,
+      "advancedCount": 1,
+      "expectedPayoff": "周野发现受害者瞳孔异象",
+      "payoffTiming": "near-term",
+      "coreHook": true,
+      "notes": "倒计时归零瞬间，受害者瞳孔出现极淡的殡仪馆徽记倒影"
+    },
+    "H007": {
+      "hookId": "H007",
+      "startChapter": 20,
+      "type": "信息差",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "advancedCount": 0,
+      "expectedPayoff": "坐标指向陈叔旧居",
+      "payoffTiming": "mid-arc",
+      "coreHook": true,
+      "notes": "周野救人失忆后，潜意识画出一个从未见过的坐标"
+    },
+    "H008": {
+      "hookId": "H008",
+      "startChapter": 22,
+      "type": "信息差",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "advancedCount": 0,
+      "expectedPayoff": "陈叔透露异能过往",
+      "payoffTiming": "near-term",
+      "coreHook": true,
+      "notes": "苏遥档案中夹着一张旧剪报，报道了十年前的一起离奇意外"
+    },
+    "H009": {
+      "hookId": "H009",
+      "startChapter": 25,
+      "type": "威胁",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "advancedCount": 0,
+      "expectedPayoff": "殡仪馆高层启动休眠灭口程序",
+      "payoffTiming": "near-term",
+      "coreHook": true,
+      "notes": "业务员暴露后吞服的毒药并非致死，而是某种休眠触发剂"
+    },
+    "H010": {
+      "hookId": "H010",
+      "startChapter": 26,
+      "type": "物件",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "advancedCount": 0,
+      "expectedPayoff": "周野在陈叔旧居发现齿轮同源零件",
+      "payoffTiming": "near-term",
+      "coreHook": true,
+      "notes": "业务员身上发现的特制齿轮，与陈叔修表铺的零件同源"
+    },
+    "H011": {
+      "hookId": "H011",
+      "startChapter": 33,
+      "type": "秘密",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "advancedCount": 0,
+      "expectedPayoff": "陈叔透露异能流转周期",
+      "payoffTiming": "mid-arc",
+      "coreHook": true,
+      "notes": "账本最后一页写着“守夜人交接期”，暗示异能流转周期"
+    },
+    "H012": {
+      "hookId": "H012",
+      "startChapter": 35,
+      "type": "秘密",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "advancedCount": 0,
+      "expectedPayoff": "潜意识画出的编号与闪回编号重合",
+      "payoffTiming": "mid-arc",
+      "coreHook": true,
+      "notes": "周野闪回中发现自己最初觉醒时，倒计时上方曾有一串极淡的编号"
+    },
+    "H013": {
+      "hookId": "H013",
+      "startChapter": 1,
+      "type": "能力",
+      "status": "open",
+      "lastAdvancedChapter": 0,
+      "advancedCount": 0,
+      "expectedPayoff": "周野利用倒计时预知并干预死亡事件",
+      "payoffTiming": "near-term",
+      "notes": "猩红的数字悬浮在陌生人头顶，飞速坍缩。为什么偏偏是我能看见？"
+    }
+  },
+  "threads": [
+    {
+      "threadId": "M",
+      "kind": "main",
+      "title": "倒计时拆解与对抗",
+      "status": "active",
+      "priority": 10,
+      "syncPoint": 1,
+      "speed": 1,
+      "eventChain": [
+        {
+          "eventId": "E-M01",
+          "summary": "周野目睹车祸受害者头顶倒计时归零，确立异能视觉与规则",
+          "chapter": null,
+          "volumeRange": "第一卷",
+          "prerequisiteEventIds": [],
+          "isConvergencePoint": false,
+          "status": "pending"
+        },
+        {
+          "eventId": "E-M02",
+          "summary": "周野发现第二起意外倒计时异常，决定介入并付出失忆代价救人",
+          "chapter": null,
+          "volumeRange": "第一卷",
+          "prerequisiteEventIds": [
+            "E-M01"
+          ],
+          "isConvergencePoint": false,
+          "status": "pending"
+        },
+        {
+          "eventId": "E-M03",
+          "summary": "周野逆向推理出意外制造的破绽，追踪到殡仪馆业务员",
+          "chapter": null,
+          "volumeRange": "第一卷",
+          "prerequisiteEventIds": [
+            "E-M02"
+          ],
+          "isConvergencePoint": false,
+          "status": "pending"
+        },
+        {
+          "eventId": "E-M04",
+          "summary": "周野与苏遥在案发现场正面交锋，利用信息差达成博弈",
+          "chapter": null,
+          "volumeRange": "第一卷",
+          "prerequisiteEventIds": [
+            "E-M03",
+            "E-S102"
+          ],
+          "isConvergencePoint": true,
+          "status": "pending"
+        },
+        {
+          "eventId": "E-M05",
+          "summary": "周野利用信息差拆解业务员的完美意外陷阱，业务员暴露，引出殡仪馆",
+          "chapter": null,
+          "volumeRange": "第一卷",
+          "prerequisiteEventIds": [
+            "E-M04"
+          ],
+          "isConvergencePoint": false,
+          "status": "pending"
+        }
+      ],
+      "characters": [
+        "周野",
+        "受害者",
+        "目标受害者",
+        "殡仪馆业务员",
+        "苏遥",
+        "陈叔"
+      ]
+    },
+    {
+      "threadId": "S1",
+      "kind": "side",
+      "title": "法医视角的连环意外调查",
+      "status": "dormant",
+      "priority": 5,
+      "syncPoint": 0,
+      "speed": 0.3,
+      "eventChain": [
+        {
+          "eventId": "E-S101",
+          "summary": "苏遥勘验第一起车祸现场，发现微小的非意外痕迹",
+          "chapter": null,
+          "volumeRange": "第一卷",
+          "prerequisiteEventIds": [],
+          "isConvergencePoint": false,
+          "status": "pending"
+        },
+        {
+          "eventId": "E-S102",
+          "summary": "苏遥建立连环意外案档案，锁定周野出现在多个现场",
+          "chapter": null,
+          "volumeRange": "第一卷",
+          "prerequisiteEventIds": [
+            "E-S101"
+          ],
+          "isConvergencePoint": false,
+          "status": "pending"
+        }
+      ],
+      "characters": [
+        "苏遥",
+        "殡仪馆业务员"
+      ]
+    },
+    {
+      "threadId": "F1",
+      "kind": "flashback",
+      "title": "异能流转与代价溯源",
+      "status": "dormant",
+      "priority": 3,
+      "syncPoint": 0,
+      "speed": 0.3,
+      "eventChain": [
+        {
+          "eventId": "E-F101",
+          "summary": "陈叔暗示周野失忆的代价，透露异能并非首次出现",
+          "chapter": null,
+          "volumeRange": "第一卷",
+          "prerequisiteEventIds": [],
+          "isConvergencePoint": false,
+          "status": "pending"
+        }
+      ],
+      "characters": [
+        "陈叔",
+        "周野"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "factId": "F001",
+      "subject": "周野",
+      "subjectType": "character",
+      "predicate": "位置/身份/情绪/认知/资源",
+      "object": "街头｜无业/暗中观察者｜冷硬克制｜知道将死之人倒计时异能的存在，不知道殡仪馆组织，不知道异能流转真相｜微薄积蓄、倒计时异能",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F002",
+      "subject": "苏遥",
+      "subjectType": "character",
+      "predicate": "位置/身份/情绪/认知/资源",
+      "object": "法医鉴定中心｜法医｜专注多疑｜察觉近期连环意外案有非自然关联端倪，不知道周野异能，不知道殡仪馆｜法医勘验权限、专业设备",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F003",
+      "subject": "陈叔",
+      "subjectType": "character",
+      "predicate": "位置/身份/情绪/认知/资源",
+      "object": "修表铺/出租屋｜修表匠/房东｜隐忍旁观｜知晓异能代价与部分流转机制，不知道周野当前对抗的细节，不知道苏遥｜修表铺、异能过往经验",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F004",
+      "subject": "殡仪馆业务员",
+      "subjectType": "character",
+      "predicate": "位置/身份/情绪/认知/资源",
+      "object": "暗处/伪装身份中｜底层执行者/伪装者｜冷血谨慎｜掌握改写倒计时的执行手段，不知道周野能看见倒计时，不知道高层核心机密｜暗杀工具、伪装资源、组织庇护",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F005",
+      "subject": "周野+苏遥",
+      "subjectType": "relationship",
+      "predicate": "关系/信任/知情",
+      "object": "嫌疑人/非官方合作者｜极低｜苏遥不知道周野拥有异能及介入案件的真实动机",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F006",
+      "subject": "周野+陈叔",
+      "subjectType": "relationship",
+      "predicate": "关系/信任/知情",
+      "object": "房客/异能继任者｜中等｜周野不知道陈叔是异能前任拥有者及流转真相",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F007",
+      "subject": "周野+殡仪馆业务员",
+      "subjectType": "relationship",
+      "predicate": "关系/信任/知情",
+      "object": "猎物/未知破坏者｜无｜业务员不知道周野能看见倒计时及真实身份",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F008",
+      "subject": "苏遥+殡仪馆业务员",
+      "subjectType": "relationship",
+      "predicate": "关系/信任/知情",
+      "object": "暗中调查对象｜无｜业务员不知道苏遥已暗中锁定其伪装的意外",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F009",
+      "subject": "世界",
+      "subjectType": "world",
+      "predicate": "时间",
+      "object": "当代·春季",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F010",
+      "subject": "世界",
+      "subjectType": "world",
+      "predicate": "公众对连环意外的认知",
+      "object": "认为是普通意外",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F011",
+      "subject": "世界",
+      "subjectType": "world",
+      "predicate": "殡仪馆组织暴露程度",
+      "object": "完全隐藏",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F012",
+      "subject": "世界",
+      "subjectType": "world",
+      "predicate": "异能存在认知",
+      "object": "仅极少数人知晓",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "status": "active"
+    },
+    {
+      "factId": "F013",
+      "subject": "周野",
+      "subjectType": "character",
+      "predicate": "能看见",
+      "object": "陌生人头顶坍缩的猩红倒计时数字",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "knownBy": [
+        "周野"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F014",
+      "subject": "受害者",
+      "subjectType": "character",
+      "predicate": "死前紧握",
+      "object": "半截车票",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "knownBy": [
+        "周野",
+        "苏遥"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F015",
+      "subject": "受害者",
+      "subjectType": "character",
+      "predicate": "瞳孔深处闪过",
+      "object": "暗色殡仪馆徽记",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "knownBy": [
+        "周野"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F016",
+      "subject": "路面擦痕",
+      "subjectType": "item",
+      "predicate": "呈现异常角度",
+      "object": "特定干预造成的痕迹",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "knownBy": [
+        "苏遥"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F017",
+      "subject": "苏遥",
+      "subjectType": "character",
+      "predicate": "在石墩内侧留下",
+      "object": "隐蔽勘验标记",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "knownBy": [
+        "苏遥"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F018",
+      "subject": "周野",
+      "subjectType": "character",
+      "predicate": "救人代价为失去",
+      "object": "包含冷峻女性面孔的记忆碎片",
+      "validFromChapter": 1,
+      "validUntilChapter": null,
+      "sourceChapter": 1,
+      "knownBy": [
+        "周野"
+      ],
+      "status": "active"
+    }
+  ],
+  "states": {
+    "周野": {
+      "name": "周野",
+      "location": "陈叔处",
+      "goal": "承受反噬与寻找真相",
+      "emotion": "痛苦与空洞",
+      "knows": [],
+      "suspects": [],
+      "inventory": [],
+      "bonds": {}
+    },
+    "苏遥": {
+      "name": "苏遥",
+      "location": "案发现场边缘",
+      "goal": "独立调查现场真相",
+      "emotion": "冷静专注",
+      "knows": [],
+      "suspects": [],
+      "inventory": [
+        "半截被血浸透的车票"
+      ],
+      "bonds": {}
+    },
+    "陈叔": {
+      "name": "陈叔",
+      "location": "修表铺/出租屋",
+      "goal": "",
+      "emotion": "隐忍旁观",
+      "knows": [],
+      "suspects": [],
+      "inventory": [],
+      "bonds": {}
+    },
+    "殡仪馆业务员": {
+      "name": "殡仪馆业务员",
+      "location": "暗处/伪装身份中",
+      "goal": "",
+      "emotion": "冷血谨慎",
+      "knows": [],
+      "suspects": [],
+      "inventory": [],
+      "bonds": {}
+    }
+  }
+}

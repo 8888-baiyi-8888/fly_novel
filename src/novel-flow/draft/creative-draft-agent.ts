@@ -6,6 +6,7 @@ import {
   buildClarifyQuestionsMessage,
   buildClarifyRetryMessage,
   buildDraftMessages,
+  buildDraftRetryMessage,
 } from "./prompt";
 import { ClarificationTurn, parseAndValidateDraft, parseClarificationTurn } from "./validate";
 import { CreativeDraft } from "./types";
@@ -77,7 +78,11 @@ export class CreativeDraftAgent {
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       try {
         const request: ChatRequest = {
-          messages: buildDraftMessages(trimmed),
+          // 第 1 次用原消息；重试时把上次校验错误回喂，引导模型修正结构（部分模型结构性输出不稳）
+          messages:
+            attempt === 0
+              ? buildDraftMessages(trimmed)
+              : [...buildDraftMessages(trimmed), buildDraftRetryMessage(describeError(lastError))],
           structured: { name: "creative_draft", description: DRAFT_JSON_DESCRIPTION },
           temperature: 0.2,
         };

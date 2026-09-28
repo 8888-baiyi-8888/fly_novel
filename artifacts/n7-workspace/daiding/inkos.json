@@ -1,0 +1,48 @@
+{
+  "bookId": "daiding",
+  "title": "待定",
+  "bookConfig": {
+    "bookId": "daiding",
+    "title": "待定",
+    "genre": "都市",
+    "platform": "番茄",
+    "targetChapters": 50,
+    "chapterWordCount": 2000,
+    "language": "zh",
+    "chapterReviewMode": "auto",
+    "maxHookRetries": 2,
+    "createdAt": "2026-09-28T08:04:50.429Z",
+    "updatedAt": "2026-09-28T08:04:50.429Z"
+  },
+  "platformProfile": {
+    "platform": "fanqie",
+    "hook": {
+      "densityPerChapter": [
+        0.2,
+        0.35
+      ],
+      "maxActive": 12,
+      "timingMix": {
+        "immediate": 0.1,
+        "near-term": 0.3,
+        "mid-arc": 0.35,
+        "slow-burn": 0.2,
+        "endgame": 0.05
+      }
+    },
+    "pacing": {
+      "consecutiveLowPressureMax": 2,
+      "climaxMultiple": 5
+    },
+    "chapterEndHook": {
+      "required": true
+    },
+    "payoffSpacing": {
+      "minor": 5,
+      "medium": 15,
+      "major": 30
+    },
+    "coreHookMax": 3
+  },
+  "createdAt": "2026-09-28T08:17:33.259Z"
+}
