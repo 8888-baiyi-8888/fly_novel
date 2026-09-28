@@ -17,6 +17,22 @@ export function toLlmMessages(messages: ChatMessage[]): Message[] {
   }));
 }
 
+/**
+ * 规整模型输出：部分模型（如 glm 系列）自由模式下会用 Markdown 围栏包裹 JSON
+ * （```json ... ```），novel-flow 各节点直接 JSON.parse 会失败。此处剥离围栏，
+ * 只处理"整段被围栏包裹"的情况，其余内容原样返回。
+ */
+export function normalizeModelJsonContent(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.startsWith("```")) {
+    const match = trimmed.match(/^```[a-zA-Z]*\s*\n?([\s\S]*?)```\s*$/);
+    if (match !== null && match[1] !== undefined && match[1].trim().length > 0) {
+      return match[1].trim();
+    }
+  }
+  return trimmed;
+}
+
 export interface ConfiguredLlmModelOptions {
   /** settings.json 顶层的供应商键，如 "qwen"。 */
   readonly provider: string;
@@ -56,7 +72,7 @@ export class ConfiguredLlmModel implements ModelClient {
         signal: controller.signal,
       });
       if (text === null) throw new ModelCallError("模型返回空内容");
-      return { content: text };
+      return { content: normalizeModelJsonContent(text) };
     } catch (error) {
       if (error instanceof ModelCallError) throw error;
       if (controller.signal.aborted) {

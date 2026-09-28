@@ -8,16 +8,16 @@ import {
   buildBeatBoardRetryMessage,
 } from "./prompt";
 import { BEAT_BOARD_JSON_DESCRIPTION } from "./schema";
-import { parseBeatBoardOutput, validateBeatBoard, extractHookTag } from "./validate";
+import { parseBeatBoardOutput, validateBeatBoard, validateChunkHookRefs, extractHookTag } from "./validate";
 import { ArchitectureParts, Beat, BeatBoard } from "./types";
-import { BeatChunk, mergeChunkBeats, planBeatChunks } from "./chunk";
+import { BeatChunk, mergeChunkBeats, planBeatChunks, renumberBeatToGlobal, renumberTagToGlobal } from "./chunk";
 
 export interface DirectorAgentOptions {
   model: ModelClient;
-  /** 结构化输出校验失败后的重试次数，默认 1。 */
+  /** 结构化输出校验失败后的重试次数（块内），默认 1。 */
   maxRetries?: number;
   /**
-   * 分块生成节拍板（按卷切块，单块 ≤40 章，块间注入衔接上下文，合并后全书校验）。
+   * 分块生成节拍板（按卷切块，单块 ≤20 章，块间注入衔接上下文，合并后全书校验）。
    * 真实模型大书推荐开启；内存模型演示保持单次调用。
    */
   chunked?: boolean;
@@ -28,6 +28,8 @@ export interface DirectorAgentOptions {
   autoRepair?: boolean;
   /** 校验失败后最大自动修复次数，默认 2。 */
   maxRepairAttempts?: number;
+  /** 全书合并验收闸门失败后的整书重试轮数，默认 1（即最多共 2 轮全书生成）。autoRepair 修完仍失败才走到整书重试。 */
+  wholeBoardRetries?: number;
 }
 
 /** Director（节拍板）失败。 */
@@ -65,6 +67,7 @@ export class DirectorAgent {
   private readonly chunked: boolean;
   private readonly autoRepair: boolean;
   private readonly maxRepairAttempts: number;
+  private readonly wholeBoardRetries: number;
 
   constructor(options: DirectorAgentOptions) {
     this.model = options.model;
@@ -72,6 +75,7 @@ export class DirectorAgent {
     this.chunked = options.chunked ?? false;
     this.autoRepair = options.autoRepair ?? true;
     this.maxRepairAttempts = options.maxRepairAttempts ?? 2;
+    this.wholeBoardRetries = options.wholeBoardRetries ?? 1;
   }
 
   /** 生成节拍板（内部按 chunked 选项路由到单次或分块，均接自动修复）。 */
@@ -110,30 +114,52 @@ export class DirectorAgent {
     return this.gateAndRepair(board, draft.targetChapters);
   }
 
-  /** 分块生成：每块一次调用，块间注入前尾 + 未回收伏笔，合并后全书校验 + 自动修复。 */
+  /** 分块生成：每块一次调用，块间注入前尾 + 未回收伏笔，合并后全书校验；
+   *  校验失败先 autoRepair 修复，仍失败再整书重试 wholeBoardRetries 轮。 */
   private async createBeatBoardChunked(draft: CreativeDraft, parts: ArchitectureParts): Promise<BeatBoard> {
     const chunks = planBeatChunks(draft.targetChapters, parts.volumeMap);
     if (chunks.length === 0) {
       throw new DirectorError(`无法分块：目标章数 ${draft.targetChapters} 或分卷数无效`);
     }
-    const chunkBeatsList: Beat[][] = [];
-    const openHooks: OpenHook[] = [];
-    let prevTail: Beat[] = [];
+    let lastViolations: string[] = [];
     console.log(`【N5 节拍板】全书 ${draft.targetChapters} 章，分 ${chunks.length} 块生成`);
-    for (let i = 0; i < chunks.length; i += 1) {
-      const chunk = chunks[i];
-      console.log(
-        `【N5 节拍板】正在生成第 ${i + 1}/${chunks.length} 块（${chunk.id}：ch${chunk.startChapter}-ch${chunk.endChapter}，${chunk.endChapter - chunk.startChapter + 1} 章），单块约需 1-5 分钟，请稍候…`,
-      );
-      const beats = await this.callChunkOnce(draft, parts, chunk, prevTail, openHooks);
-      updateOpenHooks(openHooks, beats);
-      chunkBeatsList.push(beats);
-      prevTail = beats.slice(-5);
-      console.log(`【N5 节拍板】第 ${i + 1}/${chunks.length} 块完成（${chunk.id}）`);
+    for (let round = 0; round <= this.wholeBoardRetries; round += 1) {
+      const chunkBeatsList: Beat[][] = [];
+      const openHooks: OpenHook[] = [];
+      let prevTail: Beat[] = [];
+      for (let i = 0; i < chunks.length; i += 1) {
+        const chunk = chunks[i];
+        console.log(
+          `【N5 节拍板】正在生成第 ${i + 1}/${chunks.length} 块（${chunk.id}：ch${chunk.startChapter}-ch${chunk.endChapter}，${chunk.endChapter - chunk.startChapter + 1} 章），单块约需 1-5 分钟，请稍候…`,
+        );
+        const beats = await this.callChunkOnce(draft, parts, chunk, prevTail, openHooks);
+        updateOpenHooks(openHooks, beats, chunk);
+        chunkBeatsList.push(beats);
+        prevTail = beats.slice(-5).map((b) => renumberBeatToGlobal(b, chunk));
+        console.log(`【N5 节拍板】第 ${i + 1}/${chunks.length} 块完成（${chunk.id}）`);
+      }
+      console.log(`【N5 节拍板】全部 ${chunks.length} 块生成完成，正在合并校验…`);
+      let board = mergeChunkBeats(chunks, chunkBeatsList);
+      let violations = validateBeatBoard(board, draft.targetChapters);
+      if (violations.length > 0 && this.autoRepair) {
+        for (let attempt = 0; attempt < this.maxRepairAttempts; attempt += 1) {
+          board = await this.repairBeatBoard(board, violations, draft.targetChapters);
+          violations = validateBeatBoard(board, draft.targetChapters);
+          if (violations.length === 0) break;
+        }
+      }
+      if (violations.length === 0) {
+        return board;
+      }
+      lastViolations = violations;
+      if (round < this.wholeBoardRetries) {
+        console.warn(`节拍板全书闸门未过（第 ${round + 1} 轮，${violations.length} 处，自动修复 ${this.maxRepairAttempts} 次后仍失败），整书重跑第 ${round + 2} 轮…`);
+      }
     }
-    console.log(`【N5 节拍板】全部 ${chunks.length} 块生成完成，正在合并校验…`);
-    const merged = mergeChunkBeats(chunks, chunkBeatsList);
-    return this.gateAndRepair(merged, draft.targetChapters);
+    throw new DirectorError(
+      `节拍板验收闸门未通过（分块合并后，自动修复 ${this.maxRepairAttempts} 次、整书重试 ${this.wholeBoardRetries} 轮仍失败）：
+${lastViolations.join("\n")}`,
+    );
   }
 
   /** 单块调用：一次模型调用生成某块的节拍（块内章号 1..n），带块内重试。 */
@@ -164,6 +190,11 @@ export class DirectorAgent {
         const board = parseBeatBoardOutput(parsed, chunkLength);
         if (board.beats.length !== chunkLength) {
           throw new DirectorError(`本块节拍数 ${board.beats.length} 不等于块章数 ${chunkLength}`);
+        }
+        // 块内 hook 引用校验：拦截编造 tag（孤儿回收），块内重试，避免全书闸门失败整书重跑
+        const chunkViolations = validateChunkHookRefs(board.beats, openHooks);
+        if (chunkViolations.length > 0) {
+          throw new DirectorError(`本块 hook 引用校验未过：\n${chunkViolations.join("\n")}`);
         }
         return board.beats;
       } catch (error) {
@@ -207,13 +238,13 @@ export class DirectorAgent {
   }
 }
 
-/** 维护已埋未收伏笔清单：埋设加入、回收移除（供下一块衔接与跨块闭环）。 */
-function updateOpenHooks(openHooks: OpenHook[], beats: Beat[]): void {
+/** 维护已埋未收伏笔清单：埋设加入、回收移除（供下一块衔接与跨块闭环）。tag 统一存全局号。 */
+function updateOpenHooks(openHooks: OpenHook[], beats: Beat[], chunk: BeatChunk): void {
   for (const beat of beats) {
     for (const intention of beat.hookIntentions) {
       const tag = extractHookTag(intention);
       if (tag !== null) {
-        openHooks.push({ tag, intention });
+        openHooks.push({ tag: renumberTagToGlobal(tag, chunk), intention });
       }
     }
     for (const tag of beat.plannedPayoffOf) {

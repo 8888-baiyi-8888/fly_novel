@@ -363,3 +363,39 @@ export function validateBeatBoard(board: BeatBoard, totalChapters: number): stri
   }
   return violations;
 }
+
+/**
+ * 块内 hook 引用校验：plannedPayoffOf 引用的 tag 必须已在本块埋设、
+ * 或存在于 openHooks（前块已埋未收），否则是「孤儿回收」——模型编造了
+ * 不存在的 tag（跨块/块内自漏的高频错误）。在块内生成时提前拦截，
+ * 避免全书合并后闸门失败整书重跑。
+ *
+ * 注意：块内埋设的 tag 不要求块内回收（留给后续块跨块回收是合法设计，
+ * 由全书闸门把关）。返回违规描述列表（空 = 通过）。
+ */
+export function validateChunkHookRefs(
+  beats: Beat[],
+  openHooks: Array<{ tag: string; intention: string }>,
+): string[] {
+  const violations: string[] = [];
+  const buriedTagSet = new Set<string>();
+  for (const beat of beats) {
+    for (const intention of beat.hookIntentions) {
+      const tag = extractHookTag(intention);
+      if (tag !== null) {
+        buriedTagSet.add(tag);
+      }
+    }
+  }
+  const openTagSet = new Set(openHooks.map((hook) => hook.tag));
+  for (const beat of beats) {
+    for (const tag of beat.plannedPayoffOf) {
+      if (!buriedTagSet.has(tag) && !openTagSet.has(tag)) {
+        violations.push(
+          `块内 ch${beat.chapter} plannedPayoffOf 引用 ${tag}：该 tag 既未在本块埋设、也不在前块 openHooks 中（孤儿回收）`,
+        );
+      }
+    }
+  }
+  return violations;
+}

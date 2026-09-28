@@ -1,0 +1,996 @@
+{
+  "beats": [
+    {
+      "chapter": 1,
+      "title": "归零",
+      "mainBeat": "周野目睹车祸受害者头顶倒计时归零，确立异能视觉与规则",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "目睹倒计时归零"
+        },
+        {
+          "name": "受害者",
+          "action": "车祸身亡"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "铺垫",
+      "emotionalArc": "惊愕→冰冷",
+      "hookIntentions": [
+        "【ch1-h1】受害者死前紧握的半截车票——后续推理起点"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 2,
+      "title": "非意外痕迹",
+      "mainBeat": "苏遥勘验第一起车祸现场，发现微小的非意外痕迹",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "勘验现场发现痕迹"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "铺垫",
+      "emotionalArc": "专注→疑虑",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 3,
+      "title": "代价之重",
+      "mainBeat": "陈叔暗示周野失忆的代价，透露异能并非首次出现",
+      "characters": [
+        {
+          "name": "陈叔",
+          "action": "隐喻暗示代价"
+        },
+        {
+          "name": "周野",
+          "action": "试探询问"
+        }
+      ],
+      "threadId": "F1",
+      "pacing": "舒缓",
+      "emotionalArc": "困惑→隐忧",
+      "hookIntentions": [
+        "【ch3-h1】陈叔提到代价不仅是记忆剥离，还有更深层的反噬——后续验证"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 4,
+      "title": "第二起意外",
+      "mainBeat": "周野发现第二起意外倒计时异常，决定介入",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "发现异常倒计时"
+        },
+        {
+          "name": "目标受害者",
+          "action": "浑然不觉走向死局"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "警觉→决意",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 5,
+      "title": "记忆剥离",
+      "mainBeat": "周野强行介入救人，倒计时重置，付出失忆代价",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "介入救人并承受记忆剥离"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "紧绷→空白",
+      "hookIntentions": [
+        "【ch5-h1】周野剥离的记忆中闪过一张冷峻的女性面孔——身份未知"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 6,
+      "title": "连环档案",
+      "mainBeat": "苏遥建立连环意外案档案，锁定周野出现在多个现场",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "建立档案并锁定周野"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "上升",
+      "emotionalArc": "敏锐→锁定",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 7,
+      "title": "失忆复盘",
+      "mainBeat": "周野在失忆恍惚中复盘第二起意外的破绽，察觉人为痕迹",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "强忍头痛复盘破绽"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "迷惘→暗燃",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 8,
+      "title": "逆向推理",
+      "mainBeat": "周野逆向推理出意外制造的破绽，锁定嫌疑人特征",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "通过半截车票逆向推理"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "逻辑→逼近",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch1-h1"
+      ]
+    },
+    {
+      "chapter": 9,
+      "title": "业务员现身",
+      "mainBeat": "周野顺藤摸瓜追踪到殡仪馆业务员，暗中观察其伪装",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "暗中追踪"
+        },
+        {
+          "name": "殡仪馆业务员",
+          "action": "公事公办地伪装意外"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "追踪→对峙",
+      "hookIntentions": [
+        "【ch9-h1】业务员身上散发的微弱福尔马林异味——拆解陷阱的关键"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 10,
+      "title": "完美布局",
+      "mainBeat": "业务员精心布置第三起完美意外，周野在暗处寻找切入点",
+      "characters": [
+        {
+          "name": "殡仪馆业务员",
+          "action": "布置意外陷阱"
+        },
+        {
+          "name": "周野",
+          "action": "观察陷阱寻找破绽"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "铺垫",
+      "emotionalArc": "谨慎→杀意",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 11,
+      "title": "双重逼近",
+      "mainBeat": "业务员启动意外陷阱，苏遥也悄然抵达案发现场",
+      "characters": [
+        {
+          "name": "殡仪馆业务员",
+          "action": "启动陷阱"
+        },
+        {
+          "name": "苏遥",
+          "action": "悄然抵达现场"
+        },
+        {
+          "name": "周野",
+          "action": "准备介入"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "压抑→倒数",
+      "hookIntentions": [
+        "【ch11-h1】苏遥在现场留下的隐蔽勘验标记——博弈筹码"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 12,
+      "title": "正面交锋",
+      "mainBeat": "周野与苏遥在案发现场正面交锋，周野发现失忆的面孔正是苏遥",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "与苏遥对峙"
+        },
+        {
+          "name": "苏遥",
+          "action": "质问周野"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "交锋→对峙",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch5-h1"
+      ]
+    },
+    {
+      "chapter": 13,
+      "title": "信息差博弈",
+      "mainBeat": "周野利用苏遥的勘验标记与倒计时信息差，与苏遥达成临时博弈",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "点破标记达成博弈"
+        },
+        {
+          "name": "苏遥",
+          "action": "被迫妥协合作"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "释放",
+      "emotionalArc": "博弈→默契",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch11-h1"
+      ]
+    },
+    {
+      "chapter": 14,
+      "title": "拆解陷阱",
+      "mainBeat": "周野利用福尔马林气味线索，逆向拆解业务员的完美意外陷阱",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "利用气味破局"
+        },
+        {
+          "name": "殡仪馆业务员",
+          "action": "惊愕失控"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "设局→反杀",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch9-h1"
+      ]
+    },
+    {
+      "chapter": 15,
+      "title": "意外失控",
+      "mainBeat": "业务员的完美意外彻底失控，受害者被救，业务员被迫现身善后",
+      "characters": [
+        {
+          "name": "殡仪馆业务员",
+          "action": "现身善后"
+        },
+        {
+          "name": "周野",
+          "action": "步步紧逼"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "破局→惊惶",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 16,
+      "title": "殡仪馆冰山",
+      "mainBeat": "业务员暴露身份，周野逼问出其受雇于殡仪馆，并察觉异能反噬",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "逼问组织"
+        },
+        {
+          "name": "殡仪馆业务员",
+          "action": "吐露殡仪馆冰山一角"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "释放",
+      "emotionalArc": "真相→寒意",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch3-h1"
+      ]
+    },
+    {
+      "chapter": 17,
+      "title": "暗流涌动",
+      "mainBeat": "苏遥暗中收网，陈叔再次隐晦提醒，周野确立对抗殡仪馆的决心",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "暗中收网"
+        },
+        {
+          "name": "陈叔",
+          "action": "隐晦提醒"
+        },
+        {
+          "name": "周野",
+          "action": "确立对抗决心"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "舒缓",
+      "emotionalArc": "警醒→悬念",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 18,
+      "title": "归零之眼",
+      "mainBeat": "周野追踪线索时目睹新车祸受害者倒计时归零，确立异能视觉与规则",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "目睹归零确立规则"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "铺垫",
+      "emotionalArc": "警觉→震撼",
+      "hookIntentions": [
+        "【ch18-h1】倒计时归零瞬间，受害者瞳孔出现极淡的殡仪馆徽记倒影"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 19,
+      "title": "非自然痕迹",
+      "mainBeat": "苏遥勘验第一起车祸现场，发现微小的非意外痕迹",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "勘验现场发现痕迹"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "上升",
+      "emotionalArc": "专业→疑虑",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 20,
+      "title": "代价与拯救",
+      "mainBeat": "周野发现第二起意外倒计时异常，决定介入并付出失忆代价救人",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "介入救人付出代价"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "决绝→空洞",
+      "hookIntentions": [
+        "【ch20-h2】周野救人失忆后，潜意识画出一个从未见过的坐标"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 21,
+      "title": "记忆的裂痕",
+      "mainBeat": "周野因失忆陷入短暂迷茫，陈叔察觉异样，隐晦暗示代价",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "陷入迷茫"
+        },
+        {
+          "name": "陈叔",
+          "action": "隐晦暗示代价"
+        }
+      ],
+      "threadId": "F1",
+      "pacing": "舒缓",
+      "emotionalArc": "空洞→隐痛",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 22,
+      "title": "连环档案",
+      "mainBeat": "苏遥将多起意外串联，建立连环意外案档案，锁定周野出现在多个现场",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "串联档案锁定周野"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "上升",
+      "emotionalArc": "敏锐→锁定",
+      "hookIntentions": [
+        "【ch22-h3】苏遥档案中夹着一张旧剪报，报道了十年前的一起离奇意外"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 23,
+      "title": "逆向追踪",
+      "mainBeat": "周野逆向推理出意外制造的破绽，追踪到殡仪馆业务员",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "逆向推理追踪业务员"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "冷静→猎杀",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 24,
+      "title": "现场博弈",
+      "mainBeat": "周野与苏遥在案发现场正面交锋，利用信息差达成博弈",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "正面交锋达成博弈"
+        },
+        {
+          "name": "苏遥",
+          "action": "被迫妥协合作"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "释放",
+      "emotionalArc": "对峙→默契",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 25,
+      "title": "拆解完美意外",
+      "mainBeat": "周野利用信息差拆解业务员的完美意外陷阱，业务员暴露，引出殡仪馆",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "拆解陷阱逼出殡仪馆"
+        },
+        {
+          "name": "殡仪馆业务员",
+          "action": "暴露身份"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "设局→反杀",
+      "hookIntentions": [
+        "【ch25-h4】业务员暴露后吞服的毒药并非致死，而是某种休眠触发剂"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 26,
+      "title": "绝境反杀",
+      "mainBeat": "业务员被逼入绝境试图反杀，周野陷入危机，发现受害者瞳孔异象",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "陷入危机发现异象"
+        },
+        {
+          "name": "殡仪馆业务员",
+          "action": "反杀未遂"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "惊险→寒意",
+      "hookIntentions": [
+        "【ch26-h5】业务员身上发现的特制齿轮，与陈叔修表铺的零件同源"
+      ],
+      "plannedPayoffOf": [
+        "ch18-h1"
+      ]
+    },
+    {
+      "chapter": 27,
+      "title": "逃脱与物证",
+      "mainBeat": "苏遥的介入打破僵局，业务员逃脱，但留下关键物证",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "介入打破僵局"
+        },
+        {
+          "name": "殡仪馆业务员",
+          "action": "逃脱留证"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "释放",
+      "emotionalArc": "僵局→转机",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 28,
+      "title": "休战分析",
+      "mainBeat": "周野与苏遥暂时休战分析物证，发现殡仪馆的作案模式",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "分析物证"
+        },
+        {
+          "name": "苏遥",
+          "action": "暂时休战"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "铺垫",
+      "emotionalArc": "理性→深究",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 29,
+      "title": "异能溯源",
+      "mainBeat": "陈叔暗示周野失忆的代价，透露异能并非首次出现",
+      "characters": [
+        {
+          "name": "陈叔",
+          "action": "暗示代价透露过往"
+        },
+        {
+          "name": "周野",
+          "action": "聆听深思"
+        }
+      ],
+      "threadId": "F1",
+      "pacing": "舒缓",
+      "emotionalArc": "点拨→宿命",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch22-h3"
+      ]
+    },
+    {
+      "chapter": 30,
+      "title": "旧居坐标",
+      "mainBeat": "周野调查陈叔过去，发现潜意识坐标指向陈叔旧居，并在旧居发现齿轮同源零件",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "调查陈叔发现线索"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "疑虑→逼近",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch20-h2",
+        "ch26-h5"
+      ]
+    },
+    {
+      "chapter": 31,
+      "title": "灭口指令",
+      "mainBeat": "殡仪馆高层察觉业务员暴露，启动休眠灭口程序",
+      "characters": [
+        {
+          "name": "殡仪馆业务员",
+          "action": "休眠触发"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "暗流→杀机",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch25-h4"
+      ]
+    },
+    {
+      "chapter": 32,
+      "title": "分头赛跑",
+      "mainBeat": "周野与苏遥分头行动，试图在灭口前截获业务员",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "分头截获"
+        },
+        {
+          "name": "苏遥",
+          "action": "追踪灭口者"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "紧迫→赛跑",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 33,
+      "title": "核心账本",
+      "mainBeat": "周野截获濒死业务员，获得殡仪馆核心账本，发现守夜人交接期",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "截获账本"
+        },
+        {
+          "name": "殡仪馆业务员",
+          "action": "濒死交付"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "绝境→斩获",
+      "hookIntentions": [
+        "【ch33-h6】账本最后一页写着“守夜人交接期”，暗示异能流转周期"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 34,
+      "title": "剥离与逼近",
+      "mainBeat": "账本揭示更大阴谋，周野记忆再次剥离，苏遥逼近周野的秘密",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "记忆剥离"
+        },
+        {
+          "name": "苏遥",
+          "action": "逼近秘密"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "释放",
+      "emotionalArc": "震撼→悬念",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 35,
+      "title": "记忆碎片",
+      "mainBeat": "周野记忆剥离触发闪回，目睹车祸倒计时归零，确立异能视觉与规则",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "闪回目睹"
+        }
+      ],
+      "threadId": "F1",
+      "pacing": "铺垫",
+      "emotionalArc": "混乱→清晰",
+      "hookIntentions": [
+        "【ch35-h1】周野闪回中发现自己最初觉醒时，倒计时上方曾有一串极淡的编号"
+      ],
+      "plannedPayoffOf": [
+        "ch18-h1"
+      ]
+    },
+    {
+      "chapter": 36,
+      "title": "代价之痕",
+      "mainBeat": "闪回中周野发现第二起意外倒计时异常，决定介入并付出失忆代价救人",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "介入救人"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "决绝→痛失",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch20-h2"
+      ]
+    },
+    {
+      "chapter": 37,
+      "title": "非意外痕迹",
+      "mainBeat": "苏遥勘验第一起车祸现场，发现微小的非意外痕迹",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "勘验现场"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "铺垫",
+      "emotionalArc": "专注→起疑",
+      "hookIntentions": [
+        "【ch37-h2】苏遥在现场提取到一种特殊的工业残留物，与常规意外不符"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 38,
+      "title": "连环档案",
+      "mainBeat": "苏遥建立连环意外案档案，锁定周野出现在多个现场",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "建立档案"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "上升",
+      "emotionalArc": "起疑→锁定",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch22-h3"
+      ]
+    },
+    {
+      "chapter": 39,
+      "title": "逆向追踪",
+      "mainBeat": "周野复盘逆向推理出意外制造的破绽，追踪到殡仪馆业务员",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "复盘推理"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "冷静→逼近",
+      "hookIntentions": [
+        "【ch39-h3】陈叔修表铺的地下室传来微弱的机械运转声"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 40,
+      "title": "现场博弈",
+      "mainBeat": "周野与苏遥在案发现场正面交锋，利用信息差达成博弈",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "交锋博弈"
+        },
+        {
+          "name": "苏遥",
+          "action": "质问对峙"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "对峙→妥协",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 41,
+      "title": "完美陷阱",
+      "mainBeat": "周野利用信息差拆解业务员的完美意外陷阱，业务员暴露，引出殡仪馆",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "拆解陷阱"
+        },
+        {
+          "name": "殡仪馆业务员",
+          "action": "暴露休眠"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "释放",
+      "emotionalArc": "破局→震撼",
+      "hookIntentions": [
+        "【ch41-h4】业务员休眠前留下的最后暗语，指向殡仪馆的'入殓师'"
+      ],
+      "plannedPayoffOf": [
+        "ch25-h4"
+      ]
+    },
+    {
+      "chapter": 42,
+      "title": "守夜人",
+      "mainBeat": "陈叔暗示周野失忆的代价，透露异能并非首次出现",
+      "characters": [
+        {
+          "name": "陈叔",
+          "action": "暗示代价"
+        },
+        {
+          "name": "周野",
+          "action": "聆听震惊"
+        }
+      ],
+      "threadId": "F1",
+      "pacing": "舒缓",
+      "emotionalArc": "沉重→明悟",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch26-h5",
+        "ch33-h6"
+      ]
+    },
+    {
+      "chapter": 43,
+      "title": "休眠暗语",
+      "mainBeat": "周野试图从业务员休眠状态中挖掘线索，发现休眠触发剂的逆向机制",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "挖掘线索"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "上升",
+      "emotionalArc": "焦灼→突破",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch41-h4"
+      ]
+    },
+    {
+      "chapter": 44,
+      "title": "废弃化工厂",
+      "mainBeat": "苏遥通过工业残留物追查到一家废弃化工厂，遭遇暗哨",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "追查遭遇"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "紧张",
+      "emotionalArc": "敏锐→危机",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch37-h2"
+      ]
+    },
+    {
+      "chapter": 45,
+      "title": "地下机械",
+      "mainBeat": "周野潜入陈叔修表铺地下室，发现异能流转的机械装置",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "潜入发现"
+        }
+      ],
+      "threadId": "F1",
+      "pacing": "上升",
+      "emotionalArc": "疑虑→惊骇",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch39-h3"
+      ]
+    },
+    {
+      "chapter": 46,
+      "title": "暂时联手",
+      "mainBeat": "周野与苏遥在化工厂外意外碰头，决定暂时联手潜入",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "联手"
+        },
+        {
+          "name": "苏遥",
+          "action": "妥协"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "戒备→同盟",
+      "hookIntentions": [
+        "【ch46-h5】周野发现自己无法看见苏遥的倒计时"
+      ],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 47,
+      "title": "模拟演练场",
+      "mainBeat": "两人在化工厂内发现殡仪馆的'完美意外'模拟演练场",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "探查演练场"
+        },
+        {
+          "name": "苏遥",
+          "action": "取证震惊"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "紧张",
+      "emotionalArc": "深入→战栗",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 48,
+      "title": "再次剥离",
+      "mainBeat": "演练场机关触发，周野为救苏遥再次付出记忆代价，遗忘关键线索",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "救人失忆"
+        },
+        {
+          "name": "苏遥",
+          "action": "被救震惊"
+        }
+      ],
+      "threadId": "M",
+      "pacing": "释放",
+      "emotionalArc": "决绝→空白",
+      "hookIntentions": [],
+      "plannedPayoffOf": []
+    },
+    {
+      "chapter": 49,
+      "title": "独立拼图",
+      "mainBeat": "苏遥察觉周野失忆的异常，开始独立拼凑真相，掩护周野撤离",
+      "characters": [
+        {
+          "name": "苏遥",
+          "action": "掩护撤离"
+        }
+      ],
+      "threadId": "S1",
+      "pacing": "上升",
+      "emotionalArc": "震撼→坚定",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch46-h5"
+      ]
+    },
+    {
+      "chapter": 50,
+      "title": "编号重合",
+      "mainBeat": "周野在安全屋醒来，发现潜意识画出的编号与闪回中的编号重合",
+      "characters": [
+        {
+          "name": "周野",
+          "action": "发现编号重合"
+        }
+      ],
+      "threadId": "F1",
+      "pacing": "舒缓",
+      "emotionalArc": "迷茫→暗燃",
+      "hookIntentions": [],
+      "plannedPayoffOf": [
+        "ch35-h1"
+      ]
+    }
+  ]
+}

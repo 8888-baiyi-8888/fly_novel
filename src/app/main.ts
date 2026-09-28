@@ -40,7 +40,7 @@ import { INPUT_GUIDE, USAGE } from "./input-guide";
  */
 export function buildCreativeDraftAgent(): CreativeDraftAgent {
   const model = new MemoryModel({ responses: { creative_draft: EXAMPLE_DRAFT_JSON } });
-  return new CreativeDraftAgent({ model });
+  return new CreativeDraftAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -51,7 +51,7 @@ export function buildMemoryArchitectAgent(): ArchitectAgent {
   const model = new MemoryModel({
     responses: { architect_foundation: EXAMPLE_ARCHITECT_JSON },
   });
-  return new ArchitectAgent({ model });
+  return new ArchitectAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -62,7 +62,7 @@ export function buildMemoryControlsAgent(): ControlsAgent {
   const model = new MemoryModel({
     responses: { creative_controls: EXAMPLE_CONTROLS_JSON },
   });
-  return new ControlsAgent({ model });
+  return new ControlsAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -87,7 +87,7 @@ export function buildMemoryState0Agent(): State0Agent {
   const model = new MemoryModel({
     responses: { state0: EXAMPLE_STATE0_JSON },
   });
-  return new State0Agent({ model });
+  return new State0Agent({ model, maxRetries: 3 });
 }
 
 /**
@@ -98,7 +98,7 @@ export function buildMemoryRawInputAgent(): RawInputAgent {
   const model = new MemoryModel({
     responses: { raw_input: JSON.stringify({ rawInput: EXAMPLE_RAW_INPUT }) },
   });
-  return new RawInputAgent({ model });
+  return new RawInputAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -107,7 +107,7 @@ export function buildMemoryRawInputAgent(): RawInputAgent {
  */
 export function buildRealRawInputAgent(): RawInputAgent {
   const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
-  return new RawInputAgent({ model });
+  return new RawInputAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -116,7 +116,7 @@ export function buildRealRawInputAgent(): RawInputAgent {
  */
 export function buildRealCreativeDraftAgent(): CreativeDraftAgent {
   const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
-  return new CreativeDraftAgent({ model });
+  return new CreativeDraftAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -124,7 +124,7 @@ export function buildRealCreativeDraftAgent(): CreativeDraftAgent {
  */
 export function buildRealArchitectAgent(): ArchitectAgent {
   const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
-  return new ArchitectAgent({ model });
+  return new ArchitectAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -132,7 +132,7 @@ export function buildRealArchitectAgent(): ArchitectAgent {
  */
 export function buildRealControlsAgent(): ControlsAgent {
   const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
-  return new ControlsAgent({ model });
+  return new ControlsAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -142,11 +142,15 @@ export function buildRealControlsAgent(): ControlsAgent {
 export function buildRealArchitectureAgent(): ArchitectureAgent {
   const architect = new StoryArchitectAgent({
     model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 480_000 }),
+    maxRetries: 3,
   });
-  // Director 分块生成节拍板：按卷切块（单块 ≤40 章），避免大书单次输出超时
+  // Director 分块生成节拍板：按卷切块（单块 ≤20 章），避免大书单次输出超时；
+  // glm 系模型长输出慢，超时放宽到 10 分钟。
   const director = new DirectorAgent({
-    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 480_000 }),
+    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 600_000 }),
+    maxRetries: 3,
     chunked: true,
+    wholeBoardRetries: 2,
   });
   return new ArchitectureAgent(architect, director);
 }
@@ -156,7 +160,7 @@ export function buildRealArchitectureAgent(): ArchitectureAgent {
  */
 export function buildRealState0Agent(): State0Agent {
   const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
-  return new State0Agent({ model });
+  return new State0Agent({ model, maxRetries: 3 });
 }
 
 type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5" | "n6" | "n7" | "n8";

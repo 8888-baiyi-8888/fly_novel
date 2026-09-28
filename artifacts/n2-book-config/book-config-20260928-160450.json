@@ -1,0 +1,13 @@
+{
+  "bookId": "daiding",
+  "title": "待定",
+  "genre": "都市",
+  "platform": "番茄",
+  "targetChapters": 50,
+  "chapterWordCount": 2000,
+  "language": "zh",
+  "chapterReviewMode": "auto",
+  "maxHookRetries": 2,
+  "createdAt": "2026-09-28T08:04:50.429Z",
+  "updatedAt": "2026-09-28T08:04:50.429Z"
+}
