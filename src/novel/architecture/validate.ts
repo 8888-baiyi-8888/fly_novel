@@ -299,6 +299,42 @@ export function validateBeatBoard(board: BeatBoard, totalChapters: number): stri
     }
   }
 
+  // 5. tag 撞车检查：同一 tag 出现多条不同内容的埋设 → blocking
+  //    （分块合并若未重编号 tag，不同卷会共用 tag，回收会错配到别的伏笔）
+  const tagContents = new Map<string, string[]>();
+  for (const beat of beats) {
+    for (const intention of beat.hookIntentions) {
+      const tag = extractHookTag(intention);
+      if (tag === null) {
+        continue;
+      }
+      const contents = tagContents.get(tag) ?? [];
+      if (!contents.includes(intention)) {
+        contents.push(intention);
+      }
+      tagContents.set(tag, contents);
+    }
+  }
+  for (const [tag, contents] of tagContents) {
+    if (contents.length > 1) {
+      violations.push(
+        `hook tag ${tag} 被 ${contents.length} 条不同伏笔共用（分块合并未重编号 tag）：` +
+          contents.map((c) => c.slice(0, 20)).join(" / "),
+      );
+    }
+  }
+
+  // 6. 孤儿回收检查：plannedPayoffOf 引用的 tag 必须存在于某章 hookIntention
+  //    （回收了从未埋设的东西 → blocking，说明模型块内自漏）
+  const buriedTagSet = new Set(allTags);
+  for (const beat of beats) {
+    for (const tag of beat.plannedPayoffOf) {
+      if (!buriedTagSet.has(tag)) {
+        violations.push(`ch${beat.chapter} plannedPayoffOf 引用 ${tag}，但全书无任何章埋设该 tag（孤儿回收 → blocking）`);
+      }
+    }
+  }
+
   // warning：平均埋设→回收章距
   if (allTags.length > 0) {
     const distances: number[] = [];

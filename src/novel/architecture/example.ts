@@ -77,11 +77,11 @@ function buildPlaceholderBeats(totalChapters: number): Beat[] {
     if (chapter === 58) {
       plannedPayoffOf.push("ch2-h2");
     }
-    // 占位伏笔：每 4 章埋一条，且在总章数范围内安排回收（chapter+12 ≤ 总章数才埋）
+    // 占位伏笔：每 4 章埋一条（从 ch4 起），并在 chapter+12 回收（回收的埋设章必须 ≥4）
     if (chapter % 4 === 0 && chapter + 12 <= totalChapters) {
       hookIntentions.push(`【ch${chapter}-h1】第 ${chapter} 章埋设的占位伏笔：本章细节留作后续回收`);
     }
-    if (chapter > 4 && (chapter - 12) % 4 === 0) {
+    if (chapter - 12 >= 4 && (chapter - 12) % 4 === 0) {
       plannedPayoffOf.push(`ch${chapter - 12}-h1`);
     }
     beats.push({

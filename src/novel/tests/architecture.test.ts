@@ -238,4 +238,266 @@ test("architecture：示例五件套与解析结果一致", () => {
   assert.equal(EXAMPLE_ARCHITECTURE.characterCards[0].secret.includes("龙王殿殿主"), true);
 });
 
+// ---------- N5 分块生成（B+C 方案）：planBeatChunks / mergeChunkBeats / 分块 Director ----------
+
+import { mergeChunkBeats, planBeatChunks, volumeNumber } from "../architecture/chunk";
+
+test("architecture/chunk：volumeNumber 兼容「第一卷/第1卷/第三卷」", () => {
+  assert.equal(volumeNumber("第一卷"), 1);
+  assert.equal(volumeNumber("第1卷"), 1);
+  assert.equal(volumeNumber("第三卷"), 3);
+  assert.equal(volumeNumber("卷末"), null);
+});
+
+test("architecture/chunk：100 章 3 卷均分 → 34/33/33，首尾相连", () => {
+  const volumes = [
+    { volume: "第一卷", title: "t1", goal: "g1", stages: ["s"] },
+    { volume: "第二卷", title: "t2", goal: "g2", stages: ["s"] },
+    { volume: "第三卷", title: "t3", goal: "g3", stages: ["s"] },
+  ];
+  const chunks = planBeatChunks(100, volumes);
+  assert.equal(chunks.length, 3);
+  assert.deepEqual(chunks.map((c) => [c.startChapter, c.endChapter]), [
+    [1, 34],
+    [35, 67],
+    [68, 100],
+  ]);
+});
+
+test("architecture/chunk：150 章 4 卷均分 → 38/38/37/37，首尾相连", () => {
+  const volumes = Array.from({ length: 4 }, (_, i) => ({
+    volume: `第${i + 1}卷`,
+    title: `t${i + 1}`,
+    goal: `g${i + 1}`,
+    stages: ["s"],
+  }));
+  const chunks = planBeatChunks(150, volumes);
+  assert.equal(chunks.length, 4);
+  assert.deepEqual(chunks.map((c) => [c.startChapter, c.endChapter]), [
+    [1, 38],
+    [39, 76],
+    [77, 113],
+    [114, 150],
+  ]);
+  assert.ok(chunks.every((c) => c.endChapter - c.startChapter + 1 <= 40));
+});
+
+test("architecture/chunk：100 章 2 卷（每卷 50 章）→ 每卷拆 25/25，共 4 块且每块 ≤40", () => {
+  const volumes = Array.from({ length: 2 }, (_, i) => ({
+    volume: `第${i + 1}卷`,
+    title: `t${i + 1}`,
+    goal: `g${i + 1}`,
+    stages: ["s"],
+  }));
+  const chunks = planBeatChunks(100, volumes);
+  assert.equal(chunks.length, 4);
+  assert.deepEqual(chunks.map((c) => c.id), ["V1-1", "V1-2", "V2-1", "V2-2"]);
+  assert.deepEqual(chunks.map((c) => [c.startChapter, c.endChapter]), [
+    [1, 25],
+    [26, 50],
+    [51, 75],
+    [76, 100],
+  ]);
+});
+
+test("architecture/chunk：合并后全局章号连续且保持块顺序", () => {
+  const volumes = Array.from({ length: 2 }, (_, i) => ({
+    volume: `第${i + 1}卷`,
+    title: `t${i + 1}`,
+    goal: `g${i + 1}`,
+    stages: ["s"],
+  }));
+  const chunks = planBeatChunks(10, volumes);
+  const chunk1: Beat[] = Array.from({ length: 5 }, (_, i) => ({
+    chapter: i + 1,
+    title: `c${i + 1}`,
+    mainBeat: `块1 第${i + 1}章`,
+    characters: [],
+    threadId: "M",
+    pacing: "铺垫",
+    emotionalArc: "x",
+    hookIntentions: [],
+    plannedPayoffOf: [],
+  }));
+  const chunk2: Beat[] = Array.from({ length: 5 }, (_, i) => ({
+    chapter: i + 1,
+    title: `c${i + 1}`,
+    mainBeat: `块2 第${i + 1}章`,
+    characters: [],
+    threadId: "M",
+    pacing: "铺垫",
+    emotionalArc: "x",
+    hookIntentions: [],
+    plannedPayoffOf: [],
+  }));
+  const merged = mergeChunkBeats(chunks, [chunk1, chunk2]);
+  assert.deepEqual(merged.beats.map((b) => b.chapter), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.equal(merged.beats[5].mainBeat, "块2 第1章");
+});
+
+/** 构造合法全书节拍板：每 5 章埋 1 伏笔（密度 0.2）、3 章后回收；30 章版。 */
+function makeLegitBeats(chapters: number): Beat[] {
+  const beats: Beat[] = [];
+  for (let i = 1; i <= chapters; i += 1) {
+    const hookIntentions: string[] = [];
+    const plannedPayoffOf: string[] = [];
+    if (i % 5 === 1) {
+      hookIntentions.push(`【ch${i}-h1】第 ${i} 章埋设伏笔`);
+    }
+    if (i % 5 === 4) {
+      plannedPayoffOf.push(`ch${i - 3}-h1`);
+    }
+    beats.push({
+      chapter: i,
+      title: `ch${i}`,
+      mainBeat: `第 ${i} 章主事件`,
+      characters: [],
+      threadId: "M",
+      pacing: i % 4 === 0 ? "释放" : "铺垫",
+      emotionalArc: "x",
+      hookIntentions,
+      plannedPayoffOf,
+    });
+  }
+  return beats;
+}
+
+test("architecture：chunked Director 分块生成 → 合并 → 全书闸门通过", async () => {
+  const draft = await exampleDraft();
+  draft.targetChapters = 30;
+  const full = makeLegitBeats(30);
+  let calls = 0;
+  const model = new MemoryModel({
+    responder: () => {
+      calls += 1;
+      const slice = full.slice((calls - 1) * 10, calls * 10);
+      const chunkBeats = slice.map((b) => ({ ...b, chapter: b.chapter - (calls - 1) * 10 }));
+      return JSON.stringify({ beats: chunkBeats });
+    },
+  });
+  const director = new DirectorAgent({ model, chunked: true });
+  const parts = parseArchitectureOutput(JSON.parse(EXAMPLE_ARCHITECTURE_JSON));
+  const board = await director.createBeatBoard(draft, parts);
+  assert.equal(calls, 3); // 3 卷 → 3 块
+  assert.equal(board.beats.length, 30);
+  assert.equal(board.beats[0].chapter, 1);
+  assert.equal(board.beats[29].chapter, 30);
+  const violations = validateBeatBoard(board, 30);
+  assert.deepEqual(violations, []);
+});
+
+test("architecture：chunked Director 块内输出长度错误 → 块内重试 → 成功", async () => {
+  const draft = await exampleDraft();
+  draft.targetChapters = 30;
+  const full = makeLegitBeats(30);
+  let calls = 0;
+  const model = new MemoryModel({
+    responder: () => {
+      calls += 1;
+      if (calls === 1) {
+        // 第一块第一次：只给 5 条（块应为 10 条）→ 触发块内重试
+        return JSON.stringify({ beats: full.slice(0, 5).map((b) => ({ ...b, chapter: b.chapter })) });
+      }
+      const blockIndex = calls <= 2 ? 0 : calls - 2; // calls=2 → 块0 重试；calls=3 → 块1；calls=4 → 块2
+      const slice = full.slice(blockIndex * 10, blockIndex * 10 + 10);
+      const chunkBeats = slice.map((b) => ({ ...b, chapter: b.chapter - blockIndex * 10 }));
+      return JSON.stringify({ beats: chunkBeats });
+    },
+  });
+  const director = new DirectorAgent({ model, chunked: true });
+  const parts = parseArchitectureOutput(JSON.parse(EXAMPLE_ARCHITECTURE_JSON));
+  const board = await director.createBeatBoard(draft, parts);
+  assert.equal(calls, 4); // 块0 重试 1 次 + 块1 + 块2
+  assert.equal(board.beats.length, 30);
+});
+
+test("architecture：chunked Director 合并后全书校验失败（只埋不收）→ 抛 DirectorError", async () => {
+  const draft = await exampleDraft();
+  draft.targetChapters = 30;
+  const bad = makeLegitBeats(30);
+  // 最后一章的回收移除 → ch1-h1 等只剩埋设？改为：删掉所有 plannedPayoffOf → 只埋不收
+  for (const b of bad) {
+    b.plannedPayoffOf = [];
+  }
+  let calls = 0;
+  const model = new MemoryModel({
+    responder: () => {
+      calls += 1;
+      const slice = bad.slice((calls - 1) * 10, calls * 10);
+      return JSON.stringify({ beats: slice.map((b) => ({ ...b, chapter: b.chapter - (calls - 1) * 10 })) });
+    },
+  });
+  const director = new DirectorAgent({ model, chunked: true });
+  const parts = parseArchitectureOutput(JSON.parse(EXAMPLE_ARCHITECTURE_JSON));
+  await assert.rejects(() => director.createBeatBoard(draft, parts), DirectorError);
+  assert.equal(calls, 3);
+});
+
+test("architecture/chunk：合并时 hook tag 与 payoff 引用按块内号重编号为全局号", () => {
+  const volumes = [
+    { volume: "第一卷", title: "t1", goal: "g1", stages: ["s"] },
+    { volume: "第二卷", title: "t2", goal: "g2", stages: ["s"] },
+  ];
+  const chunks = planBeatChunks(20, volumes); // 10 + 10
+  const makeBeat = (ch: number, hooks: string[], payoffs: string[]): Beat => ({
+    chapter: ch,
+    title: `c${ch}`,
+    mainBeat: `第 ${ch} 章事件`,
+    characters: [],
+    threadId: "M",
+    pacing: "铺垫",
+    emotionalArc: "x",
+    hookIntentions: hooks,
+    plannedPayoffOf: payoffs,
+  });
+  // 块 1：块内 ch1 埋【ch1-h1】（全局 ch1）；块 2：块内 ch1 埋【ch1-h1】（全局 ch11）、块内 ch9 回收
+  const chunk1: Beat[] = Array.from({ length: 10 }, (_, i) =>
+    makeBeat(i + 1, i === 0 ? ["【ch1-h1】第一块伏笔"] : [], []),
+  );
+  const chunk2: Beat[] = Array.from({ length: 10 }, (_, i) =>
+    makeBeat(i + 1, i === 0 ? ["【ch1-h1】第二块伏笔"] : [], i === 8 ? ["ch1-h1"] : []),
+  );
+  const merged = mergeChunkBeats(chunks, [chunk1, chunk2]);
+  // 块 1：ch1 的 tag 保持 ch1-h1；块 2：块内 ch1 → 全局 ch11，payoff 同步
+  assert.equal(merged.beats[0].hookIntentions[0], "【ch1-h1】第一块伏笔");
+  assert.equal(merged.beats[10].hookIntentions[0], "【ch11-h1】第二块伏笔");
+  assert.deepEqual(merged.beats[18].plannedPayoffOf, ["ch11-h1"]);
+  // 重编号后不再撞车：两个不同内容各占 ch1-h1 / ch11-h1
+  assert.notEqual(merged.beats[0].hookIntentions[0], merged.beats[10].hookIntentions[0]);
+});
+
+test("architecture：同 tag 被多条不同伏笔共用 → 验收闸门拦截", () => {
+  const beats: Beat[] = [
+    {
+      chapter: 1, title: "c1", mainBeat: "第一章", characters: [], threadId: "M",
+      pacing: "铺垫", emotionalArc: "x", hookIntentions: ["【ch1-h1】剪报伏笔"], plannedPayoffOf: [],
+    },
+    {
+      chapter: 2, title: "c2", mainBeat: "第二章", characters: [], threadId: "M",
+      pacing: "铺垫", emotionalArc: "x", hookIntentions: [], plannedPayoffOf: ["ch1-h1"],
+    },
+    {
+      chapter: 3, title: "c3", mainBeat: "第三章", characters: [], threadId: "M",
+      pacing: "铺垫", emotionalArc: "x", hookIntentions: ["【ch1-h1】数据异常伏笔"], plannedPayoffOf: ["ch1-h1"],
+    },
+  ];
+  const violations = validateBeatBoard({ beats }, 3);
+  assert.ok(violations.some((v) => v.includes("共用")));
+});
+
+test("architecture：plannedPayoffOf 引用未埋设的 tag（孤儿回收）→ 验收闸门拦截", () => {
+  const beats: Beat[] = [
+    {
+      chapter: 1, title: "c1", mainBeat: "第一章", characters: [], threadId: "M",
+      pacing: "铺垫", emotionalArc: "x", hookIntentions: ["【ch1-h1】真实伏笔"], plannedPayoffOf: [],
+    },
+    {
+      chapter: 2, title: "c2", mainBeat: "第二章", characters: [], threadId: "M",
+      pacing: "铺垫", emotionalArc: "x", hookIntentions: [], plannedPayoffOf: ["ch1-h1", "ch99-h9"],
+    },
+  ];
+  const violations = validateBeatBoard({ beats }, 2);
+  assert.ok(violations.some((v) => v.includes("孤儿回收")));
+});
+
 

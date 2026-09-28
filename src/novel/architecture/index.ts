@@ -3,6 +3,8 @@ export { StoryArchitectAgent, StoryArchitectError } from "./story-architect-agen
 export type { StoryArchitectAgentOptions, ArchitectureInput } from "./story-architect-agent";
 export { DirectorAgent, DirectorError } from "./director-agent";
 export type { DirectorAgentOptions } from "./director-agent";
+export { planBeatChunks, mergeChunkBeats, collectChunkEvents, volumeNumber, MAX_CHUNK_SIZE } from "./chunk";
+export type { BeatChunk } from "./chunk";
 export { ARCHITECTURE_JSON_DESCRIPTION, BEAT_BOARD_JSON_DESCRIPTION } from "./schema";
 export {
   parseArchitectureOutput,

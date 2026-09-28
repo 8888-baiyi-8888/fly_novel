@@ -22,7 +22,7 @@ export interface ConfiguredLlmModelOptions {
   readonly provider: string;
   /** 覆盖供应商默认模型；省略时使用 settings[provider].model。 */
   readonly model?: string;
-  /** 请求超时（毫秒），默认 180_000（3 分钟）。 */
+  /** 请求超时（毫秒），默认 300_000（5 分钟）。分块前的大节拍板输出曾超 3 分钟，放宽为 5 分钟保险。 */
   readonly timeoutMs?: number;
 }
 
@@ -40,7 +40,7 @@ export class ConfiguredLlmModel implements ModelClient {
     if (!options.provider.trim()) throw new Error("ConfiguredLlmModel 必须提供非空 provider");
     this.provider = options.provider.trim();
     this.model = options.model;
-    this.timeoutMs = options.timeoutMs ?? 180_000;
+    this.timeoutMs = options.timeoutMs ?? 300_000;
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
