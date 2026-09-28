@@ -1,22 +1,22 @@
-import type { z } from "zod";
+import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 
-/** 创建时固定的模型选择及角色定位。 */
+export const DEFAULT_BRANCH_ID = "main"
+
+export type CharacterInfos = string | Record<string, unknown>;
+
 export interface CharacterAgentOptions {
-  readonly modelId?: string;
-  readonly storyId: string;
-  /** 省略时使用 main。 */
-  readonly branchId?: string;
-  readonly characterId: string;
-}
-/** 外部提供的角色可知场景，具体字段结构尚待定义。 */
-export type CharacterScene = Readonly<Record<string, unknown>>;
-export interface CharacterAgentRunInput<TSchema extends z.ZodObject = z.ZodObject> {
-  /** 稳定场景 ID；同一场景的多轮调用共用此 ID。 */
-  readonly sceneId: string;
-  readonly scene: CharacterScene;
-  /** 调用方定义的 Zod 对象 Schema，决定字段、类型、描述和额外字段策略。 */
-  readonly responseFormat: TSchema;
-}
-export interface CharacterAgentRunOptions {
-  readonly signal?: AbortSignal;
+  /** 应用创建的模型实例，包含模型选择及 API 凭据配置。 */
+  model: BaseLanguageModel;
+
+  /** 小说唯一标识。 */
+  novelId: string;
+
+  /** 角色唯一标识。 */
+  characterId: string;
+
+  /** 分支唯一标识，用于场景重演；未提供时默认使用 {@link DEFAULT_BRANCH_ID}。 */
+  branchId?: string;
+
+  /** 角色信息，可为文本描述或结构化对象。 */
+  characterInfos?: CharacterInfos;
 }

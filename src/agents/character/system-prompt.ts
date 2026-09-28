@@ -1,32 +1,29 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { getCharacterDataDirectory } from "../runtime/agent-runtime.js";
-import type { CharacterAgentOptions } from "./types.js";
+import type { CharacterAgentOptions,CharacterInfos } from "./types";
+import { DEFAULT_BRANCH_ID } from "./types.js";
+import { getCharacterInfos } from "./utils";
 
-/** 从世界背景和角色个人信息文件构建系统提示词。 */
-export function buildSystemPrompt(
-  options: Pick<CharacterAgentOptions, "storyId" | "branchId" | "characterId">,
-): string {
-  const dataDirectory = getCharacterDataDirectory();
-  if (dataDirectory === undefined) {
-    throw new Error("尚未配置角色数据目录。");
-  }
-  const storyDirectory = join(dataDirectory, options.storyId);
-  const worldBackgroundPath = join(storyDirectory, "world-background.md");
-  const characterInfoPath = join(
-    storyDirectory,
-    "character_agent",
-    options.branchId ?? "main",
-    options.characterId,
-    "profile.md",
-  );
-  const worldBackground = readFileSync(worldBackgroundPath, "utf8").trim();
-  const characterInfo = readFileSync(characterInfoPath, "utf8").trim();
-  if (worldBackground === "") {
-    throw new Error("世界背景文件内容不能为空。");
-  }
-  if (characterInfo === "") {
-    throw new Error("角色个人信息文件内容不能为空。");
-  }
-  return `世界背景信息：\n${worldBackground}\n\n角色个人信息：\n${characterInfo}`;
+export interface SystemPromptProvider {
+  build(): string
 }
+
+export class CharacterSystemPrompt implements SystemPromptProvider {
+  private readonly option: CharacterAgentOptions
+
+  public constructor( options:CharacterAgentOptions) {
+    this.option = {
+          ...options,
+          branchId: options.branchId ?? DEFAULT_BRANCH_ID,
+        };
+  }
+
+  public  build(): string {
+    const characterInfos = this.option.characterInfos ?? getCharacterInfos(
+        this.option.novelId,
+        this.option.branchId!,
+        this.option.characterId,
+      )
+    const systemPrompt = `你是一个角色扮演 Agent。以下是你的角色信息${characterInfos}`
+    return systemPrompt;
+  }
+}
+
