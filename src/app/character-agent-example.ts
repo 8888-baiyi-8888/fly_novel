@@ -49,7 +49,6 @@ async function main(): Promise<void> {
     novelId: "debug-novel",
     branchId: "main",
     characterId: "debug-character",
-    characterInfos: "你是林舟，沉着寡言，重视对他人的承诺。",
   });
   const result = await agent.invoke(
     "场景：雨后的渡口。苏晴问你：明天还会回来吗？请以林舟的身份自然回应，并通过动作体现他的情绪。",

@@ -3,7 +3,7 @@ import { createDeepAgent } from "deepagents";
 import { CharacterSystemPrompt} from "./system-prompt.js";
 import type { CharacterAgentOptions } from "./types.js";
 import { DEFAULT_BRANCH_ID } from "./types.js";
-import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite"
+import { resolveCharacterAgentOptions } from "./utils.js";
 import { CharacterSession } from "./session.js";
 
 /** 角色 Agent */
@@ -13,10 +13,7 @@ export class CharacterAgent extends BaseAgent {
 
   public constructor(options: CharacterAgentOptions) {
     super();
-    this.options = {
-        ...options,
-        branchId: options.branchId ?? DEFAULT_BRANCH_ID,
-      };
+    this.options = resolveCharacterAgentOptions(options)
     const systemPrompt = new CharacterSystemPrompt(this.options).build();
     const checkpointer = new CharacterSession(this.options).get()
     this.agent = createDeepAgent({
