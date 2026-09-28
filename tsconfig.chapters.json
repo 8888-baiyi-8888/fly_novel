@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "declaration": false
+  },
+  "include": ["src/novel/**/*.ts", "src/workflow/**/*.ts"],
+  "exclude": []
+}

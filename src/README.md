@@ -11,5 +11,5 @@
 | [llm/](llm/README.md) | 大语言模型调用接口与提供商适配。 |
 | [util/](util/README.md) | 跨模块共用的基础工具。 |
 | [harness/](harness/README.md) | 通用 Agent 运行框架。 |
-| [workflow/](workflow/README.md) | 通用图工作流引擎。 |
-| [novel/](novel/README.md) | 小说数据、业务规则和写作流程。 |
+| [workflow/](workflow/README.md) | 步骤流水线编排引擎（章节级 7 步 + 重试回退 + 断点续跑，骨架 + stub 测试；agent 端口 AgentPort + HttpAgent 第三方 agent 适配器）。 |
+| [novel/](novel/README.md) | 小说领域数据模型（§3 共享纯类型，types/）、确定性校验闸门（gates/，§5.3 Dispatch 校验、§11.2 六步校验链）、确定性服务（services/，HookLedger lifecycle/准入/合并 + Timeline/Truth 接口契约）与 Book Runtime 模拟层（runtime/，小说流交付面的 FakeBookRuntime + §7.7 fixtures）及后续业务规则、写作流程。 |

@@ -1,0 +1,363 @@
+{
+  "ledger": {
+    "H007": {
+      "hookId": "H007",
+      "startChapter": 2,
+      "type": "物件",
+      "status": "resolved",
+      "lastAdvancedChapter": 19,
+      "advancedCount": 2,
+      "expectedPayoff": "江家用协议做文章时，第三条对赌条款反噬江氏分公司",
+      "payoffTiming": "mid-arc",
+      "coreHook": true,
+      "notes": "四道折痕 / 抽屉最底层"
+    },
+    "H011": {
+      "hookId": "H011",
+      "startChapter": 5,
+      "type": "信息差",
+      "status": "progressing",
+      "lastAdvancedChapter": 10,
+      "advancedCount": 3,
+      "expectedPayoff": "老陈亲口说出\"殿主\"称呼",
+      "payoffTiming": "slow-burn",
+      "notes": "老陈的那瓶酒"
+    },
+    "H014": {
+      "hookId": "H014",
+      "startChapter": 6,
+      "type": "秘密",
+      "status": "progressing",
+      "lastAdvancedChapter": 10,
+      "advancedCount": 3,
+      "expectedPayoff": "雨夜真相（叶凡进屋之后）",
+      "payoffTiming": "endgame",
+      "notes": "五年前的雨夜"
+    },
+    "H021": {
+      "hookId": "H021",
+      "startChapter": 16,
+      "type": "关系",
+      "status": "progressing",
+      "lastAdvancedChapter": 18,
+      "advancedCount": 4,
+      "expectedPayoff": "江辰的第二次电话内容",
+      "payoffTiming": "near-term"
+    },
+    "H023": {
+      "hookId": "H023",
+      "startChapter": 8,
+      "type": "秘密",
+      "status": "deferred",
+      "lastAdvancedChapter": 10,
+      "advancedCount": 1,
+      "expectedPayoff": "苏晴的体检单",
+      "payoffTiming": "near-term"
+    }
+  },
+  "threads": [
+    {
+      "threadId": "tl-main-share",
+      "kind": "main",
+      "title": "江氏主线",
+      "status": "active",
+      "priority": 10,
+      "syncPoint": 21,
+      "speed": 1,
+      "eventChain": [
+        {
+          "eventId": "E-M07",
+          "summary": "对赌条款反噬江氏，收束 H007",
+          "chapter": 21,
+          "prerequisiteEventIds": [],
+          "status": "pending"
+        }
+      ],
+      "characters": [
+        "叶凡",
+        "苏晴",
+        "江辰"
+      ]
+    },
+    {
+      "threadId": "tl-flashback-rain",
+      "kind": "flashback",
+      "title": "五年前的雨夜",
+      "status": "dormant",
+      "priority": 3,
+      "syncPoint": 3,
+      "speed": 0.3,
+      "eventChain": [
+        {
+          "eventId": "E-F01",
+          "summary": "叶凡进屋之后（揭示雨夜真相的前提）",
+          "chapter": null,
+          "prerequisiteEventIds": [],
+          "status": "pending"
+        }
+      ],
+      "characters": [
+        "叶凡",
+        "苏晴"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "factId": "F001",
+      "subject": "老陈",
+      "subjectType": "character",
+      "predicate": "知道称呼",
+      "object": "殿主",
+      "validFromChapter": 10,
+      "validUntilChapter": null,
+      "sourceChapter": 10,
+      "knownBy": [
+        "老陈",
+        "苏晴"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F002",
+      "subject": "叶凡",
+      "subjectType": "character",
+      "predicate": "试图让江辰正视",
+      "object": "协议第三条对赌条款的触发条件",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3,
+      "knownBy": [
+        "叶凡",
+        "江辰"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F003",
+      "subject": "江辰",
+      "subjectType": "character",
+      "predicate": "刻意回避",
+      "object": "协议第三条的具体内容",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3,
+      "knownBy": [
+        "叶凡",
+        "江辰"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F004",
+      "subject": "叶凡",
+      "subjectType": "character",
+      "predicate": "未接",
+      "object": "江辰的电话",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3,
+      "knownBy": [
+        "叶凡",
+        "江辰"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F005",
+      "subject": "江辰",
+      "subjectType": "character",
+      "predicate": "声称",
+      "object": "叶凡躲不掉",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3,
+      "knownBy": [
+        "叶凡",
+        "江辰"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F006",
+      "subject": "苏晴",
+      "subjectType": "character",
+      "predicate": "向叶凡示意",
+      "object": "抽屉最底层的位置",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3,
+      "knownBy": [
+        "叶凡",
+        "苏晴"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F007",
+      "subject": "叶凡",
+      "subjectType": "character",
+      "predicate": "收到",
+      "object": "苏晴递交的带有折痕的文件",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3,
+      "knownBy": [
+        "叶凡",
+        "苏晴",
+        "江辰"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F008",
+      "subject": "江辰",
+      "subjectType": "character",
+      "predicate": "注意到",
+      "object": "休息室角落的空酒瓶",
+      "validFromChapter": 3,
+      "validUntilChapter": null,
+      "sourceChapter": 3,
+      "knownBy": [
+        "江辰"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F009",
+      "subject": "叶凡",
+      "subjectType": "character",
+      "predicate": "解释条款逻辑并告知后果",
+      "object": "江辰",
+      "validFromChapter": 4,
+      "validUntilChapter": null,
+      "sourceChapter": 4,
+      "knownBy": [
+        "叶凡",
+        "江辰"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F010",
+      "subject": "江辰",
+      "subjectType": "character",
+      "predicate": "得知对赌自动失效及面临巨额违约金",
+      "object": "分公司/协议",
+      "validFromChapter": 4,
+      "validUntilChapter": null,
+      "sourceChapter": 4,
+      "knownBy": [
+        "江辰"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F011",
+      "subject": "叶凡",
+      "subjectType": "character",
+      "predicate": "闻到",
+      "object": "陈腐的酒气与焦油味，触发关于五年前暴雨夜的创伤记忆",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5,
+      "knownBy": [
+        "叶凡"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F012",
+      "subject": "老陈",
+      "subjectType": "character",
+      "predicate": "脱口而出",
+      "object": "“殿下”这一称呼，随后改口为“电下棋”，并敲击酒瓶底部传递信号",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5,
+      "knownBy": [
+        "叶凡",
+        "老陈"
+      ],
+      "status": "active"
+    },
+    {
+      "factId": "F013",
+      "subject": "江辰",
+      "subjectType": "character",
+      "predicate": "致电警告",
+      "object": "风声不对，且提及苏晴那边出了状况，要求叶凡保持干净",
+      "validFromChapter": 5,
+      "validUntilChapter": null,
+      "sourceChapter": 5,
+      "knownBy": [
+        "叶凡",
+        "江辰"
+      ],
+      "status": "active"
+    }
+  ],
+  "states": {
+    "叶凡": {
+      "name": "叶凡",
+      "location": "离开老陈家，进入雨中夜色",
+      "goal": "收网/等待江氏崩溃",
+      "emotion": "警惕、压抑的恐惧、冷静伪装",
+      "knows": [],
+      "suspects": [
+        "老陈知道‘殿下’的身份或过去",
+        "老陈可能在传递某种暗号",
+        "江辰提到的‘苏晴的状况’可能涉及针对自己的陷阱"
+      ],
+      "inventory": [],
+      "bonds": {
+        "江辰": -5
+      }
+    },
+    "苏晴": {
+      "name": "苏晴",
+      "location": "办公室门口",
+      "goal": "照顾叶凡/观察异常",
+      "emotion": "疑惑",
+      "knows": [
+        "老陈 知道称呼 殿主"
+      ],
+      "suspects": [
+        "叶凡对协议的熟悉程度不像临时翻阅",
+        "叶凡似乎早有预谋"
+      ],
+      "inventory": [],
+      "bonds": {
+        "叶凡": 2
+      }
+    },
+    "江辰": {
+      "name": "江辰",
+      "location": "办公室",
+      "goal": "应对危机/试图挽回损失",
+      "emotion": "恐慌/愤怒/无力",
+      "knows": [],
+      "suspects": [
+        "叶凡早就知道漏洞并利用它"
+      ],
+      "inventory": [],
+      "bonds": {
+        "叶凡": -10
+      }
+    },
+    "老陈": {
+      "name": "老陈",
+      "location": "家中藤椅",
+      "goal": "送酒",
+      "emotion": "看似浑浊实则锐利、玩味",
+      "knows": [
+        "老陈 知道称呼 殿主"
+      ],
+      "suspects": [],
+      "inventory": [
+        "深褐色玻璃酒瓶"
+      ],
+      "bonds": {}
+    }
+  }
+}
