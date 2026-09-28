@@ -28,6 +28,7 @@ logs/
 node_modules/
 dist/
 .test-dist/
+.test-dist-nf/
 build/
 out/
 coverage/

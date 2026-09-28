@@ -20,6 +20,9 @@ importers:
       '@fly-novel/util':
         specifier: workspace:*
         version: link:src/util
+      pinyin-pro:
+        specifier: ^3.29.4
+        version: 3.29.4
     devDependencies:
       '@types/node':
         specifier: ^22.20.2
@@ -60,6 +63,12 @@ importers:
       '@fly-novel/util':
         specifier: workspace:*
         version: link:../util
+
+  src/novel-flow:
+    dependencies:
+      pinyin-pro:
+        specifier: ^3.29.4
+        version: 3.29.4
 
   src/util: {}
 
@@ -206,6 +215,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  pinyin-pro@3.29.4:
+    resolution: {integrity: sha512-SPXpDT2cHEy+d26V1RXYMlVzXN42hotFAak1fzyWPi4o2dKXb61UqD4pzxDJHwk6gbv8vQ6EfErd+hYX0Qhzug==}
+
   typescript@7.0.2:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
@@ -288,6 +300,8 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
+
+  pinyin-pro@3.29.4: {}
 
   typescript@7.0.2:
     optionalDependencies:

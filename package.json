@@ -33,7 +33,8 @@
     "@fly-novel/harness": "workspace:*",
     "@deepseek-ai/cordis": "^4.0.2",
     "@fly-novel/llm": "workspace:*",
-    "@fly-novel/util": "workspace:*"
+    "@fly-novel/util": "workspace:*",
+    "pinyin-pro": "^3.29.4"
   },
   "private": true
 }

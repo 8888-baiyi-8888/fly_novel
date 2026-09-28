@@ -2,3 +2,4 @@ packages:
   - 'src/harness'
   - 'src/llm'
   - 'src/util'
+  - 'src/novel-flow'
