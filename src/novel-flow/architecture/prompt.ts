@@ -3,7 +3,7 @@ import { BookRules, StoryBible } from "../architect/types";
 import { LongTermControls } from "../controls/types";
 import { CreativeDraft } from "../draft/types";
 import { buildCreativeBrief } from "../architect";
-import { ArchitectureParts, Beat, ThreadEvent } from "./types";
+import { ArchitectureParts, Beat, BeatBoard, ThreadEvent } from "./types";
 import { ARCHITECTURE_JSON_DESCRIPTION, BEAT_BOARD_JSON_DESCRIPTION } from "./schema";
 import { BeatChunk, collectChunkEvents, MAX_CHUNK_SIZE } from "./chunk";
 import { OpenHook } from "./director-agent";
@@ -17,7 +17,7 @@ const ARCHITECT_SYSTEM_PROMPT = [
   "- 严格按输出协议，只输出 JSON，不包含任何解释文字；",
   "- 世界事实必须以故事圣经为准，不得凭空新增与圣经冲突的设定；",
   "- 作者想法以长期创作控制为准，不得擅自改变作者意图与约束；",
-  "- 角色分级 tier 按「决策需不需要被推理出来」判据；secret/knowledgeBoundary 必须具体填写。",
+  "- 角色卡必须覆盖草案里的全部主角与全部配角（草案 supportingCast 中每个人都必须有卡，不得漏配角）；tier 按「决策需不需要被推理出来」判据；secret/knowledgeBoundary 必须具体填写。",
   ARCHITECTURE_JSON_DESCRIPTION,
 ].join("\n");
 
@@ -29,6 +29,8 @@ const DIRECTOR_SYSTEM_PROMPT = [
   "要求：",
   "- 严格按输出协议，只输出 JSON，不包含任何解释文字；",
   "- 严格满足输出协议中的全部节奏要求（相邻 3 章不全释放、伏笔密度 0.2–0.5、每条伏笔必须安排回收）；",
+  "- 【精简节拍、控制输出量】mainBeat 一句话 ≤40 字；characters 至多 2 条且每条 action 短语 ≤15 字；emotionalArc 用短语（如「屈辱→暗燃」）；hookIntention 每章至多 2 条；禁止堆砌长句与冗余描述。",
+  "- 【伏笔hook强制自检，输出前必须自行遍历全书节拍并修正】每条 hookIntention 的 tag（chN-hX）必须在某章 plannedPayoffOf 中被回收，禁止只埋不收；plannedPayoffOf 引用的 tag 必须存在对应埋设，禁止孤儿回收（引用从未埋设的 tag）；hook 标签里的章节编号不得超过目标总章数；发现任何不匹配项，立即修正节拍板后再输出；",
   "- 人物出场与动作要符合角色卡的人设与说话风格；",
   "- 节拍按叙事线地图推进：主线/分线/闪回线的事件按前置关系交错安排，汇合事件必须等两条线的前置都到位。",
   BEAT_BOARD_JSON_DESCRIPTION,
@@ -79,7 +81,7 @@ export function buildArchitectureMessages(
 export function buildArchitectureRetryMessage(errorText: string): ChatMessage {
   return {
     role: "user",
-    content: `你上一次的输出不符合协议：${errorText}。请重新输出符合协议的 JSON（storyFrame/volumeMap/characterCards/threadMap 四件齐全，tier 只能 S/A/B，secret 与 knowledgeBoundary 非空，汇合事件 requires 长度 ≥2 且 merge=true）。`,
+    content: `你上一次的输出不符合协议：${errorText}。请重新输出符合协议的 JSON（storyFrame/volumeMap/characterCards/threadMap 四件齐全，characterCards 须覆盖草案里全部主角与全部配角，tier 只能 S/A/B，secret 与 knowledgeBoundary 非空，volumeMap 每项 stages 必须为非空数组、至少 1 个核心阶段，汇合事件 requires 长度 ≥2 且 merge=true）。`,
   };
 }
 
@@ -132,6 +134,8 @@ const DIRECTOR_CHUNK_SYSTEM_PROMPT = [
   "- 本块末尾可以留下跨块悬念（写进本块最后几章的 hookIntentions），下一块会承接；",
   "- mustCoverEvents 中的事件必须在本块对应章节出现（可多章展开，但事件本身必须发生）；",
   "- 严格满足输出协议中的节奏要求（相邻 3 章不全释放、伏笔密度 0.2–0.5、每条伏笔必须安排回收——全书闭环由合并后的验收闸门把关）；",
+  "- 【精简节拍、控制输出量】mainBeat 一句话 ≤40 字；characters 至多 2 条且每条 action 短语 ≤15 字；emotionalArc 用短语（如「屈辱→暗燃」）；hookIntention 每章至多 2 条；禁止堆砌长句与冗余描述。",
+  "- 【伏笔hook强制自检，输出前必须自行遍历本块并修正】每条 hookIntention 的 tag 必须在某章 plannedPayoffOf 中被回收（只埋不收 → blocking）；plannedPayoffOf 引用的 tag 必须存在对应埋设（孤儿回收 → blocking）；hook 标签里的章节编号不得超过目标总章数；发现任何不匹配项，立即修正节拍板后再输出；",
   "- 人物出场与动作要符合角色卡的人设与说话风格；",
   "- 节拍按叙事线地图推进：主线/分线/闪回线的事件按前置关系交错安排，汇合事件必须等两条线的前置都到位。",
   BEAT_BOARD_JSON_DESCRIPTION,
@@ -189,6 +193,43 @@ export function buildBeatBoardChunkMessages(
 export function buildBeatBoardChunkRetryMessage(errorText: string, chunk: BeatChunk): ChatMessage {
   return {
     role: "user",
-    content: `你上一次的输出不符合协议或验收闸门：${errorText}。请重新输出本块（${chunk.id}，ch${chunk.startChapter}-ch${chunk.endChapter}）符合协议的节拍板：beats 长度必须等于本块章数（${chunk.endChapter - chunk.startChapter + 1} 章）；chapter 从 1 递增；mainBeat 非空且 ≤60 字；相邻 3 章 pacing 不全为「释放」；每条 hookIntention 带【tag】前缀并最终有回收（全书闭环由合并校验把关，本块至少不要遗漏 prevTailBeats 与 openHooks 的承接）。`,
+    content: `你上一次的输出不符合协议或验收闸门：${errorText}
+
+
+。请重新输出本块（${chunk.id}，ch${chunk.startChapter}-ch${chunk.endChapter}）符合协议的节拍板：beats 长度必须等于本块章数（${chunk.endChapter - chunk.startChapter + 1} 章）；chapter 从 1 递增；mainBeat 非空且 ≤60 字；相邻 3 章 pacing 不全为「释放」；每条 hookIntention 带【tag】前缀并最终有回收（全书闭环由合并校验把关，本块至少不要遗漏 prevTailBeats 与 openHooks 的承接）。`,
   };
+}
+
+/** Director 修复（方案2：校验失败自动修复）系统提示词：只改 hook 字段，不动剧情。 */
+const DIRECTOR_REPAIR_SYSTEM_PROMPT = [
+  "你是小说蓝图修复专家，只处理节拍板JSON，严格遵守下面所有规则：",
+  "任务：根据校验报错清单，修复节拍板的伏笔hook不一致问题。",
+  "",
+  "修复规则：",
+  "1.【只埋不收】：存在埋设hookTag，但全书没有任何章节plannedPayoffOf回收。优先方案：直接删除该章节内这个hook的埋设记录；仅在必要时，才在后续合适章节补充plannedPayoffOf数组引用这个hookTag完成回收闭环。优先选择删除，最小化改动原有剧情。",
+  "2.【孤儿回收】：plannedPayoffOf引用了某个hookTag，但全书任何章节都没有埋设这个tag。处理：直接把这个不存在的tag从plannedPayoffOf数组删掉。",
+  "3.【章节越界hook】：hook标签里章节编号超过本书总章节上限，直接删除该hook埋设，以及所有对它的plannedPayoffOf引用。",
+  "4.禁止改动原有故事剧情、人物设定、章节主线、冲突安排，只修复hook相关字段，其他所有内容原样保留，不能修改故事本身。",
+  "5.chapter 字段保持原样不要改动；hook tag 沿用现有全局格式（chN-hX），不要重排章节号。",
+  "6.输出格式硬性要求：只返回完整合法JSON，不要任何解释、前言、markdown、注释。",
+  "7.JSON必须可直接被JSON.parse解析，不能出现语法错误。",
+  BEAT_BOARD_JSON_DESCRIPTION,
+].join("\n");
+
+/** 组装「校验失败 → LLM 修复节拍板」的模型消息。 */
+export function buildBeatBoardRepairMessages(
+  beatBoard: BeatBoard,
+  violations: string[],
+  totalChapters: number,
+): ChatMessage[] {
+  const userContent =
+    "下面是原始节拍板JSON：\n" +
+    JSON.stringify({ totalChapters, beats: beatBoard.beats }, null, 2) +
+    "\n\n校验器检测到的错误清单：\n" +
+    violations.map((v) => `- ${v}`).join("\n") +
+    "\n\n请按system里的修复规则，输出完整修复后的节拍板JSON（保持 beats 数组与全部章节原样，只增删 hook 相关字段）。";
+  return [
+    { role: "system", content: DIRECTOR_REPAIR_SYSTEM_PROMPT },
+    { role: "user", content: userContent },
+  ];
 }

@@ -63,22 +63,47 @@ function optionalStringArray(value: unknown, field: string): string[] | undefine
   return value;
 }
 
-function optionalNumber(value: unknown, field: string): number | undefined {
-  if (value === undefined) {
+/** 从值中提取数字：数字直接返回；字符串提取首个数字序列（如 "22岁"→22、"100章左右"→100）。 */
+function coerceNumber(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === "string") {
+    const match = /[-+]?\d+(\.\d+)?/.exec(value.trim());
+    if (match !== null) {
+      const n = Number(match[0]);
+      return Number.isFinite(n) ? n : undefined;
+    }
     return undefined;
   }
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new DraftValidationError(`字段 ${field} 必须是数字`);
-  }
-  return value;
+  return undefined;
 }
 
-/** 必填数字：缺失或非有限数字都报错（N1 输出契约要求平台篇幅必填）。 */
-function requireNumber(value: unknown, field: string): number {
-  if (value === undefined || typeof value !== "number" || !Number.isFinite(value)) {
+// 原逻辑（仅接受数字，模型给 "22岁" / "100章左右" 等带单位字符串会报错）：
+//   function optionalNumber(value, field) {
+//     if (value === undefined) return undefined;
+//     if (typeof value !== "number" || !Number.isFinite(value)) throw ...必须是数字;
+//     return value;
+//   }
+/** 可选数字：缺失返回 undefined；字符串宽容提取数字序列（兼容模型带单位写法）。 */
+function optionalNumber(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const n = coerceNumber(value);
+  if (n === undefined) {
     throw new DraftValidationError(`字段 ${field} 必须是数字`);
   }
-  return value;
+  return n;
+}
+
+/** 必填数字：缺失或无法提取数字都报错（N1 输出契约要求平台篇幅必填）。 */
+function requireNumber(value: unknown, field: string): number {
+  const n = optionalNumber(value, field);
+  if (n === undefined) {
+    throw new DraftValidationError(`字段 ${field} 必须是数字`);
+  }
+  return n;
 }
 
 /**
@@ -204,6 +229,50 @@ export function parseAndValidateDraft(input: unknown): CreativeDraft {
 }
 
 
+/**
+ * 程序兜底：对模型给的部分草案补全必填字段（volumePlan 等），返回能通过 parseAndValidateDraft 的完整草案。
+ * 仅用于澄清流程模型反复漏填必填字段时保底；内容为合理占位，后续 N3/N4/N5 会真正细化卷规划等。
+ */
+export function patchDraftCompleteness(partial: Record<string, unknown>): CreativeDraft {
+  const obj = { ...partial };
+  const chapters = typeof obj.targetChapters === "number" && obj.targetChapters > 0 ? obj.targetChapters : 100;
+  const volCount = 3;
+  const per = Math.max(1, Math.floor(chapters / volCount));
+  const labels = ["开局与铺垫", "冲突与升级", "高潮与收束"];
+  const ordinals = ["一", "二", "三"];
+  const volPlan = Array.from({ length: volCount }, (_, i) => {
+    const start = i * per + 1;
+    const end = i === volCount - 1 ? chapters : (i + 1) * per;
+    return `第${ordinals[i]}卷（ch${start}-ch${end}）：${labels[i]}`;
+  });
+  obj.volumePlan = Array.isArray(obj.volumePlan) && obj.volumePlan.length > 0 ? obj.volumePlan : volPlan;
+  obj.genre = Array.isArray(obj.genre) && obj.genre.length > 0 ? obj.genre : ["都市"];
+  obj.tone = Array.isArray(obj.tone) && obj.tone.length > 0 ? obj.tone : ["节奏明快"];
+  obj.constraints = Array.isArray(obj.constraints) && obj.constraints.length > 0 ? obj.constraints : ["不狗血"];
+  if (typeof obj.setting === "undefined" || !Array.isArray(obj.setting) || obj.setting.length === 0) {
+    obj.setting = ["待补充设定"];
+  }
+  if (!obj.title || typeof obj.title !== "string" || !obj.title.trim()) obj.title = "未命名小说";
+  if (!obj.worldPremise || typeof obj.worldPremise !== "string" || !obj.worldPremise.trim()) obj.worldPremise = "（世界观待 N3 细化）";
+  if (!obj.coreConflict || typeof obj.coreConflict !== "string" || !obj.coreConflict.trim()) obj.coreConflict = "（核心冲突待细化）";
+  if (!obj.blurb || typeof obj.blurb !== "string" || !obj.blurb.trim()) obj.blurb = "（简介待细化）";
+  if (!obj.authorIntent || typeof obj.authorIntent !== "string" || !obj.authorIntent.trim()) obj.authorIntent = "（作者意图待细化）";
+  if (!obj.platform || typeof obj.platform !== "string" || !obj.platform.trim()) obj.platform = "番茄";
+  if (typeof obj.targetChapters !== "number" || obj.targetChapters <= 0) obj.targetChapters = 100;
+  if (typeof obj.chapterWordCount !== "number" || obj.chapterWordCount <= 0) obj.chapterWordCount = 2500;
+  if (typeof obj.language !== "string" || !obj.language.trim()) obj.language = "zh";
+  if (!Array.isArray(obj.protagonists) || obj.protagonists.length === 0) {
+    obj.protagonists = [{ name: "主角" }];
+  if (!Array.isArray(obj.supportingCast) || obj.supportingCast.length < 2) {
+    obj.supportingCast = [
+      { name: "配角甲", identity: "配角，定位待 N3 细化", relation: "与主角相关" },
+      { name: "配角乙", identity: "配角，定位待 N3 细化", relation: "与主角相关" },
+    ];
+  }
+  }
+  return parseAndValidateDraft(obj);
+}
+
 /** 澄清轮解析结果：questions 是需要用户回答的问题；draft 存在即表示模型已给出完整草案。 */
 export interface ClarificationTurn {
   /** 待用户回答的问题；为空数组表示无需再问。 */
@@ -237,7 +306,19 @@ export function parseClarificationTurn(input: unknown): ClarificationTurn {
   } else {
     throw new DraftValidationError("字段 questions 必须是数组、字符串或省略");
   }
-  const draft =
-    obj.draft === null || obj.draft === undefined ? undefined : parseAndValidateDraft(obj.draft);
+  // 原逻辑（无论中间/最终都强校验 draft，半成品会抛错中断澄清）：
+  //   const draft = obj.draft === null || obj.draft === undefined ? undefined : parseAndValidateDraft(obj.draft);
+  // 修复：draft 一律宽容解析（不做必填强校验）。模型在澄清中段常给「半成品 draft + 问题」
+  // （协议要求 draft 为 null，但模型不严格遵循），半成品若强校验会因缺 volumePlan 等卡死澄清。
+  // 完整草案才保留（供最后一轮交卷，此时模型常同时给「完整草案 + 残留问题」）；半成品丢弃为
+  // undefined（视为尚无草案），保留 questions：中间轮走提问，最终轮交给 finalizeDraft 兜底交卷。
+  let draft;
+  if (obj.draft !== null && obj.draft !== undefined) {
+    try {
+      draft = parseAndValidateDraft(obj.draft);
+    } catch {
+      draft = undefined;
+    }
+  }
   return { questions, ...(draft === undefined ? {} : { draft }) };
 }

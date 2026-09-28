@@ -8,8 +8,8 @@ export const ARCHITECTURE_JSON_DESCRIPTION = `输出 JSON 对象，字段如下�
 - 输入：故事圣经（世界是什么）+ 书籍规则（写作规则）+ 长期创作控制（作者想怎么写）+ 草案摘要（篇幅/卷规划）。
 - 要求：
   - storyFrame: 故事框架对象 —— coreStory（核心故事，一小段）、coreConflict（核心冲突）、protagonistPath（主角总体路径阶段数组，如 ["隐忍入赘","借势反噬"]）；
-  - volumeMap: 分卷规划数组，每项 { volume: "第一卷", title: "卷标题", goal: "本卷目标", stages: ["核心阶段1","核心阶段2"] }；卷数必须与草案卷规划一致；
-  - characterCards: 角色卡数组（主角+重要配角），每项 { name, tier: "S"|"A"|"B", archetype, traits: [], speechStyle, secret, knowledgeBoundary: [], relationships: [{name, relation}] }；
+  - volumeMap: 分卷规划数组，每项 { volume: "第一卷", title: "卷标题", goal: "本卷目标", stages: ["核心阶段1","核心阶段2"] }；卷数必须与草案卷规划一致；每项 stages 必须为非空数组（至少 1 个核心阶段），禁止空数组、禁止缺失；
+  - characterCards: 角色卡数组，必须覆盖草案里的全部主角与全部配角（不得遗漏），每项 { name, tier: "S"|"A"|"B", archetype, traits: [], speechStyle, secret, knowledgeBoundary: [], relationships: [{name, relation}] }；
     tier 分级判据（按决策需不需要被推理出来，不是按戏份）：S=决策会改变主线走向；A=决策可预测只需执行指令；B=无决策只是布景；
     secret 是该角色自己知道别人不知道的事；knowledgeBoundary 是该角色绝不可能知道的信息（写具体，如"不知道 X（ch45 才揭示）"）；
   - threadMap: 叙事线地图对象 { lines: [] }，每条线 { id: "M"|"S1"|"F1", name, goal, events: [{ id: "E-M01", content, volume: "第1卷", requires: ["前置事件ID"], merge: true|false }] }；

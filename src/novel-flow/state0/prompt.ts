@@ -39,6 +39,6 @@ export function buildState0Messages(architecture: StoryArchitecture): ChatMessag
 export function buildState0RetryMessage(errorText: string): ChatMessage {
   return {
     role: "user",
-    content: `你上一次的输出不符合协议或校验：${errorText}。请重新输出符合协议的 State₀：六类齐全；伏笔种子 type 非空且 expectedPayoff 或 notes 至少一个非空；种子总数 ≤12；threadBoard.lineId 必须来自叙事线地图；progressState.currentChapter 为 0。`,
+    content: `你上一次的输出不符合协议或校验：${errorText}。请重新输出符合协议的 State₀：六类齐全；characterStates 必须非空（每张角色卡至少一条）；伏笔种子 type 非空且 expectedPayoff 或 notes 至少一个非空；种子总数 ≤12；threadBoard.lineId 必须来自叙事线地图；progressState.currentChapter 为 0。`,
   };
 }

@@ -7,7 +7,7 @@ import {
   buildClarifyRetryMessage,
   buildDraftMessages,
 } from "./prompt";
-import { ClarificationTurn, parseAndValidateDraft, parseClarificationTurn } from "./validate";
+import { ClarificationTurn, parseAndValidateDraft, parseClarificationTurn, patchDraftCompleteness } from "./validate";
 import { CreativeDraft } from "./types";
 import { CLARIFY_JSON_DESCRIPTION, DRAFT_JSON_DESCRIPTION } from "./schema";
 
@@ -156,7 +156,13 @@ export class CreativeDraftAgent {
 
   /** 兜底：不带澄清包装，直接要求模型输出完整草案对象（模型最擅长的形态，基本必成）。 */
   private async callDraftFallback(messages: ChatMessage[]): Promise<CreativeDraft> {
+    // 原逻辑（模型漏必填字段时直接抛错，如 volumePlan 空会中断整个澄清流程）：
+    //   let lastError; for... try { ...return parseAndValidateDraft(JSON.parse(...));} catch{lastError=...}
+    //   throw new CreativeDraftError(`澄清交卷失败：${lastError}`);
+    // 修复：记录最近一次模型输出（可能只是缺必填字段的部分草案），重试结束后用程序兜底补全，
+    // 保证澄清流程一定产出合法草案、不因单个必填字段（如 volumePlan）中断，同时保留用户澄清答案。
     let lastError: unknown;
+    let lastParsed: unknown;
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       try {
         const request: ChatRequest = {
@@ -173,9 +179,18 @@ export class CreativeDraftAgent {
           temperature: 0.2,
         };
         const response = await this.model.chat(request);
-        return parseAndValidateDraft(JSON.parse(response.content));
+        const parsed: unknown = JSON.parse(response.content);
+        lastParsed = parsed;
+        return parseAndValidateDraft(parsed);
       } catch (error) {
         lastError = error;
+      }
+    }
+    if (lastParsed !== undefined && typeof lastParsed === "object" && lastParsed !== null && !Array.isArray(lastParsed)) {
+      try {
+        return patchDraftCompleteness(lastParsed as Record<string, unknown>);
+      } catch {
+        // 兜底补全仍失败则落回报错
       }
     }
     throw new CreativeDraftError(`澄清交卷失败：${describeError(lastError)}`);

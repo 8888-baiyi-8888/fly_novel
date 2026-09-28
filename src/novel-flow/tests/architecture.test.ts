@@ -249,22 +249,26 @@ test("architecture/chunk：volumeNumber 兼容「第一卷/第1卷/第三卷」"
   assert.equal(volumeNumber("卷末"), null);
 });
 
-test("architecture/chunk：100 章 3 卷均分 → 34/33/33，首尾相连", () => {
+test("architecture/chunk：100 章 3 卷均分 → 每块 ≤25，共 6 块，首尾相连", () => {
   const volumes = [
     { volume: "第一卷", title: "t1", goal: "g1", stages: ["s"] },
     { volume: "第二卷", title: "t2", goal: "g2", stages: ["s"] },
     { volume: "第三卷", title: "t3", goal: "g3", stages: ["s"] },
   ];
   const chunks = planBeatChunks(100, volumes);
-  assert.equal(chunks.length, 3);
+  assert.equal(chunks.length, 6);
   assert.deepEqual(chunks.map((c) => [c.startChapter, c.endChapter]), [
-    [1, 34],
-    [35, 67],
-    [68, 100],
+    [1, 17],
+    [18, 34],
+    [35, 51],
+    [52, 67],
+    [68, 84],
+    [85, 100],
   ]);
+  assert.ok(chunks.every((c) => c.endChapter - c.startChapter + 1 <= 25));
 });
 
-test("architecture/chunk：150 章 4 卷均分 → 38/38/37/37，首尾相连", () => {
+test("architecture/chunk：150 章 4 卷均分 → 每块 ≤25，共 8 块，首尾相连", () => {
   const volumes = Array.from({ length: 4 }, (_, i) => ({
     volume: `第${i + 1}卷`,
     title: `t${i + 1}`,
@@ -272,14 +276,18 @@ test("architecture/chunk：150 章 4 卷均分 → 38/38/37/37，首尾相连", 
     stages: ["s"],
   }));
   const chunks = planBeatChunks(150, volumes);
-  assert.equal(chunks.length, 4);
+  assert.equal(chunks.length, 8);
   assert.deepEqual(chunks.map((c) => [c.startChapter, c.endChapter]), [
-    [1, 38],
-    [39, 76],
-    [77, 113],
-    [114, 150],
+    [1, 19],
+    [20, 38],
+    [39, 57],
+    [58, 76],
+    [77, 95],
+    [96, 113],
+    [114, 132],
+    [133, 150],
   ]);
-  assert.ok(chunks.every((c) => c.endChapter - c.startChapter + 1 <= 40));
+  assert.ok(chunks.every((c) => c.endChapter - c.startChapter + 1 <= 25));
 });
 
 test("architecture/chunk：100 章 2 卷（每卷 50 章）→ 每卷拆 25/25，共 4 块且每块 ≤40", () => {
@@ -427,7 +435,7 @@ test("architecture：chunked Director 合并后全书校验失败（只埋不收
       return JSON.stringify({ beats: slice.map((b) => ({ ...b, chapter: b.chapter - (calls - 1) * 10 })) });
     },
   });
-  const director = new DirectorAgent({ model, chunked: true });
+  const director = new DirectorAgent({ model, chunked: true, autoRepair: false });
   const parts = parseArchitectureOutput(JSON.parse(EXAMPLE_ARCHITECTURE_JSON));
   await assert.rejects(() => director.createBeatBoard(draft, parts), DirectorError);
   assert.equal(calls, 3);
@@ -500,4 +508,46 @@ test("architecture：plannedPayoffOf 引用未埋设的 tag（孤儿回收）→
   assert.ok(violations.some((v) => v.includes("孤儿回收")));
 });
 
+test("architecture：autoRepair 生成闸门失败 → LLM 修复 → 全书闸门通过", async () => {
+  const draft = await exampleDraft();
+  draft.targetChapters = 30;
+  const full = makeLegitBeats(30);
+  let generateCalls = 0;
+  let repairCalls = 0;
+  const model = new MemoryModel({
+    responder: (req) => {
+      if (req.structured?.name === "beat_board_repair") {
+        repairCalls += 1;
+        return JSON.stringify({ beats: full });
+      }
+      generateCalls += 1;
+      const bad = full.map((b) => ({ ...b, plannedPayoffOf: [] })); // 只埋不收
+      return JSON.stringify({ beats: bad });
+    },
+  });
+  const director = new DirectorAgent({ model, autoRepair: true, maxRepairAttempts: 2 });
+  const parts = parseArchitectureOutput(JSON.parse(EXAMPLE_ARCHITECTURE_JSON));
+  const board = await director.createBeatBoard(draft, parts);
+  assert.equal(generateCalls, 1);
+  assert.equal(repairCalls, 1);
+  assert.equal(board.beats.length, 30);
+  const violations = validateBeatBoard(board, 30);
+  assert.deepEqual(violations, []);
+});
 
+test("architecture：autoRepair 修复 2 次仍失败 → 抛 DirectorError", async () => {
+  const draft = await exampleDraft();
+  draft.targetChapters = 30;
+  const bad = makeLegitBeats(30).map((b) => ({ ...b, plannedPayoffOf: [] }));
+  let repairCalls = 0;
+  const model = new MemoryModel({
+    responder: (req) => {
+      if (req.structured?.name === "beat_board_repair") repairCalls += 1;
+      return JSON.stringify({ beats: bad });
+    },
+  });
+  const director = new DirectorAgent({ model, autoRepair: true, maxRepairAttempts: 2 });
+  const parts = parseArchitectureOutput(JSON.parse(EXAMPLE_ARCHITECTURE_JSON));
+  await assert.rejects(() => director.createBeatBoard(draft, parts), DirectorError);
+  assert.equal(repairCalls, 2);
+});

@@ -47,7 +47,7 @@ class RecordingAgent implements AgentPort {
 }
 
 test("write 节点：instruction 含 §7.3 全部禁令，context 含拍摄单", async () => {
-  const stub = new StubAgent([{ task: "write", responses: [{ text: "正文……" }] }]);
+  const stub = new StubAgent([{ task: "write", responses: [{ text: "正文……".repeat(40) }] }]);
   const recorder = new RecordingAgent(stub);
   const node = createWriteNode(recorder);
   const ctx: StepRunContext = {

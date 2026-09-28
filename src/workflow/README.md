@@ -29,7 +29,7 @@
 - [openai-compatible-agent.ts](openai-compatible-agent.ts)：`AgentPort` 的 OpenAI 兼容协议适配器（阿里云 MaaS / DashScope / DeepSeek 等）。
 - [stub-agent.ts](stub-agent.ts)：确定性模拟 agent（规则表 + 轮换 + 计数）。
 - [file-store.ts](file-store.ts)：`WorkflowStore` 的 JSON 文件实现（断点续跑落地）。
-- [run-chapter.ts](run-chapter.ts)：驱动入口（示例/调试用，非库 API）——真实 OpenAI 兼容 agent + FakeBookRuntime + JsonFileStore 端到端跑一章；编译后 `node .test-dist/workflow/run-chapter.js --base-url … --model …`（key 走 `--api-key` 或环境变量 `FLY_NOVEL_API_KEY`；可选 `--book/--chapter/--store-dir/--temperature/--max-tokens/--timeout/--draft-file/--runtime-state`）。运行结束自动导出正文草稿 `{store-dir}/{book}/{chapter}.md`（`--draft-file` 可覆盖路径），并把运行时状态（账本/真相/时钟/角色状态）落盘 `{store-dir}/{book}/runtime-state.json`（`--runtime-state` 可覆盖；下次运行自动恢复——**跨章账本由此延续**）。
+- 章节级驱动入口已上移到 **`src/app/run-chapters.ts`**（与小说级 main.ts 同层）：自动定位最新 N7 书目录（`artifacts/n7-workspace/<bookId>/`）、复用小说级 model 配置（`ConfiguredLlmModel`，从 settings + 解密凭据读取，不传参数/env）、支持 `--chapter/--to` 连续写章；每章正文导 `{store-dir}/{bookId}/{chapter}.md`，运行时状态（账本/真相/时钟/角色状态）落 `{store-dir}/{bookId}/runtime-state.json`，下次运行自动恢复——**跨章账本由此延续**。原 `run-chapter.ts`（手动传 `--base-url/--model/--api-key` 与环境变量 `FLY_NOVEL_*` 的调试入口）已删除，由该入口替代。
 - [direct-gate.ts](direct-gate.ts)：direct 节点闸门包装器 `withDispatchGate`（§5.3 校验接入点）。
 - [nodes/](nodes/index.ts)：章节流 7 节点参考实现（`buildChapterNodes(agent, { runtime })` 组装，各节点可单独替换）。
 - [engine.ts](engine.ts)：章节流水线执行器与状态推进。
@@ -45,8 +45,8 @@
 
 ## 当前状态与边界
 
-- **端到端已可运行**：注入 `StubAgent` + `FakeBookRuntime`（`buildFakeBookRuntime`，§7.7 fixture）即可跑通 7 步（含闸门重试、审计重写、断点续跑、settle 回写）；**真实 agent 已可接入**：阿里云 MaaS（`compatible-mode/v1`，OpenAI 兼容）等端点经 `createOpenAICompatibleAgent` 直连（`run-chapter.ts` 是现成驱动），LangChain Deep Agents 等自定协议走 `createHttpAgent` + 服务端薄层。
-- **跨章运行时状态**：`FakeBookRuntime` 提供 `snapshot()/restore()`（`fake-book-runtime.ts`，账本/真相/时钟/角色状态；plain JSON 可序列化）；`run-chapter` 每次运行前恢复、结束后落盘 `{store-dir}/{book}/runtime-state.json`——连续跑章时世界真实延续（H007 的推进不会因进程重启而丢失）。
+- **端到端已可运行**：注入 `StubAgent` + `FakeBookRuntime`（`buildFakeBookRuntime`，§7.7 fixture）即可跑通 7 步（含闸门重试、审计重写、断点续跑、settle 回写）；**真实 agent 已可接入**：阿里云 MaaS（`compatible-mode/v1`，OpenAI 兼容）等端点经 `createOpenAICompatibleAgent` 直连，LangChain Deep Agents 等自定协议走 `createHttpAgent` + 服务端薄层。
+- **跨章运行时状态**：`FakeBookRuntime` 提供 `snapshot()/restore()`（`fake-book-runtime.ts`，账本/真相/时钟/角色状态；plain JSON 可序列化）；`run-chapters` 每次运行前恢复、结束后落盘 `{store-dir}/{book}/runtime-state.json`——连续跑章时世界真实延续（H007 的推进不会因进程重启而丢失）。
 - 参考节点的指令文本与 audit/censor 判定规则为**占位**，业务正确性由 B 的节点实现负责；merge 的 weavePlan 暂用 `minimalWeavePlan` 占位（TimelineManager 真实排程待小说流）。
 - `WorkflowStore` 已提供 JSON 文件实现（`createJsonFileStore`，断点续跑落地）；§11.3 单事务原子落盘（facts/账本/正文同库）仍待真实存储接入——settle 的原子语义目前由 `BookRuntime.settleChapter` 在内存内保证（拒绝时任何状态不变）。
 - 引擎当前面向章节级 `Step`；小说级建书流程需要编排时，再按需泛化步骤类型。

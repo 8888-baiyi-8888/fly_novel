@@ -141,11 +141,11 @@ export function buildRealControlsAgent(): ControlsAgent {
  */
 export function buildRealArchitectureAgent(): ArchitectureAgent {
   const architect = new StoryArchitectAgent({
-    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 300_000 }),
+    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 480_000 }),
   });
   // Director 分块生成节拍板：按卷切块（单块 ≤40 章），避免大书单次输出超时
   const director = new DirectorAgent({
-    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 300_000 }),
+    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 480_000 }),
     chunked: true,
   });
   return new ArchitectureAgent(architect, director);

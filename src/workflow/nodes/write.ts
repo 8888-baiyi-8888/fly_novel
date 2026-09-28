@@ -30,6 +30,11 @@ export const WRITE_STYLE_GUIDE: readonly string[] = [
 
 /** 指令：基于排程方案与拍摄单撰写正文（纯文本）；遵守场景顺序、角色限制与字数预算，并逐条遵守 §7.3 禁令。 */
 export const WRITE_INSTRUCTION = `你是小说正文写手。基于排程方案与拍摄单撰写本章正文（纯文本，不要 JSON，不要 Markdown 代码块）。遵守场景顺序、角色限制与字数预算。
+输出要求（务必逐条做到）：
+- 直接输出本章正文文字本身：一篇连贯、可读的中文小说段落，一次写完，不要按场景拆成小标题；
+- 禁止任何方括号标记（如 [时间]、[2023.11]、[场景1]、[片段]），禁止章节标题、编号、列表、JSON、代码块；
+- 你的输出就是读者直接读到的正文，不包含任何元信息、注释、说明或标记；
+- 字数尽量贴近排程与拍摄单的预算（约 2000~2500 字）。
 
 文风要求（往这个方向写，避免说明书式的死板叙述）：
 ${WRITE_STYLE_GUIDE.map((s, i) => `${i + 1}. ${s}`).join('\n')}
@@ -53,6 +58,10 @@ export function createWriteNode(agent: AgentPort): StepNode<'write'> {
       if (!call.ok) return { outcome: { kind: 'retry', step: 'write', reason: `write agent 调用失败：${call.reason}` } }
       const draft = call.output.text.trim()
       if (draft === '') return { outcome: { kind: 'retry', step: 'write', reason: 'write 产物为空' } }
+      // 质量护栏：正文过短（<100 字）或为占位符（如 "[1]"）判定为模型未真正产出正文，重新生成
+      if (draft.length < 5 || /^\[[^\]]*\]$/.test(draft)) {
+        return { outcome: { kind: 'retry', step: 'write', reason: 'write 产物过短或为占位符' } }
+      }
       return { outcome: { kind: 'continue' }, output: draft }
     },
   }

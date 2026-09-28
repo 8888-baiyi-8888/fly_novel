@@ -11,8 +11,9 @@
  */
 import { Beat, BeatBoard, ThreadEvent, ThreadMap, VolumeMapItem } from "./types";
 
-/** 每块最大章数：40 章 ≈ 30KB 输出，真实模型一次调用可稳定完成。 */
-export const MAX_CHUNK_SIZE = 40;
+/** 每块最大章数：25 章 ≈ 18KB 输出，单次模型调用稳定完成。
+ *  40 章约 30KB，250 章级大书单次生成仍易超过请求超时，故收紧到 25 章。 */
+export const MAX_CHUNK_SIZE = 25;
 
 /** 节拍板分块：一次生成一节的章区间与卷信息。 */
 export interface BeatChunk {

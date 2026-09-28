@@ -31,7 +31,7 @@ src/novel/types/    小说领域共享数据模型（文档 §3：BookConfig/Bea
 src/novel/gates/    小说领域确定性校验闸门（纯函数，先于落盘执行；已实现 §5.3 Dispatch 校验闸门 dispatch-gate.ts、§11.2 六步校验链 apply-delta-gate.ts），测试在 src/novel/tests/
 src/novel/services/ 小说领域确定性服务（章节级文档 §16.1 组件接口：HookLedger 的 lifecycle/准入/六步校验与不可变合并已实现；TimelineManager/TruthOracle 接口契约含 insertAll 收 FactDelta），测试在 src/novel/tests/
 src/novel/runtime/  Book Runtime 模拟层（小说流交付给章节流的确定性状态面）：BookRuntime 接口、buildFakeBookRuntime 内存实现（settleChapter 原子回写）、§7.7 fixtures；小说流就绪后以真实服务替换，节点与引擎零改动，测试在 src/novel/tests/
-src/workflow/       步骤流水线编排引擎：节点/存储/事件契约 types.ts、agent 端口 agent-port.ts（真实 agent 接入面）与 StubAgent、HttpAgent（自定 `/generate` 协议）、OpenAICompatibleAgent（阿里云 MaaS 等 `/chat/completions` 直连）、JsonFileStore（断点续跑落地）、run-chapter.ts 驱动入口（示例/调试用，非库 API）、执行器 engine.ts、参考节点 nodes/（deps={runtime}，settle 回写 BookRuntime）、stub 测试 tests/
+src/workflow/       步骤流水线编排引擎：节点/存储/事件契约 types.ts、agent 端口 agent-port.ts（真实 agent 接入面）与 StubAgent、HttpAgent（自定 `/generate` 协议）、OpenAICompatibleAgent（阿里云 MaaS 等 `/chat/completions` 直连）、JsonFileStore（断点续跑落地）、执行器 engine.ts、参考节点 nodes/（deps={runtime}，settle 回写 BookRuntime）、stub 测试 tests/；章节级正式驱动入口在 src/app/run-chapters.ts（自动定位 N7 书目录 + 复用小说级配置）
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件
@@ -65,7 +65,7 @@ tsconfig.chapters.json 章节域（novel+workflow）测试编译配置，产物�
 
 引入外部 API 后，记录必需与可选环境变量。真实 API 测试缺少凭据时应明确报告跳过原因，不能伪装成通过；常规测试应能使用固定测试数据或替身在无密钥环境下运行。日志和异常信息不得泄露凭据。
 
-**真实 agent 接入（阿里云 MaaS OpenAI 兼容端点）**：驱动入口 `run-chapter.ts` 读取环境变量 `FLY_NOVEL_BASE_URL` / `FLY_NOVEL_MODEL` / `FLY_NOVEL_API_KEY`（也可用 `--base-url` / `--model` / `--api-key` 参数覆盖）；key 走本地配置（`config/credentials` 加密凭据或环境变量），不得提交真实密钥。`openai-compatible-agent.ts` 的测试用注入 `fetchImpl` 替身，不在无密钥环境下发起真实调用。
+**真实 agent 接入**：章节级正式驱动入口为 `src/app/run-chapters.ts`（`node dist/app/run-chapters.js`）——**复用小说级 `ConfiguredLlmModel`**（从 `.fly-novel/settings.json` 读 provider/model/baseURL + 解密凭据），自动定位最新 N7 书目录，不读取 `FLY_NOVEL_*` 环境变量、不传 `--base-url/--model/--api-key`；可选参数仅 `--book/--chapter/--to/--store-dir`。`openai-compatible-agent.ts` 的测试用注入 `fetchImpl` 替身，不在无密钥环境下发起真实调用。
 
 ## 工程约定
 

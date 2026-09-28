@@ -4,6 +4,7 @@ import {
   buildBeatBoardChunkMessages,
   buildBeatBoardChunkRetryMessage,
   buildBeatBoardMessages,
+  buildBeatBoardRepairMessages,
   buildBeatBoardRetryMessage,
 } from "./prompt";
 import { BEAT_BOARD_JSON_DESCRIPTION } from "./schema";
@@ -20,6 +21,13 @@ export interface DirectorAgentOptions {
    * 真实模型大书推荐开启；内存模型演示保持单次调用。
    */
   chunked?: boolean;
+  /**
+   * 校验失败后自动调用 LLM 修复节拍板（方案2）。默认 true。
+   * 只修复 hook 相关字段，不动剧情；最多 maxRepairAttempts 次，仍失败才阻断。
+   */
+  autoRepair?: boolean;
+  /** 校验失败后最大自动修复次数，默认 2。 */
+  maxRepairAttempts?: number;
 }
 
 /** Director（节拍板）失败。 */
@@ -44,23 +52,29 @@ export interface OpenHook {
  * Director Agent（N5 节拍板）：把架构师前四件 + 创作简报
  * 细化成全书章级蓝图（beats，长度 = targetChapters），并过代码验收闸门。
  *
- * 两种模式：
+ * 三种能力：
  * - 单次（默认）：一次模型调用输出全书节拍板（适合 100 章内）；
  * - 分块（chunked）：按卷切块、每块一次调用、块间衔接、合并后全书校验
- *   （适合大书；150 章单次输出曾超 180s 请求超时）。
+ *   （适合大书；150 章单次输出曾超 180s 请求超时）；
+ * - 自动修复（autoRepair）：全书校验失败时，把「节拍板 + 错误清单」喂回 LLM，
+ *   只修复 hook 字段，最多 maxRepairAttempts 次，闭环后重新校验。
  */
 export class DirectorAgent {
   private readonly model: ModelClient;
   private readonly maxRetries: number;
   private readonly chunked: boolean;
+  private readonly autoRepair: boolean;
+  private readonly maxRepairAttempts: number;
 
   constructor(options: DirectorAgentOptions) {
     this.model = options.model;
     this.maxRetries = options.maxRetries ?? 1;
     this.chunked = options.chunked ?? false;
+    this.autoRepair = options.autoRepair ?? true;
+    this.maxRepairAttempts = options.maxRepairAttempts ?? 2;
   }
 
-  /** 生成节拍板（内部按 chunked 选项路由到单次或分块）。 */
+  /** 生成节拍板（内部按 chunked 选项路由到单次或分块，均接自动修复）。 */
   async createBeatBoard(draft: CreativeDraft, parts: ArchitectureParts): Promise<BeatBoard> {
     if (this.chunked) {
       return this.createBeatBoardChunked(draft, parts);
@@ -68,9 +82,10 @@ export class DirectorAgent {
     return this.createBeatBoardOnce(draft, parts);
   }
 
-  /** 单次生成（原逻辑）：一次调用全书节拍板。 */
+  /** 单次生成：先结构解析（失败按 maxRetries 重试），再闸门校验 + 自动修复。 */
   private async createBeatBoardOnce(draft: CreativeDraft, parts: ArchitectureParts): Promise<BeatBoard> {
     let lastError: unknown;
+    let board: BeatBoard | null = null;
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       try {
         const request: ChatRequest = {
@@ -83,20 +98,19 @@ export class DirectorAgent {
         };
         const response: ChatResponse = await this.model.chat(request);
         const parsed: unknown = JSON.parse(response.content);
-        const beatBoard = parseBeatBoardOutput(parsed, draft.targetChapters);
-        const violations = validateBeatBoard(beatBoard, draft.targetChapters);
-        if (violations.length > 0) {
-          throw new DirectorError(`节拍板验收闸门未通过：\n${violations.join("\n")}`);
-        }
-        return beatBoard;
+        board = parseBeatBoardOutput(parsed, draft.targetChapters);
+        break;
       } catch (error) {
         lastError = error;
       }
     }
-    throw new DirectorError(`节拍板生成失败：${describeError(lastError)}`);
+    if (board === null) {
+      throw new DirectorError(`节拍板生成失败：${describeError(lastError)}`);
+    }
+    return this.gateAndRepair(board, draft.targetChapters);
   }
 
-  /** 分块生成：每块一次调用，块间注入前尾 + 未回收伏笔，合并后全书校验。 */
+  /** 分块生成：每块一次调用，块间注入前尾 + 未回收伏笔，合并后全书校验 + 自动修复。 */
   private async createBeatBoardChunked(draft: CreativeDraft, parts: ArchitectureParts): Promise<BeatBoard> {
     const chunks = planBeatChunks(draft.targetChapters, parts.volumeMap);
     if (chunks.length === 0) {
@@ -105,18 +119,21 @@ export class DirectorAgent {
     const chunkBeatsList: Beat[][] = [];
     const openHooks: OpenHook[] = [];
     let prevTail: Beat[] = [];
-    for (const chunk of chunks) {
+    console.log(`【N5 节拍板】全书 ${draft.targetChapters} 章，分 ${chunks.length} 块生成`);
+    for (let i = 0; i < chunks.length; i += 1) {
+      const chunk = chunks[i];
+      console.log(
+        `【N5 节拍板】正在生成第 ${i + 1}/${chunks.length} 块（${chunk.id}：ch${chunk.startChapter}-ch${chunk.endChapter}，${chunk.endChapter - chunk.startChapter + 1} 章），单块约需 1-5 分钟，请稍候…`,
+      );
       const beats = await this.callChunkOnce(draft, parts, chunk, prevTail, openHooks);
       updateOpenHooks(openHooks, beats);
       chunkBeatsList.push(beats);
       prevTail = beats.slice(-5);
+      console.log(`【N5 节拍板】第 ${i + 1}/${chunks.length} 块完成（${chunk.id}）`);
     }
+    console.log(`【N5 节拍板】全部 ${chunks.length} 块生成完成，正在合并校验…`);
     const merged = mergeChunkBeats(chunks, chunkBeatsList);
-    const violations = validateBeatBoard(merged, draft.targetChapters);
-    if (violations.length > 0) {
-      throw new DirectorError(`节拍板验收闸门未通过（分块合并后）：\n${violations.join("\n")}`);
-    }
-    return merged;
+    return this.gateAndRepair(merged, draft.targetChapters);
   }
 
   /** 单块调用：一次模型调用生成某块的节拍（块内章号 1..n），带块内重试。 */
@@ -156,6 +173,37 @@ export class DirectorAgent {
     throw new DirectorError(
       `节拍板块生成失败（${chunk.id} ch${chunk.startChapter}-ch${chunk.endChapter}）：${describeError(lastError)}`,
     );
+  }
+
+  /** 闸门校验 + 自动修复闭环：校验失败则调 LLM 只修 hook 字段，最多 maxRepairAttempts 次。 */
+  private async gateAndRepair(board: BeatBoard, totalChapters: number): Promise<BeatBoard> {
+    let violations = validateBeatBoard(board, totalChapters);
+    if (violations.length > 0 && this.autoRepair) {
+      for (let attempt = 0; attempt < this.maxRepairAttempts; attempt += 1) {
+        board = await this.repairBeatBoard(board, violations, totalChapters);
+        violations = validateBeatBoard(board, totalChapters);
+        if (violations.length === 0) {
+          break;
+        }
+      }
+    }
+    if (violations.length > 0) {
+      const suffix = this.autoRepair ? `（已自动修复 ${this.maxRepairAttempts} 次）` : "";
+      throw new DirectorError(`节拍板验收闸门未通过${suffix}：\n${violations.join("\n")}`);
+    }
+    return board;
+  }
+
+  /** 调 LLM 修复节拍板：把「节拍板 + 错误清单」喂回，只增删 hook 相关字段，返回修复后节拍板。 */
+  private async repairBeatBoard(board: BeatBoard, violations: string[], totalChapters: number): Promise<BeatBoard> {
+    const request: ChatRequest = {
+      messages: buildBeatBoardRepairMessages(board, violations, totalChapters),
+      structured: { name: "beat_board_repair", description: BEAT_BOARD_JSON_DESCRIPTION },
+      temperature: 0.2,
+    };
+    const response: ChatResponse = await this.model.chat(request);
+    const parsed: unknown = JSON.parse(response.content);
+    return parseBeatBoardOutput(parsed, totalChapters);
   }
 }
 
