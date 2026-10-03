@@ -12,6 +12,7 @@
     "src/*/tests/**",
     "src/llm",
     "src/harness",
-    "src/util"
+    "src/util",
+    "src/agents"
   ]
 }

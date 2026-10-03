@@ -22,6 +22,9 @@
       ],
       "@fly-novel/util": [
         "./src/util/index.ts"
+      ],
+      "@fly-novel/agents": [
+        "./src/agents/index.ts"
       ]
     }
   },

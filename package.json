@@ -8,6 +8,10 @@
   "scripts": {
     "build": "pnpm run build:packages && tsc -p tsconfig.build.json",
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
+    "character-agent-example": "pnpm run build && node dist/app/character-agent-example.js",
+    "director-agent-example": "pnpm run build && node dist/app/director-agent-example.js",
+    "writer-agent-example": "pnpm run build && node dist/app/writer-agent-example.js",
+    "evaluator-agent-example": "pnpm run build && node dist/app/evaluator-agent-example.js",
     "init-encryption-key": "pnpm run build && node dist/app/init-encryption-key.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "pnpm run build:tests && node --test .test-dist/*/tests/**/*.test.js",
@@ -33,6 +37,7 @@
     "@deepseek-ai/cordis": "^4.0.2",
     "@fly-novel/llm": "workspace:*",
     "@fly-novel/util": "workspace:*",
+    "@fly-novel/agents": "workspace:*",
     "pinyin-pro": "^3.29.4"
   },
   "private": true

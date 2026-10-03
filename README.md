@@ -188,4 +188,4 @@ node dist/app/run-chapters.js --store-dir <dir>    # 正文/断点存放目录�
 
 ## 本地工作区包（开发者）
 
-相对导入支持 `.ts` 后缀，例如 `import { value } from './types.ts'`；编译时通过 `rewriteRelativeImportExtensions` 改写为 `.js`。公共包通过 `@fly-novel/llm`、`@fly-novel/util` 导入。编辑器与类型检查走源码映射；运行应用前执行 `pnpm run build`。
+相对导入支持 `.ts` 后缀，例如 `import { value } from './types.ts'`；编译时通过 `rewriteRelativeImportExtensions` 改写为 `.js`。公共包通过 `@fly-novel/llm`、`@fly-novel/util` 和 `@fly-novel/agents` 导入。编辑器与类型检查走源码映射；运行应用前执行 `pnpm run build`。
