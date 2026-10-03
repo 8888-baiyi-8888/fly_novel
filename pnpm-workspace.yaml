@@ -4,3 +4,5 @@ packages:
   - 'src/util'
   - 'src/novel-flow'
   - src/agents
+allowBuilds:
+  better-sqlite3: true
