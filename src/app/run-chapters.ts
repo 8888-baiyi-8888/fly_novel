@@ -70,7 +70,7 @@ function resolveBookWorkspace(bookIdArg?: string): { bookId: string; dir: string
     .filter((name) => name !== ".gitkeep" && !name.startsWith("."))
     .sort();
   if (books.length === 0) {
-    throw new Error(`artifacts/n7-workspace 下没有书目录，请先运行小说级建书（node dist/app/main.js --model real …，产出 N1~N7）。`);
+    throw new Error(`artifacts/n7-workspace 下没有书目录，请先运行小说级建书（node dist/app/novel-workflow/workflow.js --model real …，产出 N1~N7）。`);
   }
   return { bookId: books[books.length - 1], dir: join(N7_WORKSPACE_DIR, books[books.length - 1]) };
 }

@@ -3,7 +3,7 @@
  *
  * N0 输入是自由自然语言，不强制作任何格式；但信息越全，N1 草案越准。
  * 按下面结构组织即可（缺的可以不写，模型会写进 openQuestions「待澄清问题」）。
- * 本常量通过 `node dist/app/main.js --help` 打印。
+ * 本常量通过 `node dist/app/novel-workflow/workflow.js --help` 打印。
  */
 
 export const INPUT_GUIDE = `
@@ -17,7 +17,7 @@ export const INPUT_GUIDE = `
   6. 目标平台与篇幅（如：番茄、100 章、每章 2500 字）
 
 推荐操作：把想法存成 txt 文件（UTF-8 编码），再运行：
-  node dist/app/main.js --model real --file 你的想法.txt --clarify
+  node dist/app/novel-workflow/workflow.js --model real --file 你的想法.txt --clarify
 
 说明：
 - N0 会把你几句话的想法自主扩展成一段完整原始输入（主角/配角/主线/约束/平台篇幅由模型补全），
@@ -39,7 +39,7 @@ export const INPUT_GUIDE = `
 
 /** 命令行用法说明。 */
 export const USAGE = `
-用法：node dist/app/main.js [选项]
+用法：node dist/app/novel-workflow/workflow.js [选项]
   --model memory|real   模型类型（默认 memory；real 走项目正式 LLM 机制）
   --input "文本"         直接传原始输入（短文本适用）
   --file <路径>          从 txt 文件读取原始输入（推荐）

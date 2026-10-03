@@ -86,7 +86,7 @@ pnpm run typecheck    # 只做类型检查，不产构建产物
 pnpm test             # 编译并运行全部测试（286 个）
 ```
 
-> 你也可以用 `npx tsx src/app/main.ts ...` 免编译直接跑源码（首次会下载 tsx），效果相同。下面示例统一用编译后的 `node dist/...`。
+> 你也可以用 `npx tsx src/app/novel-workflow/workflow.ts ...` 免编译直接跑源码（首次会下载 tsx），效果相同。下面示例统一用编译后的 `node dist/...`。
 
 ---
 
@@ -95,13 +95,13 @@ pnpm test             # 编译并运行全部测试（286 个）
 ### 最常用 —— 全链路一条命令跑完
 
 ```bash
-node dist/app/main.js --model real --input "你的原始想法"
+node dist/app/novel-workflow/workflow.js --model real --input "你的原始想法"
 ```
 
 例如：
 
 ```bash
-node dist/app/main.js --model real --input "题材是霸道女上司爱上初入职场的小白妹妹。不要太狗血，内容励志"
+node dist/app/novel-workflow/workflow.js --model real --input "题材是霸道女上司爱上初入职场的小白妹妹。不要太狗血，内容励志"
 ```
 
 这会依次执行 **N0 → N1 → N2 →（N3 ‖ N4）→ N5 → N6 → N7 → N8**，每步产物自动落到 `artifacts/`。全程会调用真实模型多次，**耗时较长**，请耐心等待。
@@ -109,7 +109,7 @@ node dist/app/main.js --model real --input "题材是霸道女上司爱上初入
 ### 用文本文件作为输入
 
 ```bash
-node dist/app/main.js --model real --file 想法.txt
+node dist/app/novel-workflow/workflow.js --model real --file 想法.txt
 ```
 
 ### 加澄清交互（推荐第一次用）
@@ -117,21 +117,21 @@ node dist/app/main.js --model real --file 想法.txt
 加 `--clarify` 后，N1 会**反问你最多 3 轮问题**（书名、分卷、配角等），你回答后它再生成完整草案；回答到一半输入 `够了/停止/就这样` 可提前结束：
 
 ```bash
-node dist/app/main.js --model real --input "你的想法" --clarify
+node dist/app/novel-workflow/workflow.js --model real --input "你的想法" --clarify
 ```
 
 ### 只跑某个节点（断点续跑 / 单独看产物）
 
 ```bash
-node dist/app/main.js --model real --step n0   # 只跑原始输入整理
-node dist/app/main.js --model real --step n1   # 只跑创意草案
-node dist/app/main.js --model real --step n3   # 只跑故事圣经+书籍规则
-node dist/app/main.js --model real --step n4   # 只跑长期创作控制
-node dist/app/main.js --model real --step n5   # 只跑节拍板（最耗时）
-node dist/app/main.js --model real --step n6   # 只跑初始化运行状态 State0
-node dist/app/main.js --step n2                # N2 纯程序，任何模式都能跑
-node dist/app/main.js --step n7                # N7 纯程序，生成书目录
-node dist/app/main.js --step n8                # N8 纯程序，验收+红线消毒
+node dist/app/novel-workflow/workflow.js --model real --step n0   # 只跑原始输入整理
+node dist/app/novel-workflow/workflow.js --model real --step n1   # 只跑创意草案
+node dist/app/novel-workflow/workflow.js --model real --step n3   # 只跑故事圣经+书籍规则
+node dist/app/novel-workflow/workflow.js --model real --step n4   # 只跑长期创作控制
+node dist/app/novel-workflow/workflow.js --model real --step n5   # 只跑节拍板（最耗时）
+node dist/app/novel-workflow/workflow.js --model real --step n6   # 只跑初始化运行状态 State0
+node dist/app/novel-workflow/workflow.js --step n2                # N2 纯程序，任何模式都能跑
+node dist/app/novel-workflow/workflow.js --step n7                # N7 纯程序，生成书目录
+node dist/app/novel-workflow/workflow.js --step n8                # N8 纯程序，验收+红线消毒
 ```
 
 > 中途失败时，已经落盘的节点不用重跑——从失败的节点接着用 `--step` 续跑即可。N0 已有产物时，重跑会**跳过 N0**（打印"已存在 N0 产物"），要强制重新扩展就删除 `artifacts/n0-raw-input/` 下那个文件。
@@ -139,7 +139,7 @@ node dist/app/main.js --step n8                # N8 纯程序，验收+红线消
 ### 帮助
 
 ```bash
-node dist/app/main.js --help
+node dist/app/novel-workflow/workflow.js --help
 ```
 
 ---
