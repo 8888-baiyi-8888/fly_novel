@@ -3,3 +3,5 @@ packages:
   - 'src/llm'
   - 'src/util'
   - 'src/novel-flow'
+onlyBuiltDependencies:
+  - esbuild
