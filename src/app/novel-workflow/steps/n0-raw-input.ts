@@ -1,3 +1,5 @@
+/** 原始输入整理节点 */
+
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { RawInputAgent } from "../../../novel-flow/raw-input/raw-input-agent";
@@ -5,23 +7,23 @@ import { N0_RAW_INPUT_DIR } from "../../../novel-flow/paths";
 import { latestRawInputArtifact, readLatestRawInput, saveRawInput } from "../artifacts";
 
 export async function resolveRawInput(
-  n0: RawInputAgent,
+  rawInputAgent: RawInputAgent,
   initialInput: string,
 ): Promise<{ rawInput: string; fromCache: boolean }> {
   const existing = latestRawInputArtifact();
   if (existing !== null) {
     const path = join(N0_RAW_INPUT_DIR, existing);
     const cached = readFileSync(path, "utf8");
-    console.log(`\n已存在 N0 产物：${path}\n（跳过 N0，直接作为 N1 输入；删除该文件可强制重新扩展）\n`);
+    console.log(`\n已存在 原始输入整理节点 产物：${path}\n（跳过 原始输入整理节点，直接作为 N1 输入；删除该文件可强制重新扩展）\n`);
     return { rawInput: cached, fromCache: true };
   }
-  const rawInput = await n0.createRawInput(initialInput);
-  console.log("\n【N0 扩展后的原始输入】\n" + rawInput + "\n");
+  const rawInput = await rawInputAgent.createRawInput(initialInput);
+  console.log("\n【原始输入整理节点 扩展后的原始输入】\n" + rawInput + "\n");
   return { rawInput, fromCache: false };
 }
 
-export async function runN0Step(n0: RawInputAgent, initialInput: string, persist: boolean): Promise<void> {
-  const { rawInput, fromCache } = await resolveRawInput(n0, initialInput);
+export async function runN0Step(rawInputAgent: RawInputAgent, initialInput: string, persist: boolean): Promise<void> {
+  const { rawInput, fromCache } = await resolveRawInput(rawInputAgent, initialInput);
   if (persist && !fromCache) {
     saveRawInput(rawInput);
   }

@@ -105,13 +105,21 @@ export async function executeNovelWorkflow(options: NovelWorkflowOptions): Promi
 }
 
 interface CliArgs {
+  /** 直接提供小说原始想法文本。 */
   input?: string;
+  /** 从指定文件读取小说原始想法。 */
   file?: string;
+  /** 选择内存示例模型或真实模型，缺省使用 memory。 */
   model?: "memory" | "real";
+  /** 启用 N1 多轮澄清交互。 */
   clarify?: boolean;
+  /** 仅执行指定的 N0～N8 节点，缺省执行全链路。 */
   step?: NovelWorkflowStep;
+  /** N7 目标书目录已存在时强制重建。 */
   force?: boolean;
+  /** 指定 N8 验收的书籍 ID。 */
   book?: string;
+  /** 显示命令帮助和输入建议。 */
   help?: boolean;
 }
 
