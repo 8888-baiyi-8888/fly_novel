@@ -3,7 +3,7 @@ import { BookRules, StoryBible } from "../../../novel-flow/architect/types";
 import { ControlsAgent } from "../../../novel-flow/controls";
 import { LongTermControls } from "../../../novel-flow/controls/types";
 import { CreativeDraft } from "../../../novel-flow/draft/types";
-import { readLatestDraft, saveControls } from "../artifacts";
+import { readLatestDraft, saveControls } from "../../../workflow/novel_workflow/artifacts";
 import { runN3Only } from "./n3-story-foundation";
 
 export async function runN4Only(controls: ControlsAgent, draft: CreativeDraft, persist: boolean): Promise<LongTermControls> {

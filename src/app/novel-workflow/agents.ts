@@ -7,7 +7,7 @@ import { ControlsAgent } from "../../novel-flow/controls";
 import { EXAMPLE_CONTROLS_JSON } from "../../novel-flow/controls/example";
 import { CreativeDraftAgent } from "../../novel-flow/draft/creative-draft-agent";
 import { EXAMPLE_DRAFT_JSON, EXAMPLE_RAW_INPUT } from "../../novel-flow/draft/example";
-import { RawInputAgent } from "../../novel-flow/raw-input/raw-input-agent";
+import { NormalizedInputAgent } from "../../novel-flow/normalized-input/normalized-input-agent";
 import { State0Agent } from "../../novel-flow/state0";
 import { EXAMPLE_STATE0_JSON } from "../../novel-flow/state0/example";
 import { ConfiguredLlmModel } from "../configured-model";
@@ -48,15 +48,15 @@ export function buildMemoryState0Agent(): State0Agent {
 }
 
 /** 组装内存模型版原始输入 Agent。 */
-export function buildMemoryRawInputAgent(): RawInputAgent {
+export function buildMemoryRawInputAgent(): NormalizedInputAgent {
   const model = new MemoryModel({ responses: { raw_input: JSON.stringify({ rawInput: EXAMPLE_RAW_INPUT }) } });
-  return new RawInputAgent({ model, maxRetries: 3 });
+  return new NormalizedInputAgent({ model, maxRetries: 3 });
 }
 
 /** 组装真实模型版 N0 原始输入 Agent。 */
-export function buildRealRawInputAgent(): RawInputAgent {
+export function buildRealRawInputAgent(): NormalizedInputAgent {
   const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
-  return new RawInputAgent({ model, maxRetries: 3 });
+  return new NormalizedInputAgent({ model, maxRetries: 3 });
 }
 
 /** 组装真实模型版 N1 创意草案 Agent。 */

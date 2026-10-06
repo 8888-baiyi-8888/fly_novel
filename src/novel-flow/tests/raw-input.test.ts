@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseRawInput, RawInputValidationError } from "../raw-input/validate";
-import { RawInputAgent, RawInputError } from "../raw-input/raw-input-agent";
+import { parseRawInput, RawInputValidationError } from "../normalized-input/validate";
+import { RawInputAgent, RawInputError } from "../normalized-input/normalized-input-agent";
 import { MemoryModel } from "../adapters/memory-model";
 
 const INITIAL = "我想写霸道女上司爱上初入职场的小白妹妹，不要太狗血，内容励志。";

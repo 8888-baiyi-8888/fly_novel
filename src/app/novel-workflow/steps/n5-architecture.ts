@@ -3,7 +3,7 @@ import { StoryArchitecture } from "../../../novel-flow/architecture/types";
 import { BookRules, StoryBible } from "../../../novel-flow/architect/types";
 import { LongTermControls } from "../../../novel-flow/controls/types";
 import { CreativeDraft } from "../../../novel-flow/draft/types";
-import { readLatestBookRules, readLatestControls, readLatestDraft, readLatestStoryBible, saveArchitecture } from "../artifacts";
+import { readLatestBookRules, readLatestControls, readLatestDraft, readLatestStoryBible, saveArchitecture } from "../../../workflow/novel_workflow/artifacts";
 
 export async function runN5Only(
   architecture: ArchitectureAgent,

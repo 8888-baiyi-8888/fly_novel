@@ -35,11 +35,13 @@
   },
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
+    "@fly-novel/agents": "workspace:*",
     "@fly-novel/llm": "workspace:*",
     "@fly-novel/util": "workspace:*",
-    "@fly-novel/agents": "workspace:*",
+    "@langchain/langgraph": "^1.4.18",
     "@langchain/openai": "^1.5.13",
-    "pinyin-pro": "^3.29.4"
+    "pinyin-pro": "^3.29.4",
+    "zod": "^4.6.5"
   },
   "private": true
 }

@@ -1,6 +1,6 @@
 import { ArchitectAgent, buildCreativeBrief } from "../../../novel-flow/architect";
 import { BookRules, StoryBible } from "../../../novel-flow/architect/types";
-import { readLatestBookConfig, readLatestDraft, saveBookRulesDoc, saveStoryBible } from "../artifacts";
+import { readLatestBookConfig, readLatestDraft, saveBookRulesDoc, saveStoryBible } from "../../../workflow/novel_workflow/artifacts";
 
 export async function runN3Only(
   architect: ArchitectAgent,

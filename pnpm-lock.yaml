@@ -20,12 +20,18 @@ importers:
       '@fly-novel/util':
         specifier: workspace:*
         version: link:src/util
+      '@langchain/langgraph':
+        specifier: ^1.4.18
+        version: 1.4.18(@langchain/core@1.2.14(openai@7.27.0(zod@4.6.5)))(zod@4.6.5)
       '@langchain/openai':
         specifier: ^1.5.13
         version: 1.6.2(@langchain/core@1.2.14(openai@7.27.0(zod@4.6.5)))
       pinyin-pro:
         specifier: ^3.29.4
         version: 3.29.4
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@types/node':
         specifier: ^22.20.2

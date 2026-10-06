@@ -1,7 +1,7 @@
 import { StoryArchitecture } from "../../../novel-flow/architecture/types";
 import { State0Agent } from "../../../novel-flow/state0";
 import { State0 } from "../../../novel-flow/state0/types";
-import { readLatestArchitecture, saveState0 } from "../artifacts";
+import { readLatestArchitecture, saveState0 } from "../../../workflow/novel_workflow/artifacts";
 
 export async function runN6Only(
   state0Agent: State0Agent,

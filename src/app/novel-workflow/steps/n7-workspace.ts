@@ -8,7 +8,7 @@ import {
   readLatestDraft,
   readLatestState0,
   readLatestStoryBible,
-} from "../artifacts";
+} from "../../../workflow/novel_workflow/artifacts";
 
 export async function runN7Only(inputs: WorkspaceInputs, persist: boolean, force: boolean): Promise<void> {
   const result = buildWorkspace(inputs, { force, dryRun: !persist });

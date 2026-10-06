@@ -2,7 +2,7 @@ import { ArchitectAgent } from "../../novel-flow/architect";
 import { ArchitectureAgent } from "../../novel-flow/architecture";
 import { ControlsAgent } from "../../novel-flow/controls";
 import { CreativeDraftAgent } from "../../novel-flow/draft/creative-draft-agent";
-import { RawInputAgent } from "../../novel-flow/raw-input/raw-input-agent";
+import { RawInputAgent } from "../../novel-flow/normalized-input/normalized-input-agent";
 import { State0Agent } from "../../novel-flow/state0";
 import { buildBookConfig } from "../../novel-flow/book-config";
 import { readFileSync } from "node:fs";
@@ -10,7 +10,7 @@ import { createInterface } from "node:readline";
 import { CreativeDraftError, ClarifyUserAnswer } from "../../novel-flow/draft/creative-draft-agent";
 import { EXAMPLE_RAW_INPUT } from "../../novel-flow/draft/example";
 import { EXAMPLE_ARCHITECTURE } from "../../novel-flow/architecture/example";
-import { RawInputError } from "../../novel-flow/raw-input/raw-input-agent";
+import { RawInputError } from "../../novel-flow/normalized-input/normalized-input-agent";
 import { INPUT_GUIDE, USAGE } from "../input-guide";
 import {
   buildCreativeDraftAgent,
@@ -36,7 +36,7 @@ import { runN6Step } from "./steps/n6-state0";
 import { runN7Step } from "./steps/n7-workspace";
 import { runN8Step } from "./steps/n8-ready";
 import { NovelWorkflowStep } from "./types";
-import { saveBookConfig, saveDraft, saveRawInput } from "./artifacts";
+import { saveBookConfig, saveDraft, saveRawInput } from "../../workflow/novel_workflow/artifacts";
 import { CliAskerFactory, generateDraft } from "./steps/n1-draft";
 import { resolveRawInput } from "./steps/n0-raw-input";
 import { runN3N4Parallel } from "./steps/n4-controls";

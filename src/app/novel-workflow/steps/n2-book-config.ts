@@ -1,5 +1,5 @@
 import { buildBookConfig } from "../../../novel-flow/book-config";
-import { readLatestDraft, saveBookConfig } from "../artifacts";
+import { readLatestDraft, saveBookConfig } from "../../../workflow/novel_workflow/artifacts";
 
 export async function runN2Only(): Promise<void> {
   const draft = readLatestDraft();

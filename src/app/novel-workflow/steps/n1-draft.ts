@@ -1,6 +1,6 @@
 import { ClarifyUserAnswer, CreativeDraftAgent } from "../../../novel-flow/draft/creative-draft-agent";
 import { CreativeDraft } from "../../../novel-flow/draft/types";
-import { readLatestRawInput, saveDraft } from "../artifacts";
+import { readLatestRawInput, saveDraft } from "../../../workflow/novel_workflow/artifacts";
 
 export type CliAskerFactory = () => { ask: ClarifyUserAnswer; close: () => void };
 

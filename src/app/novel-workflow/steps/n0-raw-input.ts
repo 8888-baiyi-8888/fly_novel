@@ -2,9 +2,9 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { RawInputAgent } from "../../../novel-flow/raw-input/raw-input-agent";
+import { RawInputAgent } from "../../../novel-flow/normalized-input/normalized-input-agent";
 import { N0_RAW_INPUT_DIR } from "../../../novel-flow/paths";
-import { latestRawInputArtifact, readLatestRawInput, saveRawInput } from "../artifacts";
+import { latestRawInputArtifact, readLatestRawInput, saveRawInput } from "../../../workflow/novel_workflow/artifacts";
 
 export async function resolveRawInput(
   rawInputAgent: RawInputAgent,

@@ -26,7 +26,7 @@ function describeError(error: unknown): string {
  * 不反问用户；主角、配角、主线、约束、平台篇幅等由模型自主补全。
  * 属于建书第 0 步的执行者；模型通过 ModelClient 注入，业务规则在 novel/raw-input。
  */
-export class RawInputAgent {
+export class NormalizedInputAgent {
   private readonly model: ModelClient;
   private readonly maxRetries: number;
 

@@ -5,7 +5,7 @@ import { MemoryModel } from "../novel-flow/adapters/memory-model";
 import { CreativeDraft } from "../novel-flow/draft/types";
 import { CreativeDraftAgent, CreativeDraftError, ClarifyUserAnswer } from "../novel-flow/draft/creative-draft-agent";
 import { EXAMPLE_DRAFT_JSON, EXAMPLE_RAW_INPUT } from "../novel-flow/draft/example";
-import { RawInputAgent, RawInputError } from "../novel-flow/raw-input/raw-input-agent";
+import { RawInputAgent, RawInputError } from "../novel-flow/normalized-input/normalized-input-agent";
 import { buildBookConfig, BookConfig } from "../novel-flow/book-config";
 import { ArchitectAgent, ArchitectError, buildBookRules, buildCreativeBrief } from "../novel-flow/architect";
 import { EXAMPLE_ARCHITECT_JSON } from "../novel-flow/architect/example";
