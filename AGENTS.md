@@ -32,6 +32,8 @@ src/novel/gates/    小说领域确定性校验闸门（纯函数，先于落盘
 src/novel/services/ 小说领域确定性服务（章节级文档 §16.1 组件接口：HookLedger 的 lifecycle/准入/六步校验与不可变合并已实现；TimelineManager/TruthOracle 接口契约含 insertAll 收 FactDelta），测试在 src/novel/tests/
 src/novel/runtime/  Book Runtime 模拟层（小说流交付给章节流的确定性状态面）：BookRuntime 接口、buildFakeBookRuntime 内存实现（settleChapter 原子回写）、§7.7 fixtures；小说流就绪后以真实服务替换，节点与引擎零改动，测试在 src/novel/tests/
 src/workflow/       步骤流水线编排引擎：节点/存储/事件契约 types.ts、agent 端口 agent-port.ts（真实 agent 接入面）与 StubAgent、HttpAgent（自定 `/generate` 协议）、OpenAICompatibleAgent（阿里云 MaaS 等 `/chat/completions` 直连）、JsonFileStore（断点续跑落地）、执行器 engine.ts、参考节点 nodes/（deps={runtime}，settle 回写 BookRuntime）、stub 测试 tests/；章节级正式驱动入口在 src/app/run-chapters.ts（自动定位 N7 书目录 + 复用小说级配置）
+src/workflow/novel_workflow/ 小说级 LangGraph 建书图：唯一状态 schema、建书节点、产物读写与 Agent 注入接口
+src/app/novel-workflow/ 建书命令行入口与 Agent 组装；整图和单步执行调用 src/workflow/novel_workflow/
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件

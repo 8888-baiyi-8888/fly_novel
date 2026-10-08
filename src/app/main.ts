@@ -5,7 +5,7 @@ import { MemoryModel } from "../novel-flow/adapters/memory-model";
 import { CreativeDraft } from "../novel-flow/draft/types";
 import { CreativeDraftAgent, CreativeDraftError, ClarifyUserAnswer } from "../novel-flow/draft/creative-draft-agent";
 import { EXAMPLE_DRAFT_JSON, EXAMPLE_RAW_INPUT } from "../novel-flow/draft/example";
-import { RawInputAgent, RawInputError } from "../novel-flow/normalized-input/normalized-input-agent";
+import { NormalizedInputAgent, RawInputError } from "../novel-flow/normalized-input/normalized-input-agent";
 import { buildBookConfig, BookConfig } from "../novel-flow/book-config";
 import { ArchitectAgent, ArchitectError, buildBookRules, buildCreativeBrief } from "../novel-flow/architect";
 import { EXAMPLE_ARCHITECT_JSON } from "../novel-flow/architect/example";
@@ -94,20 +94,20 @@ export function buildMemoryState0Agent(): State0Agent {
  * 组装「原始输入整理」应用 —— 内存模型版（演示/测试）。
  * 使用 MemoryModel 返回预置的《隐龙》原始输入，不发起真实网络请求。
  */
-export function buildMemoryRawInputAgent(): RawInputAgent {
+export function buildMemoryRawInputAgent(): NormalizedInputAgent {
   const model = new MemoryModel({
     responses: { raw_input: JSON.stringify({ rawInput: EXAMPLE_RAW_INPUT }) },
   });
-  return new RawInputAgent({ model, maxRetries: 3 });
+  return new NormalizedInputAgent({ model, maxRetries: 3 });
 }
 
 /**
  * 组装「原始输入整理」应用 —— 真实模型版（N0，当前使用 qwen）。
  * 走项目正式 LLM 机制：src/config 读取并解密凭据，src/llm 适配器路由。
  */
-export function buildRealRawInputAgent(): RawInputAgent {
+export function buildRealRawInputAgent(): NormalizedInputAgent {
   const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
-  return new RawInputAgent({ model, maxRetries: 3 });
+  return new NormalizedInputAgent({ model, maxRetries: 3 });
 }
 
 /**
@@ -163,7 +163,7 @@ export function buildRealState0Agent(): State0Agent {
   return new State0Agent({ model, maxRetries: 3 });
 }
 
-type Step = "n0" | "n1" | "n2" | "n3" | "n4" | "n5" | "n6" | "n7" | "n8";
+type Step = "ni" | "dra" | "bc" | "sf" | "con" | "arc" | "sta" | "wor" | "rea";
 
 interface CliArgs {
   input?: string;
@@ -194,8 +194,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.model = value;
       i += 1;
     } else if (token === "--step" && value !== undefined) {
-      if (value !== "n0" && value !== "n1" && value !== "n2" && value !== "n3" && value !== "n4" && value !== "n5" && value !== "n6" && value !== "n7" && value !== "n8") {
-        throw new Error(`--step 只支持 n0、n1、n2、n3、n4、n5、n6、n7 或 n8，收到：${value}`);
+      if (value !== "ni" && value !== "dra" && value !== "bc" && value !== "sf" && value !== "con" && value !== "arc" && value !== "sta" && value !== "wor" && value !== "rea") {
+        throw new Error(`--step 只支持 ni、dra、bc、sf、con、arc、sta、wor 或 rea，收到：${value}`);
       }
       args.step = value;
       i += 1;
@@ -210,7 +210,7 @@ function parseArgs(argv: string[]): CliArgs {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step n0|n1|n2|n3|n4|n5|n6|n7|n8、--clarify、--force、--book <bookId>、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step ni|dra|bc|sf|con|arc|sta|wor|rea、--clarify、--force、--book <bookId>、--help）`,
       );
     }
   }
@@ -409,7 +409,7 @@ function readLatestControls(): LongTermControls | null {
  * 返回 fromCache 标记，供调用方决定是否写 N0 文件。
  */
 async function resolveRawInput(
-  n0: RawInputAgent,
+  n0: NormalizedInputAgent,
   initialInput: string,
 ): Promise<{ rawInput: string; fromCache: boolean }> {
   const existing = latestRawInputArtifact();
@@ -441,7 +441,7 @@ async function generateDraft(n1: CreativeDraftAgent, args: CliArgs, rawInput: st
 async function runN2Only(): Promise<void> {
   const draft = readLatestDraft();
   if (draft === null) {
-    throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step n1 或全链路");
+    throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step dra 或全链路");
   }
   const config = buildBookConfig(draft);
   console.log(`\n【N2 书籍配置】已创建书籍：${config.bookId}（${config.title}）`);
@@ -464,7 +464,7 @@ async function runN4Only(controls: ControlsAgent, draft: CreativeDraft, persist:
 async function runN4Step(controls: ControlsAgent, persist: boolean): Promise<void> {
   const draft = readLatestDraft();
   if (draft === null) {
-    throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step n1 或全链路");
+    throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step dra 或全链路");
   }
   await runN4Only(controls, draft, persist);
 }
@@ -488,7 +488,7 @@ async function runN3N4Parallel(
 
 /**
  * N5：架构师前四件 → Director 节拍板 → 五件套。
- * 优先使用内存传入的输入（全链路 memory 模式）；未传入时读 N1/N3/N4 落盘产物（--step n5 单跑）。
+ * 优先使用内存传入的输入（全链路 memory 模式）；未传入时读 N1/N3/N4 落盘产物（--step arc 单跑）。
  */
 async function runN5Only(
   architecture: ArchitectureAgent,
@@ -504,22 +504,22 @@ async function runN5Only(
   } else {
     const latestDraft = readLatestDraft();
     if (latestDraft === null) {
-      throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step n1 或全链路");
+      throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step dra 或全链路");
     }
     draft = latestDraft;
     const latestBible = readLatestStoryBible();
     if (latestBible === null) {
-      throw new Error("没有找到 N3 故事圣经（artifacts/n3-story-bible/），请先运行 --step n3 或全链路");
+      throw new Error("没有找到 N3 故事圣经（artifacts/n3-story-bible/），请先运行 --step sf 或全链路");
     }
     storyBible = latestBible;
     const latestRules = readLatestBookRules();
     if (latestRules === null) {
-      throw new Error("没有找到 N3 书籍规则（artifacts/n3-story-bible/），请先运行 --step n3 或全链路");
+      throw new Error("没有找到 N3 书籍规则（artifacts/n3-story-bible/），请先运行 --step sf 或全链路");
     }
     bookRules = latestRules;
     const latestControls = readLatestControls();
     if (latestControls === null) {
-      throw new Error("没有找到 N4 长期创作控制（artifacts/n4-controls/），请先运行 --step n4 或全链路");
+      throw new Error("没有找到 N4 长期创作控制（artifacts/n4-controls/），请先运行 --step con 或全链路");
     }
     controls = latestControls;
   }
@@ -547,7 +547,7 @@ async function runN5Only(
   return result;
 }
 
-/** N5 单跑入口（--step n5）：读落盘产物。 */
+/** N5 单跑入口（--step arc）：读落盘产物。 */
 async function runN5Step(architecture: ArchitectureAgent, persist: boolean): Promise<void> {
   await runN5Only(architecture, persist);
 }
@@ -567,7 +567,7 @@ function readLatestArchitecture(): StoryArchitecture | null {
 
 /**
  * N6：把 N5 五件套转成初始运行状态 State₀（六类）。
- * 优先使用内存传入的架构（全链路）；未传入时读最新 N5 产物（--step n6 单跑）。
+ * 优先使用内存传入的架构（全链路）；未传入时读最新 N5 产物（--step sta 单跑）。
  */
 async function runN6Only(
   state0Agent: State0Agent,
@@ -580,7 +580,7 @@ async function runN6Only(
   } else {
     const latest = readLatestArchitecture();
     if (latest === null) {
-      throw new Error("没有找到 N5 小说静态架构（artifacts/n5-architecture/），请先运行 --step n5 或全链路");
+      throw new Error("没有找到 N5 小说静态架构（artifacts/n5-architecture/），请先运行 --step arc 或全链路");
     }
     input = latest;
   }
@@ -593,7 +593,7 @@ async function runN6Only(
   return result;
 }
 
-/** N6 单跑入口（--step n6）。memory 模式直接复用内存示例架构（与全链路 memory 一致，不读盘）；real 模式读落盘 N5 产物。 */
+/** N6 单跑入口（--step sta）。memory 模式直接复用内存示例架构（与全链路 memory 一致，不读盘）；real 模式读落盘 N5 产物。 */
 async function runN6Step(state0Agent: State0Agent, persist: boolean, memoryArchitecture?: StoryArchitecture): Promise<void> {
   await runN6Only(state0Agent, persist, memoryArchitecture);
 }
@@ -613,7 +613,7 @@ function readLatestState0(): State0 | null {
 
 /**
  * N7：把 N1~N6 产物序列化成书籍项目目录（纯程序，不调 LLM）。
- * 全链路时直接使用内存产物；--step n7 单跑时读取落盘产物。
+ * 全链路时直接使用内存产物；--step wor 单跑时读取落盘产物。
  * persist=false（memory 演示）时 dry-run：生成全部文件内容但不落盘，打印目录树。
  */
 async function runN7Only(
@@ -632,7 +632,7 @@ async function runN7Only(
   }
 }
 
-/** N7 单跑入口（--step n7）：读取全部落盘产物 → 生成书目录。 */
+/** N7 单跑入口（--step wor）：读取全部落盘产物 → 生成书目录。 */
 async function runN7Step(persist: boolean, force: boolean): Promise<void> {
   const draft = readLatestDraft();
   const bookConfig = readLatestBookConfig();
@@ -669,7 +669,7 @@ function resolveWorkspaceBookId(bookIdArg?: string): { bookId: string; dir: stri
     .filter((name) => name !== ".gitkeep" && !name.startsWith("."))
     .sort();
   if (books.length === 0) {
-    throw new Error(`artifacts/n7-workspace 下没有书目录，请先运行 --step n7。也可用 --book <bookId> 指定。`);
+    throw new Error(`artifacts/n7-workspace 下没有书目录，请先运行 --step wor。也可用 --book <bookId> 指定。`);
   }
   return { bookId: books[books.length - 1], dir: join(N7_WORKSPACE_DIR, books[books.length - 1]) };
 }
@@ -681,7 +681,7 @@ function resolveWorkspaceBookId(bookIdArg?: string): { bookId: string; dir: stri
 async function runN8Step(bookIdArg?: string): Promise<void> {
   const { bookId, dir } = resolveWorkspaceBookId(bookIdArg);
   if (!existsSync(dir)) {
-    throw new Error(`书目录不存在：${dir}。请先运行 --step n7 生成，或检查 --book <bookId>。`);
+    throw new Error(`书目录不存在：${dir}。请先运行 --step wor 生成，或检查 --book <bookId>。`);
   }
   console.log(`\n【N8 Book Runtime Ready】交接点：小说级终点 = 章节级起点`);
   console.log(`  书：${bookId} @ ${dir}\n`);
@@ -729,11 +729,11 @@ async function runN8Step(bookIdArg?: string): Promise<void> {
 async function runN3Only(architect: ArchitectAgent, persist: boolean): Promise<{ storyBible: StoryBible; bookRules: BookRules }> {
   const draft = readLatestDraft();
   if (draft === null) {
-    throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step n1 或全链路");
+    throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step dra 或全链路");
   }
   const bookConfig = readLatestBookConfig();
   if (bookConfig === null) {
-    throw new Error("没有找到 N2 书籍配置（artifacts/n2-book-config/），请先运行 --step n2 或全链路");
+    throw new Error("没有找到 N2 书籍配置（artifacts/n2-book-config/），请先运行 --step bc 或全链路");
   }
   const brief = buildCreativeBrief(draft);
   console.log(`\n【创作简报】\n${brief}\n`);
@@ -761,8 +761,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  // N2 是纯程序节点：不依赖模型，任何模式下 --step n2 都直接执行
-  if (args.step === "n2") {
+  // N2 是纯程序节点：不依赖模型，任何模式下 --step bc 都直接执行
+  if (args.step === "bc") {
     await runN2Only();
     return;
   }
@@ -782,7 +782,7 @@ async function main(): Promise<void> {
     console.log("正在调用真实模型，请稍候（首次可能需要 30~90 秒）...");
   }
 
-  if (args.step === "n0") {
+  if (args.step === "ni") {
     const { rawInput, fromCache } = await resolveRawInput(n0, initialInput);
     if (isReal && !fromCache) {
       saveRawInput(rawInput);
@@ -790,10 +790,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (args.step === "n1") {
+  if (args.step === "dra") {
     const rawInput = readLatestRawInput();
     if (rawInput === null) {
-      throw new Error("没有找到 N0 产物（artifacts/n0-raw-input/），请先运行 --step n0 或全链路");
+      throw new Error("没有找到 N0 产物（artifacts/n0-raw-input/），请先运行 --step ni 或全链路");
     }
     const draft = await generateDraft(n1, args, rawInput);
     console.log(JSON.stringify(draft, null, 2));
@@ -803,33 +803,33 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (args.step === "n3") {
+  if (args.step === "sf") {
     await runN3Only(architect, isReal);
     return;
   }
 
-  if (args.step === "n4") {
+  if (args.step === "con") {
     const controls = isReal ? buildRealControlsAgent() : buildMemoryControlsAgent();
     await runN4Step(controls, isReal);
     return;
   }
 
-  if (args.step === "n5") {
+  if (args.step === "arc") {
     await runN5Step(architecture, isReal);
     return;
   }
 
-  if (args.step === "n6") {
+  if (args.step === "sta") {
     await runN6Step(state0Agent, isReal, isReal ? undefined : EXAMPLE_ARCHITECTURE);
     return;
   }
 
-  if (args.step === "n7") {
+  if (args.step === "wor") {
     await runN7Step(isReal, args.force === true);
     return;
   }
 
-  if (args.step === "n8") {
+  if (args.step === "rea") {
     await runN8Step(args.book);
     return;
   }

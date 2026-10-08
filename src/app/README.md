@@ -13,6 +13,7 @@ pnpm run evaluator-agent-example [provider]
 
 | 子目录 | 作用 |
 | --- | --- |
+| [novel-workflow/](novel-workflow/workflow.ts) | 建书命令行入口：解析参数、创建真实或内存 Agent，并调用小说级 LangGraph；单步命令复用工作流节点。 |
 | tests/ | 应用入口与命令行交互测试。 |
 
 `character-agent-example.ts` 是角色 Agent 的手动调试入口。它读取本机 DeepSeek 配置和已加密凭据，创建关闭思考模式的 OpenAI 兼容 LangChain 模型，注册运行时后连续执行两轮角色调用并打印 `structuredResponse`。样例在调用处定义 Zod Schema：首轮为 `dialogue`、`action`，第二轮为 `reply`，这些字段不是 Agent 内置约束。模型必须调用结构化输出工具，同一实例保留记忆历史。DeepSeek 思考模式不接受强制工具选择。运行前按[配置模块说明](../config/README.md)准备 `settings.json`、`.credentials.json` 和 `.encryption-key`，再在仓库根目录执行：

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseRawInput, RawInputValidationError } from "../normalized-input/validate";
-import { RawInputAgent, RawInputError } from "../normalized-input/normalized-input-agent";
+import { NormalizedInputAgent, RawInputError } from "../normalized-input/normalized-input-agent";
 import { MemoryModel } from "../adapters/memory-model";
 
 const INITIAL = "我想写霸道女上司爱上初入职场的小白妹妹，不要太狗血，内容励志。";
@@ -27,7 +27,7 @@ test("N0：单次调用即返回整理文本（不反问用户）", async () => 
       return JSON.stringify({ rawInput: TEXT });
     },
   });
-  const agent = new RawInputAgent({ model });
+  const agent = new NormalizedInputAgent({ model });
   const rawInput = await agent.createRawInput(INITIAL);
   assert.equal(called, 1);
   assert.equal(rawInput, TEXT);
@@ -41,14 +41,14 @@ test("N0：空输入直接失败，不调用模型", async () => {
       return JSON.stringify({ rawInput: TEXT });
     },
   });
-  const agent = new RawInputAgent({ model });
+  const agent = new NormalizedInputAgent({ model });
   await assert.rejects(agent.createRawInput("   "), { name: "RawInputError" });
   assert.equal(called, 0);
 });
 
 test("N0：模型输出非法结构时重试后抛 RawInputError", async () => {
   const model = new MemoryModel({ responder: () => JSON.stringify({ rawInput: null }) });
-  const agent = new RawInputAgent({ model });
+  const agent = new NormalizedInputAgent({ model });
   await assert.rejects(agent.createRawInput(INITIAL), { name: "RawInputError" });
 });
 
@@ -60,7 +60,7 @@ test("N0：首次输出非法、重试成功时返回整理文本", async () => 
       return called === 1 ? JSON.stringify({}) : JSON.stringify({ rawInput: TEXT });
     },
   });
-  const agent = new RawInputAgent({ model });
+  const agent = new NormalizedInputAgent({ model });
   assert.equal(await agent.createRawInput(INITIAL), TEXT);
   assert.equal(called, 2);
 });

@@ -40,18 +40,18 @@ export const INPUT_GUIDE = `
 /** 命令行用法说明。 */
 export const USAGE = `
 用法：node dist/app/novel-workflow/workflow.js [选项]
-  --model memory|real   模型类型（默认 memory；real 走项目正式 LLM 机制）
+  --model memory|real   模型类型（默认 memory；novel-workflow/workflow.ts 无参数运行时使用 real 示例）
   --input "文本"         直接传原始输入（短文本适用）
   --file <路径>          从 txt 文件读取原始输入（推荐）
-  --step n0|n1|n2|n3|n4|n5|n6|n7|n8  只跑单个节点（默认全链路 N0→N1→N2→(N3‖N4 并行)→N5→N6→N7→N8）
-                           n0：扩展原始输入（有缓存跳过）；n1：读最新 N0 产物生成草案；
-                           n2：读最新 N1 草案生成 BookConfig（纯程序，不调 LLM）；
-                           n3：读最新草案+BookConfig，架构师生成故事圣经与书籍规则；
-                           n4：读最新 N1 草案，作者意图整理器生成长期创作控制四件套；
-                           n5：读最新 N1+N3+N4 产物，架构师生成前四件、Director 生成节拍板；
-                           n6：读最新 N5 产物，生成初始化运行状态 State₀ 六类；
-                           n7：读 N1~N6 全部产物，生成书项目目录（纯程序，不调 LLM）
-                           n8：验收书目录八类内容物 + AI 红线扫描消毒 + 写交接凭据（纯程序，不调 LLM）
+  --step ni|dra|bc|sf|con|arc|sta|wor|rea  只跑单个节点（默认全链路 N0→N1→N2→(N3‖N4 并行)→N5→N6→N7→N8）
+                           ni：扩展原始输入（有缓存跳过）；dra：读最新 N0 产物生成草案；
+                           bc：读最新 N1 草案生成 BookConfig（纯程序，不调 LLM）；
+                           sf：读最新草案+BookConfig，架构师生成故事圣经与书籍规则；
+                           con：读最新 N1 草案，作者意图整理器生成长期创作控制四件套；
+                           arc：读最新 N1+N3+N4 产物，架构师生成前四件、Director 生成节拍板；
+                           sta：读最新 N5 产物，生成初始化运行状态 State₀ 六类；
+                           wor：读 N1~N6 全部产物，生成书项目目录（纯程序，不调 LLM）
+                           rea：验收书目录八类内容物 + AI 红线扫描消毒 + 写交接凭据（纯程序，不调 LLM）
   --force                N7 书目录已存在时强制重建（默认存在则跳过，保护手改的权威文件）
   --book <bookId>        N8 指定处理哪本书（缺省取 n7-workspace 下最新书目录）
   --clarify              进入多轮反问（仅 real 模式的 N1 生效；N0 默认自主补全，只在遇到矛盾时才问）

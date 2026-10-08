@@ -12,8 +12,9 @@ import {
 
 
 export async function runNormalizedInput(
-  state: NovelWorkflowState,
+  state: Pick<NovelWorkflowState, "rawInput" | "normalizedInput">,
   normalizedInputAgent: NormalizedInputAgent,
+  persist = true,
 ): Promise<Partial<NovelWorkflowState>> {
   const existing = latestRawInputArtifact();
 
@@ -46,7 +47,7 @@ export async function runNormalizedInput(
     "\n",
   );
 
-  saveRawInput(normalizedInput);
+  if (persist) saveRawInput(normalizedInput);
   state.normalizedInput = {
       normalizedInput,
       rawInputFromCache: false,

@@ -94,9 +94,19 @@ pnpm test             # 编译并运行全部测试（286 个）
 
 ### 最常用 —— 全链路一条命令跑完
 
+运行源码中预设的都市悬疑示例（自动构建并调用真实模型）：
+
 ```bash
-node dist/app/novel-workflow/workflow.js --model real --input "你的原始想法"
+pnpm run novel-workflow
 ```
+
+传入自己的构想：
+
+```bash
+pnpm run novel-workflow --model real --input "你的原始想法"
+```
+
+不传参数时使用 `workflow.ts` 中预设的都市悬疑示例输入和真实模型；传入命令行参数时按参数运行。
 
 例如：
 
@@ -123,15 +133,15 @@ node dist/app/novel-workflow/workflow.js --model real --input "你的想法" --c
 ### 只跑某个节点（断点续跑 / 单独看产物）
 
 ```bash
-node dist/app/novel-workflow/workflow.js --model real --step n0   # 只跑原始输入整理
-node dist/app/novel-workflow/workflow.js --model real --step n1   # 只跑创意草案
-node dist/app/novel-workflow/workflow.js --model real --step n3   # 只跑故事圣经+书籍规则
-node dist/app/novel-workflow/workflow.js --model real --step n4   # 只跑长期创作控制
-node dist/app/novel-workflow/workflow.js --model real --step n5   # 只跑节拍板（最耗时）
-node dist/app/novel-workflow/workflow.js --model real --step n6   # 只跑初始化运行状态 State0
-node dist/app/novel-workflow/workflow.js --step n2                # N2 纯程序，任何模式都能跑
-node dist/app/novel-workflow/workflow.js --step n7                # N7 纯程序，生成书目录
-node dist/app/novel-workflow/workflow.js --step n8                # N8 纯程序，验收+红线消毒
+node dist/app/novel-workflow/workflow.js --model real --step ni   # 只跑原始输入整理
+node dist/app/novel-workflow/workflow.js --model real --step dra  # 只跑创意草案
+node dist/app/novel-workflow/workflow.js --model real --step sf   # 只跑故事圣经+书籍规则
+node dist/app/novel-workflow/workflow.js --model real --step con  # 只跑长期创作控制
+node dist/app/novel-workflow/workflow.js --model real --step arc  # 只跑节拍板（最耗时）
+node dist/app/novel-workflow/workflow.js --model real --step sta  # 只跑初始化运行状态 State0
+node dist/app/novel-workflow/workflow.js --step bc                # N2 纯程序，任何模式都能跑
+node dist/app/novel-workflow/workflow.js --step wor               # N7 纯程序，生成书目录
+node dist/app/novel-workflow/workflow.js --step rea               # N8 纯程序，验收+红线消毒
 ```
 
 > 中途失败时，已经落盘的节点不用重跑——从失败的节点接着用 `--step` 续跑即可。N0 已有产物时，重跑会**跳过 N0**（打印"已存在 N0 产物"），要强制重新扩展就删除 `artifacts/n0-raw-input/` 下那个文件。
@@ -182,7 +192,7 @@ node dist/app/run-chapters.js --store-dir <dir>    # 正文/断点存放目录�
 - **提示"没有找到 N1 草案 / N7 书目录"**：说明对应的前序节点还没跑成功。先跑全链路或补跑对应 `--step`。
 - **`--model real` 报缺供应商配置**：检查 `.fly-novel/settings.json` 是否填了 `qwen` 块，且 `credentialRef` 与 `.credentials.json` 的键一致。
 - **`--credentials encrypt` 报"Encryption key is missing"**：先执行 `pnpm run init-encryption-key`。
-- **建书流中途超时**：最常发生在 N5 节拍板（章节很多时）。会自动分块 + 自动修复；实在超时可以加大单块规模或用 `--step n5` 单独重跑。
+- **建书流中途超时**：最常发生在 N5 节拍板（章节很多时）。会自动分块 + 自动修复；实在超时可以加大单块规模或用 `--step arc` 单独重跑。
 
 ---
 

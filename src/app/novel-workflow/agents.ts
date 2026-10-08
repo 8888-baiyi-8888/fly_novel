@@ -13,7 +13,7 @@ import { EXAMPLE_STATE0_JSON } from "../../novel-flow/state0/example";
 import { ConfiguredLlmModel } from "../configured-model";
 
 /** 组装内存模型版创意草案 Agent。 */
-export function buildCreativeDraftAgent(): CreativeDraftAgent {
+export function buildMemoryDraftAgent(): CreativeDraftAgent {
   const model = new MemoryModel({ responses: { creative_draft: EXAMPLE_DRAFT_JSON } });
   return new CreativeDraftAgent({ model, maxRetries: 3 });
 }
@@ -47,37 +47,37 @@ export function buildMemoryState0Agent(): State0Agent {
   return new State0Agent({ model, maxRetries: 3 });
 }
 
-/** 组装内存模型版原始输入 Agent。 */
-export function buildMemoryRawInputAgent(): NormalizedInputAgent {
+/** 组装内存模型版原始输入整理 Agent。 */
+export function buildMemoryNormalizedInputAgent(): NormalizedInputAgent {
   const model = new MemoryModel({ responses: { raw_input: JSON.stringify({ rawInput: EXAMPLE_RAW_INPUT }) } });
   return new NormalizedInputAgent({ model, maxRetries: 3 });
 }
 
-/** 组装真实模型版 N0 原始输入 Agent。 */
-export function buildRealRawInputAgent(): NormalizedInputAgent {
+/** 组装真实模型版原始输入整理 Agent。 */
+export function buildRealNormalizedInputAgent(): NormalizedInputAgent {
   const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
   return new NormalizedInputAgent({ model, maxRetries: 3 });
 }
 
-/** 组装真实模型版 N1 创意草案 Agent。 */
-export function buildRealCreativeDraftAgent(): CreativeDraftAgent {
+/** 组装真实模型版创意草案 Agent。 */
+export function buildRealDraftAgent(): CreativeDraftAgent {
   const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
   return new CreativeDraftAgent({ model, maxRetries: 3 });
 }
 
-/** 组装真实模型版 N3 架构师基础设定 Agent。 */
+/** 组装真实模型版架构师基础设定 Agent。 */
 export function buildRealArchitectAgent(): ArchitectAgent {
   const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
   return new ArchitectAgent({ model, maxRetries: 3 });
 }
 
-/** 组装真实模型版 N4 长期创作控制 Agent。 */
+/** 组装真实模型版长期创作控制 Agent。 */
 export function buildRealControlsAgent(): ControlsAgent {
   const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
   return new ControlsAgent({ model, maxRetries: 3 });
 }
 
-/** 组装真实模型版 N5 小说静态架构 Agent。 */
+/** 组装真实模型版小说静态架构 Agent。 */
 export function buildRealArchitectureAgent(): ArchitectureAgent {
   const architect = new StoryArchitectAgent({
     model: new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 480_000 }),
@@ -92,7 +92,7 @@ export function buildRealArchitectureAgent(): ArchitectureAgent {
   return new ArchitectureAgent(architect, director);
 }
 
-/** 组装真实模型版 N6 State₀ Agent。 */
+/** 组装真实模型版初始运行状态 Agent。 */
 export function buildRealState0Agent(): State0Agent {
   const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
   return new State0Agent({ model, maxRetries: 3 });

@@ -1,6 +1,10 @@
 # 工作流引擎（workflow）
 
-步骤流水线编排与执行。当前实现**章节级 7 步流水线**（direct → simulate → merge → write → audit → censor → settle）。
+步骤流水线编排与执行。章节级流程使用七步执行器，小说级建书流程使用 LangGraph 状态图。
+
+## 小说级建书图
+
+[novel_workflow/](novel_workflow/index.ts) 导出 `buildNovelGraph` 与唯一状态定义 `NovelWorkflowSchema`。调用方提供六个 Agent 实例；图从 `normalized_input` 开始，生成草案后并行执行书籍配置与长期控制，故事基础设定完成后汇合生成静态架构，最后生成初始状态、书目录和交接凭据。`persist: true` 时节点产物写入图状态与 `artifacts/`，书目录位于 `artifacts/n7-workspace/`，交接凭据写入 `story/runtime/ready.json`；`persist: false` 时只生成内存预览。`single-step.ts` 从已有产物恢复单步输入并复用相同节点。模型配置与终端交互由[应用入口](../app/novel-workflow/workflow.ts)提供。
 
 ## 能力
 
@@ -23,6 +27,7 @@
 
 ## 一级子目录
 
+- [novel_workflow/](novel_workflow/index.ts)：小说级 LangGraph 状态定义、建图函数、节点与产物读写。
 - [types.ts](types.ts)：节点、结果、存储（WorkflowStore）、事件与运行结果契约。
 - [agent-port.ts](agent-port.ts)：agent 生成能力端口 `AgentPort`（真实 agent 的接入面）。
 - [http-agent.ts](http-agent.ts)：`AgentPort` 的进程外 HTTP 适配器（第三方 agent 接入面，自定 `/generate` 协议）。
