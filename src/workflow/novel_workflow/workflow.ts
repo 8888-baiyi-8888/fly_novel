@@ -27,6 +27,8 @@ export interface NovelWorkflowAgents {
 }
 
 export interface NovelWorkflowRunOptions {
+  /** normalized input 产物的根目录。 */
+  artifactRoot: string;
   /** 是否写入产物和书目录；内存模型预览时传 false。 */
   persist?: boolean;
   /** 草案生成前的澄清回调；省略时直接生成。 */
@@ -36,10 +38,10 @@ export interface NovelWorkflowRunOptions {
 }
 
 /** 建立小说级工作流状态图，并将 Agent 绑定到对应节点。 */
-export function buildNovelGraph(deps: NovelWorkflowAgents, options: NovelWorkflowRunOptions = {}) {
+export function buildNovelGraph(deps: NovelWorkflowAgents, options: NovelWorkflowRunOptions) {
   const persist = options.persist ?? true;
   const normalizedInputNode = (state: NovelWorkflowState) =>
-    runNormalizedInput(state, deps.normalizedInputAgent, persist);
+    runNormalizedInput(state, deps.normalizedInputAgent, persist, options.artifactRoot);
   const draftNode = (state: NovelWorkflowState) =>
     runDraft(state, deps.draftAgent, persist, options.askUser);
   const bookConfigNode = (state: NovelWorkflowState) => runBookConfig(state, persist);

@@ -1,39 +1,27 @@
 /**原始输入整理节点 */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { NovelWorkflowState } from "../state";
-import { N0_RAW_INPUT_DIR } from "../../../novel-flow/paths";
 import { NormalizedInputAgent } from "../../../novel-flow/normalized-input/normalized-input-agent";
-import {
-  latestRawInputArtifact,
-  saveRawInput,
-} from "../artifacts";
+import { createRawInputArtifacts } from "../artifacts";
 
 
 export async function runNormalizedInput(
   state: Pick<NovelWorkflowState, "rawInput" | "normalizedInput">,
   normalizedInputAgent: NormalizedInputAgent,
-  persist = true,
+  persist: boolean,
+  artifactRoot: string,
 ): Promise<Partial<NovelWorkflowState>> {
-  const existing = latestRawInputArtifact();
+  const novelId = state.rawInput.novel_id;
+  const artifacts = createRawInputArtifacts(artifactRoot);
+  const existing = artifacts.latestRawInputArtifact(novelId);
 
   // 已存在 NI 产物，直接复用
   if (existing !== null) {
-    // TODO: 这里的逻辑应该更改为通过novel_id获取对应内容
-    
-    const path = join(N0_RAW_INPUT_DIR, existing);
-    const normalizedInput = readFileSync(path, "utf8");
-
     console.log(
-      `\n已存在 normalized input 产物：${path}\n` +
-      `（跳过 原始输入整理节点，直接作为 N1 输入；删除该文件可强制重新扩展）\n`,
+      `\n已存在 normalized input 产物：${existing.existing}\n` +
+      "（跳过原始输入整理节点，直接作为草案节点输入）\n",
     );
-    state.normalizedInput = {
-      normalizedInput,
-      rawInputFromCache: true,
-    }
-    return state
+    return { normalizedInput: { normalizedInput: existing.content, rawInputFromCache: true } };
   }
 
   // 调用 Agent 生成 NI 产物
@@ -47,10 +35,6 @@ export async function runNormalizedInput(
     "\n",
   );
 
-  if (persist) saveRawInput(normalizedInput);
-  state.normalizedInput = {
-      normalizedInput,
-      rawInputFromCache: false,
-    }
-  return state
-};
+  if (persist) artifacts.saveRawInput(normalizedInput, novelId);
+  return { normalizedInput: { normalizedInput, rawInputFromCache: false } };
+}

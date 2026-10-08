@@ -21,7 +21,8 @@ export const INPUT_GUIDE = `
 
 说明：
 - N0 会把你几句话的想法自主扩展成一段完整原始输入（主角/配角/主线/约束/平台篇幅由模型补全），
-  产物存 artifacts/n0-raw-input/；如果你对模型补全的内容不满意，可以直接改那个 md 文件再跑 N1（草案存 artifacts/n1-draft/）。
+  小说级 LangGraph 入口将产物存到 artifacts/<novelId>/normalized_input/；旧版 main.ts 入口仍使用 artifacts/n0-raw-input/。
+  如果你对模型补全的内容不满意，可以修改该 md 文件；小说级 LangGraph 入口用相同 novelId 重跑草案节点（草案存 artifacts/n1-draft/）。
 - 详细设定（配角档案、分卷细纲、事件链、爽点具体场景）不需要写在第一步；
   后续节点（N3 架构师、N5 静态架构）会自动生成；你已有的详细设定可另存为
   "创作素材"文件，在 N5 阶段作为参考喂给架构师，不要塞进 N0 输入。
@@ -74,7 +75,7 @@ real 模式全链路：N0 自主补全原始输入 → N1 生成创意草案 →
   N7：持久化工作空间——把 N1~N6 全部产物序列化成书项目目录（纯程序，不调 LLM）：
       inkos.json（书配置+平台节奏尺子）/ story/*.md（人读权威，含 hooks.md 伏笔账本）
       / state/*.json（机器读权威）/ beats.json（节拍板）/ chapters、runtime、export（空目录待填）
-  产物自动落盘：N0 文本 → artifacts/n0-raw-input/；N1 草案 → artifacts/n1-draft/；
+  产物自动落盘：整理输入 → artifacts/<novelId>/normalized_input/（旧版 main.ts 为 artifacts/n0-raw-input/）；N1 草案 → artifacts/n1-draft/；
                 N2 配置 → artifacts/n2-book-config/；N3 圣经与规则 → artifacts/n3-story-bible/；
                 N4 四件套 → artifacts/n4-controls/；N5 五件套 → artifacts/n5-architecture/；
                 N6 State₀ → artifacts/n6-state0/；N7 书目录 → artifacts/n7-workspace/{bookId}/

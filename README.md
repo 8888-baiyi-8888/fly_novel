@@ -134,7 +134,7 @@ node dist/app/novel-workflow/workflow.js --model real --input "你的想法" --c
 
 ```bash
 node dist/app/novel-workflow/workflow.js --model real --step ni   # 只跑原始输入整理
-node dist/app/novel-workflow/workflow.js --model real --step dra  # 只跑创意草案
+node dist/app/novel-workflow/workflow.js --model real --step dra --novel-id <novelId>  # 读取该小说的整理输入并生成草案
 node dist/app/novel-workflow/workflow.js --model real --step sf   # 只跑故事圣经+书籍规则
 node dist/app/novel-workflow/workflow.js --model real --step con  # 只跑长期创作控制
 node dist/app/novel-workflow/workflow.js --model real --step arc  # 只跑节拍板（最耗时）
@@ -144,7 +144,7 @@ node dist/app/novel-workflow/workflow.js --step wor               # N7 纯程序
 node dist/app/novel-workflow/workflow.js --step rea               # N8 纯程序，验收+红线消毒
 ```
 
-> 中途失败时，已经落盘的节点不用重跑——从失败的节点接着用 `--step` 续跑即可。N0 已有产物时，重跑会**跳过 N0**（打印"已存在 N0 产物"），要强制重新扩展就删除 `artifacts/n0-raw-input/` 下那个文件。
+> 全链路和 `--step ni` 会打印小说 ID。重复使用同一小说的整理输入时传 `--novel-id <novelId>`；`--step dra` 必须传这个 ID。整理输入缓存在 `artifacts/<novelId>/normalized_input/`，同一 ID 有产物时会跳过整理节点。旧版 `artifacts/n0-raw-input/` 不会自动迁移或读取；草案及后续节点目前仍使用原有的全局产物目录。
 
 ### 帮助
 
@@ -178,7 +178,8 @@ node dist/app/run-chapters.js --store-dir <dir>    # 正文/断点存放目录�
 
 | 阶段 | 位置 | 内容 |
 |---|---|---|
-| 建书各节点 | `artifacts/n0-raw-input/` ~ `n6-state0/` | 原始输入、草案、书籍配置、故事圣经、控制、节拍板、状态 |
+| 整理输入 | `artifacts/<novelId>/normalized_input/` | 按小说 ID 保存的整理输入文本 |
+| 其余建书节点 | `artifacts/n1-draft/` ~ `n6-state0/` | 草案、书籍配置、故事圣经、控制、节拍板、状态 |
 | 书目录 | `artifacts/n7-workspace/<bookId>/` | 章节流的输入（`inkos.json`、`state/hooks.json`、`story/beats/beats.json` 等） |
 | 交接凭据 | `artifacts/`（N8 产物） | 验收结果 + 红线消毒记录 |
 | 章节正文 | `.fly-novel-store/<bookId>/<章号>.md` | 每章写出的正文草稿 |

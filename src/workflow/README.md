@@ -4,7 +4,7 @@
 
 ## 小说级建书图
 
-[novel_workflow/](novel_workflow/index.ts) 导出 `buildNovelGraph` 与唯一状态定义 `NovelWorkflowSchema`。调用方提供六个 Agent 实例；图从 `normalized_input` 开始，生成草案后并行执行书籍配置与长期控制，故事基础设定完成后汇合生成静态架构，最后生成初始状态、书目录和交接凭据。`persist: true` 时节点产物写入图状态与 `artifacts/`，书目录位于 `artifacts/n7-workspace/`，交接凭据写入 `story/runtime/ready.json`；`persist: false` 时只生成内存预览。`single-step.ts` 从已有产物恢复单步输入并复用相同节点。模型配置与终端交互由[应用入口](../app/novel-workflow/workflow.ts)提供。
+[novel_workflow/](novel_workflow/index.ts) 导出 `buildNovelGraph` 与唯一状态定义 `NovelWorkflowSchema`。调用方提供六个 Agent 实例和整理输入产物根目录；图从 `normalized_input` 开始，生成草案后并行执行书籍配置与长期控制，故事基础设定完成后汇合生成静态架构，最后生成初始状态、书目录和交接凭据。`persist: true` 时整理输入写入 `{artifactRoot}/{novelId}/normalized_input/`，其余节点仍写入原有 `artifacts/n1-*` 至 `artifacts/n6-*` 目录，书目录位于 `artifacts/n7-workspace/`，交接凭据写入 `story/runtime/ready.json`；`persist: false` 时只生成内存预览。`single-step.ts` 从已有产物恢复单步输入并复用相同节点；草案单步读取指定小说 ID 的整理输入。旧版 `artifacts/n0-raw-input/` 不自动迁移，也不参与新入口的缓存查找。模型配置与终端交互由[应用入口](../app/novel-workflow/workflow.ts)提供。
 
 ## 能力
 

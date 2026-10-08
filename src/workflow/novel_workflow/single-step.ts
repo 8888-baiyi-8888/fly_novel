@@ -4,12 +4,12 @@ import type { ClarifyUserAnswer } from "../../novel-flow/draft/creative-draft-ag
 import { EXAMPLE_ARCHITECTURE } from "../../novel-flow/architecture/example";
 import { N7_WORKSPACE_DIR } from "../../novel-flow/paths";
 import {
+  createRawInputArtifacts,
   readLatestArchitecture,
   readLatestBookConfig,
   readLatestBookRules,
   readLatestControls,
   readLatestDraft,
-  readLatestRawInput,
   readLatestState0,
   readLatestStoryBible,
 } from "./artifacts";
@@ -31,6 +31,8 @@ export interface SingleStepOptions {
   step: NovelWorkflowStep;
   agents: NovelWorkflowAgents;
   initialInput: string;
+  novelId?: string;
+  artifactRoot: string;
   persist: boolean;
   askUser?: ClarifyUserAnswer;
   forceWorkspace?: boolean;
@@ -59,22 +61,28 @@ function resolveWorkspace(bookId?: string): { bookId: string; workspaceDir: stri
 /** 复用图节点执行单步；前序产物从 artifacts 读取。 */
 export async function runNovelStep(options: SingleStepOptions): Promise<void> {
   const { agents, persist } = options;
+  const rawInputArtifacts = createRawInputArtifacts(options.artifactRoot);
   switch (options.step) {
-    case "ni":
+    case "ni": {
+      if (options.novelId === undefined) throw new Error("normalized input 单步运行需要 novel_id");
       await runNormalizedInput(
-        { rawInput: { userInput: options.initialInput, novel_id: "single-step" }, normalizedInput: undefined },
+        { rawInput: { userInput: options.initialInput, novel_id: options.novelId }, normalizedInput: undefined },
         agents.normalizedInputAgent,
         persist,
+        options.artifactRoot,
       );
       return;
-    case "dra":
+    }
+    case "dra": {
+      if (options.novelId === undefined) throw new Error("草案单步运行需要 --novel-id");
       console.log(JSON.stringify((await runDraft(
-        { normalizedInput: { normalizedInput: requireArtifact(readLatestRawInput(), "原始输入整理") } },
+        { normalizedInput: { normalizedInput: requireArtifact(rawInputArtifacts.latestRawInputArtifact(options.novelId), "原始输入整理").content } },
         agents.draftAgent,
         persist,
         options.askUser,
       )).draft, null, 2));
       return;
+    }
     case "bc":
       console.log(JSON.stringify(runBookConfig({ draft: requireArtifact(readLatestDraft(), "创意草案") }).bookConfig, null, 2));
       return;

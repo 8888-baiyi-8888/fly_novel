@@ -1,7 +1,7 @@
 /**
  * 建书管线（novel-flow）产物路径：基于仓库根（进程工作目录）。
  * 与章节流 src/config/paths.ts（凭据系统 APP_HOME）分离，互不影响。
- * 约束：novel-flow 相关命令（main.ts 建书 CLI、书目录加载）须在仓库根运行。
+ * 约束：建书命令和书目录加载须在仓库根运行。
  */
 import { join } from "node:path";
 
@@ -9,9 +9,9 @@ import { join } from "node:path";
 export const PROJECT_ROOT = process.cwd();
 
 /** 产物根目录：N0/N1 等节点生成物统一落盘位置。 */
-export const ARTIFACTS_ROOT = join(PROJECT_ROOT, "artifacts");
+export const ARTIFACTS_ROOT = join(PROJECT_ROOT, ".fly-novel-store");
 
-/** N0 产物目录：整理后的原始输入文本。 */
+/** 旧版建书入口的 N0 产物目录；小说级 LangGraph 使用 artifactRoot/novelId/normalized_input。 */
 export const N0_RAW_INPUT_DIR = join(ARTIFACTS_ROOT, "n0-raw-input");
 
 /** N1 产物目录：创意草案 JSON。 */

@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { BookConfig } from "../../novel-flow/book-config";
 import { BookRules, StoryBible } from "../../novel-flow/architect/types";
 import { StoryArchitecture } from "../../novel-flow/architecture/types";
@@ -7,7 +7,6 @@ import { LongTermControls } from "../../novel-flow/controls/types";
 import { CreativeDraft } from "../../novel-flow/draft/types";
 import { State0 } from "../../novel-flow/state0/types";
 import {
-  N0_RAW_INPUT_DIR,
   N1_DRAFT_DIR,
   N2_BOOK_CONFIG_DIR,
   N3_STORY_BIBLE_DIR,
@@ -23,12 +22,39 @@ export function timestamp(): string {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
-export function saveRawInput(rawInput: string): string {
-  mkdirSync(N0_RAW_INPUT_DIR, { recursive: true });
-  const path = join(N0_RAW_INPUT_DIR, `raw-input-${timestamp()}.md`);
-  writeFileSync(path, rawInput, "utf8");
-  console.log(`\n已保存 N0 原始输入到：${path}`);
-  return path;
+/** 将产物根目录绑定到原始输入产物的读写函数。 */
+export function createRawInputArtifacts(rootPath: string) {
+  const root = resolve(rootPath);
+  const directoryFor = (novelId: string): string => {
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(novelId)) {
+      throw new Error(`无效的 novel_id：${novelId}`);
+    }
+    return join(root, novelId, "normalized_input");
+  };
+
+  return {
+    /** 只读取指定小说的最新产物；旧版 artifacts/n0-raw-input 不参与查找。 */
+    latestRawInputArtifact(novelId: string): { existing: string; content: string } | null {
+      const directory = directoryFor(novelId);
+      if (!existsSync(directory)) return null;
+      const existing = readdirSync(directory, { encoding: "utf8" })
+        .filter((name) => name.startsWith("normalized-input-") && name.endsWith(".md"))
+        .sort()
+        .at(-1);
+      if (existing === undefined) return null;
+      const path = join(directory, existing);
+      return { existing: path, content: readFileSync(path, "utf8") };
+    },
+    /** 保存到 rootPath/novelId/normalized_input/normalized-input-时间戳.md。 */
+    saveRawInput(normalizedInput: string, novelId: string): string {
+      const directory = directoryFor(novelId);
+      mkdirSync(directory, { recursive: true });
+      const path = join(directory, `normalized-input-${timestamp()}.md`);
+      writeFileSync(path, normalizedInput, "utf8");
+      console.log(`\n已保存 normalized input 到：${path}`);
+      return path;
+    },
+  };
 }
 
 export function saveDraft(draft: CreativeDraft): string {
@@ -85,19 +111,6 @@ export function saveState0(state0: State0): string {
   writeFileSync(path, JSON.stringify(state0, null, 2), "utf8");
   console.log(`已保存 N6 State₀ 到：${path}`);
   return path;
-}
-
-export function latestRawInputArtifact(): string | null {
-  mkdirSync(N0_RAW_INPUT_DIR, { recursive: true });
-  const files = readdirSync(N0_RAW_INPUT_DIR, { encoding: "utf8" })
-    .filter((name) => name.startsWith("raw-input-") && name.endsWith(".md"))
-    .sort();
-  return files.length === 0 ? null : files[files.length - 1];
-}
-
-export function readLatestRawInput(): string | null {
-  const file = latestRawInputArtifact();
-  return file === null ? null : readFileSync(join(N0_RAW_INPUT_DIR, file), "utf8");
 }
 
 export function latestDraftArtifact(): string | null {
