@@ -1,12 +1,14 @@
 import { buildCreativeBrief, type ArchitectAgent } from "../../../novel-flow/architect";
-import { saveBookRulesDoc, saveStoryBible } from "../artifacts";
+import type { NovelArtifacts } from "../artifacts";
 import type { NovelWorkflowState } from "../state";
 
 /** 生成故事圣经与书籍规则。 */
 export async function runStoryFoundation(
   state: Pick<NovelWorkflowState, "draft" | "bookConfig">,
   architectAgent: ArchitectAgent,
-  persist = true,
+  persist: boolean,
+  novelId: string,
+  artifacts: NovelArtifacts,
 ): Promise<Partial<NovelWorkflowState>> {
   if (state.draft === undefined || state.bookConfig === undefined) {
     throw new Error("缺少 draft 或 book_config 节点产物，无法生成故事基础设定");
@@ -18,8 +20,8 @@ export async function runStoryFoundation(
     state.bookConfig,
   );
   if (persist) {
-    saveStoryBible(storyBible);
-    saveBookRulesDoc(bookRules);
+    artifacts.saveStoryBible(storyBible, novelId);
+    artifacts.saveBookRulesDoc(bookRules, novelId);
   }
   return { storyBible, bookRules };
 }

@@ -2,17 +2,16 @@
 
 import { NovelWorkflowState } from "../state";
 import { NormalizedInputAgent } from "../../../novel-flow/normalized-input/normalized-input-agent";
-import { createRawInputArtifacts } from "../artifacts";
+import type { NovelArtifacts } from "../artifacts";
 
 
 export async function runNormalizedInput(
   state: Pick<NovelWorkflowState, "rawInput" | "normalizedInput">,
   normalizedInputAgent: NormalizedInputAgent,
   persist: boolean,
-  artifactRoot: string,
+  artifacts: NovelArtifacts,
 ): Promise<Partial<NovelWorkflowState>> {
   const novelId = state.rawInput.novel_id;
-  const artifacts = createRawInputArtifacts(artifactRoot);
   const existing = artifacts.latestRawInputArtifact(novelId);
 
   // 已存在 NI 产物，直接复用

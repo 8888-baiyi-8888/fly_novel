@@ -1,10 +1,16 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scanAndFixRedlines, verifyWorkspace } from "../../../novel-flow/workspace";
+import type { NovelArtifacts } from "../artifacts";
 import type { NovelWorkflowState } from "../state";
 
 /** 验收书籍工作空间并写入章节流交接凭据。 */
-export function runReady(state: Pick<NovelWorkflowState, "workspace">, persist = true): Partial<NovelWorkflowState> {
+export function runReady(
+  state: Pick<NovelWorkflowState, "workspace">,
+  persist: boolean,
+  novelId: string,
+  artifacts: NovelArtifacts,
+): Partial<NovelWorkflowState> {
   if (!persist) return {};
   const workspace = state.workspace;
   if (workspace === undefined) {
@@ -24,5 +30,6 @@ export function runReady(state: Pick<NovelWorkflowState, "workspace">, persist =
   const runtimeDir = join(workspace.workspaceDir, "story", "runtime");
   mkdirSync(runtimeDir, { recursive: true });
   writeFileSync(join(runtimeDir, "ready.json"), JSON.stringify(ready, null, 2), "utf8");
+  artifacts.saveReady(ready, novelId);
   return { ready };
 }

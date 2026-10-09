@@ -2,17 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ClarifyUserAnswer } from "../../novel-flow/draft/creative-draft-agent";
 import { EXAMPLE_ARCHITECTURE } from "../../novel-flow/architecture/example";
-import { N7_WORKSPACE_DIR } from "../../novel-flow/paths";
-import {
-  createRawInputArtifacts,
-  readLatestArchitecture,
-  readLatestBookConfig,
-  readLatestBookRules,
-  readLatestControls,
-  readLatestDraft,
-  readLatestState0,
-  readLatestStoryBible,
-} from "./artifacts";
+import { createNovelArtifacts } from "./artifacts";
 import { runArchitecture } from "./nodes/architecture";
 import { runBookConfig } from "./nodes/book-config";
 import { runControls } from "./nodes/controls";
@@ -31,7 +21,7 @@ export interface SingleStepOptions {
   step: NovelWorkflowStep;
   agents: NovelWorkflowAgents;
   initialInput: string;
-  novelId?: string;
+  novelId: string;
   artifactRoot: string;
   persist: boolean;
   askUser?: ClarifyUserAnswer;
@@ -44,8 +34,8 @@ function requireArtifact<T>(value: T | null, description: string): T {
   return value;
 }
 
-function resolveWorkspace(bookId?: string): { bookId: string; workspaceDir: string } {
-  const selected = bookId ?? (existsSync(N7_WORKSPACE_DIR) ? readdirSync(N7_WORKSPACE_DIR, { withFileTypes: true })
+function resolveWorkspace(workspaceRoot: string, bookId?: string): { bookId: string; workspaceDir: string } {
+  const selected = bookId ?? (existsSync(workspaceRoot) ? readdirSync(workspaceRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
     .map((entry) => entry.name)
     .sort()
@@ -53,7 +43,8 @@ function resolveWorkspace(bookId?: string): { bookId: string; workspaceDir: stri
   if (selected === undefined) {
     throw new Error("没有找到书籍工作空间，请先运行工作空间节点");
   }
-  const workspaceDir = join(N7_WORKSPACE_DIR, selected);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(selected)) throw new Error(`无效的 bookId：${selected}`);
+  const workspaceDir = join(workspaceRoot, selected);
   if (!existsSync(workspaceDir)) throw new Error(`书目录不存在：${workspaceDir}`);
   return { bookId: selected, workspaceDir };
 }
@@ -61,83 +52,94 @@ function resolveWorkspace(bookId?: string): { bookId: string; workspaceDir: stri
 /** 复用图节点执行单步；前序产物从 artifacts 读取。 */
 export async function runNovelStep(options: SingleStepOptions): Promise<void> {
   const { agents, persist } = options;
-  const rawInputArtifacts = createRawInputArtifacts(options.artifactRoot);
+  const artifacts = createNovelArtifacts(options.artifactRoot);
+  const novelId = options.novelId;
   switch (options.step) {
     case "ni": {
-      if (options.novelId === undefined) throw new Error("normalized input 单步运行需要 novel_id");
       await runNormalizedInput(
-        { rawInput: { userInput: options.initialInput, novel_id: options.novelId }, normalizedInput: undefined },
+        { rawInput: { userInput: options.initialInput, novel_id: novelId }, normalizedInput: undefined },
         agents.normalizedInputAgent,
         persist,
-        options.artifactRoot,
+        artifacts,
       );
       return;
     }
     case "dra": {
-      if (options.novelId === undefined) throw new Error("草案单步运行需要 --novel-id");
       console.log(JSON.stringify((await runDraft(
-        { normalizedInput: { normalizedInput: requireArtifact(rawInputArtifacts.latestRawInputArtifact(options.novelId), "原始输入整理").content } },
+        { normalizedInput: { normalizedInput: requireArtifact(artifacts.latestRawInputArtifact(novelId), "原始输入整理").content } },
         agents.draftAgent,
         persist,
+        novelId,
+        artifacts,
         options.askUser,
       )).draft, null, 2));
       return;
     }
     case "bc":
-      console.log(JSON.stringify(runBookConfig({ draft: requireArtifact(readLatestDraft(), "创意草案") }).bookConfig, null, 2));
+      console.log(JSON.stringify(runBookConfig(
+        { draft: requireArtifact(artifacts.readLatestDraft(novelId), "创意草案") }, persist, novelId, artifacts,
+      ).bookConfig, null, 2));
       return;
     case "sf":
       console.log(JSON.stringify(await runStoryFoundation(
         {
-          draft: requireArtifact(readLatestDraft(), "创意草案"),
-          bookConfig: requireArtifact(readLatestBookConfig(), "书籍配置"),
+          draft: requireArtifact(artifacts.readLatestDraft(novelId), "创意草案"),
+          bookConfig: requireArtifact(artifacts.readLatestBookConfig(novelId), "书籍配置"),
         },
         agents.architectAgent,
         persist,
+        novelId,
+        artifacts,
       ), null, 2));
       return;
     case "con":
       console.log(JSON.stringify(await runControls(
-        { draft: requireArtifact(readLatestDraft(), "创意草案") }, agents.controlsAgent, persist,
+        { draft: requireArtifact(artifacts.readLatestDraft(novelId), "创意草案") }, agents.controlsAgent, persist, novelId, artifacts,
       ), null, 2));
       return;
     case "arc":
       console.log(JSON.stringify(await runArchitecture(
         {
-          draft: requireArtifact(readLatestDraft(), "创意草案"),
-          storyBible: requireArtifact(readLatestStoryBible(), "故事圣经"),
-          bookRules: requireArtifact(readLatestBookRules(), "书籍规则"),
-          controls: requireArtifact(readLatestControls(), "长期创作控制"),
+          draft: requireArtifact(artifacts.readLatestDraft(novelId), "创意草案"),
+          storyBible: requireArtifact(artifacts.readLatestStoryBible(novelId), "故事圣经"),
+          bookRules: requireArtifact(artifacts.readLatestBookRules(novelId), "书籍规则"),
+          controls: requireArtifact(artifacts.readLatestControls(novelId), "长期创作控制"),
         },
         agents.architectureAgent,
         persist,
+        novelId,
+        artifacts,
       ), null, 2));
       return;
     case "sta":
       console.log(JSON.stringify(await runState0(
-        { architecture: persist ? requireArtifact(readLatestArchitecture(), "小说静态架构") : EXAMPLE_ARCHITECTURE },
+        { architecture: persist ? requireArtifact(artifacts.readLatestArchitecture(novelId), "小说静态架构") : EXAMPLE_ARCHITECTURE },
         agents.state0Agent,
         persist,
+        novelId,
+        artifacts,
       ), null, 2));
       return;
     case "wor":
       console.log(JSON.stringify(runWorkspace(
         {
-          draft: requireArtifact(readLatestDraft(), "创意草案"),
-          bookConfig: requireArtifact(readLatestBookConfig(), "书籍配置"),
-          storyBible: requireArtifact(readLatestStoryBible(), "故事圣经"),
-          bookRules: requireArtifact(readLatestBookRules(), "书籍规则"),
-          controls: requireArtifact(readLatestControls(), "长期创作控制"),
-          architecture: requireArtifact(readLatestArchitecture(), "小说静态架构"),
-          state0: requireArtifact(readLatestState0(), "初始运行状态"),
+          draft: requireArtifact(artifacts.readLatestDraft(novelId), "创意草案"),
+          bookConfig: requireArtifact(artifacts.readLatestBookConfig(novelId), "书籍配置"),
+          storyBible: requireArtifact(artifacts.readLatestStoryBible(novelId), "故事圣经"),
+          bookRules: requireArtifact(artifacts.readLatestBookRules(novelId), "书籍规则"),
+          controls: requireArtifact(artifacts.readLatestControls(novelId), "长期创作控制"),
+          architecture: requireArtifact(artifacts.readLatestArchitecture(novelId), "小说静态架构"),
+          state0: requireArtifact(artifacts.readLatestState0(novelId), "初始运行状态"),
         },
         persist,
-        options.forceWorkspace,
+        options.forceWorkspace ?? false,
+        novelId,
+        artifacts,
       ).workspace, null, 2));
       return;
     case "rea": {
-      const workspace = resolveWorkspace(options.bookId);
-      const result = runReady({ workspace: { ...workspace, skipped: true, filesWritten: [] } });
+      const workspace = resolveWorkspace(artifacts.workspaceRoot(novelId), options.bookId);
+      const result = runReady({ workspace: { ...workspace, skipped: true, filesWritten: [] } }, true, novelId, artifacts);
       console.log(`交接结果：${result.ready?.status ?? "warn"}`);
       return;
     }

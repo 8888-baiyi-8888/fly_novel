@@ -1,11 +1,14 @@
 import { buildWorkspace } from "../../../novel-flow/workspace";
+import type { NovelArtifacts } from "../artifacts";
 import type { NovelWorkflowState } from "../state";
 
 /** 将前序节点产物写入书籍工作空间。 */
 export function runWorkspace(
   state: Pick<NovelWorkflowState, "draft" | "bookConfig" | "storyBible" | "bookRules" | "controls" | "architecture" | "state0">,
-  persist = true,
-  force = false,
+  persist: boolean,
+  force: boolean,
+  novelId: string,
+  artifacts: NovelArtifacts,
 ): Partial<NovelWorkflowState> {
   const { draft, bookConfig, storyBible, bookRules, controls, architecture, state0 } = state;
   if (
@@ -16,7 +19,7 @@ export function runWorkspace(
   }
   const workspace = buildWorkspace(
     { draft, bookConfig, storyBible, bookRules, controls, architecture, state0 },
-    { dryRun: !persist, force },
+    { dryRun: !persist, force, workspaceRoot: artifacts.workspaceRoot(novelId) },
   );
   return { workspace };
 }

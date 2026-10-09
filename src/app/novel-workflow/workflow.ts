@@ -136,12 +136,12 @@ export async function runNovelWorkflow(argv: string[] = process.argv.slice(2)): 
   const args = parseArgs(argv);
   if (args.help === true) {
     console.log(USAGE);
-    console.log("  --novel-id <ID>       指定小说 ID；草案单步运行时必须传入 normalized input 使用的 ID");
+    console.log("  --novel-id <ID>       指定小说 ID；除 ni 外的单步运行均须传入");
     console.log(INPUT_GUIDE);
     return;
   }
-  if (args.step === "dra" && args.novelId === undefined) {
-    throw new Error("草案单步运行需要 --novel-id <ID>");
+  if (args.step !== undefined && args.step !== "ni" && args.novelId === undefined) {
+    throw new Error("单步运行需要 --novel-id <ID>（ni 节点可自动生成）");
   }
   const isReal = args.model === "real";
   const agents: NovelWorkflowAgents = {
@@ -161,7 +161,7 @@ export async function runNovelWorkflow(argv: string[] = process.argv.slice(2)): 
   }
 
   if (args.step !== undefined) {
-    const novelId = args.novelId ?? (args.step === "ni" ? randomUUID() : undefined);
+    const novelId = args.novelId ?? randomUUID();
     if (args.step === "ni") console.log(`小说 ID：${novelId}`);
     const asker = args.step === "dra" && args.clarify === true ? createCliAsker() : undefined;
     try {
@@ -192,12 +192,14 @@ export async function runNovelWorkflow(argv: string[] = process.argv.slice(2)): 
   });
 }
 
+
 if (require.main === module) {
+  const inputconst = "我想写一部小说，讲述有序无序的故事。智商在线。玄幻世界，非常规修仙。一千章，每章 3000 字。";
   const argv = process.argv.slice(2);
   runNovelWorkflow(argv.length > 0 ? argv : [
     "--model", "real",
-    "--novel-id", "bf552107-18ce-4e81-962f-7b31c5d521d9",
-    "--input", "我想写一部都市悬疑小说。主角是一名刚入职的档案管理员，在整理旧案卷时发现十年前一宗失踪案的照片里出现了现在的自己。她起初以为照片被人伪造，却陆续找到只有她知道的童年细节。故事围绕她追查失踪者、怀疑自己的记忆展开；希望悬念逐步揭开，人物的选择有合理动机，结局解释照片的来历。计划写约80章，每章2500字。",
+    "--novel-id", "bf552107-18ce-4e81-962f-7b31c5d521d8",
+    "--input", inputconst,
   ]).catch((error: unknown) => {
     const message =
       error instanceof CreativeDraftError || error instanceof RawInputError || error instanceof Error

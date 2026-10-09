@@ -5,6 +5,7 @@ import type { ControlsAgent } from "../../novel-flow/controls";
 import type { ClarifyUserAnswer, CreativeDraftAgent } from "../../novel-flow/draft/creative-draft-agent";
 import type { NormalizedInputAgent } from "../../novel-flow/normalized-input/normalized-input-agent";
 import type { State0Agent } from "../../novel-flow/state0";
+import { createNovelArtifacts } from "./artifacts";
 import { runArchitecture } from "./nodes/architecture";
 import { runBookConfig } from "./nodes/book-config";
 import { runControls } from "./nodes/controls";
@@ -27,7 +28,7 @@ export interface NovelWorkflowAgents {
 }
 
 export interface NovelWorkflowRunOptions {
-  /** normalized input 产物的根目录。 */
+  /** 小说级各节点产物的根目录。 */
   artifactRoot: string;
   /** 是否写入产物和书目录；内存模型预览时传 false。 */
   persist?: boolean;
@@ -40,20 +41,25 @@ export interface NovelWorkflowRunOptions {
 /** 建立小说级工作流状态图，并将 Agent 绑定到对应节点。 */
 export function buildNovelGraph(deps: NovelWorkflowAgents, options: NovelWorkflowRunOptions) {
   const persist = options.persist ?? true;
+  const artifacts = createNovelArtifacts(options.artifactRoot);
   const normalizedInputNode = (state: NovelWorkflowState) =>
-    runNormalizedInput(state, deps.normalizedInputAgent, persist, options.artifactRoot);
+    runNormalizedInput(state, deps.normalizedInputAgent, persist, artifacts);
   const draftNode = (state: NovelWorkflowState) =>
-    runDraft(state, deps.draftAgent, persist, options.askUser);
-  const bookConfigNode = (state: NovelWorkflowState) => runBookConfig(state, persist);
+    runDraft(state, deps.draftAgent, persist, state.rawInput.novel_id, artifacts, options.askUser);
+  const bookConfigNode = (state: NovelWorkflowState) =>
+    runBookConfig(state, persist, state.rawInput.novel_id, artifacts);
   const storyFoundationNode = (state: NovelWorkflowState) =>
-    runStoryFoundation(state, deps.architectAgent, persist);
-  const controlsNode = (state: NovelWorkflowState) => runControls(state, deps.controlsAgent, persist);
+    runStoryFoundation(state, deps.architectAgent, persist, state.rawInput.novel_id, artifacts);
+  const controlsNode = (state: NovelWorkflowState) =>
+    runControls(state, deps.controlsAgent, persist, state.rawInput.novel_id, artifacts);
   const architectureNode = (state: NovelWorkflowState) =>
-    runArchitecture(state, deps.architectureAgent, persist);
-  const state0Node = (state: NovelWorkflowState) => runState0(state, deps.state0Agent, persist);
+    runArchitecture(state, deps.architectureAgent, persist, state.rawInput.novel_id, artifacts);
+  const state0Node = (state: NovelWorkflowState) =>
+    runState0(state, deps.state0Agent, persist, state.rawInput.novel_id, artifacts);
   const workspaceNode = (state: NovelWorkflowState) =>
-    runWorkspace(state, persist, options.forceWorkspace);
-  const readyNode = (state: NovelWorkflowState) => runReady(state, persist);
+    runWorkspace(state, persist, options.forceWorkspace ?? false, state.rawInput.novel_id, artifacts);
+  const readyNode = (state: NovelWorkflowState) =>
+    runReady(state, persist, state.rawInput.novel_id, artifacts);
 
   const graphWithNodes = new StateGraph(NovelWorkflowSchema)
     .addNode("normalized_input", normalizedInputNode)

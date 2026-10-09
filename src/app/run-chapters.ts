@@ -1,9 +1,9 @@
 /**
- * 章节工作流驱动入口（章节级，与小说级 main.ts 同层）。
+ * 章节工作流驱动入口（章节级，与小说级应用入口同属 app）。
  *
  * 与 run-chapter.ts 的区别：run-chapter 是 workflow 层的调试入口，要求手动传
  * --base-url/--model/--api-key/--workspace；本入口面向正式使用——
- *  - 自动定位最新 N7 书目录（artifacts/n7-workspace/<bookId>/），不传 --workspace；
+ *  - 自动定位最新小说书目录（.fly-novel-store/<novelId>/workspace_node/<bookId>/），不传 --workspace；
  *  - model 复用小说级配置（.fly-novel/settings.json + 解密凭据，provider=qwen），
  *    不传 --base-url/--model/--api-key，也不读 FLY_NOVEL_* 环境变量。
  *
@@ -12,13 +12,13 @@
  *   node dist/app/run-chapters.js                     # 自动定位最新书目录，写第 1 章
  *   node dist/app/run-chapters.js --chapter 3        # 写第 3 章
  *   node dist/app/run-chapters.js --chapter 1 --to 5 # 连续写第 1~5 章
- *   node dist/app/run-chapters.js --book <bookId>    # 指定书（缺省取最新书目录）
+ *   node dist/app/run-chapters.js --novel-id <ID> --book <bookId> # 指定小说和书
  *   node dist/app/run-chapters.js --store-dir <dir>  # 断点/正文存放目录（缺省 .fly-novel-store）
  *
- * 每章正文导到 {store-dir}/{bookId}/{chapter}.md；跨章运行时状态（账本/真相/时钟/角色状态）
- * 落盘 {store-dir}/{bookId}/runtime-state.json，下次运行自动恢复，逐章世界真实延续。
+ * 每章正文和断点写入 {store-dir}/{novelId}/chapter_workflow/{bookId}/；
+ * 跨章运行时状态存为同目录的 runtime-state.json，下次运行自动恢复。
  */
-import { readdirSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { ConfiguredLlmModel } from "./configured-model";
 import type { ModelClient } from "../novel-flow/adapters/model-contract";
@@ -27,11 +27,12 @@ import { buildChapterNodes } from "../workflow/nodes";
 import { ChapterWorkflow } from "../workflow/engine";
 import { createJsonFileStore } from "../workflow/file-store";
 import { buildRuntimeFromBookWorkspace } from "../novel/runtime/book-workspace";
-import { N7_WORKSPACE_DIR } from "../novel-flow/paths";
+import { ARTIFACTS_ROOT } from "../novel-flow/paths";
+import { novelArtifactDirectory } from "../workflow/novel_workflow/artifacts";
 import type { WorkflowEvent } from "../workflow/types";
 import type { BookId } from "../novel/types";
 
-/** 复用小说级 model 配置：settings.json 的顶层供应商键（与 main.ts 的 real 链路一致）。 */
+/** 复用小说级 model 配置：settings.json 的顶层供应商键。 */
 const MODEL_PROVIDER = "qwen";
 
 /** 把小说级 ModelClient（ConfiguredLlmModel，settings 读+解密）适配成 workflow 的 AgentPort。 */
@@ -60,23 +61,37 @@ function createConfiguredAgentPort(model: ModelClient): AgentPort {
   };
 }
 
-/** 定位书目录：--book 指定 bookId；缺省取 n7-workspace 下最新书目录。 */
-function resolveBookWorkspace(bookIdArg?: string): { bookId: string; dir: string } {
-  if (bookIdArg !== undefined && bookIdArg !== "") {
-    return { bookId: bookIdArg, dir: join(N7_WORKSPACE_DIR, bookIdArg) };
+/** 定位指定小说的书目录；未指定 ID 时选最近修改的新格式书目录。 */
+function resolveBookWorkspace(novelIdArg?: string, bookIdArg?: string): { novelId: string; bookId: string; dir: string } {
+  const novelIds = novelIdArg === undefined
+    ? existsSync(ARTIFACTS_ROOT) ? readdirSync(ARTIFACTS_ROOT, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(entry.name))
+      .map((entry) => entry.name) : []
+    : [novelIdArg];
+  const candidates: { novelId: string; bookId: string; dir: string; mtimeMs: number }[] = [];
+  for (const novelId of novelIds) {
+    const workspaceRoot = novelArtifactDirectory(ARTIFACTS_ROOT, novelId, "workspace_node");
+    if (!existsSync(workspaceRoot)) continue;
+    for (const entry of readdirSync(workspaceRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || (bookIdArg !== undefined && entry.name !== bookIdArg)) continue;
+      const dir = join(workspaceRoot, entry.name);
+      candidates.push({ novelId, bookId: entry.name, dir, mtimeMs: statSync(dir).mtimeMs });
+    }
   }
-  mkdirSync(N7_WORKSPACE_DIR, { recursive: true });
-  const books = readdirSync(N7_WORKSPACE_DIR, { encoding: "utf8" })
-    .filter((name) => name !== ".gitkeep" && !name.startsWith("."))
-    .sort();
-  if (books.length === 0) {
-    throw new Error(`artifacts/n7-workspace 下没有书目录，请先运行小说级建书（node dist/app/novel-workflow/workflow.js --model real …，产出 N1~N7）。`);
+  if (candidates.length === 0) {
+    throw new Error("未找到小说书目录：请确认 --novel-id 和 --book；旧版 n7-workspace 目录不会自动读取");
   }
-  return { bookId: books[books.length - 1], dir: join(N7_WORKSPACE_DIR, books[books.length - 1]) };
+  if (novelIdArg === undefined && bookIdArg !== undefined && candidates.length > 1) {
+    throw new Error(`bookId ${bookIdArg} 对应多部小说，请同时指定 --novel-id`);
+  }
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs || a.dir.localeCompare(b.dir));
+  const selected = candidates[0];
+  return { novelId: selected.novelId, bookId: selected.bookId, dir: selected.dir };
 }
 
 interface CliOptions {
   readonly book?: string;
+  readonly novelId?: string;
   readonly chapter?: number;
   readonly to?: number;
   readonly storeDir?: string;
@@ -98,6 +113,7 @@ function parseArgs(argv: readonly string[]): CliOptions {
   }
   return {
     book: out.book,
+    novelId: out["novel-id"],
     chapter: out.chapter === undefined ? undefined : Number(out.chapter),
     to: out.to === undefined ? undefined : Number(out.to),
     storeDir: out["store-dir"],
@@ -108,26 +124,31 @@ function parseArgs(argv: readonly string[]): CliOptions {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.help === true) {
-    console.log("用法：node dist/app/run-chapters.js [--book <bookId>] [--chapter N] [--to M] [--store-dir <dir>]");
-    console.log("说明：自动定位最新 N7 书目录；model 复用小说级配置（.fly-novel/settings.json，provider=qwen）；");
-    console.log("      从 --chapter（默认 1）写到 --to（默认同章）；正文与断点存 {store-dir}/{bookId}/。");
+    console.log("用法：node dist/app/run-chapters.js [--novel-id <ID>] [--book <bookId>] [--chapter N] [--to M] [--store-dir <dir>]");
+    console.log("说明：自动定位最近修改的小说书目录；model 复用小说级配置（.fly-novel/settings.json，provider=qwen）；");
+    console.log("      正文与断点存 {store-dir}/{novelId}/chapter_workflow/{bookId}/。");
     return;
   }
 
-  const { bookId, dir: workspace } = resolveBookWorkspace(args.book);
+  const { novelId, bookId, dir: workspace } = resolveBookWorkspace(args.novelId, args.book);
   const chapter = args.chapter ?? 1;
   const to = args.to ?? chapter;
   const storeDir = args.storeDir ?? ".fly-novel-store";
-  const runtimeStatePath = join(storeDir, bookId, "runtime-state.json");
+  const chapterRoot = novelArtifactDirectory(storeDir, novelId, "chapter_workflow");
+  const legacyChapterDir = join(storeDir, bookId);
+  if (!existsSync(join(chapterRoot, bookId)) && existsSync(legacyChapterDir)) {
+    throw new Error(`发现旧版章节数据：${legacyChapterDir}。请先迁移到 ${join(chapterRoot, bookId)}，避免从空状态续写`);
+  }
+  const runtimeStatePath = join(chapterRoot, bookId, "runtime-state.json");
 
   console.log(`书目录：${workspace}`);
-  console.log(`章节：${chapter}~${to}，store：${storeDir}/${bookId}/`);
+  console.log(`章节：${chapter}~${to}，store：${chapterRoot}/${bookId}/`);
 
   // model 复用小说级配置（settings 读 + 解密凭据），不传参数/env
   const model = new ConfiguredLlmModel({ provider: MODEL_PROVIDER, timeoutMs: 480_000 });
   const agent = createConfiguredAgentPort(model);
   const runtime = buildRuntimeFromBookWorkspace(workspace);
-  const store = createJsonFileStore({ dir: storeDir });
+  const store = createJsonFileStore({ dir: chapterRoot });
 
   // 恢复跨章运行时状态（账本/真相/时钟/角色状态，上一章结束落盘）
   try {
@@ -175,7 +196,7 @@ async function main(): Promise<void> {
     const persisted = await store.load(book, ch);
     const draft = persisted?.artifacts?.["write"];
     if (typeof draft === "string" && draft !== "") {
-      const draftPath = join(storeDir, bookId, `${ch}.md`);
+      const draftPath = join(chapterRoot, bookId, `${ch}.md`);
       mkdirSync(dirname(draftPath), { recursive: true });
       writeFileSync(draftPath, `# 第 ${ch} 章\n\n${draft}`, "utf8");
       console.log(`正文草稿：${draftPath}`);

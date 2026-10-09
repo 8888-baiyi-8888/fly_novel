@@ -4,7 +4,7 @@
 
 ## 小说级建书图
 
-[novel_workflow/](novel_workflow/index.ts) 导出 `buildNovelGraph` 与唯一状态定义 `NovelWorkflowSchema`。调用方提供六个 Agent 实例和整理输入产物根目录；图从 `normalized_input` 开始，生成草案后并行执行书籍配置与长期控制，故事基础设定完成后汇合生成静态架构，最后生成初始状态、书目录和交接凭据。`persist: true` 时整理输入写入 `{artifactRoot}/{novelId}/normalized_input/`，其余节点仍写入原有 `artifacts/n1-*` 至 `artifacts/n6-*` 目录，书目录位于 `artifacts/n7-workspace/`，交接凭据写入 `story/runtime/ready.json`；`persist: false` 时只生成内存预览。`single-step.ts` 从已有产物恢复单步输入并复用相同节点；草案单步读取指定小说 ID 的整理输入。旧版 `artifacts/n0-raw-input/` 不自动迁移，也不参与新入口的缓存查找。模型配置与终端交互由[应用入口](../app/novel-workflow/workflow.ts)提供。
+[novel_workflow/](novel_workflow/index.ts) 导出 `buildNovelGraph` 与唯一状态定义 `NovelWorkflowSchema`。调用方提供六个 Agent 实例和产物根目录；图从 `normalized_input` 开始，生成草案后并行执行书籍配置与长期控制，故事基础设定完成后汇合生成静态架构，最后生成初始状态、书目录和交接凭据。`persist: true` 时各节点写入 `{artifactRoot}/{novelId}/{nodeName}/`，工作空间在 `workspace_node/{bookId}/`，`ready_node/` 存交接记录，工作空间内仍有 `story/runtime/ready.json`；`persist: false` 时只生成内存预览。`single-step.ts` 只从指定小说 ID 的目录恢复前序产物。旧版全局 `n0-raw-input` 至 `n7-workspace` 目录保留，但新入口不自动迁移或读取。模型配置与终端交互由[应用入口](../app/novel-workflow/workflow.ts)提供。
 
 ## 能力
 
@@ -34,7 +34,7 @@
 - [openai-compatible-agent.ts](openai-compatible-agent.ts)：`AgentPort` 的 OpenAI 兼容协议适配器（阿里云 MaaS / DashScope / DeepSeek 等）。
 - [stub-agent.ts](stub-agent.ts)：确定性模拟 agent（规则表 + 轮换 + 计数）。
 - [file-store.ts](file-store.ts)：`WorkflowStore` 的 JSON 文件实现（断点续跑落地）。
-- 章节级驱动入口已上移到 **`src/app/run-chapters.ts`**（与小说级 main.ts 同层）：自动定位最新 N7 书目录（`artifacts/n7-workspace/<bookId>/`）、复用小说级 model 配置（`ConfiguredLlmModel`，从 settings + 解密凭据读取，不传参数/env）、支持 `--chapter/--to` 连续写章；每章正文导 `{store-dir}/{bookId}/{chapter}.md`，运行时状态（账本/真相/时钟/角色状态）落 `{store-dir}/{bookId}/runtime-state.json`，下次运行自动恢复——**跨章账本由此延续**。原 `run-chapter.ts`（手动传 `--base-url/--model/--api-key` 与环境变量 `FLY_NOVEL_*` 的调试入口）已删除，由该入口替代。
+- 章节级驱动入口在 **`src/app/run-chapters.ts`**：自动定位最新小说书目录（`{artifactRoot}/{novelId}/workspace_node/{bookId}/`），也可传 `--novel-id/--book`；复用小说级 model 配置，支持 `--chapter/--to` 连续写章。正文、断点和运行时状态写入 `{store-dir}/{novelId}/chapter_workflow/{bookId}/`；旧版 `{store-dir}/{bookId}/` 数据保留，检测到时要求先迁移，避免从空状态续写。
 - [direct-gate.ts](direct-gate.ts)：direct 节点闸门包装器 `withDispatchGate`（§5.3 校验接入点）。
 - [nodes/](nodes/index.ts)：章节流 7 节点参考实现（`buildChapterNodes(agent, { runtime })` 组装，各节点可单独替换）。
 - [engine.ts](engine.ts)：章节流水线执行器与状态推进。
@@ -51,7 +51,7 @@
 ## 当前状态与边界
 
 - **端到端已可运行**：注入 `StubAgent` + `FakeBookRuntime`（`buildFakeBookRuntime`，§7.7 fixture）即可跑通 7 步（含闸门重试、审计重写、断点续跑、settle 回写）；**真实 agent 已可接入**：阿里云 MaaS（`compatible-mode/v1`，OpenAI 兼容）等端点经 `createOpenAICompatibleAgent` 直连，LangChain Deep Agents 等自定协议走 `createHttpAgent` + 服务端薄层。
-- **跨章运行时状态**：`FakeBookRuntime` 提供 `snapshot()/restore()`（`fake-book-runtime.ts`，账本/真相/时钟/角色状态；plain JSON 可序列化）；`run-chapters` 每次运行前恢复、结束后落盘 `{store-dir}/{book}/runtime-state.json`——连续跑章时世界真实延续（H007 的推进不会因进程重启而丢失）。
+- **跨章运行时状态**：`FakeBookRuntime` 提供 `snapshot()/restore()`（`fake-book-runtime.ts`，账本/真相/时钟/角色状态；plain JSON 可序列化）；`run-chapters` 每次运行前恢复、结束后落盘 `{store-dir}/{novelId}/chapter_workflow/{bookId}/runtime-state.json`。
 - 参考节点的指令文本与 audit/censor 判定规则为**占位**，业务正确性由 B 的节点实现负责；merge 的 weavePlan 暂用 `minimalWeavePlan` 占位（TimelineManager 真实排程待小说流）。
 - `WorkflowStore` 已提供 JSON 文件实现（`createJsonFileStore`，断点续跑落地）；§11.3 单事务原子落盘（facts/账本/正文同库）仍待真实存储接入——settle 的原子语义目前由 `BookRuntime.settleChapter` 在内存内保证（拒绝时任何状态不变）。
 - 引擎当前面向章节级 `Step`；小说级建书流程需要编排时，再按需泛化步骤类型。

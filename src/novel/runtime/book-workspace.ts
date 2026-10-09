@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { buildFakeBookRuntime, type FakeBookRuntime } from './fake-book-runtime.ts'
 import type { FakeBookRuntimeOptions } from './fixtures.ts'
 import type { BookConfig } from '../types/book-config.ts'
@@ -19,8 +19,8 @@ import type { Thread, ThreadEvent, ThreadKind, ThreadStatus } from '../types/thr
  *   {workspaceDir}/state/facts.json           —— 事实库（压缩三元组投影）
  *   {workspaceDir}/story/beats/beats.json     —— 节拍板（hookToThread 反推 + 线角色推导）
  * 可选补源（书目录自包含度缺口，见下方"缺口"）：
- *   artifacts/n5-architecture/architecture-*.json —— 角色卡 JSON（characterCards）+ 叙事线本体（threadMap）
- *   artifacts/n6-state0/state0-*.json         —— 结构化角色状态（characterStates）
+ *   {artifactRoot}/{novelId}/architecture_node/architecture-*.json —— 角色卡与叙事线本体
+ *   {artifactRoot}/{novelId}/state0_node/state0-*.json             —— 结构化角色状态
  *
  * 输出：FakeBookRuntimeOptions → buildFakeBookRuntime（复用章节流既有内存运行时，节点与引擎零改动）。
  *
@@ -367,7 +367,7 @@ function findLatestArtifact(artifactsRoot: string, dir: string, bookId: string):
 }
 
 export interface BookWorkspaceOptions {
-  /** artifacts 根目录（N5/N6 产物定位基准）；缺省由 workspaceDir 上溯两级推断（…/artifacts/n7-workspace/{bookId}）。 */
+  /** 产物根目录；新版书目录使用其中的 novelId 子目录定位静态架构与初始状态。 */
   readonly artifactsRoot?: string
   /** 显式 N5 architecture JSON 路径（跳过自动定位）。 */
   readonly architecturePath?: string
@@ -383,9 +383,17 @@ export function buildRuntimeFromBookWorkspace(workspaceDir: string, options: Boo
   const facts = readJson<{ facts: readonly WorkspaceFact[] }>(join(workspaceDir, 'state', 'facts.json')).facts
   const beats = readJson<{ beats: readonly BeatIntentionsBeat[] }>(join(workspaceDir, 'story', 'beats', 'beats.json')).beats
 
-  const artifactsRoot = options.artifactsRoot ?? join(workspaceDir, '..', '..')
-  const architecturePath = options.architecturePath ?? findLatestArtifact(artifactsRoot, 'n5-architecture', ink.bookId)
-  const state0Path = options.state0Path ?? findLatestArtifact(artifactsRoot, 'n6-state0', ink.bookId)
+  const isNovelWorkspace = basename(dirname(workspaceDir)) === 'workspace_node'
+  const novelId = basename(dirname(dirname(workspaceDir)))
+  const artifactsRoot = isNovelWorkspace
+    ? options.artifactsRoot === undefined ? dirname(dirname(workspaceDir)) : join(options.artifactsRoot, novelId)
+    : options.artifactsRoot ?? join(workspaceDir, '..', '..')
+  const architecturePath = options.architecturePath ?? findLatestArtifact(
+    artifactsRoot, isNovelWorkspace ? 'architecture_node' : 'n5-architecture', ink.bookId,
+  )
+  const state0Path = options.state0Path ?? findLatestArtifact(
+    artifactsRoot, isNovelWorkspace ? 'state0_node' : 'n6-state0', ink.bookId,
+  )
 
   const architecture = architecturePath === undefined ? undefined : readJson<ArchitectureFile>(architecturePath)
   const state0 = state0Path === undefined ? undefined : readJson<State0File>(state0Path)

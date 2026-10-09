@@ -1,12 +1,14 @@
 import type { ClarifyUserAnswer, CreativeDraftAgent } from "../../../novel-flow/draft/creative-draft-agent";
-import { saveDraft } from "../artifacts";
+import type { NovelArtifacts } from "../artifacts";
 import type { NovelWorkflowState } from "../state";
 
 /** 根据整理后的原始输入生成创意草案。 */
 export async function runDraft(
   state: Pick<NovelWorkflowState, "normalizedInput">,
   draftAgent: CreativeDraftAgent,
-  persist = true,
+  persist: boolean,
+  novelId: string,
+  artifacts: NovelArtifacts,
   askUser?: ClarifyUserAnswer,
 ): Promise<Partial<NovelWorkflowState>> {
   const normalizedInput = state.normalizedInput?.normalizedInput;
@@ -16,6 +18,6 @@ export async function runDraft(
   const draft = askUser === undefined
     ? await draftAgent.createDraft(normalizedInput)
     : await draftAgent.createDraftWithClarification(normalizedInput, askUser);
-  if (persist) saveDraft(draft);
+  if (persist) artifacts.saveDraft(draft, novelId);
   return { draft };
 }
