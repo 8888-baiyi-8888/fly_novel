@@ -114,7 +114,7 @@ pnpm run novel-workflow --model real --input "你的原始想法"
 node dist/app/novel-workflow/workflow.js --model real --input "题材是霸道女上司爱上初入职场的小白妹妹。不要太狗血，内容励志"
 ```
 
-这会依次执行 **N0 → N1 → N2 →（N3 ‖ N4）→ N5 → N6 → N7 → N8**，每步产物按节点存到 `.fly-novel-store/<novelId>/`。全程会调用真实模型多次，**耗时较长**，请耐心等待。
+这会依次执行 **整理输入 → 草案（同时生成书籍配置）→（故事基础设定 ‖ 长期控制）→ 静态架构 → 初始状态 → 书目录 → 交接**，产物存到 `.fly-novel-store/<novelId>/`。全程会调用真实模型多次，**耗时较长**，请耐心等待。
 
 ### 用文本文件作为输入
 
@@ -134,12 +134,11 @@ node dist/app/novel-workflow/workflow.js --model real --input "你的想法" --c
 
 ```bash
 node dist/app/novel-workflow/workflow.js --model real --step ni   # 只跑原始输入整理
-node dist/app/novel-workflow/workflow.js --model real --step dra --novel-id <novelId>  # 读取该小说的整理输入并生成草案
+node dist/app/novel-workflow/workflow.js --model real --step dra --novel-id <novelId>  # 读取整理输入并生成草案及书籍配置
 node dist/app/novel-workflow/workflow.js --model real --step sf --novel-id <novelId>   # 故事圣经+书籍规则
 node dist/app/novel-workflow/workflow.js --model real --step con --novel-id <novelId>  # 长期创作控制
 node dist/app/novel-workflow/workflow.js --model real --step arc --novel-id <novelId>  # 节拍板
 node dist/app/novel-workflow/workflow.js --model real --step sta --novel-id <novelId>  # 初始运行状态
-node dist/app/novel-workflow/workflow.js --step bc --novel-id <novelId>                # 书籍配置
 node dist/app/novel-workflow/workflow.js --step wor --novel-id <novelId>               # 生成书目录
 node dist/app/novel-workflow/workflow.js --step rea --novel-id <novelId>               # 验收与交接
 ```
@@ -181,7 +180,7 @@ node dist/app/run-chapters.js --store-dir <dir>    # 正文/断点存放目录�
 | 阶段 | 位置 | 内容 |
 |---|---|---|
 | 整理输入 | `.fly-novel-store/<novelId>/normalized_input/` | 整理输入文本 |
-| 建书节点 | `.fly-novel-store/<novelId>/{draft_node,book_config,story_foundation,controls_node,architecture_node,state0_node}/` | 草案至初始状态的节点产物 |
+| 建书产物 | `.fly-novel-store/<novelId>/{draft_node,book_config,story_foundation,controls_node,architecture_node,state0_node}/` | 草案至初始状态的产物；`draft_node` 同时生成 `book_config` |
 | 书目录 | `.fly-novel-store/<novelId>/workspace_node/<bookId>/` | 章节流的输入（`inkos.json`、`state/hooks.json`、`story/beats/beats.json` 等） |
 | 交接凭据 | `.fly-novel-store/<novelId>/ready_node/`，书目录内 `story/runtime/ready.json` | 验收结果与红线消毒记录 |
 | 章节正文与断点 | `.fly-novel-store/<novelId>/chapter_workflow/<bookId>/` | 正文草稿、每章断点和 `runtime-state.json` |

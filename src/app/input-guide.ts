@@ -45,39 +45,38 @@ export const USAGE = `
   --input "文本"         直接传原始输入（短文本适用）
   --file <路径>          从 txt 文件读取原始输入（推荐）
   --novel-id <ID>        小说级 LangGraph 单步续跑使用的 ID（ni 可自动生成；旧版 main.ts 不支持）
-  --step ni|dra|bc|sf|con|arc|sta|wor|rea  只跑单个节点（默认全链路 N0→N1→N2→(N3‖N4 并行)→N5→N6→N7→N8）
-                           ni：扩展原始输入（有缓存跳过）；dra：读最新 N0 产物生成草案；
-                           bc：读最新 N1 草案生成 BookConfig（纯程序，不调 LLM）；
+  --step ni|dra|sf|con|arc|sta|wor|rea  只跑单个节点（默认执行完整建书流程）
+                           ni：扩展原始输入（有缓存跳过）；dra：读最新整理输入，生成草案及 BookConfig；
                            sf：读最新草案+BookConfig，架构师生成故事圣经与书籍规则；
                            con：读最新 N1 草案，作者意图整理器生成长期创作控制四件套；
                            arc：读最新 N1+N3+N4 产物，架构师生成前四件、Director 生成节拍板；
                            sta：读最新 N5 产物，生成初始化运行状态 State₀ 六类；
-                           wor：读 N1~N6 全部产物，生成书项目目录（纯程序，不调 LLM）
+                           wor：读前序全部产物，生成书项目目录（纯程序，不调 LLM）
                            rea：验收书目录八类内容物 + AI 红线扫描消毒 + 写交接凭据（纯程序，不调 LLM）
   --force                N7 书目录已存在时强制重建（默认存在则跳过，保护手改的权威文件）
   --book <bookId>        N8 指定要验收的书籍目录
   --clarify              进入多轮反问（仅 real 模式的 N1 生效；N0 默认自主补全，只在遇到矛盾时才问）
   --help                 显示本帮助与 N0 输入建议
 
-real 模式全链路：N0 自主补全原始输入 → N1 生成创意草案 → N2 固化书籍配置
-                 →（N3 架构师建世界 ‖ N4 长期创作控制 并行）→ N5 静态架构 → N6 初始运行状态
+real 模式全链路：整理输入 → 草案（同时固化书籍配置）
+                 →（故事基础设定 ‖ 长期创作控制 并行）→ 静态架构 → 初始运行状态
                  → N7 书项目目录（持久化工作空间）→ N8 验收+红线消毒+交接凭据
   N0：把几句粗想法扩展成一段完整原始创作输入（主角/配角/主线/约束/平台篇幅由模型自主补全）
-  N1：把原始输入整理成结构化创意草案（含书名/题材/平台/字数/章节数/语言等运行参数）
-  N2：把草案中的运行参数固化成 BookConfig + bookId（书名拼音 ID，如 隐龙→yinlong），不调 LLM
+  N1：把原始输入整理成结构化创意草案（含书名/题材/平台/字数/章节数/语言等运行参数），
+      并在同一节点固化 BookConfig + bookId（书名拼音 ID，如 隐龙→yinlong）
   N3：架构师产出故事圣经（这个世界是什么）+ 书籍规则（允许怎么写，含内置 AI 写作红线 11 条）
   N4：作者意图整理器把草案创作意图扩展为四件套（作者意图/当前重点/分卷方向/创作约束），
-      与世界事实、写作规则严格分离；与 N2/N3 并行，只依赖 N1 草案
+      与世界事实、写作规则严格分离；与故事基础设定并行，只依赖草案
   N5：架构师把 N3+N4+草案组织成五件套（故事框架/分卷规划/角色卡/叙事线地图），
       Director 再把前四件细化成全书节拍板（每章一句话蓝图，过验收闸门）
   N6：TruthOracle + Hook Ledger 把静态架构转成"故事开始这一刻"的初始运行状态 State₀
       （人物状态/关系状态/世界状态/伏笔种子账本/线状态板/进度），伏笔种子过准入闸门，
       每章后 Stateₙ → 第 n 章 → Stateₙ₊₁ 滚动前进
-  N7：持久化工作空间——把 N1~N6 全部产物序列化成书项目目录（纯程序，不调 LLM）：
+  N7：持久化工作空间——把前序产物序列化成书项目目录（纯程序，不调 LLM）：
       inkos.json（书配置+平台节奏尺子）/ story/*.md（人读权威，含 hooks.md 伏笔账本）
       / state/*.json（机器读权威）/ beats.json（节拍板）/ chapters、runtime、export（空目录待填）
-  小说级产物根目录：.fly-novel-store/<novelId>/；各节点分别存入 normalized_input、draft_node、
-                book_config、story_foundation、controls_node、architecture_node、state0_node、
+  小说级产物根目录：.fly-novel-store/<novelId>/；草案节点分别存入 draft_node 和 book_config，
+                其余节点存入 normalized_input、story_foundation、controls_node、architecture_node、state0_node、
                 workspace_node/{bookId}/ 和 ready_node/。旧版 main.ts 仍使用全局 n0～n7 目录。
 
 真实模型（--model real）配置：不读取 .env，使用项目正式机制——

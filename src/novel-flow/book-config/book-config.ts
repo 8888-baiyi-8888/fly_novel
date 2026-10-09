@@ -15,7 +15,7 @@ export function slugifyTitle(title: string): string {
 }
 
 /**
- * 书籍配置固化（N2）：从创意草案的运行参数部分生成 BookConfig。
+ * 从创意草案的运行参数部分固化 BookConfig，由 draft 节点调用。
  * 纯程序节点，不调 LLM；确定性输出（同一草案 → 同一 bookId）。
  * now 可注入，便于测试固定时间戳。
  */

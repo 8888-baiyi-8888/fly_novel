@@ -7,7 +7,6 @@ import type { NormalizedInputAgent } from "../../novel-flow/normalized-input/nor
 import type { State0Agent } from "../../novel-flow/state0";
 import { createNovelArtifacts } from "./artifacts";
 import { runArchitecture } from "./nodes/architecture";
-import { runBookConfig } from "./nodes/book-config";
 import { runControls } from "./nodes/controls";
 import { runDraft } from "./nodes/draft";
 import { runNormalizedInput } from "./nodes/normalized-input";
@@ -46,8 +45,6 @@ export function buildNovelGraph(deps: NovelWorkflowAgents, options: NovelWorkflo
     runNormalizedInput(state, deps.normalizedInputAgent, persist, artifacts);
   const draftNode = (state: NovelWorkflowState) =>
     runDraft(state, deps.draftAgent, persist, state.rawInput.novel_id, artifacts, options.askUser);
-  const bookConfigNode = (state: NovelWorkflowState) =>
-    runBookConfig(state, persist, state.rawInput.novel_id, artifacts);
   const storyFoundationNode = (state: NovelWorkflowState) =>
     runStoryFoundation(state, deps.architectAgent, persist, state.rawInput.novel_id, artifacts);
   const controlsNode = (state: NovelWorkflowState) =>
@@ -64,7 +61,6 @@ export function buildNovelGraph(deps: NovelWorkflowAgents, options: NovelWorkflo
   const graphWithNodes = new StateGraph(NovelWorkflowSchema)
     .addNode("normalized_input", normalizedInputNode)
     .addNode("draft_node", draftNode)
-    .addNode("book_config", bookConfigNode)
     .addNode("story_foundation", storyFoundationNode)
     .addNode("controls_node", controlsNode)
     .addNode("architecture_node", architectureNode)
@@ -75,9 +71,8 @@ export function buildNovelGraph(deps: NovelWorkflowAgents, options: NovelWorkflo
   const graphWithEdges = graphWithNodes
     .addEdge(START, "normalized_input")
     .addEdge("normalized_input", "draft_node")
-    .addEdge("draft_node", "book_config")
+    .addEdge("draft_node", "story_foundation")
     .addEdge("draft_node", "controls_node")
-    .addEdge("book_config", "story_foundation")
     .addEdge(["story_foundation", "controls_node"], "architecture_node")
     .addEdge("architecture_node", "state0_node")
     .addEdge("state0_node", "workspace_node")

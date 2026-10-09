@@ -11,7 +11,7 @@ export async function runStoryFoundation(
   artifacts: NovelArtifacts,
 ): Promise<Partial<NovelWorkflowState>> {
   if (state.draft === undefined || state.bookConfig === undefined) {
-    throw new Error("缺少 draft 或 book_config 节点产物，无法生成故事基础设定");
+    throw new Error("缺少草案或书籍配置产物，无法生成故事基础设定");
   }
   const brief = buildCreativeBrief(state.draft);
   const { storyBible, bookRules } = await architectAgent.createStoryFoundation(

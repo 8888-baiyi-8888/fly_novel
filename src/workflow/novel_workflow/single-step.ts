@@ -4,7 +4,6 @@ import type { ClarifyUserAnswer } from "../../novel-flow/draft/creative-draft-ag
 import { EXAMPLE_ARCHITECTURE } from "../../novel-flow/architecture/example";
 import { createNovelArtifacts } from "./artifacts";
 import { runArchitecture } from "./nodes/architecture";
-import { runBookConfig } from "./nodes/book-config";
 import { runControls } from "./nodes/controls";
 import { runDraft } from "./nodes/draft";
 import { runNormalizedInput } from "./nodes/normalized-input";
@@ -15,7 +14,7 @@ import { runWorkspace } from "./nodes/workspace";
 import type { NovelWorkflowAgents } from "./workflow";
 
 /** 命令行单步运行使用的阶段标识，与 LangGraph 节点 ID 分离。 */
-export type NovelWorkflowStep = "ni" | "dra" | "bc" | "sf" | "con" | "arc" | "sta" | "wor" | "rea";
+export type NovelWorkflowStep = "ni" | "dra" | "sf" | "con" | "arc" | "sta" | "wor" | "rea";
 
 export interface SingleStepOptions {
   step: NovelWorkflowStep;
@@ -65,21 +64,17 @@ export async function runNovelStep(options: SingleStepOptions): Promise<void> {
       return;
     }
     case "dra": {
-      console.log(JSON.stringify((await runDraft(
-        { normalizedInput: { normalizedInput: requireArtifact(artifacts.latestRawInputArtifact(novelId), "原始输入整理").content } },
+      const normalizedInput = artifacts.latestRawInputArtifact(novelId);
+      console.log(JSON.stringify(await runDraft(
+        { normalizedInput: normalizedInput === null ? undefined : { normalizedInput: normalizedInput.content } },
         agents.draftAgent,
         persist,
         novelId,
         artifacts,
         options.askUser,
-      )).draft, null, 2));
+      ), null, 2));
       return;
     }
-    case "bc":
-      console.log(JSON.stringify(runBookConfig(
-        { draft: requireArtifact(artifacts.readLatestDraft(novelId), "创意草案") }, persist, novelId, artifacts,
-      ).bookConfig, null, 2));
-      return;
     case "sf":
       console.log(JSON.stringify(await runStoryFoundation(
         {

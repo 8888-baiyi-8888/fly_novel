@@ -64,7 +64,7 @@ interface CliArgs {
   model?: "memory" | "real";
   /** 启用 N1 多轮澄清交互。 */
   clarify?: boolean;
-  /** 仅执行指定的 N0～N8 节点，缺省执行全链路。 */
+  /** 仅执行指定的小说级节点，缺省执行全链路。 */
   step?: NovelWorkflowStep;
   /** N7 目标书目录已存在时强制重建。 */
   force?: boolean;
@@ -95,8 +95,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.model = value;
       i += 1;
     } else if (token === "--step" && value !== undefined) {
-      if (value !== "ni" && value !== "dra" && value !== "bc" && value !== "sf" && value !== "con" && value !== "arc" && value !== "sta" && value !== "wor" && value !== "rea") {
-        throw new Error(`--step 只支持 ni、dra、bc、sf、con、arc、sta、wor 或 rea，收到：${value}`);
+      if (value !== "ni" && value !== "dra" && value !== "sf" && value !== "con" && value !== "arc" && value !== "sta" && value !== "wor" && value !== "rea") {
+        throw new Error(`--step 只支持 ni、dra、sf、con、arc、sta、wor 或 rea，收到：${value}`);
       }
       args.step = value;
       i += 1;
@@ -111,7 +111,7 @@ function parseArgs(argv: string[]): CliArgs {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--novel-id <ID>、--model memory|real、--step ni|dra|bc|sf|con|arc|sta|wor|rea、--clarify、--force、--book <bookId>、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--novel-id <ID>、--model memory|real、--step ni|dra|sf|con|arc|sta|wor|rea、--clarify、--force、--book <bookId>、--help）`,
       );
     }
   }
