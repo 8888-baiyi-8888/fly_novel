@@ -2,7 +2,7 @@ import type { ClarifyUserAnswer, CreativeDraftAgent } from "../../../novel-flow/
 import type { NovelArtifacts } from "../artifacts";
 import type { NovelWorkflowState } from "../state";
 
-/** 根据整理后的原始输入生成创意草案。 */
+/** 优先复用指定小说的最新草案；没有草案时根据整理后的输入生成并按需保存。 */
 export async function runDraft(
   state: Pick<NovelWorkflowState, "normalizedInput">,
   draftAgent: CreativeDraftAgent,
@@ -11,6 +11,12 @@ export async function runDraft(
   artifacts: NovelArtifacts,
   askUser?: ClarifyUserAnswer,
 ): Promise<Partial<NovelWorkflowState>> {
+  const existing = artifacts.readLatestDraft(novelId);
+  if (existing !== null) {
+    console.log(`\n已存在 draft 节点产物，跳过草案生成（novelId：${novelId}）\n`);
+    return { draft: existing };
+  }
+
   const normalizedInput = state.normalizedInput?.normalizedInput;
   if (normalizedInput === undefined) {
     throw new Error("缺少 normalized_input 节点产物，无法生成创意草案");
