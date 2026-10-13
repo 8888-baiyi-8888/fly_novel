@@ -1,11 +1,12 @@
-import type { DispatchGateLedgerEntry } from '../../novel/gates/dispatch-gate'
-import { validateDispatch } from '../../novel/gates/dispatch-gate'
-import type { BookRuntime } from '../../novel/runtime'
-import { HOOK_TYPES } from '../../novel/types'
-import type { HookId } from '../../novel/types'
-import type { AgentPort } from '../agent-port.ts'
-import { withDispatchGate } from '../direct-gate.ts'
-import type { StepNode } from '../types.ts'
+import type { DispatchGateLedgerEntry } from '../../../novel/gates/dispatch-gate'
+import { validateDispatch } from '../../../novel/gates/dispatch-gate'
+import type { BookRuntime } from '../../../novel/runtime'
+import { HOOK_TYPES } from '../../../novel/types'
+import type { ChapterState, HookId } from '../../../novel/types'
+import type { AgentPort } from '../../agent-port.ts'
+import { withDispatchGate } from '../../direct-gate.ts'
+import type { StepNode } from '../../types.ts'
+import type { ChapterGraphState } from '../state'
 import { describeDispatchFailure, parseDispatch, runAgentTask } from './parse.ts'
 
 /** direct 节点依赖：书运行时（真实来源为小说流交付的 BookRuntime）。 */
@@ -79,4 +80,18 @@ export function createDirectNode(agent: AgentPort, deps: DirectNodeDeps): StepNo
 
 function ctxOf(dispatch: { chapter?: unknown }): number {
   return typeof dispatch.chapter === 'number' ? dispatch.chapter : 0
+}
+
+/** LangGraph direct 节点入口：调用本文件的业务节点并写回 Dispatch/outcome。 */
+export function createDirectGraphNode(agent: AgentPort, deps: DirectNodeDeps) {
+  const node = createDirectNode(agent, deps)
+  return async (state: ChapterGraphState) => {
+    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    return {
+      artifacts: result.outcome.kind === 'continue' && result.output !== undefined
+        ? { ...state.artifacts, direct: result.output }
+        : state.artifacts,
+      outcome: result.outcome,
+    }
+  }
 }

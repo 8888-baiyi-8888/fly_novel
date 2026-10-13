@@ -1,7 +1,9 @@
-import type { Dispatch, EventId, WeavePlan } from '../../novel/types'
-import type { AgentPort } from '../agent-port.ts'
-import { artifactOf, type StepNode } from '../types.ts'
+import type { Dispatch, EventId, WeavePlan } from '../../../novel/types'
+import type { AgentPort } from '../../agent-port.ts'
+import { artifactOf, type StepNode } from '../../types.ts'
 import { parseSceneSheet, runAgentTask } from './parse.ts'
+import type { ChapterState } from '../../../novel/types'
+import type { ChapterGraphState } from '../state'
 
 /** 排程占位：真实实现为 TimelineManager.checkWeaveEligibility（确定性服务，文档 §7.2）。 */
 export function minimalWeavePlan(dispatch: Dispatch): WeavePlan {
@@ -65,5 +67,19 @@ export function createMergeNode(agent: AgentPort): StepNode<'merge'> {
       }
       return { outcome: { kind: 'continue' }, output: { weavePlan: minimalWeavePlan(dispatch), scenesheet } }
     },
+  }
+}
+
+/** LangGraph merge 节点入口：调用本文件的业务节点并写回合并产物/outcome。 */
+export function createMergeGraphNode(agent: AgentPort) {
+  const node = createMergeNode(agent)
+  return async (state: ChapterGraphState) => {
+    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    return {
+      artifacts: result.outcome.kind === 'continue' && result.output !== undefined
+        ? { ...state.artifacts, merge: result.output }
+        : state.artifacts,
+      outcome: result.outcome,
+    }
   }
 }

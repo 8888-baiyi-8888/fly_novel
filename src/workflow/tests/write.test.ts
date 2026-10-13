@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BookId } from "../../novel/types";
 import { StubAgent } from "../stub-agent";
-import { createWriteNode } from "../nodes/write";
-import { WRITE_BANS } from "../nodes/write";
+import { createWriteNode } from "../chapter_workflow/nodes/write";
+import { WRITE_BANS } from "../chapter_workflow/nodes/write";
 import type { AgentGenerateInput, AgentPort } from "../agent-port";
 import type { NodeOutput, StepRunContext } from "../types";
 

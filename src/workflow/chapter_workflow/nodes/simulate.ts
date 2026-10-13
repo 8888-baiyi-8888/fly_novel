@@ -1,5 +1,7 @@
-import type { AgentPort } from '../agent-port.ts'
-import { artifactOf, type StepNode } from '../types.ts'
+import type { AgentPort } from '../../agent-port.ts'
+import { artifactOf, type StepNode } from '../../types.ts'
+import type { ChapterState } from '../../../novel/types'
+import type { ChapterGraphState } from '../state'
 import { parseSimulations, runAgentTask } from './parse.ts'
 
 /** 指令：要求输出严格为 Simulation 数组（带结构示例 few-shot；禁止包装对象）。 */
@@ -47,5 +49,19 @@ export function createSimulateNode(agent: AgentPort): StepNode<'simulate'> {
       }
       return { outcome: { kind: 'continue' }, output: sims }
     },
+  }
+}
+
+/** LangGraph simulate 节点入口：调用本文件的业务节点并写回 Simulation[]/outcome。 */
+export function createSimulateGraphNode(agent: AgentPort) {
+  const node = createSimulateNode(agent)
+  return async (state: ChapterGraphState) => {
+    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    return {
+      artifacts: result.outcome.kind === 'continue' && result.output !== undefined
+        ? { ...state.artifacts, simulate: result.output }
+        : state.artifacts,
+      outcome: result.outcome,
+    }
   }
 }

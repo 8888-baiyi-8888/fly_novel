@@ -8,7 +8,7 @@ import type { AgentGenerateInput, AgentPort } from "../agent-port";
 import { StubAgent } from "../stub-agent";
 import { ChapterWorkflow } from "../engine";
 import { withDispatchGate } from "../direct-gate";
-import { createDirectNode } from "../nodes/direct";
+import { createDirectNode } from "../chapter_workflow/nodes/direct";
 import type { StepNode, StepRunContext, WorkflowEvent, WorkflowStore, PersistedWorkflow } from "../types";
 
 /* 编译期断言：包装器仍产出 StepNode<'direct'>，其 output 仍为 Dispatch。 */

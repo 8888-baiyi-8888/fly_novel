@@ -1,6 +1,6 @@
 # 工作流引擎（workflow）
 
-步骤流水线编排与执行。章节级流程使用七步执行器，小说级建书流程使用 LangGraph 状态图。
+工作流编排与执行。章节级流程使用 LangGraph 状态图，小说级建书流程也使用 LangGraph；章节节点工厂继续提供各步骤的业务行为。
 
 ## 小说级建书图
 
@@ -20,8 +20,9 @@
 - **OpenAICompatibleAgent**（[openai-compatible-agent.ts](openai-compatible-agent.ts)）：`AgentPort` 的 OpenAI 兼容协议适配器（阿里云 MaaS `compatible-mode/v1`、DashScope、DeepSeek 等 `/chat/completions` 端点）——`instruction→system`、`context→user`、`outputFormat=json` 且 `jsonMode=true` 时请求 `response_format=json_object`，取 `choices[0].message.content` 为 text 并顺带解析 json；非 2xx / 超时 / 缺 content 转抛错。
 - **StubAgent**（[stub-agent.ts](stub-agent.ts)）：确定性模拟 agent——按规则表返回预设响应，支持调用次数轮换（重试场景：先违规后合规）、instruction 子串分支、调用计数。当前用它驱动 workflow 端到端先行开发。
 - **JsonFileStore**（[file-store.ts](file-store.ts)）：`WorkflowStore` 的 JSON 文件实现（断点续跑落地）——布局 `{dir}/{bookId}/{chapter}.json`，写 `{chapter}.json.tmp` 再 rename（原子替换），load 遇 ENOENT 返回 undefined。真实存储（§11.3 单事务）就绪后替换，引擎零改动。
-- **参考节点**（[nodes/](nodes/index.ts)）：`buildChapterNodes(agent, { runtime })` 组装 7 步可运行节点——LLM 型节点（direct/simulate/merge/write/audit/censor/settle）经 AgentPort 生成并做产物形状校验，direct 实时渲染债务表（`runtime.ledger.viewForChapter`）并接入 §5.3 闸门，merge 的 weavePlan 用确定性占位（`minimalWeavePlan`，TimelineManager 位置），audit/censor 以 PASS/FAIL 前缀做最小判定（回 write 重写），**settle 产出 RuntimeDelta 后回写 BookRuntime**（`runtime.settleChapter`，§11.3 原子语义：六步校验拒绝 → retry 回 settle 附违规摘要）。**指令与判定均为占位**，真实策略由 B 按文档替换对应工厂。
-- **执行器**（[engine.ts](engine.ts)）：`ChapterWorkflow` 按 `STEP_ORDER` 顺序执行，支持：
+- **章节节点**（[chapter_workflow/nodes/](chapter_workflow/nodes/index.ts)）：每个业务节点文件同时定义业务逻辑和 LangGraph 入口函数（如 `createWriteNode` 与 `createWriteGraphNode`）；`transition.ts` 单独负责状态推进、重试预算、事件通知和断点保存。`buildChapterNodes` 仍供旧执行器和测试使用。
+- **章节图**（[chapter_workflow/](chapter_workflow/index.ts)）：`buildChapterGraph` 将现有 7 个章节节点接入 LangGraph。图状态保存章节状态和 `artifacts`，条件边按当前 `step` 前进或按节点 outcome 回退；重试预算耗尽时挂起。`runChapterGraph` 从 `WorkflowStore` 恢复并在每次转移后保存，因此原有 JSON 断点格式可继续使用。
+- **旧执行器**（[engine.ts](engine.ts)）：`ChapterWorkflow` 按 `STEP_ORDER` 顺序执行，供原有测试和调用方使用；正式章节入口改由 LangGraph 编排。它支持：
   - **重试回退**：节点返回 `retry` 时回退到目标步骤重跑（闸门拒绝→回 direct；audit/censor 不过→回 write），每章重试预算 `maxRetries` 封顶，超预算挂起等待人类；
   - **断点续跑**：经 `WorkflowStore` 持久化状态与工件，从 `ChapterState.step` 继续，不重跑前序；
   - **挂起/失败通知**：`notify` 回调 + 现场落盘。
@@ -29,6 +30,7 @@
 
 ## 一级子目录
 
+- [chapter_workflow/](chapter_workflow/index.ts)：章节级 LangGraph 状态定义、七个章节业务节点、图构建与断点恢复入口。
 - [novel_workflow/](novel_workflow/index.ts)：小说级 LangGraph 状态定义、建图函数、节点与产物读写。
 - [types.ts](types.ts)：节点、结果、存储（WorkflowStore）、事件与运行结果契约。
 - [agent-port.ts](agent-port.ts)：agent 生成能力端口 `AgentPort`（真实 agent 的接入面）。
@@ -38,9 +40,11 @@
 - [file-store.ts](file-store.ts)：`WorkflowStore` 的 JSON 文件实现（断点续跑落地）。
 - 章节级驱动入口在 **`src/app/run-chapters.ts`**：自动定位最新小说书目录（`{artifactRoot}/{novelId}/workspace_node/{bookId}/`），也可传 `--novel-id/--book`；复用小说级 model 配置，支持 `--chapter/--to` 连续写章。正文、断点和运行时状态写入 `{store-dir}/{novelId}/chapter_workflow/{bookId}/`；旧版 `{store-dir}/{bookId}/` 数据保留，检测到时要求先迁移，避免从空状态续写。
 - [direct-gate.ts](direct-gate.ts)：direct 节点闸门包装器 `withDispatchGate`（§5.3 校验接入点）。
-- [nodes/](nodes/index.ts)：章节流 7 节点参考实现（`buildChapterNodes(agent, { runtime })` 组装，各节点可单独替换）。
-- [engine.ts](engine.ts)：章节流水线执行器与状态推进。
-- [tests/](tests/engine.test.ts)：stub 节点测试——正常路径、审计重试环、预算耗尽挂起、断点续跑、已完结、缺节点、节点失败/挂起、非法回退、状态映射。
+- [chapter_workflow/nodes/](chapter_workflow/nodes/index.ts)：章节流 7 个业务节点及组装函数。
+- [chapter_workflow/](chapter_workflow/index.ts)：章节 LangGraph 状态、节点接线、条件路由、重试预算和 WorkflowStore 断点恢复。
+- [index.ts](index.ts)：工作流模块公共导出，包括 `buildChapterGraph`、`runChapterGraph` 与旧执行器。
+- [engine.ts](engine.ts)：原章节流水线执行器，保留给旧调用方和测试。
+- [tests/](tests/engine.test.ts)：原 `ChapterWorkflow` 执行器测试——正常路径、审计重试环、预算耗尽挂起、断点续跑、已完结、缺节点、节点失败/挂起、非法回退、状态映射。
   [chapter-contract.test.ts](tests/chapter-contract.test.ts)：类型化节点测试——`StepNode<'direct'>` 产 Dispatch、merge 经 `artifactOf` 取前序、settle 产 RuntimeDelta 的完整 7 步流程。
   [direct-gate.test.ts](tests/direct-gate.test.ts)：闸门接线测试——合规通过/违规 retry/非 continue 透传/引擎集成（预算耗尽挂起）。
   [stub-agent.test.ts](tests/stub-agent.test.ts)：StubAgent 行为测试——json/text 响应、轮换、match 分支、无匹配抛错、计数。
@@ -52,10 +56,10 @@
 
 ## 当前状态与边界
 
-- **端到端已可运行**：注入 `StubAgent` + `FakeBookRuntime`（`buildFakeBookRuntime`，§7.7 fixture）即可跑通 7 步（含闸门重试、审计重写、断点续跑、settle 回写）；**真实 agent 已可接入**：阿里云 MaaS（`compatible-mode/v1`，OpenAI 兼容）等端点经 `createOpenAICompatibleAgent` 直连，LangChain Deep Agents 等自定协议走 `createHttpAgent` + 服务端薄层。
+- **章节正式入口使用 LangGraph**：`runChapterGraph` 复用七个节点工厂，通过图状态与条件边编排；现有 `end-to-end.test.ts` 仍覆盖旧 `ChapterWorkflow`，不代表新章节图已具备自动化行为覆盖。**真实 agent 已可接入**：阿里云 MaaS（`compatible-mode/v1`，OpenAI 兼容）等端点经 `createOpenAICompatibleAgent` 直连，LangChain Deep Agents 等自定协议走 `createHttpAgent` + 服务端薄层。
 - **跨章运行时状态**：`FakeBookRuntime` 提供 `snapshot()/restore()`（`fake-book-runtime.ts`，账本/真相/时钟/角色状态；plain JSON 可序列化）；`run-chapters` 每次运行前恢复、结束后落盘 `{store-dir}/{novelId}/chapter_workflow/{bookId}/runtime-state.json`。
 - 参考节点的指令文本与 audit/censor 判定规则为**占位**，业务正确性由 B 的节点实现负责；merge 的 weavePlan 暂用 `minimalWeavePlan` 占位（TimelineManager 真实排程待小说流）。
 - `WorkflowStore` 已提供 JSON 文件实现（`createJsonFileStore`，断点续跑落地）；§11.3 单事务原子落盘（facts/账本/正文同库）仍待真实存储接入——settle 的原子语义目前由 `BookRuntime.settleChapter` 在内存内保证（拒绝时任何状态不变）。
-- 引擎当前面向章节级 `Step`；小说级建书流程需要编排时，再按需泛化步骤类型。
+- 章节图使用固定章节级 `Step`；小说级建书流程由独立 LangGraph 状态图编排。
 - 假设（记录于 `.agents/notes/2026-09-21-workflow-engine.md`）：`direct` 完成后 status 仍为 planned（规划步骤）；预算耗尽挂起时 step 停在回退目标步骤。
 - 第三方 agent 接入：OpenAI 兼容路线已落地（阿里云 MaaS 实配）；LangChain 原生协议映射与结构化输出保障（RuntimeDelta/Dispatch 的 JSON 形状，必要时加修复层）待实际对接时确认（见 `.agents/notes/2026-09-22-book-runtime-http-agent.md`、`.agents/notes/2026-09-23-openai-compatible-file-store.md`）。

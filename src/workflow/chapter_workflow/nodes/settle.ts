@@ -1,8 +1,10 @@
-import type { BookRuntime } from '../../novel/runtime'
-import { HOOK_TYPES } from '../../novel/types'
-import type { AgentPort } from '../agent-port.ts'
-import { artifactOf, type StepNode } from '../types.ts'
+import type { BookRuntime } from '../../../novel/runtime'
+import { HOOK_TYPES } from '../../../novel/types'
+import type { AgentPort } from '../../agent-port.ts'
+import { artifactOf, type StepNode } from '../../types.ts'
 import { parseRuntimeDelta, runAgentTask } from './parse.ts'
+import type { ChapterState } from '../../../novel/types'
+import type { ChapterGraphState } from '../state'
 
 /** settle 节点依赖：书运行时（回写目标）。 */
 export interface SettleNodeDeps {
@@ -75,5 +77,19 @@ export function createSettleNode(agent: AgentPort, deps: SettleNodeDeps): StepNo
       }
       return { outcome: { kind: 'continue' }, output: delta }
     },
+  }
+}
+
+/** LangGraph settle 节点入口：调用本文件的业务节点并写回 RuntimeDelta/outcome。 */
+export function createSettleGraphNode(agent: AgentPort, deps: SettleNodeDeps) {
+  const node = createSettleNode(agent, deps)
+  return async (state: ChapterGraphState) => {
+    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    return {
+      artifacts: result.outcome.kind === 'continue' && result.output !== undefined
+        ? { ...state.artifacts, settle: result.output }
+        : state.artifacts,
+      outcome: result.outcome,
+    }
   }
 }

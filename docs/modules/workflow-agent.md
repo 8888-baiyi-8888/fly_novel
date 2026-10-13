@@ -1,7 +1,7 @@
 # workflow 与 Agent 对接规范
 
 本文档定义章节流工作流与外部 Agent 之间的输入输出契约，供 Agent 实现方（自研/第三方/HTTP 服务）对接使用。
-指令原文的唯一事实来源是 `src/workflow/nodes/*.ts` 中的常量；本文档摘录并定位，修改指令后须同步本文。
+指令原文的唯一事实来源是 `src/workflow/chapter_workflow/nodes/*.ts` 中的常量；本文档摘录并定位，修改指令后须同步本文。
 对接点只有一个：`AgentPort`（`src/workflow/agent-port.ts`）。
 
 ## 对接面
@@ -32,7 +32,7 @@ interface AgentGenerateOutput {
 |---|---|---|
 | C. OpenAI 兼容端点 | `instruction`→system、`context`→user，POST `/chat/completions` | `src/workflow/openai-compatible-agent.ts`（已实现，含流式） |
 | B. Agent 为 HTTP 服务 | 自定义协议，`POST /task` 请求/响应即上文接口 | 新增薄适配器实现 `AgentPort` |
-| A. Agent 进程内实现 | 直接实现 `AgentPort` 接口注入 | `src/workflow/nodes/index.ts` `buildChapterNodes(agent, deps)` |
+| A. Agent 进程内实现 | 直接实现 `AgentPort` 接口注入 | `src/workflow/chapter_workflow/nodes/index.ts` `buildChapterNodes(agent, deps)` |
 
 ## 全局约定（Agent 必须遵守）
 
@@ -48,7 +48,7 @@ interface AgentGenerateOutput {
 
 ### 1. direct（章节导演）
 
-- 指令：`DIRECT_INSTRUCTION`（`src/workflow/nodes/direct.ts`）
+- 指令：`DIRECT_INSTRUCTION`（`src/workflow/chapter_workflow/nodes/direct.ts`）
 - context：`{ chapter, hookContext, ledger, threads }`
   - `hookContext`：`runtime.ledger.viewForChapter(chapter)`（mustResolve/mustAdvance/canResolve/mustNotDefer/pressure 等）
   - `ledger`：账本全量视图（含每条伏笔 status/lastAdvancedChapter/notes）
@@ -58,7 +58,7 @@ interface AgentGenerateOutput {
 
 ### 2. simulate（角色模拟）
 
-- 指令：`SIMULATE_INSTRUCTION`（`src/workflow/nodes/simulate.ts`）
+- 指令：`SIMULATE_INSTRUCTION`（`src/workflow/chapter_workflow/nodes/simulate.ts`）
 - context：Dispatch JSON
 - 期望输出：Simulation 数组（`src/novel/types/simulation.ts`）：`[{character, tier:'S'|'A', lines[], actions[], suspects[], reasoning?, risk?}]`
   - 角色必须来自 `dispatch.castPlan`；B 级角色不模拟。
@@ -66,7 +66,7 @@ interface AgentGenerateOutput {
 
 ### 3. merge（线性拍摄单合成）
 
-- 指令：`MERGE_INSTRUCTION`（`src/workflow/nodes/merge.ts`）
+- 指令：`MERGE_INSTRUCTION`（`src/workflow/chapter_workflow/nodes/merge.ts`）
 - context：`{ dispatch, sims }`
 - 期望输出：SceneSheet JSON（`src/novel/types/scene-sheet.ts`）：`{writingPlan, scenes[{no, kind, pov, slot, purpose, beats[], cast[], material{lines,actions,suspects}, hookOps[], budgetChars, emotion}], weavingNotes, forbidden[]}`
   - 素材只来自 Dispatch/Simulation，不得新增剧情、新伏笔或角色决策；hookOps 无 defer。
@@ -74,28 +74,28 @@ interface AgentGenerateOutput {
 
 ### 4. write（正文写手）
 
-- 指令：`WRITE_INSTRUCTION` = 文风 5 条（`WRITE_STYLE_GUIDE`）+ 禁令 10 条（`WRITE_BANS`，来源文档 §7.3）（`src/workflow/nodes/write.ts`）
+- 指令：`WRITE_INSTRUCTION` = 文风 5 条（`WRITE_STYLE_GUIDE`）+ 禁令 10 条（`WRITE_BANS`，来源文档 §7.3）（`src/workflow/chapter_workflow/nodes/write.ts`）
 - context：merge 产物（weavePlan + scenesheet）
 - 期望输出：纯文本正文（不要 JSON、不要 Markdown 代码块）
 - 校验：非空即可；质量问题靠 audit 节点兜底。
 
 ### 5. audit（内容审计）
 
-- 指令：`AUDIT_INSTRUCTION`（`src/workflow/nodes/audit.ts`）
+- 指令：`AUDIT_INSTRUCTION`（`src/workflow/chapter_workflow/nodes/audit.ts`）
 - context：`{ draft, dispatch, scenesheet }`（正文 + 拍摄单比对材料）
 - 期望输出：`PASS …` 或 `FAIL …`（FAIL 后列出编号条目：问题 + 涉及伏笔/角色）
 - 校验：前缀判定；FAIL → retry 回 write 重写。
 
 ### 6. censor（内容审查）
 
-- 指令：`CENSOR_INSTRUCTION`（`src/workflow/nodes/censor.ts`）
+- 指令：`CENSOR_INSTRUCTION`（`src/workflow/chapter_workflow/nodes/censor.ts`）
 - context：正文文本
 - 期望输出：`PASS …` 或 `FAIL …`（FAIL 后列出条目与修改建议）
 - 校验：前缀判定；FAIL → retry 回 write 重写。
 
 ### 7. settle（结算器）
 
-- 指令：`SETTLE_INSTRUCTION`（`src/workflow/nodes/settle.ts`）
+- 指令：`SETTLE_INSTRUCTION`（`src/workflow/chapter_workflow/nodes/settle.ts`）
 - context：`{ draft, hookContext, ledger }`
 - 期望输出：RuntimeDelta JSON（`src/novel/types/runtime-delta.ts`）：`{facts[], hookOps[{op:'open'|'advance'|'resolve'|'defer'|'mention', …}], stateChanges{角色:{location, goal, emotion, suspects[], inventory[], bonds{}}}}`
   - 判据见指令（§11.1）：resolve=明确解答；advance=新增信息且删掉则离回收更近（仅再提=mention）；open=写得出预期回收；角色"以为"≠叙述层时进 suspects 不进 fact。
@@ -111,5 +111,5 @@ interface AgentGenerateOutput {
 ## 现有实现
 
 - `src/workflow/openai-compatible-agent.ts`：OpenAI 兼容端点适配器（阿里云 MaaS `compatible-mode/v1` 等），含 SSE 流式、`enable_thinking=false`；`run-chapter.ts` 为现成驱动。
-- `src/workflow/nodes/stub-agent.ts`：StubAgent（测试/离线运行用，无真实生成）。
+- `src/workflow/stub-agent.ts`：StubAgent（测试/离线运行用，无真实生成）。
 - 决策记录：`.agents/notes/`（2026-09-23 起，含 OpenAI 兼容接入、SSE 流式、跨章持久化等）。

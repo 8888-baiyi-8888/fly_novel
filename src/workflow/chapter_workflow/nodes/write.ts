@@ -1,6 +1,8 @@
-import type { AgentPort } from '../agent-port.ts'
-import { artifactOf, type StepNode } from '../types.ts'
+import type { AgentPort } from '../../agent-port.ts'
+import { artifactOf, type StepNode } from '../../types.ts'
 import { runAgentTask } from './parse.ts'
+import type { ChapterState } from '../../../novel/types'
+import type { ChapterGraphState } from '../state'
 
 /**
  * §7.3 写作禁令（来源：小说级开发工作流文档 §7.3；运行时指令的唯一事实来源，README 仅登记出处）。
@@ -64,5 +66,19 @@ export function createWriteNode(agent: AgentPort): StepNode<'write'> {
       }
       return { outcome: { kind: 'continue' }, output: draft }
     },
+  }
+}
+
+/** LangGraph write 节点入口：调用本文件的业务节点并写回正文/outcome。 */
+export function createWriteGraphNode(agent: AgentPort) {
+  const node = createWriteNode(agent)
+  return async (state: ChapterGraphState) => {
+    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    return {
+      artifacts: result.outcome.kind === 'continue' && result.output !== undefined
+        ? { ...state.artifacts, write: result.output }
+        : state.artifacts,
+      outcome: result.outcome,
+    }
   }
 }

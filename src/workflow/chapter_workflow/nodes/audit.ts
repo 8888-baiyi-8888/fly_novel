@@ -1,6 +1,8 @@
-import type { AgentPort } from '../agent-port.ts'
-import { artifactOf, type StepNode } from '../types.ts'
+import type { AgentPort } from '../../agent-port.ts'
+import { artifactOf, type StepNode } from '../../types.ts'
 import { runAgentTask } from './parse.ts'
+import type { ChapterState } from '../../../novel/types'
+import type { ChapterGraphState } from '../state'
 
 /** 指令：基于正文 + Dispatch/拍摄单逐项比对（漏收伏笔/角色限制/事实矛盾）；PASS/FAIL 前缀判定。 */
 export const AUDIT_INSTRUCTION = `你是内容审计员。基于正文与 Dispatch/拍摄单逐项比对：
@@ -36,5 +38,19 @@ export function createAuditNode(agent: AgentPort): StepNode<'audit'> {
       }
       return { outcome: { kind: 'continue' }, output: report }
     },
+  }
+}
+
+/** LangGraph audit 节点入口：调用本文件的业务节点并写回审计报告/outcome。 */
+export function createAuditGraphNode(agent: AgentPort) {
+  const node = createAuditNode(agent)
+  return async (state: ChapterGraphState) => {
+    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    return {
+      artifacts: result.outcome.kind === 'continue' && result.output !== undefined
+        ? { ...state.artifacts, audit: result.output }
+        : state.artifacts,
+      outcome: result.outcome,
+    }
   }
 }

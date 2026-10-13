@@ -23,17 +23,16 @@ import { join, dirname } from "node:path";
 import { ConfiguredLlmModel } from "./configured-model";
 import type { ModelClient } from "../novel-flow/adapters/model-contract";
 import type { AgentGenerateInput, AgentGenerateOutput, AgentPort } from "../workflow/agent-port";
-import { buildChapterNodes } from "../workflow/nodes";
-import { ChapterWorkflow } from "../workflow/engine";
 import { createJsonFileStore } from "../workflow/file-store";
+import { runChapterGraph } from "../workflow/chapter_workflow";
 import { buildRuntimeFromBookWorkspace } from "../novel/runtime/book-workspace";
 import { ARTIFACTS_ROOT } from "../novel-flow/paths";
 import { novelArtifactDirectory } from "../workflow/novel_workflow/artifacts";
-import type { WorkflowEvent } from "../workflow/types";
 import type { BookId } from "../novel/types";
+import type { WorkflowEvent } from "../workflow/types";
 
 /** 复用小说级 model 配置：settings.json 的顶层供应商键。 */
-const MODEL_PROVIDER = "qwen";
+const MODEL_PROVIDER = "deepseek";
 
 /** 把小说级 ModelClient（ConfiguredLlmModel，settings 读+解密）适配成 workflow 的 AgentPort。 */
 function createConfiguredAgentPort(model: ModelClient): AgentPort {
@@ -161,35 +160,38 @@ async function main(): Promise<void> {
     }
   }
 
-  const workflow = new ChapterWorkflow({
-    nodes: buildChapterNodes(agent, { runtime }),
+  const notify = (event: WorkflowEvent): void => {
+    switch (event.type) {
+      case "step-completed":
+        console.log(`  [step] ${event.step} 完成（status=${event.state.status}）`);
+        break;
+      case "retrying":
+        console.log(`  [retry] ${event.from} → ${event.to}（第 ${event.attempt} 次）`);
+        break;
+      case "suspended":
+        console.log(`  [suspend] ${event.step}：${event.reason}`);
+        break;
+      case "failed":
+        console.error(`  [fail] ${event.step}：${event.reason}`);
+        break;
+      case "completed":
+        console.log(`  [done] 章 ${event.chapter} 完成（${event.state.status}）`);
+        break;
+    }
+  };
+
+  const runOptions = {
+    agent,
+    runtime,
     store,
     maxRetries: 4,
-    notify: (event: WorkflowEvent) => {
-      switch (event.type) {
-        case "step-completed":
-          console.log(`  [step] ${event.step} 完成（status=${event.state.status}）`);
-          break;
-        case "retrying":
-          console.log(`  [retry] ${event.from} → ${event.to}（第 ${event.attempt} 次）`);
-          break;
-        case "suspended":
-          console.log(`  [suspend] ${event.step}：${event.reason}`);
-          break;
-        case "failed":
-          console.error(`  [fail] ${event.step}：${event.reason}`);
-          break;
-        case "completed":
-          console.log(`  [done] 章 ${event.chapter} 完成（${event.state.status}）`);
-          break;
-      }
-    },
-  });
+    notify,
+  };
 
   const book: BookId = bookId as BookId;
   for (let ch = chapter; ch <= to; ch += 1) {
     console.log(`\n[章节 ${ch}/${to}] 运行章节流：book=${bookId}`);
-    const result = await workflow.run(book, ch);
+    const result = await runChapterGraph(book, ch, runOptions);
     console.log(`结果：${result.kind}${result.kind === "suspended" || result.kind === "failed" ? `（${result.reason}）` : ""}`);
 
     // 只要有正文产物就导出草稿

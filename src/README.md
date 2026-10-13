@@ -11,6 +11,6 @@
 | [config/](config/README.md) | 固定应用数据路径、配置校验与本地凭据加密存储。 |
 | [llm/](llm/README.md) | 大语言模型调用接口与提供商适配。 |
 | [util/](util/README.md) | 跨模块共用的基础工具。 |
-| [workflow/](workflow/README.md) | 章节级步骤执行器与小说级 LangGraph 建书图。 |
+| [workflow/](workflow/README.md) | 章节级与小说级 LangGraph 工作流，以及共用节点、Agent 和持久化契约。 |
 | [novel-flow/](novel-flow/README.md) | 建书流程的 Agent、数据结构和工作区输出。 |
 | [novel/](novel/README.md) | 小说领域数据模型、确定性校验、服务与运行时。 |

@@ -7,7 +7,8 @@ import { H007, H011 } from "../../novel/runtime/fixtures";
 import { ChapterWorkflow } from "../engine";
 import { StubAgent } from "../stub-agent";
 import type { StubRule } from "../stub-agent";
-import { buildChapterNodes } from "../nodes";
+import { buildChapterNodes } from "../chapter_workflow/nodes";
+import { runChapterGraph } from "../chapter_workflow";
 import type { WorkflowEvent, WorkflowStore, PersistedWorkflow } from "../types";
 
 const bookId = "book-e2e-001" as BookId;
@@ -113,6 +114,10 @@ function runAll(agent: StubAgent, store: WorkflowStore, runtime: BookRuntime, no
   return new ChapterWorkflow({ nodes: buildChapterNodes(agent, { runtime }), store, maxRetries: 2, notify }).run(bookId, chapter);
 }
 
+function runGraph(agent: StubAgent, store: WorkflowStore, runtime: BookRuntime, notify?: (e: WorkflowEvent) => void, maxRetries = 2) {
+  return runChapterGraph(bookId, chapter, { agent, store, runtime, maxRetries, notify });
+}
+
 test("端到端：7 步全流程经 StubAgent 跑通，产物七项齐全且类型正确", async () => {
   const store = new MemoryStore();
   const runtime = e2eRuntime();
@@ -203,4 +208,59 @@ test("端到端：settle agent 失败 → failed；修复后断点续跑 → com
   const latest = store.latest;
   assert.ok(latest);
   assert.equal(latest.state.status, "settled");
+});
+
+test("LangGraph 端到端：完整运行七个章节节点并结算运行时", async () => {
+  const store = new MemoryStore();
+  const runtime = e2eRuntime();
+  const agent = new StubAgent(fullRules());
+  const events: WorkflowEvent[] = [];
+
+  const result = await runGraph(agent, store, runtime, (event) => events.push(event));
+
+  assert.equal(result.kind, "completed");
+  assert.equal(agent.count(), 7);
+  assert.equal(Object.keys(store.latest?.artifacts ?? {}).length, 7);
+  assert.equal(store.latest?.state.status, "settled");
+  assert.ok(events.some((event) => event.type === "completed"));
+  assert.equal(runtime.ledgerView[H007]?.status, "resolved");
+  assert.equal(runtime.ledgerView[H011]?.status, "progressing");
+});
+
+test("LangGraph 端到端：审计失败经 transition 回退 write 后完成", async () => {
+  const store = new MemoryStore();
+  const rules: StubRule[] = [
+    { task: "direct", responses: [{ json: compliantDispatch() }] },
+    { task: "simulate", responses: [{ json: simulationFixture() }] },
+    { task: "merge", responses: [{ json: scenesheetFixture() }] },
+    { task: "write", responses: [{ text: "第一稿（漏收 H007）" }, { text: "第二稿（补上回收）" }] },
+    { task: "audit", responses: [{ text: "FAIL 漏收 H007" }, { text: "PASS 无偏差" }] },
+    { task: "censor", responses: [{ text: "PASS 无红线问题" }] },
+    { task: "settle", responses: [{ json: runtimeDeltaFixture() }] },
+  ];
+  const agent = new StubAgent(rules);
+  const events: WorkflowEvent[] = [];
+
+  const result = await runGraph(agent, store, e2eRuntime(), (event) => events.push(event));
+
+  assert.equal(result.kind, "completed");
+  assert.equal(agent.count("write"), 2);
+  assert.equal(agent.count("audit"), 2);
+  assert.equal(store.latest?.artifacts.write, "第二稿（补上回收）");
+  assert.deepEqual(events.filter((event) => event.type === "retrying").map((event) => event.type), ["retrying"]);
+});
+
+test("LangGraph 端到端：失败后从持久化的 settle 步骤恢复", async () => {
+  const store = new MemoryStore();
+  const runtime = e2eRuntime();
+  const failedRun = await runGraph(new StubAgent(fullRules().filter((rule) => rule.task !== "settle")), store, runtime);
+  assert.equal(failedRun.kind, "failed");
+  assert.equal(store.latest?.state.step, "settle");
+
+  const resumedAgent = new StubAgent(fullRules());
+  const resumed = await runGraph(resumedAgent, store, runtime);
+
+  assert.equal(resumed.kind, "completed");
+  assert.equal(resumedAgent.count("settle"), 1);
+  assert.equal(resumedAgent.count("direct"), 0);
 });

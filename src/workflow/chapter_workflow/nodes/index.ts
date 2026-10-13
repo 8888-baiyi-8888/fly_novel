@@ -1,6 +1,6 @@
-import type { BookRuntime } from '../../novel/runtime'
-import type { AgentPort } from '../agent-port.ts'
-import type { StepNode } from '../types.ts'
+import type { BookRuntime } from '../../../novel/runtime'
+import type { AgentPort } from '../../agent-port.ts'
+import type { StepNode } from '../../types.ts'
 import { createAuditNode } from './audit.ts'
 import { createCensorNode } from './censor.ts'
 import { createDirectNode, type DirectNodeDeps } from './direct.ts'
@@ -8,6 +8,8 @@ import { createMergeNode, minimalWeavePlan } from './merge.ts'
 import { createSettleNode, type SettleNodeDeps } from './settle.ts'
 import { createSimulateNode } from './simulate.ts'
 import { createWriteNode } from './write.ts'
+export { createTransitionNode } from './transition.ts'
+export type { TransitionNodeOptions } from './transition.ts'
 
 /** 组装章节流 7 节点所需的确定性依赖：书运行时（小说流交付的确定性状态面，FakeBookRuntime 可模拟）。 */
 export interface ChapterNodesDeps {
@@ -34,14 +36,14 @@ export function buildChapterNodes(agent: AgentPort, deps: ChapterNodesDeps): rea
   ]
 }
 
-export { createDirectNode } from './direct.ts'
+export { createDirectNode, createDirectGraphNode } from './direct.ts'
 export type { DirectNodeDeps } from './direct.ts'
-export { createSimulateNode } from './simulate.ts'
-export { createMergeNode, minimalWeavePlan } from './merge.ts'
-export { createWriteNode, WRITE_INSTRUCTION, WRITE_BANS, WRITE_STYLE_GUIDE } from './write.ts'
-export { createAuditNode } from './audit.ts'
-export { createCensorNode } from './censor.ts'
-export { createSettleNode } from './settle.ts'
+export { createSimulateNode, createSimulateGraphNode } from './simulate.ts'
+export { createMergeNode, createMergeGraphNode, minimalWeavePlan } from './merge.ts'
+export { createWriteNode, createWriteGraphNode, WRITE_INSTRUCTION, WRITE_BANS, WRITE_STYLE_GUIDE } from './write.ts'
+export { createAuditNode, createAuditGraphNode } from './audit.ts'
+export { createCensorNode, createCensorGraphNode } from './censor.ts'
+export { createSettleNode, createSettleGraphNode } from './settle.ts'
 export type { SettleNodeDeps } from './settle.ts'
 
 // 指令常量统一出口（agent 对接方可直接 import，无需翻各节点文件）：

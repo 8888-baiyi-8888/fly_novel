@@ -1,5 +1,5 @@
-import type { AgentGenerateInput, AgentGenerateOutput, AgentPort } from '../agent-port.ts'
-import type { Dispatch, RuntimeDelta, SceneSheet, Simulation } from '../../novel/types'
+import type { AgentGenerateInput, AgentGenerateOutput, AgentPort } from '../../agent-port.ts'
+import type { Dispatch, RuntimeDelta, SceneSheet, Simulation } from '../../../novel/types'
 
 export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
