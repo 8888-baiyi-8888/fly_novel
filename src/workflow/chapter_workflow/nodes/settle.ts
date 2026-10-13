@@ -2,7 +2,7 @@ import type { BookRuntime } from '../../../novel/runtime'
 import { HOOK_TYPES } from '../../../novel/types'
 import type { AgentPort } from '../../agent-port.ts'
 import { artifactOf, type StepNode } from '../../types.ts'
-import { parseRuntimeDelta, runAgentTask } from './parse.ts'
+import { parseRuntimeDelta, runAgentTask } from '../parse.ts'
 import type { ChapterState } from '../../../novel/types'
 import type { ChapterGraphState } from '../state'
 

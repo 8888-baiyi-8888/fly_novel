@@ -1,7 +1,7 @@
 import type { Dispatch, EventId, WeavePlan } from '../../../novel/types'
 import type { AgentPort } from '../../agent-port.ts'
 import { artifactOf, type StepNode } from '../../types.ts'
-import { parseSceneSheet, runAgentTask } from './parse.ts'
+import { parseSceneSheet, runAgentTask } from '../parse.ts'
 import type { ChapterState } from '../../../novel/types'
 import type { ChapterGraphState } from '../state'
 

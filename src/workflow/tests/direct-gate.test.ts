@@ -6,10 +6,9 @@ import type { DispatchGateLedgerEntry } from "../../novel/gates/dispatch-gate";
 import { buildFakeBookRuntime } from "../../novel/runtime";
 import type { AgentGenerateInput, AgentPort } from "../agent-port";
 import { StubAgent } from "../stub-agent";
-import { ChapterWorkflow } from "../engine";
 import { withDispatchGate } from "../direct-gate";
 import { createDirectNode } from "../chapter_workflow/nodes/direct";
-import type { StepNode, StepRunContext, WorkflowEvent, WorkflowStore, PersistedWorkflow } from "../types";
+import type { StepNode, StepRunContext } from "../types";
 
 /* 编译期断言：包装器仍产出 StepNode<'direct'>，其 output 仍为 Dispatch。 */
 type Expect<T extends true> = T;
@@ -69,15 +68,12 @@ function directNode(output: Dispatch): StepNode<"direct"> {
 }
 
 /** 内存存储替身。 */
-class MemoryStore implements WorkflowStore {
-  private readonly records = new Map<string, PersistedWorkflow>();
-  private key(bookId: BookId, chapter: number): string { return `${bookId}:${chapter}`; }
-  async load(bookId: BookId, chapter: number): Promise<PersistedWorkflow | undefined> {
-    const record = this.records.get(this.key(bookId, chapter));
-    return record === undefined ? undefined : { ...record, state: { ...record.state }, artifacts: { ...record.artifacts } };
-  }
-  async save(record: PersistedWorkflow): Promise<void> {
-    this.records.set(this.key(record.bookId, record.chapter), { ...record, state: { ...record.state }, artifacts: { ...record.artifacts } });
+class RecordingAgent implements AgentPort {
+  readonly inputs: AgentGenerateInput[] = [];
+  constructor(private readonly inner: AgentPort) {}
+  async generate(input: AgentGenerateInput) {
+    this.inputs.push(input);
+    return this.inner.generate(input);
   }
 }
 
@@ -108,35 +104,6 @@ test("节点自带的 suspend/fail/无产物结果原样透传，不触发闸门
   const result = await gated.run({ bookId, chapter, state: { bookId, chapter, step: "direct" as const, status: "planned" as const, retries: 0 }, artifacts: {} });
   assert.deepEqual(result.outcome, { kind: "suspend", reason: "等人类确认主角人设" });
 });
-
-test("引擎集成：闸门拒绝 → retry 回 direct，预算耗尽后挂起并通知", async () => {
-  const bad = makeDispatch({ hookDirectives: { ...makeDispatch().hookDirectives, resolve: [] } });
-  const events: WorkflowEvent[] = [];
-  const workflow = new ChapterWorkflow({
-    nodes: [withDispatchGate(directNode(bad), judge)],
-    store: new MemoryStore(),
-    maxRetries: 2,
-    notify: (e) => events.push(e),
-  });
-  const result = await workflow.run(bookId, chapter);
-  assert.equal(result.kind, "suspended");
-  if (result.kind !== "suspended") return;
-  assert.match(result.reason, /Dispatch 未通过校验闸门/);
-  assert.deepEqual(
-    events.map((e) => e.type),
-    ["retrying", "retrying", "suspended"],
-  );
-});
-
-/** 记录传给 agent 的原始输入（真实 agent 接入后用于核对指令与上下文）。 */
-class RecordingAgent implements AgentPort {
-  readonly inputs: AgentGenerateInput[] = [];
-  constructor(private readonly inner: AgentPort) {}
-  async generate(input: AgentGenerateInput) {
-    this.inputs.push(input);
-    return this.inner.generate(input);
-  }
-}
 
 test("direct 节点：instruction 含 Dispatch 结构示例（few-shot），context 注入线程快照", async () => {
   const runtime = buildFakeBookRuntime();

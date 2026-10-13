@@ -1,13 +1,13 @@
 import type { AgentPort } from '../../agent-port.ts'
 import { artifactOf, type StepNode } from '../../types.ts'
-import { runAgentTask } from './parse.ts'
+import { runAgentTask } from '../parse.ts'
 import type { ChapterState } from '../../../novel/types'
 import type { ChapterGraphState } from '../state'
 
 /** 指令占位：真实实现为 Censor 组件（文档 §16.1），L0 确定性扫描 + LLM 语义审查。 */
 export const CENSOR_INSTRUCTION = `你是内容审查员。按平台红线审查正文。通过输出以 PASS 开头；发现问题输出以 FAIL 开头并列出条目与修改建议。`
 
-/** censor 节点（参考实现）：报告以 FAIL 开头 → 回 write 重写（引擎重试预算内）。 */
+/** censor 节点（参考实现）：报告以 FAIL 开头 → 回 write 重写（transition 节点重试预算内）。 */
 export function createCensorNode(agent: AgentPort): StepNode<'censor'> {
   return {
     step: 'censor',

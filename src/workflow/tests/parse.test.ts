@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AgentGenerateOutput } from "../agent-port";
-import { describeDispatchFailure, parseDispatch } from "../chapter_workflow/nodes/parse";
+import { describeDispatchFailure, parseDispatch } from "../chapter_workflow/parse";
 
 function textOut(text: string): AgentGenerateOutput {
   return { text };

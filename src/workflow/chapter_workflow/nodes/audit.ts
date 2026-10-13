@@ -1,6 +1,6 @@
 import type { AgentPort } from '../../agent-port.ts'
 import { artifactOf, type StepNode } from '../../types.ts'
-import { runAgentTask } from './parse.ts'
+import { runAgentTask } from '../parse.ts'
 import type { ChapterState } from '../../../novel/types'
 import type { ChapterGraphState } from '../state'
 
@@ -12,7 +12,7 @@ export const AUDIT_INSTRUCTION = `你是内容审计员。基于正文与 Dispat
 全部通过输出以 PASS 开头；发现问题输出以 FAIL 开头并列出条目（编号 + 问题 + 涉及伏笔/角色）。`
 
 /**
- * audit 节点（参考实现）：报告以 FAIL 开头 → 回 write 重写（引擎重试预算内）。
+ * audit 节点（参考实现）：报告以 FAIL 开头 → 回 write 重写（transition 节点重试预算内）。
  * context 含正文 + Dispatch + SceneSheet（比对材料）；判定规则为参考策略（§7.7 六步校验语义），真实策略由 B 细化。
  */
 export function createAuditNode(agent: AgentPort): StepNode<'audit'> {

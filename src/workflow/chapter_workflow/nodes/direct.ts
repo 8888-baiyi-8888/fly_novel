@@ -7,7 +7,7 @@ import type { AgentPort } from '../../agent-port.ts'
 import { withDispatchGate } from '../../direct-gate.ts'
 import type { StepNode } from '../../types.ts'
 import type { ChapterGraphState } from '../state'
-import { describeDispatchFailure, parseDispatch, runAgentTask } from './parse.ts'
+import { describeDispatchFailure, parseDispatch, runAgentTask } from '../parse.ts'
 
 /** direct 节点依赖：书运行时（真实来源为小说流交付的 BookRuntime）。 */
 export interface DirectNodeDeps {

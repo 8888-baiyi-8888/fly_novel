@@ -13,7 +13,7 @@ import {
   createTransitionNode,
   createWriteGraphNode,
 } from "./nodes";
-import type { ChapterWorkflowResult, WorkflowEvent, WorkflowStore } from "../types";
+import type { ChapterRunResult, WorkflowEvent, WorkflowStore } from "../types";
 import { ChapterGraphStateSchema, type ChapterGraphState } from "./state";
 
 export interface ChapterGraphOptions {
@@ -66,7 +66,7 @@ export interface RunChapterGraphOptions extends Omit<ChapterGraphOptions, "store
 }
 
 /** 从 JsonFileStore 恢复章节状态并运行 LangGraph。 */
-export async function runChapterGraph(bookId: BookId, chapter: number, options: RunChapterGraphOptions): Promise<ChapterWorkflowResult> {
+export async function runChapterGraph(bookId: BookId, chapter: number, options: RunChapterGraphOptions): Promise<ChapterRunResult> {
   const store = options.store ?? createJsonFileStore({ dir: options.storeDir ?? ".fly-novel-store" });
   const persisted = await store.load(bookId, chapter);
   if (persisted?.state.status === "settled" || persisted?.state.status === "approved") {

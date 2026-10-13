@@ -93,7 +93,7 @@ export type WorkflowEvent =
   | { readonly type: 'completed'; readonly bookId: BookId; readonly chapter: number; readonly state: ChapterState }
 
 /** 引擎一次运行的结果。 */
-export type ChapterWorkflowResult =
+export type ChapterRunResult =
   | { readonly kind: 'completed'; readonly state: ChapterState }
   | { readonly kind: 'already-complete'; readonly state: ChapterState }
   | { readonly kind: 'suspended'; readonly state: ChapterState; readonly reason: string }

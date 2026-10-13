@@ -31,8 +31,8 @@ src/novel/types/    小说领域共享数据模型（文档 §3：BookConfig/Bea
 src/novel/gates/    小说领域确定性校验闸门（纯函数，先于落盘执行；已实现 §5.3 Dispatch 校验闸门 dispatch-gate.ts、§11.2 六步校验链 apply-delta-gate.ts），测试在 src/novel/tests/
 src/novel/services/ 小说领域确定性服务（章节级文档 §16.1 组件接口：HookLedger 的 lifecycle/准入/六步校验与不可变合并已实现；TimelineManager/TruthOracle 接口契约含 insertAll 收 FactDelta），测试在 src/novel/tests/
 src/novel/runtime/  Book Runtime 模拟层（小说流交付给章节流的确定性状态面）：BookRuntime 接口、buildFakeBookRuntime 内存实现（settleChapter 原子回写）、§7.7 fixtures；小说流就绪后以真实服务替换，节点与引擎零改动，测试在 src/novel/tests/
-src/workflow/       工作流编排：章节图 chapter_workflow/ 和小说级 LangGraph 图 novel_workflow/、节点/存储/事件契约 types.ts、agent 端口 agent-port.ts（真实 agent 接入面）与 StubAgent、HttpAgent（自定 `/generate` 协议）、OpenAICompatibleAgent（阿里云 MaaS 等 `/chat/completions` 直连）、JsonFileStore（断点续跑落地）、旧执行器 engine.ts、章节节点 chapter_workflow/nodes/（deps={runtime}，settle 回写 BookRuntime）、stub 测试 tests/；章节级正式驱动入口在 src/app/run-chapters.ts（自动定位 N7 书目录 + 复用小说级配置）
-src/workflow/chapter_workflow/ 章节级 LangGraph 状态 state.ts、建图与恢复入口 workflow.ts、公共导出 index.ts、七个章节业务节点 nodes/；共享 Agent、数据契约、存储和旧执行器留在 src/workflow/ 根目录
+src/workflow/       工作流编排：章节图 chapter_workflow/ 和小说级 LangGraph 图 novel_workflow/、节点/存储/事件契约 types.ts、agent 端口 agent-port.ts（真实 agent 接入面）与 StubAgent、HttpAgent（自定 `/generate` 协议）、OpenAICompatibleAgent（阿里云 MaaS 等 `/chat/completions` 直连）、JsonFileStore（断点续跑落地）、章节节点 chapter_workflow/nodes/（deps={runtime}，settle 回写 BookRuntime）、stub 测试 tests/；章节级正式驱动入口在 src/app/run-chapters.ts（自动定位 N7 书目录 + 复用小说级配置）
+src/workflow/chapter_workflow/ 章节级 LangGraph 状态 state.ts、建图与恢复入口 workflow.ts、公共导出 index.ts、七个章节业务节点 nodes/；共享 Agent、数据契约、存储留在 src/workflow/ 根目录
 src/workflow/novel_workflow/ 小说级 LangGraph 建书图：唯一状态 schema、建书节点、按 novelId/节点名分目录的产物读写与 Agent 注入接口
 src/app/novel-workflow/ 建书命令行入口与 Agent 组装；整图和单步执行调用 src/workflow/novel_workflow/
 .gitignore         Git 忽略规则

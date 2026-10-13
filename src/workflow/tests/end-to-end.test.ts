@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { BookId, CharacterName, Dispatch, EventId, HookId, ThreadId, WeavePlan } from "../../novel/types";
+import type { BookId, CharacterName, Dispatch, EventId, HookId, ThreadId } from "../../novel/types";
 import type { BookRuntime } from "../../novel/runtime";
 import { buildFakeBookRuntime } from "../../novel/runtime";
 import { H007, H011 } from "../../novel/runtime/fixtures";
-import { ChapterWorkflow } from "../engine";
 import { StubAgent } from "../stub-agent";
 import type { StubRule } from "../stub-agent";
-import { buildChapterNodes } from "../chapter_workflow/nodes";
 import { runChapterGraph } from "../chapter_workflow";
 import type { WorkflowEvent, WorkflowStore, PersistedWorkflow } from "../types";
 
@@ -110,114 +108,16 @@ class MemoryStore implements WorkflowStore {
   get latest(): PersistedWorkflow | undefined { return [...this.records.values()].at(-1); }
 }
 
-function runAll(agent: StubAgent, store: WorkflowStore, runtime: BookRuntime, notify?: (e: WorkflowEvent) => void) {
-  return new ChapterWorkflow({ nodes: buildChapterNodes(agent, { runtime }), store, maxRetries: 2, notify }).run(bookId, chapter);
-}
-
 function runGraph(agent: StubAgent, store: WorkflowStore, runtime: BookRuntime, notify?: (e: WorkflowEvent) => void, maxRetries = 2) {
   return runChapterGraph(bookId, chapter, { agent, store, runtime, maxRetries, notify });
 }
 
-test("端到端：7 步全流程经 StubAgent 跑通，产物七项齐全且类型正确", async () => {
-  const store = new MemoryStore();
-  const runtime = e2eRuntime();
-  const agent = new StubAgent(fullRules());
-  const result = await runAll(agent, store, runtime);
-  assert.equal(result.kind, "completed");
-  if (result.kind !== "completed") return;
-  const latest = store.latest;
-  assert.ok(latest);
-  const a = latest.artifacts;
-  const dispatch = a.direct as Dispatch;
-  assert.equal(dispatch.chapter, chapter);
-  assert.equal(dispatch.hookDirectives.resolve[0]?.hookId, H007);
-  assert.equal((a.simulate as unknown[]).length, 2);
-  const merge = a.merge as { weavePlan: WeavePlan; scenesheet: { writingPlan: string } };
-  assert.equal(merge.weavePlan.mainEvents[0], "E-M07");
-  assert.equal(merge.scenesheet.writingPlan, `本章按 ${chapter} 章调度：第 2 场收束 H007。`);
-  assert.equal(a.write, "第 21 章正文……");
-  assert.match(a.audit as string, /^PASS/);
-  assert.match(a.censor as string, /^PASS/);
-  const delta = a.settle as { hookOps: readonly { op: string }[] };
-  assert.equal(delta.hookOps[0]?.op, "advance");
-  // 七步各落盘一次
-  const record = store.latest;
-  assert.ok(record);
-  assert.equal(Object.keys(record.artifacts).length, 7);
-  // 每步调用一次 agent
-  assert.equal(agent.count(), 7);
-  // settle 已回写 BookRuntime：H007 resolved、H011 progressing
-  assert.equal(runtime.ledgerView[H007]?.status, "resolved");
-  assert.equal(runtime.ledgerView[H011]?.status, "progressing");
-});
-
-test("端到端：闸门拒绝 → retry 回 direct，第二次合规后跑通", async () => {
-  const store = new MemoryStore();
-  const runtime = e2eRuntime();
-  const rules: StubRule[] = [
-    { task: "direct", responses: [{ json: violatingDispatch() }, { json: compliantDispatch() }] },
-    ...fullRules().slice(1),
-  ];
-  const agent = new StubAgent(rules);
-  const events: WorkflowEvent[] = [];
-  const result = await runAll(agent, store, runtime, (e) => events.push(e));
-  assert.equal(result.kind, "completed");
-  assert.equal(agent.count("direct"), 2);
-  assert.deepEqual(events.filter((e) => e.type === "retrying").map((e) => e.type), ["retrying"]);
-  const dispatch = store.latest?.artifacts.direct as Dispatch;
-  assert.equal(dispatch.hookDirectives.resolve.length, 1);
-});
-
-test("端到端：审计不过 → 回 write 重写 → 二次通过后跑通", async () => {
-  const store = new MemoryStore();
-  const rules: StubRule[] = [
-    { task: "direct", responses: [{ json: compliantDispatch() }] },
-    { task: "simulate", responses: [{ json: simulationFixture() }] },
-    { task: "merge", responses: [{ json: scenesheetFixture() }] },
-    { task: "write", responses: [{ text: "第一稿（漏收 H007）" }, { text: "第二稿（补上回收）" }] },
-    { task: "audit", responses: [{ text: "FAIL 漏收 H007" }, { text: "PASS 无偏差" }] },
-    { task: "censor", responses: [{ text: "PASS 无红线问题" }] },
-    { task: "settle", responses: [{ json: runtimeDeltaFixture() }] },
-  ];
-  const agent = new StubAgent(rules);
-  const runtime = e2eRuntime();
-  const events: WorkflowEvent[] = [];
-  const result = await runAll(agent, store, runtime, (e) => events.push(e));
-  assert.equal(result.kind, "completed");
-  assert.equal(agent.count("write"), 2);
-  assert.equal(agent.count("audit"), 2);
-  assert.deepEqual(events.filter((e) => e.type === "retrying").map((e) => e.type), ["retrying"]);
-  assert.equal(store.latest?.artifacts.write, "第二稿（补上回收）");
-});
-
-test("端到端：settle agent 失败 → failed；修复后断点续跑 → completed 且不重跑前序", async () => {
-  const store = new MemoryStore();
-  const runtime = e2eRuntime();
-  // 第一轮：settle 无匹配规则 → agent 抛错 → 节点转 fail
-  const agent1 = new StubAgent(fullRules().filter((r) => r.task !== "settle"));
-  const r1 = await runAll(agent1, store, runtime);
-  assert.equal(r1.kind, "failed");
-  if (r1.kind !== "failed") return;
-  assert.match(r1.reason, /settle agent 调用失败/);
-  // 修复后换新 agent（同一 store）：从 settle 断点续跑
-  const agent2 = new StubAgent(fullRules());
-  const r2 = await runAll(agent2, store, runtime);
-  assert.equal(r2.kind, "completed");
-  assert.equal(agent2.count("settle"), 1);
-  assert.equal(agent2.count("direct"), 0); // 未重跑前序
-  const latest = store.latest;
-  assert.ok(latest);
-  assert.equal(latest.state.status, "settled");
-});
-
-test("LangGraph 端到端：完整运行七个章节节点并结算运行时", async () => {
+test("LangGraph chapter flow completes all seven nodes", async () => {
   const store = new MemoryStore();
   const runtime = e2eRuntime();
   const agent = new StubAgent(fullRules());
   const events: WorkflowEvent[] = [];
-
   const result = await runGraph(agent, store, runtime, (event) => events.push(event));
-
   assert.equal(result.kind, "completed");
   assert.equal(agent.count(), 7);
   assert.equal(Object.keys(store.latest?.artifacts ?? {}).length, 7);
@@ -227,39 +127,35 @@ test("LangGraph 端到端：完整运行七个章节节点并结算运行时", a
   assert.equal(runtime.ledgerView[H011]?.status, "progressing");
 });
 
-test("LangGraph 端到端：审计失败经 transition 回退 write 后完成", async () => {
+test("LangGraph retries write after an audit failure", async () => {
   const store = new MemoryStore();
   const rules: StubRule[] = [
     { task: "direct", responses: [{ json: compliantDispatch() }] },
     { task: "simulate", responses: [{ json: simulationFixture() }] },
     { task: "merge", responses: [{ json: scenesheetFixture() }] },
-    { task: "write", responses: [{ text: "第一稿（漏收 H007）" }, { text: "第二稿（补上回收）" }] },
-    { task: "audit", responses: [{ text: "FAIL 漏收 H007" }, { text: "PASS 无偏差" }] },
-    { task: "censor", responses: [{ text: "PASS 无红线问题" }] },
+    { task: "write", responses: [{ text: "first draft" }, { text: "revised draft" }] },
+    { task: "audit", responses: [{ text: "FAIL" }, { text: "PASS" }] },
+    { task: "censor", responses: [{ text: "PASS" }] },
     { task: "settle", responses: [{ json: runtimeDeltaFixture() }] },
   ];
   const agent = new StubAgent(rules);
   const events: WorkflowEvent[] = [];
-
   const result = await runGraph(agent, store, e2eRuntime(), (event) => events.push(event));
-
   assert.equal(result.kind, "completed");
   assert.equal(agent.count("write"), 2);
   assert.equal(agent.count("audit"), 2);
-  assert.equal(store.latest?.artifacts.write, "第二稿（补上回收）");
+  assert.equal(store.latest?.artifacts.write, "revised draft");
   assert.deepEqual(events.filter((event) => event.type === "retrying").map((event) => event.type), ["retrying"]);
 });
 
-test("LangGraph 端到端：失败后从持久化的 settle 步骤恢复", async () => {
+test("LangGraph resumes from the persisted settle step after failure", async () => {
   const store = new MemoryStore();
   const runtime = e2eRuntime();
   const failedRun = await runGraph(new StubAgent(fullRules().filter((rule) => rule.task !== "settle")), store, runtime);
   assert.equal(failedRun.kind, "failed");
   assert.equal(store.latest?.state.step, "settle");
-
   const resumedAgent = new StubAgent(fullRules());
   const resumed = await runGraph(resumedAgent, store, runtime);
-
   assert.equal(resumed.kind, "completed");
   assert.equal(resumedAgent.count("settle"), 1);
   assert.equal(resumedAgent.count("direct"), 0);

@@ -32,7 +32,7 @@ interface AgentGenerateOutput {
 |---|---|---|
 | C. OpenAI 兼容端点 | `instruction`→system、`context`→user，POST `/chat/completions` | `src/workflow/openai-compatible-agent.ts`（已实现，含流式） |
 | B. Agent 为 HTTP 服务 | 自定义协议，`POST /task` 请求/响应即上文接口 | 新增薄适配器实现 `AgentPort` |
-| A. Agent 进程内实现 | 直接实现 `AgentPort` 接口注入 | `src/workflow/chapter_workflow/nodes/index.ts` `buildChapterNodes(agent, deps)` |
+| A. Agent 进程内实现 | 直接实现 `AgentPort` 接口注入 | `src/workflow/chapter_workflow/workflow.ts` `buildChapterGraph(options)` |
 
 ## 全局约定（Agent 必须遵守）
 
@@ -103,13 +103,13 @@ interface AgentGenerateOutput {
 
 ## 联调顺序与验收
 
-1. **先 direct**：跑 `node .test-dist/workflow/run-chapter.js --base-url … --model … --chapter N`，日志出现 `[step] direct 完成（status=planned）` 即通过。
+1. **先 direct**：跑 `node dist/app/run-chapters.js --chapter N`，日志出现 `[step] direct 完成（status=planned）` 即通过。
 2. **逐节点推进**：simulate → merge → write → audit → censor → settle；每步以"完成"为过，`retry`/`fail` 时把日志 reason 原样反馈给 Agent 方调 prompt。
 3. **验收**：一章 `completed` + 账本摘要出现预期变化（如 `H007:resolved`）；连续两章验证跨章账本延续。
 4. **失败即信息**：节点挂起/失败的 reason 已带诊断（`describeDispatchFailure` 会列出缺失字段与原始 JSON 预览），优先据此定位。
 
 ## 现有实现
 
-- `src/workflow/openai-compatible-agent.ts`：OpenAI 兼容端点适配器（阿里云 MaaS `compatible-mode/v1` 等），含 SSE 流式、`enable_thinking=false`；`run-chapter.ts` 为现成驱动。
+- `src/workflow/openai-compatible-agent.ts`：OpenAI 兼容端点适配器（阿里云 MaaS `compatible-mode/v1` 等），含 SSE 流式、`enable_thinking=false`；`src/app/run-chapters.ts` 为现成驱动。
 - `src/workflow/stub-agent.ts`：StubAgent（测试/离线运行用，无真实生成）。
 - 决策记录：`.agents/notes/`（2026-09-23 起，含 OpenAI 兼容接入、SSE 流式、跨章持久化等）。

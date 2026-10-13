@@ -2,7 +2,7 @@ import type { AgentPort } from '../../agent-port.ts'
 import { artifactOf, type StepNode } from '../../types.ts'
 import type { ChapterState } from '../../../novel/types'
 import type { ChapterGraphState } from '../state'
-import { parseSimulations, runAgentTask } from './parse.ts'
+import { parseSimulations, runAgentTask } from '../parse.ts'
 
 /** 指令：要求输出严格为 Simulation 数组（带结构示例 few-shot；禁止包装对象）。 */
 export const SIMULATE_INSTRUCTION = `你是角色模拟器。基于 Dispatch 模拟本章出场的关键角色，输出 Simulation 数组（严格 JSON 数组，禁止 Markdown 代码块，禁止额外包装键——{"simulations": [...]} 这类包装对象一律不合格）。
