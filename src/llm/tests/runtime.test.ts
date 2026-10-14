@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import { LlmAdapter, LlmRuntime, LlmError, type GenerateOptions, type StreamChunk, type LlmResolvedModelInfo, type ReasoningEffortId } from '../index'
+import { LlmAdapter, LlmRuntime, LlmError, type GenerateOptions, type StreamChunk, type LlmResolvedModelInfo, type ReasoningEffortId } from '@fly-novel/llm'
 
 const options: GenerateOptions = { provider: 'test', model: 'model', messages: [] }
 const finish: StreamChunk = { type: 'finish', reason: { kind: 'stop' } }

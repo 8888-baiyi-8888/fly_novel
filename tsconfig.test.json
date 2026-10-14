@@ -4,6 +4,8 @@
     "noEmit": false,
     "outDir": ".test-dist",
     "declaration": false,
-    "paths": {}
+    "paths": {
+      "@fly-novel/llm": ["./src/llm/index.ts"]
+    }
   }
 }
