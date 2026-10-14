@@ -12,7 +12,7 @@ export async function runNormalizedInput(
   artifacts: NovelArtifacts,
 ): Promise<Partial<NovelWorkflowState>> {
   const novelId = state.rawInput.novel_id;
-  const existing = artifacts.latestRawInputArtifact(novelId);
+  const existing = state.rawInput.autoNovelId === true ? null : artifacts.latestRawInputArtifact(novelId);
 
   // 已存在 NI 产物，直接复用
   if (existing !== null) {
@@ -34,6 +34,6 @@ export async function runNormalizedInput(
     "\n",
   );
 
-  if (persist) artifacts.saveRawInput(normalizedInput, novelId);
+  if (persist && state.rawInput.autoNovelId !== true) artifacts.saveRawInput(normalizedInput, novelId);
   return { normalizedInput: { normalizedInput, rawInputFromCache: false } };
 }

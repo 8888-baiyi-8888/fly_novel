@@ -25,10 +25,10 @@ import type { CharacterName, EventId, HookId, ThreadId } from "../types/identifi
 /* ---------------- fixture：真实书目录数据（《初夏逢清晏》） ---------------- */
 
 const REAL_INK: InkFile = {
-  bookId: "chuxiafengqingyan",
+  novelId: "chuxiafengqingyan",
   title: "初夏逢清晏",
   bookConfig: {
-    bookId: "chuxiafengqingyan", title: "初夏逢清晏", genre: "现代都市", platform: "晋江文学城",
+    novelId: "chuxiafengqingyan", title: "初夏逢清晏", genre: "现代都市", platform: "晋江文学城",
     targetChapters: 100, chapterWordCount: 3000, language: "zh", chapterReviewMode: "auto", maxHookRetries: 2,
     createdAt: "2026-09-28T00:30:02.280Z", updatedAt: "2026-09-28T00:30:02.280Z",
   },
@@ -111,7 +111,7 @@ const REAL_THREAD_MAP_LINES = [
 
 test("mapBookConfig：运行参数直传（platform 保留原文「晋江文学城」）", () => {
   const config = mapBookConfig(REAL_INK);
-  assert.equal(config.bookId, "chuxiafengqingyan");
+  assert.equal(config.novelId, "chuxiafengqingyan");
   assert.equal(config.platform, "晋江文学城");
   assert.equal(config.targetChapters, 100);
   assert.equal(config.chapterWordCount, 3000);
@@ -239,9 +239,9 @@ function writeFixtureWorkspace(): string {
   mkdirSync(join(dir, "state"), { recursive: true });
   mkdirSync(join(dir, "story", "beats"), { recursive: true });
   writeFileSync(join(dir, "inkos.json"), JSON.stringify({ ...REAL_INK, platformProfile: { hook: { maxActive: 12 } } }));
-  writeFileSync(join(dir, "state", "hooks.json"), JSON.stringify({ bookId: "chuxiafengqingyan", hooks: REAL_SEEDS, archive: [] }));
-  writeFileSync(join(dir, "state", "threads.json"), JSON.stringify({ bookId: "chuxiafengqingyan", threadBoard: REAL_BOARD }));
-  writeFileSync(join(dir, "state", "facts.json"), JSON.stringify({ bookId: "chuxiafengqingyan", facts: REAL_FACTS }));
+  writeFileSync(join(dir, "state", "hooks.json"), JSON.stringify({ novelId: "chuxiafengqingyan", hooks: REAL_SEEDS, archive: [] }));
+  writeFileSync(join(dir, "state", "threads.json"), JSON.stringify({ novelId: "chuxiafengqingyan", threadBoard: REAL_BOARD }));
+  writeFileSync(join(dir, "state", "facts.json"), JSON.stringify({ novelId: "chuxiafengqingyan", facts: REAL_FACTS }));
   writeFileSync(join(dir, "story", "beats", "beats.json"), JSON.stringify({ beats: REAL_BEATS }));
   return dir;
 }
@@ -276,8 +276,8 @@ test("端到端：带 N5/N6 补源（真实衔接场景——书目录 + archite
   const dir = writeFixtureWorkspace();
   const n5 = join(dir, "architecture.json");
   const n6 = join(dir, "state0.json");
-  writeFileSync(n5, JSON.stringify({ bookId: "chuxiafengqingyan", characterCards: REAL_CHARACTER_CARDS, threadMap: { lines: REAL_THREAD_MAP_LINES } }));
-  writeFileSync(n6, JSON.stringify({ bookId: "chuxiafengqingyan", characterStates: REAL_STATE0_STATES }));
+  writeFileSync(n5, JSON.stringify({ novelId: "chuxiafengqingyan", characterCards: REAL_CHARACTER_CARDS, threadMap: { lines: REAL_THREAD_MAP_LINES } }));
+  writeFileSync(n6, JSON.stringify({ novelId: "chuxiafengqingyan", characterStates: REAL_STATE0_STATES }));
   try {
     const runtime = buildRuntimeFromBookWorkspace(dir, { architecturePath: n5, state0Path: n6 });
     assert.equal(runtime.characters.length, 3);

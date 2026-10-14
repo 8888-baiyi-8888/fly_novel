@@ -29,7 +29,7 @@ function requireStringArray(value: unknown, field: string): string[] {
 
 /**
  * 解析并校验长期创作控制输出（{ authorIntent, currentFocus, volumeDirections, constraints }）。
- * 返回规范化后的结构；id 与 bookId 由调用方生成。
+ * 返回规范化后的结构；id 与 novelId 由调用方生成。
  */
 export function parseControlsOutput(input: unknown): {
   authorIntent: string;

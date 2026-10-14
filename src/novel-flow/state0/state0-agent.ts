@@ -42,7 +42,7 @@ function ensureCharacterStates(parsed: unknown, architecture: StoryArchitecture)
 
 /**
  * State₀ Agent（N6）：一次模型调用，把 N5 五件套转成六类初始运行状态。
- * bookId/title 从输入架构直接取（确定性，与 N5 一致）。
+ * novelId/title 从输入架构直接取（确定性，与 N5 一致）。
  */
 export class State0Agent {
   private readonly model: ModelClient;
@@ -86,7 +86,7 @@ export class State0Agent {
         }
         return {
           ...state0,
-          bookId: architecture.bookId,
+          novelId: architecture.novelId,
           title: architecture.title,
         };
       } catch (error) {

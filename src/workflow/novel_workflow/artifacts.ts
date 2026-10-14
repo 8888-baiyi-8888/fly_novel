@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { slugifyTitle } from "../../novel-flow/book-config";
 import type { BookConfig } from "../../novel-flow/book-config";
 import type { BookRules, StoryBible } from "../../novel-flow/architect/types";
 import type { StoryArchitecture } from "../../novel-flow/architecture/types";
@@ -12,6 +13,31 @@ export function timestamp(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+/** 按时间、可选书名拼音和目录冲突序号生成小说 ID。 */
+export function generateUniqueNovelId(rootPath: string, title?: string, now: Date = new Date(), reserve = false): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const base = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}${title === undefined ? "" : `-${slugifyTitle(title)}`}`;
+  const root = resolve(rootPath);
+  if (reserve) mkdirSync(root, { recursive: true });
+  let suffix = 1;
+  let candidate = `${base}-${suffix}`;
+  while (true) {
+    const candidatePath = join(root, candidate);
+    if (!reserve) {
+      if (!existsSync(candidatePath)) return candidate;
+    } else {
+      try {
+        mkdirSync(candidatePath);
+        return candidate;
+      } catch (error) {
+        if (!(error instanceof Error) || (error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      }
+    }
+    suffix += 1;
+    candidate = `${base}-${suffix}`;
+  }
 }
 
 /** 小说 ID 只能作为一个目录名；节点名由工作流代码固定。 */
@@ -55,6 +81,9 @@ export function createNovelArtifacts(rootPath: string) {
   };
 
   return {
+    generateNovelId(title?: string, now?: Date, reserve?: boolean): string {
+      return generateUniqueNovelId(rootPath, title, now, reserve);
+    },
     /** 返回指定小说的最新整理输入文件路径及内容。 */
     latestRawInputArtifact(novelId: string): { existing: string; content: string } | null {
       const existing = latestPath(novelId, "normalized_input", "normalized-input-", ".md");

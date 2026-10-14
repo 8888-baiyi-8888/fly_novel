@@ -54,7 +54,7 @@ export const USAGE = `
                            wor：读前序全部产物，生成书项目目录（纯程序，不调 LLM）
                            rea：验收书目录八类内容物 + AI 红线扫描消毒 + 写交接凭据（纯程序，不调 LLM）
   --force                N7 书目录已存在时强制重建（默认存在则跳过，保护手改的权威文件）
-  --book <bookId>        N8 指定要验收的书籍目录
+  --novel-id <novelId>        N8 指定要验收的书籍目录
   --clarify              进入多轮反问（仅 real 模式的 N1 生效；N0 默认自主补全，只在遇到矛盾时才问）
   --help                 显示本帮助与 N0 输入建议
 
@@ -63,7 +63,7 @@ real 模式全链路：整理输入 → 草案（同时固化书籍配置）
                  → N7 书项目目录（持久化工作空间）→ N8 验收+红线消毒+交接凭据
   N0：把几句粗想法扩展成一段完整原始创作输入（主角/配角/主线/约束/平台篇幅由模型自主补全）
   N1：把原始输入整理成结构化创意草案（含书名/题材/平台/字数/章节数/语言等运行参数），
-      并在同一节点固化 BookConfig + bookId（书名拼音 ID，如 隐龙→yinlong）
+      并在同一节点固化 BookConfig + novelId（自动生成时包含时间戳与书名拼音，如 20261014-105910-yinlong-1）
   N3：架构师产出故事圣经（这个世界是什么）+ 书籍规则（允许怎么写，含内置 AI 写作红线 11 条）
   N4：作者意图整理器把草案创作意图扩展为四件套（作者意图/当前重点/分卷方向/创作约束），
       与世界事实、写作规则严格分离；与故事基础设定并行，只依赖草案
@@ -77,7 +77,7 @@ real 模式全链路：整理输入 → 草案（同时固化书籍配置）
       / state/*.json（机器读权威）/ beats.json（节拍板）/ chapters、runtime、export（空目录待填）
   小说级产物根目录：.fly-novel-store/<novelId>/；草案节点分别存入 draft_node 和 book_config，
                 其余节点存入 normalized_input、story_foundation、controls_node、architecture_node、state0_node、
-                workspace_node/{bookId}/ 和 ready_node/。旧版 main.ts 仍使用全局 n0～n7 目录。
+                workspace_node/ 和 ready_node/。旧版 main.ts 仍使用全局 n0～n7 目录。
 
 真实模型（--model real）配置：不读取 .env，使用项目正式机制——
   .fly-novel/settings.json 配置供应商（当前 qwen：baseURL / model / credentialRef / responseFormat）

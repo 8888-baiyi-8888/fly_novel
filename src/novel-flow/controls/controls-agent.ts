@@ -1,6 +1,6 @@
 import { ChatRequest, ChatResponse, ModelClient } from "../adapters/model-contract";
 import { CreativeDraft } from "../draft/types";
-import { slugifyTitle } from "../book-config/book-config";
+import { generateNovelId } from "../book-config/book-config";
 import { buildControlsMessages, buildControlsRetryMessage } from "./prompt";
 import { parseControlsOutput } from "./validate";
 import { CONTROLS_JSON_DESCRIPTION } from "./schema";
@@ -27,7 +27,7 @@ function describeError(error: unknown): string {
 /**
  * 长期创作控制 Agent（N4）：一次模型调用，把草案中的创作意图部分
  * 整理扩展为四件套（作者意图/当前重点/分卷方向/创作约束）。
- * bookId 从书名确定性生成（与 N2 一致），因此 N4 与 N2/N3 并行、不依赖它们的产物。
+ * 工作流可传入统一 novelId；独立调用时按书名生成默认 novelId。
  */
 export class ControlsAgent {
   private readonly model: ModelClient;
@@ -39,7 +39,7 @@ export class ControlsAgent {
   }
 
   /** 一次调用：返回长期创作控制四件套。 */
-  async createControls(draft: CreativeDraft): Promise<LongTermControls> {
+  async createControls(draft: CreativeDraft, novelId?: string): Promise<LongTermControls> {
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       try {
@@ -56,7 +56,7 @@ export class ControlsAgent {
         const parsed: unknown = JSON.parse(response.content);
         const { authorIntent, currentFocus, volumeDirections, constraints } = parseControlsOutput(parsed);
         return {
-          bookId: slugifyTitle(draft.title),
+          novelId: novelId ?? generateNovelId(draft.title),
           title: draft.title,
           authorIntent,
           currentFocus,

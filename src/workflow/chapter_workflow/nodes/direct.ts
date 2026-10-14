@@ -86,7 +86,7 @@ function ctxOf(dispatch: { chapter?: unknown }): number {
 export function createDirectGraphNode(agent: AgentPort, deps: DirectNodeDeps) {
   const node = createDirectNode(agent, deps)
   return async (state: ChapterGraphState) => {
-    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    const result = await node.run({ novelId: state.novelId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
     return {
       artifacts: result.outcome.kind === 'continue' && result.output !== undefined
         ? { ...state.artifacts, direct: result.output }

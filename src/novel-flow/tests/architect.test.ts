@@ -63,7 +63,7 @@ test("AI 红线：内置常量共 11 条", () => {
 test("buildBookRules：书特定规则 R 编号 + 内置 AI 红线 A 编号合并", () => {
   const generated = [{ content: "叶凡必须谨慎克制" }, { content: "反派禁止降智" }];
   const rules = buildBookRules("yinlong", "隐龙", generated);
-  assert.equal(rules.bookId, "yinlong");
+  assert.equal(rules.novelId, "yinlong");
   assert.equal(rules.rules.length, 2 + AI_REDLINES.length);
   assert.equal(rules.rules[0].id, "R01");
   assert.equal(rules.rules[0].category, "story");
@@ -78,7 +78,7 @@ test("架构师 Agent：内存模型产出故事圣经与书籍规则（合并�
   const bookConfig = buildBookConfig(EXAMPLE_DRAFT);
   const { storyBible, bookRules } = await agent.createStoryFoundation(BRIEF, EXAMPLE_DRAFT, bookConfig);
   assert.deepEqual(storyBible.sections, EXAMPLE_STORY_BIBLE.sections);
-  assert.equal(bookRules.bookId, "yinlong");
+  assert.equal(bookRules.novelId, "yinlong");
   assert.equal(bookRules.rules.length, 7 + AI_REDLINES.length);
 });
 

@@ -14,7 +14,7 @@ export async function runArchitecture(
   if (draft === undefined || storyBible === undefined || bookRules === undefined || controls === undefined) {
     throw new Error("缺少 draft、story_foundation 或 controls 节点产物，无法生成小说静态架构");
   }
-  const architecture = await architectureAgent.createArchitecture({ draft, storyBible, bookRules, controls });
+  const architecture = await architectureAgent.createArchitecture({ draft, storyBible, bookRules, controls, novelId });
   if (persist) artifacts.saveArchitecture(architecture, novelId);
   return { architecture };
 }

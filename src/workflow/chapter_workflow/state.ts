@@ -1,6 +1,6 @@
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
-import type { BookId, ChapterStatus, Step } from "../../novel/types";
+import type { NovelId, ChapterStatus, Step } from "../../novel/types";
 import type { NodeOutput } from "../types";
 
 const OutcomeSchema = z.discriminatedUnion("kind", [
@@ -12,7 +12,7 @@ const OutcomeSchema = z.discriminatedUnion("kind", [
 
 /** 章节 LangGraph 的共享状态；业务产物沿用 WorkflowStore 的 artifacts 结构。 */
 export const ChapterGraphStateSchema = new StateSchema({
-  bookId: z.custom<BookId>(),
+  novelId: z.custom<NovelId>(),
   chapter: z.number(),
   step: z.custom<Step>(),
   status: z.custom<ChapterStatus>(),

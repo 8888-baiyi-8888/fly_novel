@@ -1,6 +1,6 @@
 /**
  * novel/book-config：书籍配置固化（Book Config）。
- * draft 节点把创意草案中的「运行参数」抽出来固化成 BookConfig + bookId。
+ * draft 节点把创意草案中的「运行参数」抽出来固化成 BookConfig + novelId。
  *
  * 关键区分（文档 N2）：单章字数、平台、语言属于运行参数，不属于世界设定；
  * 运行参数改了（如番茄→起点、2500→3000 字），世界设定不需要跟着改。
@@ -16,8 +16,8 @@ export type Platform = string;
 
 /** 书籍配置：书与项目运行参数。 */
 export interface BookConfig {
-  /** 书籍唯一标识（从书名生成的拼音 ID，如 隐龙→yinlong）。 */
-  bookId: string;
+  /** 小说唯一标识；自动生成时由时间戳、书名拼音和防重序号组成。 */
+  novelId: string;
   title: string;
   genre: Genre;
   platform: Platform;

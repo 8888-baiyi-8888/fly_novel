@@ -1,6 +1,6 @@
 import type { BookConfig } from '../types/book-config.ts'
 import type { CharacterCard, CharacterState } from '../types/character.ts'
-import type { BookId, CharacterName, EventId, FactId, HookId, ThreadId } from '../types/identifiers.ts'
+import type { NovelId, CharacterName, EventId, FactId, HookId, ThreadId } from '../types/identifiers.ts'
 import type { Fact } from '../types/fact.ts'
 import type { HookRecord } from '../types/hook.ts'
 import type { Thread, ThreadEvent } from '../types/thread.ts'
@@ -21,7 +21,7 @@ export const TL_MAIN = 'tl-main-share' as ThreadId
 export const TL_FLASHBACK_RAIN = 'tl-flashback-rain' as ThreadId
 
 export const BOOK_CONFIG: BookConfig = {
-  bookId: 'book-fake-001' as BookId,
+  novelId: 'book-fake-001' as NovelId,
   title: '龙王赘婿',
   genre: 'dushi',
   platform: 'fanqie',

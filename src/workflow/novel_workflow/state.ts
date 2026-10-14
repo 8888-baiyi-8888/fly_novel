@@ -13,6 +13,7 @@ export const NovelWorkflowSchema = new StateSchema({
   rawInput: z.object({
     userInput: z.string(),
     novel_id: z.string(),
+    autoNovelId: z.boolean().optional(),
   }),
   normalizedInput: z.object({
     normalizedInput: z.string().optional(),
@@ -27,7 +28,7 @@ export const NovelWorkflowSchema = new StateSchema({
   state0: z.custom<State0>().optional(),
   workspace: z.custom<BuildWorkspaceResult>().optional(),
   ready: z.object({
-    bookId: z.string(),
+    novelId: z.string(),
     status: z.enum(["ready", "warn"]),
     checkedAt: z.string(),
   }).optional(),

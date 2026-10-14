@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { BookId, CharacterName, Dispatch, EventId, HookId, ThreadId } from "../../novel/types";
+import type { NovelId, CharacterName, Dispatch, EventId, HookId, ThreadId } from "../../novel/types";
 import { validateDispatch } from "../../novel/gates/dispatch-gate";
 import type { DispatchGateLedgerEntry } from "../../novel/gates/dispatch-gate";
 import { buildFakeBookRuntime } from "../../novel/runtime";
@@ -16,7 +16,7 @@ type _gatedDirect = Expect<ReturnType<typeof withDispatchGate> extends StepNode<
 
 const H007 = "H007" as HookId;
 const H011 = "H011" as HookId;
-const bookId = "book-gate-001" as BookId;
+const novelId = "book-gate-001" as NovelId;
 const chapter = 21;
 
 /** 账本视图：H007（已埋设、已推进、可回收）、H011（已埋设、可推进）。 */
@@ -80,7 +80,7 @@ class RecordingAgent implements AgentPort {
 test("合规 Dispatch：经 withDispatchGate 后 continue，产物原样保留", async () => {
   const dispatch = makeDispatch();
   const gated = withDispatchGate(directNode(dispatch), judge);
-  const result = await gated.run({ bookId, chapter, state: { bookId, chapter, step: "direct" as const, status: "planned" as const, retries: 0 }, artifacts: {} });
+  const result = await gated.run({ novelId, chapter, state: { novelId, chapter, step: "direct" as const, status: "planned" as const, retries: 0 }, artifacts: {} });
   assert.deepEqual(result.outcome, { kind: "continue" });
   assert.deepEqual(result.output, dispatch);
 });
@@ -88,7 +88,7 @@ test("合规 Dispatch：经 withDispatchGate 后 continue，产物原样保留",
 test("违规 Dispatch（mustResolve 未覆盖）：返回 retry 回 direct，reason 含违规规则", async () => {
   const bad = makeDispatch({ hookDirectives: { ...makeDispatch().hookDirectives, resolve: [] } });
   const gated = withDispatchGate(directNode(bad), judge);
-  const result = await gated.run({ bookId, chapter, state: { bookId, chapter, step: "direct" as const, status: "planned" as const, retries: 0 }, artifacts: {} });
+  const result = await gated.run({ novelId, chapter, state: { novelId, chapter, step: "direct" as const, status: "planned" as const, retries: 0 }, artifacts: {} });
   assert.equal(result.outcome.kind, "retry");
   if (result.outcome.kind !== "retry") return;
   assert.equal(result.outcome.step, "direct");
@@ -101,7 +101,7 @@ test("节点自带的 suspend/fail/无产物结果原样透传，不触发闸门
     run: async () => ({ outcome: { kind: "suspend", reason: "等人类确认主角人设" } }),
   };
   const gated = withDispatchGate(suspending, judge);
-  const result = await gated.run({ bookId, chapter, state: { bookId, chapter, step: "direct" as const, status: "planned" as const, retries: 0 }, artifacts: {} });
+  const result = await gated.run({ novelId, chapter, state: { novelId, chapter, step: "direct" as const, status: "planned" as const, retries: 0 }, artifacts: {} });
   assert.deepEqual(result.outcome, { kind: "suspend", reason: "等人类确认主角人设" });
 });
 
@@ -111,9 +111,9 @@ test("direct 节点：instruction 含 Dispatch 结构示例（few-shot），cont
   const recorder = new RecordingAgent(stub);
   const node = createDirectNode(recorder, { runtime });
   const ctx: StepRunContext = {
-    bookId,
+    novelId,
     chapter: 1,
-    state: { bookId, chapter: 1, step: "direct" as const, status: "planned" as const, retries: 0 },
+    state: { novelId, chapter: 1, step: "direct" as const, status: "planned" as const, retries: 0 },
     artifacts: {},
   };
   const result = await node.run(ctx);

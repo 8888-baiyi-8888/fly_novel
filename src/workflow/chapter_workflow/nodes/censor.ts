@@ -34,7 +34,7 @@ export function createCensorNode(agent: AgentPort): StepNode<'censor'> {
 export function createCensorGraphNode(agent: AgentPort) {
   const node = createCensorNode(agent)
   return async (state: ChapterGraphState) => {
-    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    const result = await node.run({ novelId: state.novelId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
     return {
       artifacts: result.outcome.kind === 'continue' && result.output !== undefined
         ? { ...state.artifacts, censor: result.output }

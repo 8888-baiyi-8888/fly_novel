@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { N7_WORKSPACE_DIR } from "../paths";
+import { ARTIFACTS_ROOT } from "../paths";
 import { WorkspaceInputs, WorkspaceFile, BuildWorkspaceResult } from "./types";
 import {
   bookRulesToMd,
@@ -71,7 +71,7 @@ export const PLATFORM_PROFILE: PlatformProfile = PLATFORM_PROFILES.fanqie;
 
 /** 把 N6 种子转成机器读的 hook 账本（与 hooks.md 同一数据）。 */
 function hooksJson(state0: WorkspaceInputs["state0"]): string {
-  return JSON.stringify({ bookId: state0.bookId, hooks: state0.hookSeeds, archive: [] }, null, 2);
+  return JSON.stringify({ novelId: state0.novelId, hooks: state0.hookSeeds, archive: [] }, null, 2);
 }
 
 /** TruthOracle 初始事实（N6 的人物状态/关系状态/世界状态 → 事实条目）。 */
@@ -81,7 +81,7 @@ function factsJson(state0: WorkspaceInputs["state0"]): string {
     ...state0.relationshipStates.map((r) => ({ subject: r.subjects.join("+"), predicate: "关系/信任/知情", value: `${r.relation}｜${r.trust}｜${r.knowledge}` })),
     ...state0.worldState.map((w) => ({ subject: "世界", predicate: w.key, value: w.value })),
   ];
-  return JSON.stringify({ bookId: state0.bookId, facts }, null, 2);
+  return JSON.stringify({ novelId: state0.novelId, facts }, null, 2);
 }
 
 /** 生成全部待写文件（dry-run 也走这里，只生成不落盘）。 */
@@ -95,7 +95,7 @@ export function buildWorkspaceFiles(inputs: WorkspaceInputs): WorkspaceFile[] {
       relPath: "inkos.json",
       content: JSON.stringify(
         {
-          bookId: bookConfig.bookId,
+          novelId: bookConfig.novelId,
           title: bookConfig.title,
           bookConfig,
           platformProfile: resolvePlatformProfile(bookConfig.platform),
@@ -143,7 +143,7 @@ export function buildWorkspaceFiles(inputs: WorkspaceInputs): WorkspaceFile[] {
     ...Object.entries(volumeBeats).map(([name, content]) => ({ relPath: `story/beats/${name}`, content })),
     // 机器读权威状态（与 story/*.md 同一数据的 JSON 投影）
     { relPath: "state/hooks.json", content: hooksJson(state0) },
-    { relPath: "state/threads.json", content: JSON.stringify({ bookId: state0.bookId, threadBoard: state0.threadBoard }, null, 2) },
+    { relPath: "state/threads.json", content: JSON.stringify({ novelId: state0.novelId, threadBoard: state0.threadBoard }, null, 2) },
     { relPath: "state/facts.json", content: factsJson(state0) },
   ];
   return files;
@@ -157,22 +157,23 @@ export interface BuildWorkspaceOptions {
   force?: boolean;
   /** true 时不落盘，只生成内容并返回（memory 演示用）。 */
   dryRun?: boolean;
-  /** 工作空间根目录（默认 artifacts/n7-workspace；测试可注入临时目录）。 */
+  /** 工作空间目录；未传入时使用小说的统一产物路径。 */
   workspaceRoot?: string;
+  novelId?: string;
 }
 
 /** N7 主入口：N1~N6 产物 → 书项目目录。 */
 export function buildWorkspace(inputs: WorkspaceInputs, options: BuildWorkspaceOptions = {}): BuildWorkspaceResult {
-  const bookId = inputs.bookConfig.bookId;
-  const workspaceDir = join(options.workspaceRoot ?? N7_WORKSPACE_DIR, bookId);
+  const novelId = options.novelId ?? inputs.bookConfig.novelId;
+  const workspaceDir = options.workspaceRoot ?? join(ARTIFACTS_ROOT, novelId, "workspace_node");
 
   if (existsSync(workspaceDir) && options.force !== true) {
-    return { bookId, workspaceDir, skipped: true, filesWritten: [] };
+    return { novelId, workspaceDir, skipped: true, filesWritten: [] };
   }
 
   const files = buildWorkspaceFiles(inputs);
   if (options.dryRun === true) {
-    return { bookId, workspaceDir, skipped: false, filesWritten: files.map((f) => f.relPath) };
+    return { novelId, workspaceDir, skipped: false, filesWritten: files.map((f) => f.relPath) };
   }
 
   mkdirSync(workspaceDir, { recursive: true });
@@ -184,5 +185,5 @@ export function buildWorkspace(inputs: WorkspaceInputs, options: BuildWorkspaceO
     mkdirSync(join(fullPath, ".."), { recursive: true });
     writeFileSync(fullPath, file.content, "utf8");
   }
-  return { bookId, workspaceDir, skipped: false, filesWritten: files.map((f) => f.relPath) };
+  return { novelId, workspaceDir, skipped: false, filesWritten: files.map((f) => f.relPath) };
 }

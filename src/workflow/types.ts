@@ -1,4 +1,4 @@
-import type { BookId, ChapterState, Dispatch, RuntimeDelta, SceneSheet, Simulation, Step, WeavePlan } from '../novel/types'
+import type { NovelId, ChapterState, Dispatch, RuntimeDelta, SceneSheet, Simulation, Step, WeavePlan } from '../novel/types'
 
 /**
  * ③merge 节点的完整产物：排程方案（Timeline Manager 产出，§7.2）+ 线性拍摄单（Merger 产出，§7.4）。
@@ -49,7 +49,7 @@ export interface StepResult<O = NodeOutput> {
 
 /** 步骤节点执行上下文（只读）：state 为执行该步骤时的最新章节状态。 */
 export interface StepRunContext {
-  readonly bookId: BookId
+  readonly novelId: NovelId
   readonly chapter: number
   readonly state: ChapterState
   /** 前序步骤产物，按步骤名索引；重试时被回退到的步骤之后的产物会随重跑被覆盖。 */
@@ -72,7 +72,7 @@ export function artifactOf<S extends Step>(ctx: StepRunContext, step: S): NodeOu
 
 /** 断点持久化记录：状态 + 工件，由存储实现决定序列化方式。 */
 export interface PersistedWorkflow {
-  readonly bookId: BookId
+  readonly novelId: NovelId
   readonly chapter: number
   readonly state: ChapterState
   readonly artifacts: Record<string, NodeOutput>
@@ -80,17 +80,17 @@ export interface PersistedWorkflow {
 
 /** 存储抽象：引擎的落盘与续跑唯一入口。 */
 export interface WorkflowStore {
-  load(bookId: BookId, chapter: number): Promise<PersistedWorkflow | undefined>
+  load(novelId: NovelId, chapter: number): Promise<PersistedWorkflow | undefined>
   save(record: PersistedWorkflow): Promise<void>
 }
 
 /** 引擎运行事件，供挂起通知 / 日志 / 监控使用。 */
 export type WorkflowEvent =
-  | { readonly type: 'step-completed'; readonly bookId: BookId; readonly chapter: number; readonly step: Step; readonly state: ChapterState }
-  | { readonly type: 'retrying'; readonly bookId: BookId; readonly chapter: number; readonly from: Step; readonly to: Step; readonly attempt: number }
-  | { readonly type: 'suspended'; readonly bookId: BookId; readonly chapter: number; readonly step: Step; readonly reason: string; readonly state: ChapterState }
-  | { readonly type: 'failed'; readonly bookId: BookId; readonly chapter: number; readonly step: Step; readonly reason: string; readonly state: ChapterState }
-  | { readonly type: 'completed'; readonly bookId: BookId; readonly chapter: number; readonly state: ChapterState }
+  | { readonly type: 'step-completed'; readonly novelId: NovelId; readonly chapter: number; readonly step: Step; readonly state: ChapterState }
+  | { readonly type: 'retrying'; readonly novelId: NovelId; readonly chapter: number; readonly from: Step; readonly to: Step; readonly attempt: number }
+  | { readonly type: 'suspended'; readonly novelId: NovelId; readonly chapter: number; readonly step: Step; readonly reason: string; readonly state: ChapterState }
+  | { readonly type: 'failed'; readonly novelId: NovelId; readonly chapter: number; readonly step: Step; readonly reason: string; readonly state: ChapterState }
+  | { readonly type: 'completed'; readonly novelId: NovelId; readonly chapter: number; readonly state: ChapterState }
 
 /** 引擎一次运行的结果。 */
 export type ChapterRunResult =

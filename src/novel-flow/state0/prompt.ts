@@ -18,7 +18,7 @@ const STATE0_SYSTEM_PROMPT = [
 /** 组装「N5 五件套 → State₀」的模型消息。 */
 export function buildState0Messages(architecture: StoryArchitecture): ChatMessage[] {
   const digest = {
-    bookId: architecture.bookId,
+    novelId: architecture.novelId,
     title: architecture.title,
     storyFrame: architecture.storyFrame,
     volumeMap: architecture.volumeMap,

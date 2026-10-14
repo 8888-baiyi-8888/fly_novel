@@ -1,4 +1,4 @@
-import type { BookId } from './identifiers.ts'
+import type { NovelId } from './identifiers.ts'
 import type { Dispatch } from './dispatch.ts'
 import type { Simulation } from './simulation.ts'
 import type { WeavePlan } from './weave-plan.ts'
@@ -42,7 +42,7 @@ export type ChapterStatus =
  * ⑦settle 的 RuntimeDelta 分解为 hooks.json + facts.json + 状态更新，不留存在本章状态中。
  */
 export interface ChapterState {
-  readonly bookId: BookId
+  readonly novelId: NovelId
   readonly chapter: number
   /** 当前步骤：断点续跑从该 step 继续，不重跑前序。 */
   readonly step: Step

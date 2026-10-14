@@ -74,7 +74,7 @@ export function createMergeNode(agent: AgentPort): StepNode<'merge'> {
 export function createMergeGraphNode(agent: AgentPort) {
   const node = createMergeNode(agent)
   return async (state: ChapterGraphState) => {
-    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    const result = await node.run({ novelId: state.novelId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
     return {
       artifacts: result.outcome.kind === 'continue' && result.output !== undefined
         ? { ...state.artifacts, merge: result.output }

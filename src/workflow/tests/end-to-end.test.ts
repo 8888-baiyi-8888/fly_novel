@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { BookId, CharacterName, Dispatch, EventId, HookId, ThreadId } from "../../novel/types";
+import type { NovelId, CharacterName, Dispatch, EventId, HookId, ThreadId } from "../../novel/types";
 import type { BookRuntime } from "../../novel/runtime";
 import { buildFakeBookRuntime } from "../../novel/runtime";
 import { H007, H011 } from "../../novel/runtime/fixtures";
@@ -9,7 +9,7 @@ import type { StubRule } from "../stub-agent";
 import { runChapterGraph } from "../chapter_workflow";
 import type { WorkflowEvent, WorkflowStore, PersistedWorkflow } from "../types";
 
-const bookId = "book-e2e-001" as BookId;
+const novelId = "book-e2e-001" as NovelId;
 const chapter = 21;
 
 /** §7.7 精简账本（H007 可回收 / H011 可推进）：viewForChapter(21) 的 must 集合与合规 Dispatch 精确匹配。 */
@@ -97,19 +97,19 @@ function fullRules(): StubRule[] {
 
 class MemoryStore implements WorkflowStore {
   private readonly records = new Map<string, PersistedWorkflow>();
-  private key(bookId: BookId, chapter: number): string { return `${bookId}:${chapter}`; }
-  async load(bookId: BookId, chapter: number): Promise<PersistedWorkflow | undefined> {
-    const record = this.records.get(this.key(bookId, chapter));
+  private key(novelId: NovelId, chapter: number): string { return `${novelId}:${chapter}`; }
+  async load(novelId: NovelId, chapter: number): Promise<PersistedWorkflow | undefined> {
+    const record = this.records.get(this.key(novelId, chapter));
     return record === undefined ? undefined : { ...record, state: { ...record.state }, artifacts: { ...record.artifacts } };
   }
   async save(record: PersistedWorkflow): Promise<void> {
-    this.records.set(this.key(record.bookId, record.chapter), { ...record, state: { ...record.state }, artifacts: { ...record.artifacts } });
+    this.records.set(this.key(record.novelId, record.chapter), { ...record, state: { ...record.state }, artifacts: { ...record.artifacts } });
   }
   get latest(): PersistedWorkflow | undefined { return [...this.records.values()].at(-1); }
 }
 
 function runGraph(agent: StubAgent, store: WorkflowStore, runtime: BookRuntime, notify?: (e: WorkflowEvent) => void, maxRetries = 2) {
-  return runChapterGraph(bookId, chapter, { agent, store, runtime, maxRetries, notify });
+  return runChapterGraph(novelId, chapter, { agent, store, runtime, maxRetries, notify });
 }
 
 test("LangGraph chapter flow completes all seven nodes", async () => {

@@ -59,7 +59,7 @@ test("controls：MemoryModel 内存版返回《隐龙》四件套", async () => 
   const agent = new ControlsAgent({ model });
   const draft = await exampleDraft();
   const controls: LongTermControls = await agent.createControls(draft);
-  assert.equal(controls.bookId, "yinlong");
+  assert.match(controls.novelId, /^\d{8}-\d{6}-yinlong$/);
   assert.equal(controls.title, "隐龙");
   assert.equal(controls.volumeDirections.length, 3);
   assert.equal(controls.constraints.includes("不虐主"), true);
@@ -80,7 +80,7 @@ test("controls：第一次输出缺字段 → 重试带反馈 → 成功", async
   const draft = await exampleDraft();
   const controls = await agent.createControls(draft);
   assert.equal(calls, 2);
-  assert.equal(controls.bookId, "yinlong");
+  assert.match(controls.novelId, /^\d{8}-\d{6}-yinlong$/);
 });
 
 test("controls：多次重试仍失败 → 抛 ControlsError", async () => {
@@ -93,15 +93,15 @@ test("controls：多次重试仍失败 → 抛 ControlsError", async () => {
 });
 
 test("controls：示例常量与解析结果一致", () => {
-  assert.equal(EXAMPLE_CONTROLS.bookId, "yinlong");
+  assert.equal(EXAMPLE_CONTROLS.novelId, "yinlong");
   assert.equal(EXAMPLE_CONTROLS.currentFocus.length, 5);
   assert.equal(EXAMPLE_CONTROLS.volumeDirections[1].direction.includes("势力重聚"), true);
 });
 
-test("controls：agent 产出 bookId 来自书名拼音 slug（确定性）", async () => {
+test("controls：默认 novelId 包含时间和书名拼音", async () => {
   const model = new MemoryModel({ responses: { creative_controls: EXAMPLE_CONTROLS_JSON } });
   const agent = new ControlsAgent({ model });
   const draft = await exampleDraft();
   const controls = await agent.createControls(draft);
-  assert.equal(controls.bookId, "yinlong");
+  assert.match(controls.novelId, /^\d{8}-\d{6}-yinlong$/);
 });

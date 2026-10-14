@@ -25,7 +25,7 @@ export interface SingleStepOptions {
   persist: boolean;
   askUser?: ClarifyUserAnswer;
   forceWorkspace?: boolean;
-  bookId?: string;
+
 }
 
 function requireArtifact<T>(value: T | null, description: string): T {
@@ -33,21 +33,10 @@ function requireArtifact<T>(value: T | null, description: string): T {
   return value;
 }
 
-function resolveWorkspace(workspaceRoot: string, bookId?: string): { bookId: string; workspaceDir: string } {
-  const selected = bookId ?? (existsSync(workspaceRoot) ? readdirSync(workspaceRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-    .map((entry) => entry.name)
-    .sort()
-    .at(-1) : undefined);
-  if (selected === undefined) {
-    throw new Error("没有找到书籍工作空间，请先运行工作空间节点");
-  }
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(selected)) throw new Error(`无效的 bookId：${selected}`);
-  const workspaceDir = join(workspaceRoot, selected);
-  if (!existsSync(workspaceDir)) throw new Error(`书目录不存在：${workspaceDir}`);
-  return { bookId: selected, workspaceDir };
+function resolveWorkspace(novelId: string, workspaceDir: string): { novelId: string; workspaceDir: string } {
+  if (!existsSync(workspaceDir)) throw new Error(`小说工作区不存在：${workspaceDir}`);
+  return { novelId, workspaceDir };
 }
-
 /** 复用图节点执行单步；前序产物从 artifacts 读取。 */
 export async function runNovelStep(options: SingleStepOptions): Promise<void> {
   const { agents, persist } = options;
@@ -133,7 +122,7 @@ export async function runNovelStep(options: SingleStepOptions): Promise<void> {
       ).workspace, null, 2));
       return;
     case "rea": {
-      const workspace = resolveWorkspace(artifacts.workspaceRoot(novelId), options.bookId);
+      const workspace = resolveWorkspace(novelId, artifacts.workspaceRoot(novelId));
       const result = runReady({ workspace: { ...workspace, skipped: true, filesWritten: [] } }, true, novelId, artifacts);
       console.log(`交接结果：${result.ready?.status ?? "warn"}`);
       return;

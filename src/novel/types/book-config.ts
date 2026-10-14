@@ -1,4 +1,4 @@
-import type { BookId } from './identifiers.ts'
+import type { NovelId } from './identifiers.ts'
 
 /**
  * 目标平台，决定 Censor 规则集、节奏与伏笔密度参数（PlatformProfile）。
@@ -15,7 +15,7 @@ export type ChapterReviewMode = 'auto' | 'manual'
 
 /** 书与项目配置（文档 §3.1）。运行参数，不属世界设定。 */
 export interface BookConfig {
-  readonly bookId: BookId
+  readonly novelId: NovelId
   readonly title: string
   readonly genre: Genre
   readonly platform: Platform

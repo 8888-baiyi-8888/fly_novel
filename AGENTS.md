@@ -68,7 +68,7 @@ tsconfig.chapters.json 章节域（novel+workflow）测试编译配置，产物�
 
 引入外部 API 后，记录必需与可选环境变量。真实 API 测试缺少凭据时应明确报告跳过原因，不能伪装成通过；常规测试应能使用固定测试数据或替身在无密钥环境下运行。日志和异常信息不得泄露凭据。
 
-**真实 agent 接入**：章节级正式驱动入口为 `src/app/run-chapters.ts`（`node dist/app/run-chapters.js`）——**复用小说级 `ConfiguredLlmModel`**（从 `.fly-novel/settings.json` 读 provider/model/baseURL + 解密凭据），自动定位最近修改的 `{artifactRoot}/{novelId}/workspace_node/{bookId}/` 书目录，不读取 `FLY_NOVEL_*` 环境变量、不传 `--base-url/--model/--api-key`；可选参数为 `--novel-id/--book/--chapter/--to/--store-dir`。`openai-compatible-agent.ts` 的测试用注入 `fetchImpl` 替身，不在无密钥环境下发起真实调用。
+**真实 agent 接入**：章节级正式驱动入口为 `src/app/run-chapters.ts`（`node dist/app/run-chapters.js`）——通过 `src/app/chat-openai-model.ts` 读取 `.fly-novel/settings.json` 中的 provider/model/baseURL 并解密凭据，创建 OpenAI 兼容 LangChain 模型，自动定位最近修改的 `{artifactRoot}/{novelId}/workspace_node/` 书目录，不读取 `FLY_NOVEL_*` 环境变量、不传 `--base-url/--model/--api-key`；可选参数为 `--novel-id/--chapter/--to/--store-dir`。`openai-compatible-agent.ts` 的测试用注入 `fetchImpl` 替身，不在无密钥环境下发起真实调用。
 
 ## 工程约定
 

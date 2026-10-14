@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { BookId } from "../../novel/types";
+import type { NovelId } from "../../novel/types";
 import { StubAgent } from "../stub-agent";
 import { createWriteNode } from "../chapter_workflow/nodes/write";
 import { WRITE_BANS } from "../chapter_workflow/nodes/write";
 import type { AgentGenerateInput, AgentPort } from "../agent-port";
 import type { NodeOutput, StepRunContext } from "../types";
 
-const bookId = "demo-book" as BookId;
+const novelId = "demo-book" as NovelId;
 
 /** 测试 fixture：绕过 branded 类型（EventId/CharacterName/HookId），结构对齐 MergeArtifacts。 */
 function makeMerge(): NodeOutput {
@@ -51,9 +51,9 @@ test("write 节点：instruction 含 §7.3 全部禁令，context 含拍摄单",
   const recorder = new RecordingAgent(stub);
   const node = createWriteNode(recorder);
   const ctx: StepRunContext = {
-    bookId,
+    novelId,
     chapter: 1,
-    state: { bookId, chapter: 1, step: "write" as const, status: "planned" as const, retries: 0 },
+    state: { novelId, chapter: 1, step: "write" as const, status: "planned" as const, retries: 0 },
     artifacts: { merge: makeMerge() },
   };
   const result = await node.run(ctx);
@@ -75,9 +75,9 @@ test("write 节点：agent 调用失败（无规则/超时）→ retry 回 write
   const stub = new StubAgent([]);
   const node = createWriteNode(stub);
   const ctx: StepRunContext = {
-    bookId,
+    novelId,
     chapter: 1,
-    state: { bookId, chapter: 1, step: "write" as const, status: "planned" as const, retries: 0 },
+    state: { novelId, chapter: 1, step: "write" as const, status: "planned" as const, retries: 0 },
     artifacts: { merge: makeMerge() },
   };
   const result = await node.run(ctx);

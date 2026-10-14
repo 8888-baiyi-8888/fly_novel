@@ -199,7 +199,7 @@ test("architecture：全链路 Agent（前四件 → 节拍板）产出五件套
     bookRules: buildExampleBookRules(),
     controls: EXAMPLE_CONTROLS,
   });
-  assert.equal(result.bookId, "yinlong");
+  assert.match(result.novelId, /^\d{8}-\d{6}-yinlong$/);
   assert.equal(result.beatBoard.beats.length, 100);
 });
 
@@ -234,7 +234,7 @@ test("architecture：多次重试仍违规 → 抛 DirectorError", async () => {
 });
 
 test("architecture：示例五件套与解析结果一致", () => {
-  assert.equal(EXAMPLE_ARCHITECTURE.bookId, "yinlong");
+  assert.equal(EXAMPLE_ARCHITECTURE.novelId, "yinlong");
   assert.equal(EXAMPLE_ARCHITECTURE.volumeMap[1].title, "重聚");
   assert.equal(EXAMPLE_ARCHITECTURE.characterCards[0].secret.includes("龙王殿殿主"), true);
 });

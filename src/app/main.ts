@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { MemoryModel } from "../novel-flow/adapters/memory-model";
@@ -29,7 +29,7 @@ import {
   N4_CONTROLS_DIR,
   N5_ARCHITECTURE_DIR,
   N6_STATE0_DIR,
-  N7_WORKSPACE_DIR,
+  ARTIFACTS_ROOT,
 } from "../novel-flow/paths";
 import { ConfiguredLlmModel } from "./configured-model";
 import { INPUT_GUIDE, USAGE } from "./input-guide";
@@ -168,11 +168,12 @@ type Step = "ni" | "dra" | "bc" | "sf" | "con" | "arc" | "sta" | "wor" | "rea";
 interface CliArgs {
   input?: string;
   file?: string;
+  novelId?: string;
   model?: "memory" | "real";
   clarify?: boolean;
   step?: Step;
   force?: boolean;
-  book?: string;
+
   help?: boolean;
 }
 
@@ -203,14 +204,14 @@ function parseArgs(argv: string[]): CliArgs {
       args.clarify = true;
     } else if (token === "--force") {
       args.force = true;
-    } else if (token === "--book" && value !== undefined) {
-      args.book = value;
+    } else if (token === "--novel-id" && value !== undefined) {
+      args.novelId = value;
       i += 1;
     } else if (token === "--help") {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step ni|dra|bc|sf|con|arc|sta|wor|rea、--clarify、--force、--book <bookId>、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--model memory|real、--step ni|dra|bc|sf|con|arc|sta|wor|rea、--clarify、--force、--novel-id <novelId>、--help）`,
       );
     }
   }
@@ -444,7 +445,7 @@ async function runN2Only(): Promise<void> {
     throw new Error("没有找到 N1 草案（artifacts/n1-draft/），请先运行 --step dra 或全链路");
   }
   const config = buildBookConfig(draft);
-  console.log(`\n【N2 书籍配置】已创建书籍：${config.bookId}（${config.title}）`);
+  console.log(`\n【N2 书籍配置】已创建书籍：${config.novelId}（${config.title}）`);
   console.log(JSON.stringify(config, null, 2));
   saveBookConfig(config);
 }
@@ -527,7 +528,7 @@ async function runN5Only(
   console.log(`\n【N5 小说静态架构】五件套：故事框架 / 分卷规划（${result.volumeMap.length} 卷）/ 角色卡（${result.characterCards.length} 张）/ 叙事线地图（${result.threadMap.lines.length} 条线）/ 节拍板（${result.beatBoard.beats.length} 章）`);
   console.log(JSON.stringify(
     {
-      bookId: result.bookId,
+      novelId: result.novelId,
       title: result.title,
       storyFrame: result.storyFrame,
       volumeMap: result.volumeMap,
@@ -659,32 +660,36 @@ async function runN7Step(persist: boolean, force: boolean): Promise<void> {
   );
 }
 
-/** 定位 N8 要处理的书目录：--book 指定 bookId，缺省取 n7-workspace 下最新书目录。 */
-function resolveWorkspaceBookId(bookIdArg?: string): { bookId: string; dir: string } {
-  if (bookIdArg !== undefined && bookIdArg !== "") {
-    return { bookId: bookIdArg, dir: join(N7_WORKSPACE_DIR, bookIdArg) };
+/** 定位 N8 要处理的小说工作区：--novel-id 指定小说，缺省取最近修改的工作区。 */
+function resolveWorkspaceNovelId(novelIdArg?: string): { novelId: string; dir: string } {
+  if (novelIdArg !== undefined && novelIdArg !== "") {
+    return { novelId: novelIdArg, dir: join(ARTIFACTS_ROOT, novelIdArg, "workspace_node") };
   }
-  mkdirSync(N7_WORKSPACE_DIR, { recursive: true });
-  const books = readdirSync(N7_WORKSPACE_DIR, { encoding: "utf8" })
-    .filter((name) => name !== ".gitkeep" && !name.startsWith("."))
-    .sort();
-  if (books.length === 0) {
-    throw new Error(`artifacts/n7-workspace 下没有书目录，请先运行 --step wor。也可用 --book <bookId> 指定。`);
+  const workspaces = existsSync(ARTIFACTS_ROOT)
+    ? readdirSync(ARTIFACTS_ROOT, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({ novelId: entry.name, dir: join(ARTIFACTS_ROOT, entry.name, "workspace_node") }))
+      .filter((candidate) => existsSync(candidate.dir))
+      .map((candidate) => ({ ...candidate, mtimeMs: statSync(candidate.dir).mtimeMs }))
+    : [];
+  if (workspaces.length === 0) {
+    throw new Error(`没有小说工作区，请先运行 --step wor。也可用 --novel-id <novelId> 指定。`);
   }
-  return { bookId: books[books.length - 1], dir: join(N7_WORKSPACE_DIR, books[books.length - 1]) };
+  workspaces.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return workspaces[0];
 }
 
 /**
  * N8：Book Runtime Ready（交接点，纯程序不调 LLM）。
  * ① 验收八类内容物 → ② AI 红线扫描消毒（自动替换并打印「从什么改成什么」）→ ③ 写交接凭据 ready.json。
  */
-async function runN8Step(bookIdArg?: string): Promise<void> {
-  const { bookId, dir } = resolveWorkspaceBookId(bookIdArg);
+async function runN8Step(novelIdArg?: string): Promise<void> {
+  const { novelId, dir } = resolveWorkspaceNovelId(novelIdArg);
   if (!existsSync(dir)) {
-    throw new Error(`书目录不存在：${dir}。请先运行 --step wor 生成，或检查 --book <bookId>。`);
+    throw new Error(`书目录不存在：${dir}。请先运行 --step wor 生成，或检查 --novel-id <novelId>。`);
   }
   console.log(`\n【N8 Book Runtime Ready】交接点：小说级终点 = 章节级起点`);
-  console.log(`  书：${bookId} @ ${dir}\n`);
+  console.log(`  书：${novelId} @ ${dir}\n`);
 
   // ① 验收八类内容物
   const verify = verifyWorkspace(dir);
@@ -710,7 +715,7 @@ async function runN8Step(bookIdArg?: string): Promise<void> {
 
   // ③ 写交接凭据
   const ready = {
-    bookId,
+    novelId,
     status: verify.ok && scan.damaged.length === 0 ? "ready" : "warn",
     checkedAt: new Date().toISOString(),
     checks: verify.checks,
@@ -830,7 +835,7 @@ async function main(): Promise<void> {
   }
 
   if (args.step === "rea") {
-    await runN8Step(args.book);
+    await runN8Step(args.novelId);
     return;
   }
 
@@ -845,7 +850,7 @@ async function main(): Promise<void> {
     saveDraft(draft);
   }
   const config = buildBookConfig(draft);
-  console.log(`\n【N2 书籍配置】已创建书籍：${config.bookId}（${config.title}）`);
+  console.log(`\n【N2 书籍配置】已创建书籍：${config.novelId}（${config.title}）`);
   console.log(JSON.stringify(config, null, 2));
   if (isReal) {
     saveBookConfig(config);
@@ -878,7 +883,7 @@ async function main(): Promise<void> {
   // N8：交接点——验收八类内容物 + AI 红线扫描消毒 + 写交接凭据（纯程序，不调 LLM）。
   // memory 模式 N7 是 dry-run 未落盘，没有书目录可交接，跳过并提示。
   if (isReal) {
-    await runN8Step(config.bookId);
+    await runN8Step(config.novelId);
   } else {
     console.log("（memory 模式 N7 为 dry-run 未落盘，跳过 N8 交接）");
   }

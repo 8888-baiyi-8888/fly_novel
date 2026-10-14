@@ -16,7 +16,7 @@ export interface StoryBibleSection {
 
 /** 故事圣经：这本书的世界。 */
 export interface StoryBible {
-  bookId: string;
+  novelId: string;
   title: string;
   sections: StoryBibleSection[];
 }
@@ -32,7 +32,7 @@ export interface BookRule {
 
 /** 书籍规则：这本书以后应该怎么写、哪些不能乱写（Director/Writer/Auditor 都读）。 */
 export interface BookRules {
-  bookId: string;
+  novelId: string;
   title: string;
   rules: BookRule[];
 }

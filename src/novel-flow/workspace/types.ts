@@ -25,7 +25,7 @@ export interface WorkspaceFile {
 
 /** N7 运行结果。 */
 export interface BuildWorkspaceResult {
-  bookId: string;
+  novelId: string;
   /** 书目录绝对路径。 */
   workspaceDir: string;
   /** true = 目录已存在且未传 force，跳过未写。 */

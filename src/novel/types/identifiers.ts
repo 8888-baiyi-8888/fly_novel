@@ -1,7 +1,7 @@
 import type { Branded } from '@fly-novel/util'
 
-/** 书级唯一标识，对应 BookConfig.bookId。 */
-export type BookId = Branded<'BookId'>
+/** 小说唯一标识，由小说工作流入口生成并贯穿建书与章节工作流。 */
+export type NovelId = Branded<'NovelId'>
 
 /** 伏笔账本条目唯一标识（如 "H007"），对应 HookRecord.hookId。 */
 export type HookId = Branded<'HookId'>

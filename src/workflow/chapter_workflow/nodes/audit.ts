@@ -45,7 +45,7 @@ export function createAuditNode(agent: AgentPort): StepNode<'audit'> {
 export function createAuditGraphNode(agent: AgentPort) {
   const node = createAuditNode(agent)
   return async (state: ChapterGraphState) => {
-    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    const result = await node.run({ novelId: state.novelId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
     return {
       artifacts: result.outcome.kind === 'continue' && result.output !== undefined
         ? { ...state.artifacts, audit: result.output }

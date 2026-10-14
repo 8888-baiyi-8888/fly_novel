@@ -4,7 +4,7 @@ import { normalizeGenre, normalizePlatform } from "./mapping";
 import { BookConfig } from "./types";
 
 /**
- * 从书名生成拼音 bookId：声调去除、只保留小写字母与数字。
+ * 按书名生成默认 novelId：声调去除、只保留小写字母与数字。
  * 例：隐龙 → "yinlong"；书名含数字/字母原样保留（如 "重生2010" → "zhongsheng2010"）。
  * 全部被过滤掉（如纯符号标题）时回退 "book"。
  */
@@ -14,15 +14,22 @@ export function slugifyTitle(title: string): string {
   return slug.length > 0 ? slug : "book";
 }
 
+/** 生成默认小说 ID：本地时间戳加书名拼音，格式为 YYYYMMDD-HHmmss-title。 */
+export function generateNovelId(title: string, now: Date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `${timestamp}-${slugifyTitle(title)}`;
+}
+
 /**
  * 从创意草案的运行参数部分固化 BookConfig，由 draft 节点调用。
- * 纯程序节点，不调 LLM；确定性输出（同一草案 → 同一 bookId）。
+ * 纯程序节点，不调 LLM；未传入 novelId 时，按生成时间与书名生成默认 ID。
  * now 可注入，便于测试固定时间戳。
  */
-export function buildBookConfig(draft: CreativeDraft, now: Date = new Date()): BookConfig {
+export function buildBookConfig(draft: CreativeDraft, now: Date = new Date(), novelId?: string): BookConfig {
   const timestamp = now.toISOString();
   return {
-    bookId: slugifyTitle(draft.title),
+    novelId: novelId ?? generateNovelId(draft.title, now),
     title: draft.title,
     genre: normalizeGenre(draft.genre),
     platform: normalizePlatform(draft.platform),

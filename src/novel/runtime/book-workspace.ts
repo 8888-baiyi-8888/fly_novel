@@ -4,7 +4,7 @@ import { buildFakeBookRuntime, type FakeBookRuntime } from './fake-book-runtime.
 import type { FakeBookRuntimeOptions } from './fixtures.ts'
 import type { BookConfig } from '../types/book-config.ts'
 import type { CharacterCard, CharacterState, Tier } from '../types/character.ts'
-import type { CharacterName, EventId, FactId, HookId, ThreadId, BookId } from '../types/identifiers.ts'
+import type { CharacterName, EventId, FactId, HookId, ThreadId, NovelId } from '../types/identifiers.ts'
 import type { Fact, SubjectKind } from '../types/fact.ts'
 import type { HookRecord, HookStatus, HookTiming, HookType } from '../types/hook.ts'
 import type { Thread, ThreadEvent, ThreadKind, ThreadStatus } from '../types/thread.ts'
@@ -34,9 +34,9 @@ import type { Thread, ThreadEvent, ThreadKind, ThreadStatus } from '../types/thr
 /* ---------------- 书目录原始形状（小说流 N7 产物，机器读权威） ---------------- */
 
 export interface InkFile {
-  readonly bookId: string
+  readonly novelId: string
   readonly title: string
-  readonly bookConfig: Omit<BookConfig, 'bookId'> & { readonly bookId: string }
+  readonly bookConfig: Omit<BookConfig, 'novelId'> & { readonly novelId: string }
 }
 
 /** 伏笔种子：State₀ 的 hookSeeds 元素（book-workspace 直接用 hooks.json，字段与 state0 同构）。 */
@@ -81,7 +81,7 @@ export interface BeatIntentionsBeat {
 
 /** N5 architecture 产物（角色卡与叙事线本体的 JSON 来源）。 */
 export interface ArchitectureFile {
-  readonly bookId: string
+  readonly novelId: string
   readonly characterCards?: readonly CharacterCardLike[]
   readonly threadMap?: { readonly lines?: readonly ThreadMapLine[] }
 }
@@ -112,7 +112,7 @@ export interface ThreadMapLine {
 
 /** N6 state0 产物（结构化角色状态的 JSON 来源）。 */
 export interface State0File {
-  readonly bookId: string
+  readonly novelId: string
   readonly characterStates?: readonly State0CharacterState[]
   readonly relationshipStates?: readonly { readonly subjects: readonly string[]; readonly relation: string; readonly trust: string; readonly knowledge: string }[]
   readonly worldState?: readonly { readonly key: string; readonly value: string }[]
@@ -134,7 +134,7 @@ export interface State0CharacterState {
 export function mapBookConfig(ink: InkFile): BookConfig {
   const c = ink.bookConfig
   return {
-    bookId: c.bookId as BookId,
+    novelId: c.novelId as NovelId,
     title: c.title,
     genre: c.genre,
     platform: c.platform,
@@ -348,8 +348,8 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, 'utf8')) as T
 }
 
-/** 在 artifacts 根下定位 bookId 匹配的最新 N5/N6 产物；找不到返回 undefined。 */
-function findLatestArtifact(artifactsRoot: string, dir: string, bookId: string): string | undefined {
+/** 在 artifacts 根下定位 novelId 匹配的最新 N5/N6 产物；找不到返回 undefined。 */
+function findLatestArtifact(artifactsRoot: string, dir: string, novelId: string): string | undefined {
   const dirPath = join(artifactsRoot, dir)
   if (!existsSync(dirPath)) return undefined
   // 命名约定 {name}-{yyyyMMdd-HHmmss}.json → 按文件名倒序即最新在前
@@ -357,8 +357,8 @@ function findLatestArtifact(artifactsRoot: string, dir: string, bookId: string):
   for (const file of files) {
     if (!file.endsWith('.json')) continue
     try {
-      const json = readJson<{ bookId?: string }>(join(dirPath, file))
-      if (json.bookId === bookId) return join(dirPath, file)
+      const json = readJson<{ novelId?: string }>(join(dirPath, file))
+      if (json.novelId === novelId) return join(dirPath, file)
     } catch {
       // 跳过损坏产物，继续找下一个
     }
@@ -383,16 +383,16 @@ export function buildRuntimeFromBookWorkspace(workspaceDir: string, options: Boo
   const facts = readJson<{ facts: readonly WorkspaceFact[] }>(join(workspaceDir, 'state', 'facts.json')).facts
   const beats = readJson<{ beats: readonly BeatIntentionsBeat[] }>(join(workspaceDir, 'story', 'beats', 'beats.json')).beats
 
-  const isNovelWorkspace = basename(dirname(workspaceDir)) === 'workspace_node'
-  const novelId = basename(dirname(dirname(workspaceDir)))
+  const isNovelWorkspace = basename(workspaceDir) === 'workspace_node'
+  const novelId = basename(dirname(workspaceDir))
   const artifactsRoot = isNovelWorkspace
-    ? options.artifactsRoot === undefined ? dirname(dirname(workspaceDir)) : join(options.artifactsRoot, novelId)
+    ? options.artifactsRoot === undefined ? dirname(workspaceDir) : join(options.artifactsRoot, novelId)
     : options.artifactsRoot ?? join(workspaceDir, '..', '..')
   const architecturePath = options.architecturePath ?? findLatestArtifact(
-    artifactsRoot, isNovelWorkspace ? 'architecture_node' : 'n5-architecture', ink.bookId,
+    artifactsRoot, isNovelWorkspace ? 'architecture_node' : 'n5-architecture', ink.novelId,
   )
   const state0Path = options.state0Path ?? findLatestArtifact(
-    artifactsRoot, isNovelWorkspace ? 'state0_node' : 'n6-state0', ink.bookId,
+    artifactsRoot, isNovelWorkspace ? 'state0_node' : 'n6-state0', ink.novelId,
   )
 
   const architecture = architecturePath === undefined ? undefined : readJson<ArchitectureFile>(architecturePath)

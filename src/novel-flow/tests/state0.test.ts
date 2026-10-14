@@ -69,16 +69,16 @@ function state0Agent(): State0Agent {
   return new State0Agent({ model });
 }
 
-test("N6 State₀：六类结构齐全且 bookId/title 与输入一致", async () => {
+test("N6 State₀：六类结构齐全且 novelId/title 与输入一致", async () => {
   const agent = state0Agent();
   const architecture = await architectureAgent().createArchitecture({
     draft: draft(),
     storyBible: JSON.parse(EXAMPLE_ARCHITECTURE_JSON),
-    bookRules: { bookId: "yinlong", title: "隐龙", rules: [] },
+    bookRules: { novelId: "yinlong", title: "隐龙", rules: [] },
     controls: JSON.parse(EXAMPLE_ARCHITECTURE_JSON),
   });
   const state0 = await agent.createState0(architecture);
-  assert.equal(state0.bookId, architecture.bookId);
+  assert.equal(state0.novelId, architecture.novelId);
   assert.equal(state0.title, architecture.title);
   assert.ok(Array.isArray(state0.characterStates));
   assert.ok(Array.isArray(state0.relationshipStates));
@@ -144,7 +144,7 @@ test("N6 State₀：MemoryModel 响应可被 State0Agent 正确解析（端到�
   const architecture = await architectureAgent().createArchitecture({
     draft: draft(),
     storyBible: JSON.parse(EXAMPLE_ARCHITECTURE_JSON),
-    bookRules: { bookId: "yinlong", title: "隐龙", rules: [] },
+    bookRules: { novelId: "yinlong", title: "隐龙", rules: [] },
     controls: JSON.parse(EXAMPLE_ARCHITECTURE_JSON),
   });
   const state0 = await agent.createState0(architecture);
@@ -158,12 +158,12 @@ test("N6 上下文接续：N5 五件套（含节拍板）是 N6 唯一输入，�
   const architecture = await architectureAgent().createArchitecture({
     draft: draft(),
     storyBible: JSON.parse(EXAMPLE_ARCHITECTURE_JSON),
-    bookRules: { bookId: "yinlong", title: "隐龙", rules: [] },
+    bookRules: { novelId: "yinlong", title: "隐龙", rules: [] },
     controls: JSON.parse(EXAMPLE_ARCHITECTURE_JSON),
   });
   const state0 = await agent.createState0(architecture);
-  // N6 输出必须携带 bookId，供后续 N7 持久化定位
-  assert.ok(state0.bookId.length > 0);
+  // N6 输出必须携带 novelId，供后续 N7 持久化定位
+  assert.ok(state0.novelId.length > 0);
 });
 
 test("N6 对账：示例种子的 beatTag 在节拍板里都有埋有收（能回收才入账）", () => {

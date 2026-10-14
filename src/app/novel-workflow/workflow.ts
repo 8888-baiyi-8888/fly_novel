@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { CreativeDraftError, ClarifyUserAnswer } from "../../novel-flow/draft/creative-draft-agent";
@@ -22,6 +21,7 @@ import {
 } from "./agents";
 import { buildNovelGraph, type NovelWorkflowAgents } from "../../workflow/novel_workflow";
 import { runNovelStep, type NovelWorkflowStep } from "../../workflow/novel_workflow/single-step";
+import { generateUniqueNovelId, timestamp } from "../../workflow/novel_workflow/artifacts";
 
 type CliAskerFactory = () => { ask: ClarifyUserAnswer; close: () => void };
 
@@ -37,13 +37,14 @@ export interface NovelWorkflowOptions {
 export async function executeNovelWorkflow(options: NovelWorkflowOptions): Promise<void> {
   const asker = options.ask?.();
   try {
-    const novelId = options.novelId ?? randomUUID();
-    console.log(`小说 ID：${novelId}`);
+    const autoNovelId = options.novelId === undefined;
+    const novelId = options.novelId ?? `pending-${timestamp()}`;
     const graph = buildNovelGraph(
       options.agents,
       { artifactRoot: ARTIFACTS_ROOT, persist: options.isReal, askUser: asker?.ask, forceWorkspace: options.forceWorkspace },
     );
-    const result = await graph.invoke({ rawInput: { userInput: options.initialInput, novel_id: novelId } });
+    const result = await graph.invoke({ rawInput: { userInput: options.initialInput, novel_id: novelId, autoNovelId } });
+    if (!autoNovelId) console.log(`小说 ID：${result.rawInput.novel_id}`);
     const title = result.bookConfig?.title ?? "未命名书籍";
     const location = result.workspace?.workspaceDir ?? "未生成书目录";
     console.log(`\n建书流程完成：${title}（${options.isReal ? location : "内存预览"}）`);
@@ -69,7 +70,7 @@ interface CliArgs {
   /** N7 目标书目录已存在时强制重建。 */
   force?: boolean;
   /** 指定 N8 验收的书籍 ID。 */
-  book?: string;
+
   /** 显示命令帮助和输入建议。 */
   help?: boolean;
 }
@@ -104,14 +105,11 @@ function parseArgs(argv: string[]): CliArgs {
       args.clarify = true;
     } else if (token === "--force") {
       args.force = true;
-    } else if (token === "--book" && value !== undefined) {
-      args.book = value;
-      i += 1;
     } else if (token === "--help") {
       args.help = true;
     } else {
       throw new Error(
-        `未知参数：${token}（支持 --input <文本>、--file <路径>、--novel-id <ID>、--model memory|real、--step ni|dra|sf|con|arc|sta|wor|rea、--clarify、--force、--book <bookId>、--help）`,
+        `未知参数：${token}（支持 --input <文本>、--file <路径>、--novel-id <ID>、--model memory|real、--step ni|dra|sf|con|arc|sta|wor|rea、--clarify、--force、--novel-id <novelId>、--help）`,
       );
     }
   }
@@ -161,7 +159,7 @@ export async function runNovelWorkflow(argv: string[] = process.argv.slice(2)): 
   }
 
   if (args.step !== undefined) {
-    const novelId = args.novelId ?? randomUUID();
+    const novelId = args.novelId ?? generateUniqueNovelId(ARTIFACTS_ROOT, undefined, new Date(), isReal);
     if (args.step === "ni") console.log(`小说 ID：${novelId}`);
     const asker = args.step === "dra" && args.clarify === true ? createCliAsker() : undefined;
     try {
@@ -174,7 +172,7 @@ export async function runNovelWorkflow(argv: string[] = process.argv.slice(2)): 
         persist: isReal,
         askUser: asker?.ask,
         forceWorkspace: args.force,
-        bookId: args.book,
+
       });
     } finally {
       asker?.close();
@@ -191,7 +189,6 @@ export async function runNovelWorkflow(argv: string[] = process.argv.slice(2)): 
     forceWorkspace: args.force,
   });
 }
-
 
 if (require.main === module) {
   const inputconst = "我想写一部小说，讲述有序无序的故事。智商在线。玄幻世界，非常规修仙。一千章，每章 3000 字。";

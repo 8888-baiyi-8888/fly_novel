@@ -19,7 +19,7 @@ export function runWorkspace(
   }
   const workspace = buildWorkspace(
     { draft, bookConfig, storyBible, bookRules, controls, architecture, state0 },
-    { dryRun: !persist, force, workspaceRoot: artifacts.workspaceRoot(novelId) },
+    { dryRun: !persist, force, workspaceRoot: artifacts.workspaceRoot(novelId), novelId },
   );
   return { workspace };
 }

@@ -1,5 +1,5 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import type { BookId, ChapterState } from "../../novel/types";
+import type { NovelId, ChapterState } from "../../novel/types";
 import type { BookRuntime } from "../../novel/runtime";
 import type { AgentPort } from "../agent-port";
 import { createJsonFileStore } from "../file-store";
@@ -66,18 +66,18 @@ export interface RunChapterGraphOptions extends Omit<ChapterGraphOptions, "store
 }
 
 /** 从 JsonFileStore 恢复章节状态并运行 LangGraph。 */
-export async function runChapterGraph(bookId: BookId, chapter: number, options: RunChapterGraphOptions): Promise<ChapterRunResult> {
+export async function runChapterGraph(novelId: NovelId, chapter: number, options: RunChapterGraphOptions): Promise<ChapterRunResult> {
   const store = options.store ?? createJsonFileStore({ dir: options.storeDir ?? ".fly-novel-store" });
-  const persisted = await store.load(bookId, chapter);
+  const persisted = await store.load(novelId, chapter);
   if (persisted?.state.status === "settled" || persisted?.state.status === "approved") {
     return { kind: "already-complete", state: persisted.state };
   }
   const initial: ChapterGraphState = persisted === undefined
-    ? { bookId, chapter, step: "direct", status: "planned", retries: 0, artifacts: {}, outcome: undefined, resultKind: undefined, reason: undefined }
+    ? { novelId, chapter, step: "direct", status: "planned", retries: 0, artifacts: {}, outcome: undefined, resultKind: undefined, reason: undefined }
     : { ...persisted.state, artifacts: persisted.artifacts, outcome: undefined, resultKind: undefined, reason: undefined };
   const result = await buildChapterGraph({ ...options, store }).invoke(initial);
   if (result.resultKind === "invalid") return { kind: "invalid", reason: result.reason ?? "章节图状态无效" };
-  const state: ChapterState = { bookId, chapter, step: result.step, status: result.status, retries: result.retries };
+  const state: ChapterState = { novelId, chapter, step: result.step, status: result.status, retries: result.retries };
   if (result.resultKind === "completed" || result.resultKind === "already-complete") return { kind: result.resultKind, state };
   if (result.resultKind === "suspended" || result.resultKind === "failed") {
     return { kind: result.resultKind, state, reason: result.reason ?? "章节工作流停止" };

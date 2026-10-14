@@ -27,7 +27,7 @@ export const EXAMPLE_ARCHITECT_JSON: string = JSON.stringify(
 
 /** 演示/测试用：与 EXAMPLE_ARCHITECT_JSON 对应的规范化对象。 */
 export const EXAMPLE_STORY_BIBLE: StoryBible = {
-  bookId: "yinlong",
+  novelId: "yinlong",
   title: "隐龙",
   sections: [
     { id: "S01", title: "当代背景", content: "当代城市。江氏贸易是本地龙头企业；龙王殿是离岸世界的传说，公众不知其存在。" },
@@ -64,7 +64,7 @@ export function buildExampleBookRules(): BookRules {
     "禁套路化比喻/拟物：「像一株向日葵」「像太阳/光」「融化坚冰/冰冷的心」「眼里有光/有星星」「心像被什么填满」等万能比喻；比喻必须贴合角色独有的记忆与经历，否则直接删除",
   ];
   return {
-    bookId: "yinlong",
+    novelId: "yinlong",
     title: "隐龙",
     rules: [
       ...rules.map((content, index) => ({

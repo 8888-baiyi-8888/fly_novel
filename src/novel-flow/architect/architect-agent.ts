@@ -26,7 +26,7 @@ function describeError(error: unknown): string {
 }
 
 /** 组装带编号的书籍规则：R01…（书特定）+ A01…（内置 AI 红线）。 */
-export function buildBookRules(bookId: string, title: string, generated: { content: string }[]): BookRules {
+export function buildBookRules(novelId: string, title: string, generated: { content: string }[]): BookRules {
   const storyRules = generated.map((rule, index) => ({
     id: `R${String(index + 1).padStart(2, "0")}`,
     category: "story" as const,
@@ -37,7 +37,7 @@ export function buildBookRules(bookId: string, title: string, generated: { conte
     category: "ai-redline" as const,
     content,
   }));
-  return { bookId, title, rules: [...storyRules, ...redlineRules] };
+  return { novelId, title, rules: [...storyRules, ...redlineRules] };
 }
 
 /**
@@ -78,8 +78,8 @@ export class ArchitectAgent {
         const parsed: unknown = JSON.parse(response.content);
         const { storyBible, bookRules } = parseArchitectOutput(parsed);
         return {
-          storyBible: { bookId: bookConfig.bookId, title: bookConfig.title, sections: storyBible },
-          bookRules: buildBookRules(bookConfig.bookId, bookConfig.title, bookRules),
+          storyBible: { novelId: bookConfig.novelId, title: bookConfig.title, sections: storyBible },
+          bookRules: buildBookRules(bookConfig.novelId, bookConfig.title, bookRules),
         };
       } catch (error) {
         lastError = error;

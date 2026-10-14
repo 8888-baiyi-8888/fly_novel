@@ -21,9 +21,9 @@ function inputs(): WorkspaceInputs {
   return {
     draft,
     bookConfig,
-    storyBible: { bookId: "yinlong", title: "隐龙", sections: [{ id: "S01", title: "当代背景", content: "当代都市，江氏贸易是本地龙头企业。" }] },
+    storyBible: { novelId: "yinlong", title: "隐龙", sections: [{ id: "S01", title: "当代背景", content: "当代都市，江氏贸易是本地龙头企业。" }] },
     bookRules: buildExampleBookRules(),
-    controls: { bookId: "yinlong", title: "隐龙", authorIntent: "信息差爽点", currentFocus: ["离婚协议逼签"], volumeDirections: [{ volume: "第一卷", direction: "借势反噬" }], constraints: ["不虐主", "不送女"] },
+    controls: { novelId: "yinlong", title: "隐龙", authorIntent: "信息差爽点", currentFocus: ["离婚协议逼签"], volumeDirections: [{ volume: "第一卷", direction: "借势反噬" }], constraints: ["不虐主", "不送女"] },
     architecture: EXAMPLE_ARCHITECTURE,
     state0: EXAMPLE_STATE0,
   };
@@ -54,7 +54,7 @@ test("N7：书目录文件清单覆盖文档目录结构（inkos/story/state/bea
 test("N7：inkos.json 固化 BookConfig + 平台节奏尺子（§13.1）", () => {
   const files = buildWorkspaceFiles(inputs());
   const inkos = JSON.parse(files.find((f) => f.relPath === "inkos.json")!.content);
-  assert.equal(inkos.bookId, "yinlong");
+  assert.equal(inkos.novelId, "yinlong");
   assert.equal(inkos.bookConfig.targetChapters, EXAMPLE_DRAFT.targetChapters);
   assert.equal(inkos.platformProfile.hook.maxActive, 12);
   assert.equal(inkos.platformProfile.hook.timingMix["near-term"], 0.3);
@@ -239,10 +239,10 @@ test("N8：替换破坏 JSON 时回滚并标记 damaged（不写坏文件）", (
   const dir = result.workspaceDir;
   // 手写一个坏 JSON（值里未闭合引号），但含红线词 → 替换后仍坏 → 回滚标记
   const badPath = join(dir, "state", "facts.json");
-  writeFileSync(badPath, '{"bookId":"yinlong","facts":[{"value":"瞳孔缩成针尖未闭合}]\n', "utf8");
+  writeFileSync(badPath, '{"novelId":"yinlong","facts":[{"value":"瞳孔缩成针尖未闭合}]\n', "utf8");
   const scan = scanAndFixRedlines(dir);
   assert.ok(scan.damaged.some((d) => d.includes("facts.json")), `damaged 应为 facts.json，实际 ${scan.damaged.join(",")}`);
   // 原文件未被写回（保持原样）
-  assert.equal(readFileSync(badPath, "utf8"), '{"bookId":"yinlong","facts":[{"value":"瞳孔缩成针尖未闭合}]\n');
+  assert.equal(readFileSync(badPath, "utf8"), '{"novelId":"yinlong","facts":[{"value":"瞳孔缩成针尖未闭合}]\n');
   rmSync(root, { recursive: true, force: true });
 });

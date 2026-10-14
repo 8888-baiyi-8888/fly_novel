@@ -1,5 +1,5 @@
 import { CreativeDraft } from "../draft/types";
-import { slugifyTitle } from "../book-config/book-config";
+import { generateNovelId } from "../book-config/book-config";
 import { StoryArchitectAgent, ArchitectureInput } from "./story-architect-agent";
 import { DirectorAgent } from "./director-agent";
 import { StoryArchitecture } from "./types";
@@ -14,12 +14,12 @@ export class ArchitectureAgent {
     private readonly director: DirectorAgent,
   ) {}
 
-  /** 生成 N5 五件套（bookId 从书名确定性生成，与 N2/N3/N4 一致）。 */
-  async createArchitecture(input: ArchitectureInput): Promise<StoryArchitecture> {
+  /** 生成 N5 五件套（使用工作流提供的 novelId；独立调用时按书名生成默认 ID）。 */
+  async createArchitecture(input: ArchitectureInput & { novelId?: string }): Promise<StoryArchitecture> {
     const parts = await this.architect.createParts(input);
     const beatBoard = await this.director.createBeatBoard(input.draft, parts);
     return {
-      bookId: slugifyTitle(input.draft.title),
+      novelId: input.novelId ?? generateNovelId(input.draft.title),
       title: input.draft.title,
       storyFrame: parts.storyFrame,
       volumeMap: parts.volumeMap,

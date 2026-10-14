@@ -84,7 +84,7 @@ export function createSettleNode(agent: AgentPort, deps: SettleNodeDeps): StepNo
 export function createSettleGraphNode(agent: AgentPort, deps: SettleNodeDeps) {
   const node = createSettleNode(agent, deps)
   return async (state: ChapterGraphState) => {
-    const result = await node.run({ bookId: state.bookId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
+    const result = await node.run({ novelId: state.novelId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })
     return {
       artifacts: result.outcome.kind === 'continue' && result.output !== undefined
         ? { ...state.artifacts, settle: result.output }

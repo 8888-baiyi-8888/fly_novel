@@ -14,7 +14,7 @@ export interface VolumeDirection {
 
 /** 长期创作控制四件套。 */
 export interface LongTermControls {
-  bookId: string;
+  novelId: string;
   title: string;
   /** 作者意图：作者为什么要这样写（长期，全书有效，永不失效）。 */
   authorIntent: string;

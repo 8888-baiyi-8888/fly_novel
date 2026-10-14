@@ -20,7 +20,7 @@ export function runReady(
   const verify = verifyWorkspace(workspace.workspaceDir);
   const scan = scanAndFixRedlines(workspace.workspaceDir);
   const ready = {
-    bookId: workspace.bookId,
+    novelId: workspace.novelId,
     status: verify.ok && scan.damaged.length === 0 ? "ready" as const : "warn" as const,
     checkedAt: new Date().toISOString(),
     checks: verify.checks,

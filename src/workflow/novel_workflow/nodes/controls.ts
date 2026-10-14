@@ -13,7 +13,7 @@ export async function runControls(
   if (state.draft === undefined) {
     throw new Error("缺少 draft 节点产物，无法生成长期创作控制");
   }
-  const controls = await controlsAgent.createControls(state.draft);
+  const controls = await controlsAgent.createControls(state.draft, novelId);
   if (persist) artifacts.saveControls(controls, novelId);
   return { controls };
 }

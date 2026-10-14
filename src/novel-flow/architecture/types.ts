@@ -121,7 +121,7 @@ export interface ArchitectureParts {
 
 /** N5 五件套产物（落盘结构）。 */
 export interface StoryArchitecture extends ArchitectureParts {
-  bookId: string;
+  novelId: string;
   title: string;
   beatBoard: BeatBoard;
 }

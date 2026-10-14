@@ -32,7 +32,7 @@ export const EXAMPLE_CONTROLS_JSON: string = JSON.stringify(
 
 /** 演示/测试用：与 EXAMPLE_CONTROLS_JSON 对应的规范化对象。 */
 export const EXAMPLE_CONTROLS: LongTermControls = {
-  bookId: "yinlong",
+  novelId: "yinlong",
   title: "隐龙",
   authorIntent:
     "这不是一本单纯炫力的小说。我最想写的是反差——一个拥有最高权力的人，刻意选择被低估。爽点来源不是他多强，而是他每次「轻描淡写的正确」。苏晴不是工具人：她对叶凡的认知必须分层推进，从「以为他是废物」到「怀疑他有底气」再到「震动重估」。反派要自洽，他们的败局要落在自己头上。",

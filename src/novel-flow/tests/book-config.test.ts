@@ -1,4 +1,4 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildBookConfig, slugifyTitle } from "../book-config/book-config";
 import { normalizeGenre, normalizePlatform } from "../book-config/mapping";
@@ -10,7 +10,7 @@ test("slugifyTitle：中文书名转拼音小写", () => {
 });
 
 test("slugifyTitle：数字/字母保留，特殊符号剔除", () => {
-  // 注："重"是多音字，pinyin-pro 按词频默认读 chong（重复的重），bookId 为内部标识，接受默认读音
+  // 注："重"是多音字，pinyin-pro 按词频默认读 chong（重复的重），novelId 为内部标识，接受默认读音
   assert.equal(slugifyTitle("重生2010"), "chongsheng2010");
   assert.equal(slugifyTitle("斗破苍穹3"), "doupocangqiong3");
 });
@@ -39,9 +39,9 @@ test("normalizePlatform：空串返回 未定", () => {
 });
 
 test("buildBookConfig：从草案运行参数固化书籍配置", () => {
-  const now = new Date("2026-09-23T10:00:00.000Z");
+  const now = new Date(2026, 8, 23, 10, 0, 0);
   const config = buildBookConfig(EXAMPLE_DRAFT, now);
-  assert.equal(config.bookId, "yinlong");
+  assert.equal(config.novelId, "20260923-100000-yinlong");
   assert.equal(config.title, "隐龙");
   assert.equal(config.genre, "都市");
   assert.equal(config.platform, "番茄");
@@ -57,14 +57,14 @@ test("buildBookConfig：默认值 chapterReviewMode/maxHookRetries", () => {
 });
 
 test("buildBookConfig：时间戳字段", () => {
-  const now = new Date("2026-09-23T10:00:00.000Z");
+  const now = new Date(2026, 8, 23, 10, 0, 0);
   const config = buildBookConfig(EXAMPLE_DRAFT, now);
   assert.equal(config.createdAt, now.toISOString());
   assert.equal(config.updatedAt, now.toISOString());
 });
 
-test("buildBookConfig：同一草案生成确定性 bookId", () => {
-  const a = buildBookConfig(EXAMPLE_DRAFT);
-  const b = buildBookConfig(EXAMPLE_DRAFT);
-  assert.equal(a.bookId, b.bookId);
+test("buildBookConfig：默认 novelId 包含生成时间和书名拼音", () => {
+  const now = new Date(2026, 8, 23, 10, 0, 0);
+  const config = buildBookConfig(EXAMPLE_DRAFT, now);
+  assert.equal(config.novelId, "20260923-100000-yinlong");
 });

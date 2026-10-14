@@ -194,7 +194,7 @@ export function parseState0Output(input: unknown, lineIds: string[]): State0 {
   };
 
   return {
-    bookId: "",
+    novelId: "",
     title: "",
     characterStates,
     relationshipStates,

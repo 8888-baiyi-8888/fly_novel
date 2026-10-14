@@ -93,7 +93,7 @@ export interface ProgressState {
 
 /** N6 产物：State₀ 六类。 */
 export interface State0 {
-  bookId: string;
+  novelId: string;
   title: string;
   characterStates: CharacterState[];
   relationshipStates: RelationshipState[];

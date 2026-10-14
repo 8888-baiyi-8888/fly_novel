@@ -6,7 +6,7 @@
 
 - [types/](types/index.ts)：**小说领域共享数据模型**（工作流文档 §3 核心数据模型 + 章节级运行时结构）。
   §3：BookConfig / Beat / Fact / HookRecord / Thread / CharacterCard / ChapterState，
-  以及配套的品牌标识（BookId/HookId/ThreadId/EventId/FactId/CharacterName）与
+  以及配套的品牌标识（NovelId/HookId/ThreadId/EventId/FactId/CharacterName）与
   伏笔状态迁移合法性判定 `canTransitionHookStatus`。
   ChapterState 产物字段已收敛为结构化类型：dispatch / sims / weavePlan / scenesheet / draft / auditReport / censorReport
   （weavePlan 与 scenesheet 为 ③merge 的两个独立产物，对应 weaveplan.json / scenesheet.json）。

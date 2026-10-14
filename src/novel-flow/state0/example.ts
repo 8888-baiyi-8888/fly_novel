@@ -3,7 +3,7 @@ import { State0 } from "./types";
 /** 预置《隐龙》State0（六类，与工作流文档 N6 示例一致）。 */
 export function buildExampleState0(): State0 {
   return {
-    bookId: "yinlong",
+    novelId: "yinlong",
     title: "隐龙",
     characterStates: [
       {

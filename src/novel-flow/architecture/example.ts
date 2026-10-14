@@ -107,7 +107,7 @@ function buildExampleBeatBoard(totalChapters: number): BeatBoard {
 /** 构建《隐龙》五件套（targetChapters=100）。 */
 export function buildExampleArchitecture(): StoryArchitecture {
   return {
-    bookId: "yinlong",
+    novelId: "yinlong",
     title: "隐龙",
     storyFrame: {
       coreStory:
