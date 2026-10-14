@@ -23,7 +23,7 @@ export class CharacterAgent extends BaseAgent {
     });
   }
 
-  public async invoke(content: string) {
+  public async generate(content: string) {
     const thread_id = `${this.options.novelId}_${this.options.branchId}_${this.options.characterId}`
     return this.agent.invoke(
       {

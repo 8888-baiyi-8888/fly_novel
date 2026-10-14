@@ -50,7 +50,7 @@ async function main(): Promise<void> {
     branchId: "main",
     characterId: "debug-character",
   });
-  const result = await agent.invoke(
+  const result = await agent.generate(
     "场景：雨后的渡口。苏晴问你：明天还会回来吗？请以林舟的身份自然回应，并通过动作体现他的情绪。",
   );
   console.dir(result, { depth: null });

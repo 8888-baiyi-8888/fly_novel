@@ -11,7 +11,7 @@ test("角色 Agent 使用注入的模型响应角色调用", async () => {
     characterInfos: "林舟，沉着寡言，重视承诺。",
   });
 
-  const result = await agent.invoke("苏晴问：明天还会回来吗？");
+  const result = await agent.generate("苏晴问：明天还会回来吗？");
   const finalMessage = result.messages.at(-1);
 
   assert.ok(finalMessage);
