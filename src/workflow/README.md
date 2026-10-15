@@ -20,9 +20,10 @@
 - **agent 端口**（[agent-port.ts](agent-port.ts)）：`AgentPort.generate` 是 workflow 消费的 agent 生成能力契约（task/instruction/context → text 或 JSON）。**预留真实 agent 的位置**：自研 agent-loop 或第三方 agent（经进程外服务）实现同一端口注入即可，引擎与节点零改动。
 - **HttpAgent**（[http-agent.ts](http-agent.ts)）：`AgentPort` 的进程外 HTTP 适配器（第三方 agent 接入面）——POST `{baseUrl}/generate` 收 `{ text, json }`，非 2xx / 超时 / 坏响应转抛错（节点经 `runAgentTask` 转 fail）。服务端薄层负责把第三方原生协议（如 LangChain Deep Agents / Managed Deep Agents）映射到本契约。
 - **OpenAICompatibleAgent**（[openai-compatible-agent.ts](openai-compatible-agent.ts)）：`AgentPort` 的 OpenAI 兼容协议适配器（阿里云 MaaS `compatible-mode/v1`、DashScope、DeepSeek 等 `/chat/completions` 端点）——`instruction→system`、`context→user`、`outputFormat=json` 且 `jsonMode=true` 时请求 `response_format=json_object`，取 `choices[0].message.content` 为 text 并顺带解析 json；非 2xx / 超时 / 缺 content 转抛错。
+- **角色模拟**：章节 `simulate` 节点逐个调用 `CharacterAgentManager`，按 `Dispatch.castPlan` 选择 S/A 角色，通过 `BookRuntime` 的角色 ID、角色卡和当前状态组装各自上下文；B 级不调用 Agent。S 级沿用角色持久会话，A 级使用章节专属 thread ID，不跨章复用对话。其他六个节点仍使用 `AgentPort`。
 - **StubAgent**（[stub-agent.ts](stub-agent.ts)）：确定性模拟 agent——按规则表返回预设响应，支持调用次数轮换（重试场景：先违规后合规）、instruction 子串分支、调用计数。当前用它驱动 workflow 端到端先行开发。
 - **JsonFileStore**（[file-store.ts](file-store.ts)）：`WorkflowStore` 的 JSON 文件实现（断点续跑落地）——布局 `{dir}/{chapter}.json`，写 `{chapter}.json.tmp` 再 rename（原子替换），load 遇 ENOENT 返回 undefined。真实存储（§11.3 单事务）就绪后替换，引擎零改动。
-- **章节图**（[chapter_workflow/](chapter_workflow/index.ts)）：`buildChapterGraph` 将现有 7 个章节节点接入 LangGraph。图状态保存章节状态和 `artifacts`，条件边按当前 `step` 前进或按节点 outcome 回退；重试预算耗尽时挂起。`runChapterGraph` 从 `WorkflowStore` 恢复并在每次转移后保存，断点文件以章节号命名，路径按小说 ID 隔离。
+- **章节图**（[chapter_workflow/](chapter_workflow/index.ts)）：`buildChapterGraph` 将现有 7 个章节节点接入 LangGraph。图状态保存章节状态和 `artifacts`，条件边按当前 `step` 前进或按节点 outcome 回退；重试预算耗尽时挂起。`runChapterGraph` 从 `WorkflowStore` 恢复并在每次转移后保存，断点文件以章节号命名，路径按小说 ID 隔离。`simulate` 通过注入的 `CharacterAgentManager` 单独调用每个 S/A 角色，角色卡来自 `workspace_node/characters/all.json` 映射出的 `BookRuntime.characters`。
   - **重试回退**：节点返回 `retry` 时回退到目标步骤重跑（闸门拒绝→回 direct；audit/censor 不过→回 write），每章重试预算 `maxRetries` 封顶，超预算挂起等待人类；
   - **断点续跑**：经 `WorkflowStore` 持久化状态与工件，从 `ChapterState.step` 继续，不重跑前序；
   - **挂起/失败通知**：`notify` 回调 + 现场落盘。

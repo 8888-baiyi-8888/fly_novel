@@ -21,7 +21,7 @@ export interface DirectNodeDeps {
  */
 export const DIRECT_INSTRUCTION = `你是章节导演。基于债务表、线程快照与账本，输出本章 Dispatch 拍摄单（严格 JSON，禁止 Markdown 代码块，禁止额外包装键如 "dispatch"）。
 
-必须满足：覆盖 mustResolve/mustAdvance 全部项；hookId 必须来自账本（不得编造）；不得 resolve 尚未埋设的伏笔；open 数不得多于 resolve 数；budget.openAllowed=false 时不得 open；coreHook 不得 defer；threadId/eventId 必须来自提供的线程快照。
+必须满足：覆盖 mustResolve/mustAdvance 全部项；hookId 必须来自账本（不得编造）；不得 resolve 尚未埋设的伏笔；open 数不得多于 resolve 数；budget.openAllowed=false 时不得 open；coreHook 不得 defer；threadId/eventId 必须来自提供的线程快照；castPlan 中的角色名和级别必须来自 characters 列表。
 
 严格按以下结构输出（字段名与类型必须一致，数组不能缺）：
 {
@@ -56,6 +56,7 @@ export function createDirectNode(agent: AgentPort, deps: DirectNodeDeps): StepNo
     step: 'direct',
     run: async (ctx) => {
       const hookContext = deps.runtime.ledger.viewForChapter(ctx.chapter)
+      const characters = deps.runtime.characters.map(({ characterId, name, tier }) => ({ characterId, name, tier }))
       const call = await runAgentTask(agent, {
         task: 'direct',
         instruction: DIRECT_INSTRUCTION,
@@ -64,6 +65,7 @@ export function createDirectNode(agent: AgentPort, deps: DirectNodeDeps): StepNo
           hookContext,
           ledger: deps.runtime.ledgerView,
           threads: deps.runtime.timeline.snapshotFor(ctx.chapter),
+          characters,
         }),
         outputFormat: 'json',
       })
@@ -72,7 +74,25 @@ export function createDirectNode(agent: AgentPort, deps: DirectNodeDeps): StepNo
       if (dispatch === undefined) {
         return { outcome: { kind: 'retry', step: 'direct', reason: `direct 产物不是合法 Dispatch JSON（${describeDispatchFailure(call.output)}）` } }
       }
-      return { outcome: { kind: 'continue' }, output: dispatch }
+      const tierByName = new Map(characters.map((character) => [character.name, character.tier]))
+      const unknownCharacter = dispatch.castPlan.find((cast) => !tierByName.has(cast.name))
+      if (unknownCharacter !== undefined) {
+        return {
+          outcome: {
+            kind: 'retry',
+            step: 'direct',
+            reason: `Dispatch 引用了角色卡中不存在的角色：${unknownCharacter.name}`,
+          },
+        }
+      }
+      const normalizedDispatch = {
+        ...dispatch,
+        castPlan: dispatch.castPlan.map((cast) => ({
+          ...cast,
+          tier: tierByName.get(cast.name)!,
+        })),
+      }
+      return { outcome: { kind: 'continue' }, output: normalizedDispatch }
     },
   }
   return withDispatchGate(inner, (dispatch) => validateDispatch({ dispatch, context: deps.runtime.ledger.viewForChapter(ctxOf(dispatch)), ledger: deps.runtime.ledgerView as Readonly<Record<HookId, DispatchGateLedgerEntry>> }))

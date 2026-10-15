@@ -21,6 +21,7 @@
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import type { ChatOpenAI } from "@langchain/openai";
+import { CharacterAgentManager } from "@fly-novel/agents";
 import { createConfiguredChatOpenAI } from "./chat-openai-model";
 import type { AgentGenerateInput, AgentGenerateOutput, AgentPort } from "../workflow/agent-port";
 import { createJsonFileStore } from "../workflow/file-store";
@@ -144,6 +145,11 @@ async function main(): Promise<void> {
   const agent = createConfiguredAgentPort(model, writeModel);
   const runtime = buildRuntimeFromBookWorkspace(workspace);
   const store = createJsonFileStore({ dir: chapterRoot });
+  const characterAgents = new CharacterAgentManager({
+    model,
+    novelId,
+    branchId: "main",
+  });
 
   // 恢复跨章运行时状态（账本/真相/时钟/角色状态，上一章结束落盘）
   try {
@@ -178,6 +184,7 @@ async function main(): Promise<void> {
 
   const runOptions = {
     agent,
+    characterAgents,
     runtime,
     store,
     maxRetries: 4,
@@ -185,35 +192,39 @@ async function main(): Promise<void> {
   };
 
   const novel: NovelId = novelId as NovelId;
-  for (let ch = chapter; ch <= to; ch += 1) {
-    console.log(`\n[章节 ${ch}/${to}] 运行章节流：novel=${novelId}`);
-    const result = await runChapterGraph(novel, ch, runOptions);
-    console.log(`结果：${result.kind}${result.kind === "suspended" || result.kind === "failed" ? `（${result.reason}）` : ""}`);
-
-    // 只要有正文产物就导出草稿
-    const persisted = await store.load(novel, ch);
-    const draft = persisted?.artifacts?.["write"];
-    if (typeof draft === "string" && draft !== "") {
-      const draftPath = join(chapterRoot, `${ch}.md`);
-      mkdirSync(dirname(draftPath), { recursive: true });
-      writeFileSync(draftPath, `# 第 ${ch} 章\n\n${draft}`, "utf8");
-      console.log(`正文草稿：${draftPath}`);
-    }
-
-    // 挂起/失败/无效说明后续章节依赖本章状态，先停下，由人工介入后重跑该章
-    if (result.kind === "failed" || result.kind === "suspended" || result.kind === "invalid") {
-      console.log(`章节 ${ch} 未完成（${result.kind}），停止继续写后续章节；处理后重跑 --chapter ${ch}。`);
-      break;
-    }
-  }
-
-  // 落盘运行时状态（下一章/下次运行从此继续）
   try {
-    mkdirSync(dirname(runtimeStatePath), { recursive: true });
-    writeFileSync(runtimeStatePath, JSON.stringify(runtime.snapshot(), null, 2), "utf8");
-    console.log(`\n运行时状态已保存：${runtimeStatePath}`);
-  } catch (error) {
-    console.warn(`运行时状态落盘失败：${error instanceof Error ? error.message : String(error)}`);
+    for (let ch = chapter; ch <= to; ch += 1) {
+      console.log(`\n[章节 ${ch}/${to}] 运行章节流：novel=${novelId}`);
+      const result = await runChapterGraph(novel, ch, runOptions);
+      console.log(`结果：${result.kind}${result.kind === "suspended" || result.kind === "failed" ? `（${result.reason}）` : ""}`);
+
+      // 只要有正文产物就导出草稿
+      const persisted = await store.load(novel, ch);
+      const draft = persisted?.artifacts?.["write"];
+      if (typeof draft === "string" && draft !== "") {
+        const draftPath = join(chapterRoot, `${ch}.md`);
+        mkdirSync(dirname(draftPath), { recursive: true });
+        writeFileSync(draftPath, `# 第 ${ch} 章\n\n${draft}`, "utf8");
+        console.log(`正文草稿：${draftPath}`);
+      }
+
+      // 挂起/失败/无效说明后续章节依赖本章状态，先停下，由人工介入后重跑该章
+      if (result.kind === "failed" || result.kind === "suspended" || result.kind === "invalid") {
+        console.log(`章节 ${ch} 未完成（${result.kind}），停止继续写后续章节；处理后重跑 --chapter ${ch}。`);
+        break;
+      }
+    }
+
+    // 落盘运行时状态（下一章/下次运行从此继续）
+    try {
+      mkdirSync(dirname(runtimeStatePath), { recursive: true });
+      writeFileSync(runtimeStatePath, JSON.stringify(runtime.snapshot(), null, 2), "utf8");
+      console.log(`\n运行时状态已保存：${runtimeStatePath}`);
+    } catch (error) {
+      console.warn(`运行时状态落盘失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  } finally {
+    characterAgents.clear();
   }
 }
 

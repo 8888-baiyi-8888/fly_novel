@@ -15,9 +15,11 @@ import {
 } from "./nodes";
 import type { ChapterRunResult, WorkflowEvent, WorkflowStore } from "../types";
 import { ChapterGraphStateSchema, type ChapterGraphState } from "./state";
+import type { CharacterSimulationAgent } from "./nodes/simulate";
 
 export interface ChapterGraphOptions {
   readonly agent: AgentPort;
+  readonly characterAgents: CharacterSimulationAgent;
   readonly runtime: BookRuntime;
   readonly store: WorkflowStore;
   readonly maxRetries: number;
@@ -28,7 +30,7 @@ export interface ChapterGraphOptions {
 export function buildChapterGraph(options: ChapterGraphOptions) {
   const { agent, runtime, store, maxRetries, notify } = options;
   const directNode = createDirectGraphNode(agent, { runtime });
-  const simulateNode = createSimulateGraphNode(agent);
+  const simulateNode = createSimulateGraphNode(options.characterAgents, runtime);
   const mergeNode = createMergeGraphNode(agent);
   const writeNode = createWriteGraphNode(agent);
   const auditNode = createAuditGraphNode(agent);

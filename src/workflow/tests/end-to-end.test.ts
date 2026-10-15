@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { CharacterAgentGenerateOptions } from "@fly-novel/agents";
 import type { NovelId, CharacterName, Dispatch, EventId, HookId, ThreadId } from "../../novel/types";
 import type { BookRuntime } from "../../novel/runtime";
 import { buildFakeBookRuntime } from "../../novel/runtime";
@@ -86,13 +87,23 @@ function runtimeDeltaFixture() {
 function fullRules(): StubRule[] {
   return [
     { task: "direct", responses: [{ json: compliantDispatch() }] },
-    { task: "simulate", responses: [{ json: simulationFixture() }] },
     { task: "merge", responses: [{ json: scenesheetFixture() }] },
     { task: "write", responses: [{ text: "第 21 章正文……" }] },
     { task: "audit", responses: [{ text: "PASS 伏笔/事实/角色一致性无偏差" }] },
     { task: "censor", responses: [{ text: "PASS 无红线问题" }] },
     { task: "settle", responses: [{ json: runtimeDeltaFixture() }] },
   ];
+}
+
+class StubCharacterAgentManager {
+  constructor(private readonly simulations: ReturnType<typeof simulationFixture>) {}
+
+  async generate(_characterId: string, _content: string, options?: CharacterAgentGenerateOptions): Promise<unknown> {
+    const profile = typeof options?.characterInfos === "string" ? JSON.parse(options.characterInfos) as { character?: { name?: string } } : {};
+    const simulation = this.simulations.find((item) => item.character === profile.character?.name);
+    if (simulation === undefined) throw new Error(`缺少角色模拟 fixture：${profile.character?.name ?? "unknown"}`);
+    return { messages: [{ type: "ai", content: JSON.stringify([simulation]) }] };
+  }
 }
 
 class MemoryStore implements WorkflowStore {
@@ -109,7 +120,14 @@ class MemoryStore implements WorkflowStore {
 }
 
 function runGraph(agent: StubAgent, store: WorkflowStore, runtime: BookRuntime, notify?: (e: WorkflowEvent) => void, maxRetries = 2) {
-  return runChapterGraph(novelId, chapter, { agent, store, runtime, maxRetries, notify });
+  return runChapterGraph(novelId, chapter, {
+    agent,
+    characterAgents: new StubCharacterAgentManager(simulationFixture()),
+    store,
+    runtime,
+    maxRetries,
+    notify,
+  });
 }
 
 test("LangGraph chapter flow completes all seven nodes", async () => {
@@ -119,7 +137,7 @@ test("LangGraph chapter flow completes all seven nodes", async () => {
   const events: WorkflowEvent[] = [];
   const result = await runGraph(agent, store, runtime, (event) => events.push(event));
   assert.equal(result.kind, "completed");
-  assert.equal(agent.count(), 7);
+  assert.equal(agent.count(), 6);
   assert.equal(Object.keys(store.latest?.artifacts ?? {}).length, 7);
   assert.equal(store.latest?.state.status, "settled");
   assert.ok(events.some((event) => event.type === "completed"));
@@ -131,7 +149,6 @@ test("LangGraph retries write after an audit failure", async () => {
   const store = new MemoryStore();
   const rules: StubRule[] = [
     { task: "direct", responses: [{ json: compliantDispatch() }] },
-    { task: "simulate", responses: [{ json: simulationFixture() }] },
     { task: "merge", responses: [{ json: scenesheetFixture() }] },
     { task: "write", responses: [{ text: "first draft" }, { text: "revised draft" }] },
     { task: "audit", responses: [{ text: "FAIL" }, { text: "PASS" }] },

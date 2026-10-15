@@ -23,8 +23,8 @@ export class CharacterAgent extends BaseAgent {
     });
   }
 
-  public async generate(content: string) {
-    const thread_id = `${this.options.novelId}_${this.options.branchId}_${this.options.characterId}`
+  public async generate(content: string, threadId?: string) {
+    const thread_id = threadId ?? `${this.options.novelId}_${this.options.branchId}_${this.options.characterId}`
     return this.agent.invoke(
       {
         messages: [{ role: "user", content }]

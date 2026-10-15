@@ -55,36 +55,36 @@ export function buildMemoryNormalizedInputAgent(): NormalizedInputAgent {
 
 /** 组装真实模型版原始输入整理 Agent。 */
 export function buildRealNormalizedInputAgent(): NormalizedInputAgent {
-  const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
   return new NormalizedInputAgent({ model, maxRetries: 3 });
 }
 
 /** 组装真实模型版创意草案 Agent。 */
 export function buildRealDraftAgent(): CreativeDraftAgent {
-  const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
   return new CreativeDraftAgent({ model, maxRetries: 3 });
 }
 
 /** 组装真实模型版架构师基础设定 Agent。 */
 export function buildRealArchitectAgent(): ArchitectAgent {
-  const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
   return new ArchitectAgent({ model, maxRetries: 3 });
 }
 
 /** 组装真实模型版长期创作控制 Agent。 */
 export function buildRealControlsAgent(): ControlsAgent {
-  const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
   return new ControlsAgent({ model, maxRetries: 3 });
 }
 
 /** 组装真实模型版小说静态架构 Agent。 */
 export function buildRealArchitectureAgent(): ArchitectureAgent {
   const architect = new StoryArchitectAgent({
-    model: new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 480_000 }),
+    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 480_000 }),
     maxRetries: 3,
   });
   const director = new DirectorAgent({
-    model: new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 600_000 }),
+    model: new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 600_000 }),
     maxRetries: 3,
     chunked: true,
     wholeBoardRetries: 2,
@@ -94,6 +94,6 @@ export function buildRealArchitectureAgent(): ArchitectureAgent {
 
 /** 组装真实模型版初始运行状态 Agent。 */
 export function buildRealState0Agent(): State0Agent {
-  const model = new ConfiguredLlmModel({ provider: "deepseek", timeoutMs: 180_000 });
+  const model = new ConfiguredLlmModel({ provider: "qwen", timeoutMs: 180_000 });
   return new State0Agent({ model, maxRetries: 3 });
 }

@@ -1,5 +1,12 @@
 import { CharacterAgent } from "./character-agent";
-import type { CharacterAgentOptions } from "./types.js";
+import type { CharacterAgentOptions, CharacterInfos } from "./types.js";
+
+export interface CharacterAgentGenerateOptions {
+  /** 当前角色档案；首次创建该角色 Agent 时写入系统提示词。 */
+  readonly characterInfos?: CharacterInfos;
+  /** 覆盖默认持久会话 ID；章节级一次性角色调用可使用章节范围 ID。 */
+  readonly threadId?: string;
+}
 
 const DEFAULT_MAX_AGENTS = 100;
 
@@ -19,7 +26,7 @@ export class CharacterAgentManager {
   }
 
   /** 根据角色 ID 获取或创建 Agent */
-  private getAgent(characterId: string): CharacterAgent {
+  private getAgent(characterId: string, characterInfos?: CharacterInfos): CharacterAgent {
     const existing = this.agents.get(characterId);
 
     if (existing) {
@@ -38,6 +45,7 @@ export class CharacterAgentManager {
     const agent = new CharacterAgent({
       ...this.baseOptions,
       characterId,
+      ...(characterInfos === undefined ? {} : { characterInfos }),
     });
 
     this.agents.set(characterId, agent);
@@ -54,9 +62,10 @@ export class CharacterAgentManager {
   public async generate(
     characterId: string,
     content: string,
+    options: CharacterAgentGenerateOptions = {},
   ) {
-    const agent = this.getAgent(characterId);
+    const agent = this.getAgent(characterId, options.characterInfos);
 
-    return agent.generate(content);
+    return agent.generate(content, options.threadId);
   }
 }

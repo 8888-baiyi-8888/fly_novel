@@ -15,7 +15,7 @@
 
 ## 构建与引用
 
-公共入口导出抽象基类 `BaseAgent`，以及 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`EvaluatorAgent`。`CharacterAgent` 通过应用启动时注册的模型解析器调用 Deep Agents；导演、写作和评估 Agent 接收应用创建的模型实例，并通过 `invoke(content)` 调用 Deep Agents。它们不读取应用配置或凭据，也不读写文件。基础使用方式：
+公共入口导出抽象基类 `BaseAgent`，以及 `CharacterAgent`、`CharacterAgentManager`、`DirectorAgent`、`WriterAgent`、`EvaluatorAgent`。`CharacterAgentManager` 按小说内的角色 ID 缓存实例，达到容量上限时淘汰最久未使用的实例；章节驱动在一次运行结束后调用 `clear()`。章节模拟把角色档案和当前状态作为 `characterInfos` 提供给对应角色 Agent，不要求复制到旧版 `novel_data` 目录。`CharacterAgent` 通过应用启动时注册的模型解析器调用 Deep Agents；导演、写作和评估 Agent 接收应用创建的模型实例，并通过 `invoke(content)` 调用 Deep Agents。它们不读取应用配置或凭据，也不读写文件。基础使用方式：
 
 ```ts
 import { CharacterAgent, DirectorAgent, WriterAgent, EvaluatorAgent } from "@fly-novel/agents";
