@@ -28,8 +28,8 @@ export interface BuildWorkspaceResult {
   novelId: string;
   /** 书目录绝对路径。 */
   workspaceDir: string;
-  /** true = 目录已存在且未传 force，跳过未写。 */
+  /** true = 目录已存在且未传 force；既有文件不覆盖，只补充缺失的角色 JSON 与索引。 */
   skipped: boolean;
-  /** 实际写出的文件相对路径列表（skipped 时为空）。 */
+  /** 实际写出的文件相对路径列表；既有书目录只列出补充的角色文件。 */
   filesWritten: string[];
 }

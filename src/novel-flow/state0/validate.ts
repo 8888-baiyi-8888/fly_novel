@@ -61,6 +61,7 @@ export function parseState0Output(input: unknown, lineIds: string[]): State0 {
     }
     const o = item as Record<string, unknown>;
     return {
+      characterId: requireNonEmptyString(o.characterId, `characterStates[${index}].characterId`),
       name: requireNonEmptyString(o.name, `characterStates[${index}].name`),
       location: requireNonEmptyString(o.location, `characterStates[${index}].location`),
       identity: requireNonEmptyString(o.identity, `characterStates[${index}].identity`),
@@ -83,8 +84,13 @@ export function parseState0Output(input: unknown, lineIds: string[]): State0 {
     if (subjects.length < 2) {
       throw new State0ValidationError(`字段 relationshipStates[${index}].subjects 至少要有两个人`);
     }
+    const subjectCharacterIds = requireStringArray(o.subjectCharacterIds, `relationshipStates[${index}].subjectCharacterIds`);
+    if (subjectCharacterIds.length !== subjects.length) {
+      throw new State0ValidationError(`字段 relationshipStates[${index}].subjectCharacterIds 必须与 subjects 等长`);
+    }
     return {
       subjects,
+      subjectCharacterIds,
       relation: requireNonEmptyString(o.relation, `relationshipStates[${index}].relation`),
       trust: requireNonEmptyString(o.trust, `relationshipStates[${index}].trust`),
       knowledge: requireNonEmptyString(o.knowledge, `relationshipStates[${index}].knowledge`),
@@ -194,6 +200,7 @@ export function parseState0Output(input: unknown, lineIds: string[]): State0 {
   };
 
   return {
+    characterSchemaVersion: 1,
     novelId: "",
     title: "",
     characterStates,

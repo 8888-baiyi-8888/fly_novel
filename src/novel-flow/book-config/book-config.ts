@@ -1,4 +1,5 @@
 import { pinyin } from "pinyin-pro";
+import { createHash } from "node:crypto";
 import { CreativeDraft } from "../draft/types";
 import { normalizeGenre, normalizePlatform } from "./mapping";
 import { BookConfig } from "./types";
@@ -12,6 +13,14 @@ export function slugifyTitle(title: string): string {
   const raw = pinyin(title, { toneType: "none", type: "array" }).join("");
   const slug = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
   return slug.length > 0 ? slug : "book";
+}
+
+/** 生成同一小说内稳定的角色 ID：拼音便于识别，短哈希区分同音或同名角色。 */
+export function generateCharacterId(novelId: string, name: string): string {
+  const normalizedName = name.normalize("NFKC").trim();
+  const pinyinSlug = slugifyTitle(normalizedName);
+  const suffix = createHash("sha256").update(`${novelId}\0${normalizedName}`).digest("hex").slice(0, 12);
+  return `c-${pinyinSlug}-${suffix}`;
 }
 
 /** 生成默认小说 ID：本地时间戳加书名拼音，格式为 YYYYMMDD-HHmmss-title。 */

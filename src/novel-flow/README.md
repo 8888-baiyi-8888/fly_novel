@@ -11,6 +11,7 @@
 当前已实现子模块：
 
 - `draft/`：创意草案整理（建书第 1 步）。定义草案类型与校验、提示词组装、轻量整理 Agent，以及演示示例数据。详见 `draft/README.md`。
+- N5 角色卡带稳定的 `characterId`，ID 由小说 ID、角色名拼音和短哈希组成。N7 在书目录 `characters/` 下为每个角色写独立 JSON，并生成 `index.json` 和供批量读取的 `all.json`；关系条目用目标角色 ID 关联。
 - `tests/`：novel 一级模块的自动化测试（创意草案整理 15 个用例）。
 
 ## 边界

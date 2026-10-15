@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { ARTIFACTS_ROOT } from "../paths";
+import { generateCharacterId } from "../book-config";
 import { WorkspaceInputs, WorkspaceFile, BuildWorkspaceResult } from "./types";
 import {
   bookRulesToMd,
@@ -88,6 +89,26 @@ function factsJson(state0: WorkspaceInputs["state0"]): string {
 export function buildWorkspaceFiles(inputs: WorkspaceInputs): WorkspaceFile[] {
   const { draft, bookConfig, storyBible, bookRules, controls, architecture, state0 } = inputs;
   const volumeBeats = beatsByVolumeToMd(architecture.volumeMap, architecture.beatBoard.beats);
+  const idByName = new Map(
+    architecture.characterCards.map((card) => [card.name, card.characterId ?? generateCharacterId(architecture.novelId, card.name)]),
+  );
+  const characterCards = architecture.characterCards.map((card) => ({
+    ...card,
+    characterId: idByName.get(card.name)!,
+    relationships: card.relationships.map((relationship) => ({
+      ...relationship,
+      characterId: relationship.characterId ?? idByName.get(relationship.name) ?? generateCharacterId(architecture.novelId, relationship.name),
+    })),
+  }));
+  const characterFiles = characterCards.map((card) => ({
+    relPath: `characters/${card.characterId}.json`,
+    content: JSON.stringify({ schemaVersion: 1, ...card }, null, 2),
+  }));
+  const characterIndex = characterCards.map(({ characterId, name }) => ({
+    characterId,
+    name,
+    file: `${characterId}.json`,
+  }));
 
   const files: WorkspaceFile[] = [
     // 书配置 + 平台节奏尺子
@@ -132,7 +153,10 @@ export function buildWorkspaceFiles(inputs: WorkspaceInputs): WorkspaceFile[] {
         .map((v) => `## ${v.volume} ${v.title}\n\n- 目标：${v.goal}\n- 阶段：${v.stages.join(" → ")}\n`)
         .join("\n")}\n`,
     },
-    { relPath: "story/characters.md", content: charactersToMd(architecture.characterCards) },
+    { relPath: "story/characters.md", content: charactersToMd(characterCards) },
+    ...characterFiles,
+    { relPath: "characters/index.json", content: JSON.stringify({ schemaVersion: 1, novelId: architecture.novelId, characters: characterIndex }, null, 2) },
+    { relPath: "characters/all.json", content: JSON.stringify({ schemaVersion: 1, novelId: architecture.novelId, characters: characterCards }, null, 2) },
     // 伏笔账本（人读 + 归档）
     { relPath: "story/hooks.md", content: hooksToMd(state0.hookSeeds) },
     { relPath: "story/hooks_archive.md", content: "# 已回收伏笔归档\n\n（初始为空，还清的伏笔由 Settler 挪到这里）\n" },
@@ -150,7 +174,7 @@ export function buildWorkspaceFiles(inputs: WorkspaceInputs): WorkspaceFile[] {
 }
 
 /** 目录骨架（初始为空，N9 开始填充）。 */
-const EMPTY_DIRS = ["chapters", "story/runtime", "export"];
+const EMPTY_DIRS = ["chapters", "story/runtime", "export", "characters"];
 
 export interface BuildWorkspaceOptions {
   /** 书目录已存在时是否强制重建（默认 false：跳过，保护人可读可手改的权威文件）。 */
@@ -167,11 +191,19 @@ export function buildWorkspace(inputs: WorkspaceInputs, options: BuildWorkspaceO
   const novelId = options.novelId ?? inputs.bookConfig.novelId;
   const workspaceDir = options.workspaceRoot ?? join(ARTIFACTS_ROOT, novelId, "workspace_node");
 
+  const files = buildWorkspaceFiles(inputs);
   if (existsSync(workspaceDir) && options.force !== true) {
-    return { novelId, workspaceDir, skipped: true, filesWritten: [] };
+    const missingCharacterFiles = files.filter(
+      (file) => file.relPath.startsWith("characters/") && !existsSync(join(workspaceDir, file.relPath)),
+    );
+    for (const file of missingCharacterFiles) {
+      const fullPath = join(workspaceDir, file.relPath);
+      mkdirSync(join(fullPath, ".."), { recursive: true });
+      writeFileSync(fullPath, file.content, "utf8");
+    }
+    return { novelId, workspaceDir, skipped: true, filesWritten: missingCharacterFiles.map((file) => file.relPath) };
   }
 
-  const files = buildWorkspaceFiles(inputs);
   if (options.dryRun === true) {
     return { novelId, workspaceDir, skipped: false, filesWritten: files.map((f) => f.relPath) };
   }

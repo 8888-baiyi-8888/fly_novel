@@ -4,6 +4,7 @@ import { buildState0Messages, buildState0RetryMessage } from "./prompt";
 import { STATE0_JSON_DESCRIPTION } from "./schema";
 import { parseState0Output, validateHookSeeds, validateHookSeedsAgainstBeatBoard } from "./validate";
 import { State0 } from "./types";
+import { generateCharacterId } from "../book-config";
 
 export interface State0AgentOptions {
   model: ModelClient;
@@ -28,15 +29,45 @@ function describeError(error: unknown): string {
 function ensureCharacterStates(parsed: unknown, architecture: StoryArchitecture): unknown {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return parsed;
   const obj = parsed as Record<string, unknown>;
-  if (Array.isArray(obj.characterStates) && obj.characterStates.length > 0) return parsed;
-  obj.characterStates = architecture.characterCards.map((card) => ({
-    name: card.name,
-    location: "故事起始地（正文待细化）",
-    identity: card.archetype && card.archetype.length > 0 ? card.archetype : card.name,
-    emotion: "平静",
-    cognition: "见故事圣经设定",
-    resources: "见故事圣经设定",
-  }));
+  if (!Array.isArray(obj.characterStates) || obj.characterStates.length === 0) {
+    obj.characterStates = architecture.characterCards.map((card) => ({
+      characterId: card.characterId ?? generateCharacterId(architecture.novelId, card.name),
+      name: card.name,
+      location: "故事起始地（正文待细化）",
+      identity: card.archetype && card.archetype.length > 0 ? card.archetype : card.name,
+      emotion: "平静",
+      cognition: "见故事圣经设定",
+      resources: "见故事圣经设定",
+    }));
+  } else {
+    const characterIdByName = new Map(architecture.characterCards.map((card) => [card.name, card.characterId ?? generateCharacterId(architecture.novelId, card.name)]));
+    obj.characterStates = obj.characterStates.map((state, index) => {
+      if (typeof state !== "object" || state === null || Array.isArray(state)) return state;
+      const characterState = state as Record<string, unknown>;
+      const name = typeof characterState.name === "string" ? characterState.name : "";
+      const characterId = characterIdByName.get(name);
+      if (characterId === undefined) {
+        throw new State0Error(`characterStates[${index}] 引用了不存在的角色「${name}」`);
+      }
+      return { ...characterState, characterId };
+    });
+  }
+  if (Array.isArray(obj.relationshipStates)) {
+    const characterIdByName = new Map(architecture.characterCards.map((card) => [card.name, card.characterId ?? generateCharacterId(architecture.novelId, card.name)]));
+    obj.relationshipStates = obj.relationshipStates.map((state, index) => {
+      if (typeof state !== "object" || state === null || Array.isArray(state)) return state;
+      const relationship = state as Record<string, unknown>;
+      if (!Array.isArray(relationship.subjects)) return relationship;
+      const subjectCharacterIds = relationship.subjects.map((name) => {
+        const characterId = typeof name === "string" ? characterIdByName.get(name) : undefined;
+        if (characterId === undefined) {
+          throw new State0Error(`relationshipStates[${index}] 引用了不存在的角色「${String(name)}」`);
+        }
+        return characterId;
+      });
+      return { ...relationship, subjectCharacterIds };
+    });
+  }
   return parsed;
 }
 
@@ -86,6 +117,7 @@ export class State0Agent {
         }
         return {
           ...state0,
+          characterSchemaVersion: 1,
           novelId: architecture.novelId,
           title: architecture.title,
         };

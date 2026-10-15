@@ -94,31 +94,31 @@ export const FACTS: readonly Fact[] = [
 
 export const CHARACTERS: readonly CharacterCard[] = [
   {
-    name: '叶凡' as CharacterName, tier: 'S', archetype: '隐忍赘婿', aliases: [], traits: ['沉默', '果决'], speechStyle: '短句',
+    characterId: 'c-yefan-fixture', name: '叶凡' as CharacterName, tier: 'S', archetype: '隐忍赘婿', aliases: [], traits: ['沉默', '果决'], speechStyle: '短句',
     goals: ['护住苏晴'], fears: ['苏晴知道真相'], secret: '龙王身份', knowledgeBoundary: ['苏晴的体检结果'],
-    relationships: [{ target: '苏晴' as CharacterName, type: '夫妻', desc: '隐忍守护' }],
+    relationships: [{ targetCharacterId: 'c-suqing-fixture', target: '苏晴' as CharacterName, type: '夫妻', desc: '隐忍守护' }],
   },
   {
-    name: '苏晴' as CharacterName, tier: 'S', archetype: '家业继承人', aliases: [], traits: ['敏锐', '重情'], speechStyle: '克制',
+    characterId: 'c-suqing-fixture', name: '苏晴' as CharacterName, tier: 'S', archetype: '家业继承人', aliases: [], traits: ['敏锐', '重情'], speechStyle: '克制',
     goals: ['查清协议疑点'], fears: ['协议被江家利用'], secret: '藏有协议副本', knowledgeBoundary: ['叶凡的龙王身份'],
-    relationships: [{ target: '叶凡' as CharacterName, type: '夫妻', desc: '渐生信任' }],
+    relationships: [{ targetCharacterId: 'c-yefan-fixture', target: '叶凡' as CharacterName, type: '夫妻', desc: '渐生信任' }],
   },
   {
-    name: '江辰' as CharacterName, tier: 'A', archetype: '世家子弟', aliases: [], traits: ['傲慢', '胆怯'], speechStyle: '官腔',
+    characterId: 'c-jiangchen-fixture', name: '江辰' as CharacterName, tier: 'A', archetype: '世家子弟', aliases: [], traits: ['傲慢', '胆怯'], speechStyle: '官腔',
     goals: ['吞并分公司'], fears: ['对赌条款反噬'], secret: '电话内容', knowledgeBoundary: [],
-    relationships: [{ target: '叶凡' as CharacterName, type: '对立', desc: '轻视' }],
+    relationships: [{ targetCharacterId: 'c-yefan-fixture', target: '叶凡' as CharacterName, type: '对立', desc: '轻视' }],
   },
   {
-    name: '老陈' as CharacterName, tier: 'B', archetype: '旧部掌柜', aliases: [], traits: ['忠厚'], speechStyle: '老派',
+    characterId: 'c-laochen-fixture', name: '老陈' as CharacterName, tier: 'B', archetype: '旧部掌柜', aliases: [], traits: ['忠厚'], speechStyle: '老派',
     goals: [], fears: [], secret: '知道殿主称呼', knowledgeBoundary: [], relationships: [],
   },
 ]
 
 export const CHARACTER_STATES: Readonly<Record<CharacterName, CharacterState>> = {
-  ['叶凡' as CharacterName]: { name: '叶凡' as CharacterName, location: '江氏会议室', goal: '按协议收束 H007', emotion: '平静', knows: [], suspects: [], inventory: [], bonds: { 苏晴: 60 } },
-  ['苏晴' as CharacterName]: { name: '苏晴' as CharacterName, location: '江氏会议室', goal: '列席观察', emotion: '警觉', knows: ['老陈 知道称呼 殿主'], suspects: ['协议与我有关'], inventory: [], bonds: { 叶凡: 40 } },
-  ['江辰' as CharacterName]: { name: '江辰' as CharacterName, location: '江氏会议室', goal: '促成协议生效', emotion: '得意', knows: [], suspects: [], inventory: [], bonds: { 叶凡: -30 } },
-  ['老陈' as CharacterName]: { name: '老陈' as CharacterName, location: '江氏停车场', goal: '送酒', emotion: '平静', knows: ['老陈 知道称呼 殿主'], suspects: [], inventory: ['那瓶酒'], bonds: {} },
+  ['叶凡' as CharacterName]: { characterId: 'c-yefan-fixture', name: '叶凡' as CharacterName, location: '江氏会议室', goal: '按协议收束 H007', emotion: '平静', knows: [], suspects: [], inventory: [], bonds: { 苏晴: 60 } },
+  ['苏晴' as CharacterName]: { characterId: 'c-suqing-fixture', name: '苏晴' as CharacterName, location: '江氏会议室', goal: '列席观察', emotion: '警觉', knows: ['老陈 知道称呼 殿主'], suspects: ['协议与我有关'], inventory: [], bonds: { 叶凡: 40 } },
+  ['江辰' as CharacterName]: { characterId: 'c-jiangchen-fixture', name: '江辰' as CharacterName, location: '江氏会议室', goal: '促成协议生效', emotion: '得意', knows: [], suspects: [], inventory: [], bonds: { 叶凡: -30 } },
+  ['老陈' as CharacterName]: { characterId: 'c-laochen-fixture', name: '老陈' as CharacterName, location: '江氏停车场', goal: '送酒', emotion: '平静', knows: ['老陈 知道称呼 殿主'], suspects: [], inventory: ['那瓶酒'], bonds: {} },
 }
 
 /** FakeBookRuntime 构造选项：全部可选，缺省取上方 §7.7 默认 fixture。 */

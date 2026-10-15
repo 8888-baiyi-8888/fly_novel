@@ -182,7 +182,7 @@ node dist/app/run-chapters.js --store-dir <dir>    # 正文/断点存放目录�
 |---|---|---|
 | 整理输入 | `.fly-novel-store/<novelId>/normalized_input/` | 整理输入文本 |
 | 建书产物 | `.fly-novel-store/<novelId>/{draft_node,book_config,story_foundation,controls_node,architecture_node,state0_node}/` | 草案至初始状态的产物；`draft_node` 同时生成 `book_config` |
-| 书目录 | `.fly-novel-store/<novelId>/workspace_node/` | 章节流的输入（`inkos.json`、`state/hooks.json`、`story/beats/beats.json` 等） |
+| 书目录 | `.fly-novel-store/<novelId>/workspace_node/` | 章节流输入；角色卡按 `characters/<拼音角色ID>.json` 单独保存，并生成 `characters/index.json` 和供批量读取的 `characters/all.json` |
 | 交接凭据 | `.fly-novel-store/<novelId>/ready_node/`，书目录内 `story/runtime/ready.json` | 验收结果与红线消毒记录 |
 | 章节正文与断点 | `.fly-novel-store/<novelId>/chapter_workflow/` | 正文草稿、每章断点和 `runtime-state.json` |
 | 角色会话 | `.fly-novel-store/<novelId>/character_agent/main/session.sqlite` | 角色 Agent 的 SQLite 会话断点 |

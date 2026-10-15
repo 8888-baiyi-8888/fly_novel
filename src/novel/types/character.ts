@@ -9,6 +9,7 @@ export type Tier = 'S' | 'A' | 'B'
 
 /** 角色关系条目。 */
 export interface CharacterRelationship {
+  readonly targetCharacterId: string
   readonly target: CharacterName
   readonly type: string
   readonly desc: string
@@ -20,6 +21,7 @@ export interface CharacterRelationship {
  * S 级 Agent 的 System Prompt 直接注入前两者；`suspects` 变化是伏笔 advance 的合法形态。
  */
 export interface CharacterCard {
+  readonly characterId: string
   readonly name: CharacterName
   readonly tier: Tier
   readonly archetype: string
@@ -41,6 +43,7 @@ export interface CharacterCard {
  * 角色运行时状态（动态属性，每章 settle 后更新，文档 §3.7）。
  */
 export interface CharacterState {
+  readonly characterId: string
   readonly name: CharacterName
   readonly location: string
   readonly goal: string

@@ -31,12 +31,14 @@ export interface VolumeMapItem {
 
 /** 角色卡中的关系条目。 */
 export interface CharacterRelationship {
+  characterId: string;
   name: string;
   relation: string;
 }
 
 /** 5.3 角色卡：各角色稳定属性 + S/A/B 分级。 */
 export interface CharacterCard {
+  characterId: string;
   name: string;
   tier: Tier;
   /** 定位，如 protagonist / deuteragonist / rival。 */
@@ -121,6 +123,7 @@ export interface ArchitectureParts {
 
 /** N5 五件套产物（落盘结构）。 */
 export interface StoryArchitecture extends ArchitectureParts {
+  characterSchemaVersion: 1;
   novelId: string;
   title: string;
   beatBoard: BeatBoard;

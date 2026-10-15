@@ -8,6 +8,7 @@ import type { CharacterName, EventId, FactId, HookId, ThreadId, NovelId } from '
 import type { Fact, SubjectKind } from '../types/fact.ts'
 import type { HookRecord, HookStatus, HookTiming, HookType } from '../types/hook.ts'
 import type { Thread, ThreadEvent, ThreadKind, ThreadStatus } from '../types/thread.ts'
+import { generateCharacterId } from '../../novel-flow/book-config/index.ts'
 
 /**
  * 书目录 → BookRuntime 适配器（小说流 N7 工作空间 → 章节流 BookRuntime）。
@@ -81,12 +82,14 @@ export interface BeatIntentionsBeat {
 
 /** N5 architecture 产物（角色卡与叙事线本体的 JSON 来源）。 */
 export interface ArchitectureFile {
+  readonly characterSchemaVersion?: number
   readonly novelId: string
   readonly characterCards?: readonly CharacterCardLike[]
   readonly threadMap?: { readonly lines?: readonly ThreadMapLine[] }
 }
 
 export interface CharacterCardLike {
+  readonly characterId?: string
   readonly name: string
   readonly tier: string
   readonly archetype: string
@@ -94,7 +97,7 @@ export interface CharacterCardLike {
   readonly speechStyle: string
   readonly secret: string
   readonly knowledgeBoundary: readonly string[]
-  readonly relationships: readonly { readonly name: string; readonly relation: string }[]
+  readonly relationships: readonly { readonly characterId?: string; readonly name: string; readonly relation: string }[]
 }
 
 export interface ThreadMapLine {
@@ -112,14 +115,16 @@ export interface ThreadMapLine {
 
 /** N6 state0 产物（结构化角色状态的 JSON 来源）。 */
 export interface State0File {
+  readonly characterSchemaVersion?: number
   readonly novelId: string
   readonly characterStates?: readonly State0CharacterState[]
-  readonly relationshipStates?: readonly { readonly subjects: readonly string[]; readonly relation: string; readonly trust: string; readonly knowledge: string }[]
+  readonly relationshipStates?: readonly { readonly subjects: readonly string[]; readonly subjectCharacterIds?: readonly string[]; readonly relation: string; readonly trust: string; readonly knowledge: string }[]
   readonly worldState?: readonly { readonly key: string; readonly value: string }[]
   readonly progressState?: { readonly currentChapter: number }
 }
 
 export interface State0CharacterState {
+  readonly characterId?: string
   readonly name: string
   readonly location: string
   readonly identity: string
@@ -274,9 +279,12 @@ export function mapFacts(facts: readonly WorkspaceFact[]): readonly Fact[] {
 export function mapCharacters(
   cards: readonly CharacterCardLike[] | undefined,
   beats: readonly BeatIntentionsBeat[],
+  novelId = '',
 ): readonly CharacterCard[] {
   if (cards !== undefined && cards.length > 0) {
+    const idByName = new Map(cards.map((card) => [card.name, card.characterId ?? generateCharacterId(novelId, card.name)]))
     return cards.map((c) => ({
+      characterId: c.characterId ?? generateCharacterId(novelId, c.name),
       name: c.name as CharacterName,
       tier: (c.tier === 'S' || c.tier === 'A' || c.tier === 'B' ? c.tier : 'B') as Tier,
       archetype: c.archetype,
@@ -287,7 +295,11 @@ export function mapCharacters(
       fears: [],
       secret: c.secret,
       knowledgeBoundary: c.knowledgeBoundary ?? [],
-      relationships: (c.relationships ?? []).map((r) => ({ target: r.name as CharacterName, type: r.relation, desc: r.relation })),
+      relationships: (c.relationships ?? []).map((r) => {
+        const targetCharacterId = r.characterId ?? idByName.get(r.name)
+        if (targetCharacterId === undefined) throw new Error(`角色 ${c.name} 的关系对象「${r.name}」未在角色卡中定义`)
+        return { targetCharacterId, target: r.name as CharacterName, type: r.relation, desc: r.relation }
+      }),
     }))
   }
   const names: CharacterName[] = []
@@ -297,17 +309,24 @@ export function mapCharacters(
     }
   }
   return names.map((name) => ({
-    name, tier: 'B', archetype: '', aliases: [], traits: [], speechStyle: '', goals: [], fears: [],
+    characterId: generateCharacterId(novelId, name), name, tier: 'B', archetype: '', aliases: [], traits: [], speechStyle: '', goals: [], fears: [],
     secret: '', knowledgeBoundary: [], relationships: [],
   }))
 }
 
 /** ⑥角色运行时状态：N6 state0.characterStates → 章节流 CharacterState。
  * 小说流产物无 goal/suspects/inventory/bonds 数值 → 初始为空（随 settle 建立）；knows 由 Fact.knownBy 派生（初始无人登记）。 */
-export function mapCharacterStates(states: readonly State0CharacterState[] | undefined): Readonly<Record<CharacterName, CharacterState>> {
+export function mapCharacterStates(
+  states: readonly State0CharacterState[] | undefined,
+  characters: readonly CharacterCard[] = [],
+  novelId = '',
+): Readonly<Record<CharacterName, CharacterState>> {
   const out: Record<CharacterName, CharacterState> = {}
+  const idByName = new Map(characters.map((card) => [card.name as string, card.characterId]))
   for (const s of states ?? []) {
+    const characterId = s.characterId ?? idByName.get(s.name) ?? generateCharacterId(novelId, s.name)
     out[s.name as CharacterName] = {
+      characterId,
       name: s.name as CharacterName,
       location: s.location,
       goal: '',
@@ -397,21 +416,38 @@ export function buildRuntimeFromBookWorkspace(workspaceDir: string, options: Boo
 
   const architecture = architecturePath === undefined ? undefined : readJson<ArchitectureFile>(architecturePath)
   const state0 = state0Path === undefined ? undefined : readJson<State0File>(state0Path)
+  if (architecture?.characterSchemaVersion !== undefined && architecture.characterSchemaVersion !== 1) {
+    throw new Error(`book-workspace：不支持 N5 角色数据版本 ${architecture.characterSchemaVersion}`)
+  }
+  if (state0?.characterSchemaVersion !== undefined && state0.characterSchemaVersion !== 1) {
+    throw new Error(`book-workspace：不支持 N6 角色数据版本 ${state0.characterSchemaVersion}`)
+  }
+  const characterSummaryPath = join(workspaceDir, 'characters', 'all.json')
+  const characterCards = existsSync(characterSummaryPath)
+    ? (() => {
+        const summary = readJson<{ readonly schemaVersion?: number; readonly characters: readonly CharacterCardLike[] }>(characterSummaryPath)
+        if (summary.schemaVersion !== undefined && summary.schemaVersion !== 1) {
+          throw new Error(`book-workspace：不支持书目录角色汇总版本 ${summary.schemaVersion}`)
+        }
+        return summary.characters
+      })()
+    : architecture?.characterCards
+  const characters = mapCharacters(characterCards, beats, ink.novelId)
 
   const mapped: FakeBookRuntimeOptions = {
     config: mapBookConfig(ink),
     ledger: mapHookLedger(seeds),
     threads: mapThreads(board, architecture?.threadMap?.lines, beats),
     facts: mapFacts(facts),
-    characters: mapCharacters(architecture?.characterCards, beats),
-    characterStates: mapCharacterStates(state0?.characterStates),
+    characters,
+    characterStates: mapCharacterStates(state0?.characterStates, characters, ink.novelId),
     hookToThread: mapHookToThread(seeds, beats),
     cap: (ink as unknown as { platformProfile?: { hook?: { maxActive?: number } } }).platformProfile?.hook?.maxActive ?? 12,
   }
 
   const runtime = buildFakeBookRuntime(mapped)
   // 书目录事实库 → 真相库快照；角色卡 JSON 缺失时给调用方可见提示（对接期已知缺口）
-  if (architecture === undefined) console.warn(`book-workspace：未定位到 N5 architecture 产物，角色卡使用节拍板兜底（${runtime.characters.length} 张）`)
+  if (architecture === undefined && characterCards === undefined) console.warn(`book-workspace：未定位到 N5 architecture 产物，角色卡使用节拍板兜底（${runtime.characters.length} 张）`)
   if (state0 === undefined) console.warn('book-workspace：未定位到 N6 state0 产物，角色运行时状态为空（等待小说流将 characterStates 并入书目录）')
   return runtime
 }

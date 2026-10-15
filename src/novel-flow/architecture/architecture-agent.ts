@@ -16,10 +16,12 @@ export class ArchitectureAgent {
 
   /** 生成 N5 五件套（使用工作流提供的 novelId；独立调用时按书名生成默认 ID）。 */
   async createArchitecture(input: ArchitectureInput & { novelId?: string }): Promise<StoryArchitecture> {
-    const parts = await this.architect.createParts(input);
+    const novelId = input.novelId ?? generateNovelId(input.draft.title);
+    const parts = await this.architect.createParts({ ...input, novelId });
     const beatBoard = await this.director.createBeatBoard(input.draft, parts);
     return {
-      novelId: input.novelId ?? generateNovelId(input.draft.title),
+      characterSchemaVersion: 1,
+      novelId,
       title: input.draft.title,
       storyFrame: parts.storyFrame,
       volumeMap: parts.volumeMap,

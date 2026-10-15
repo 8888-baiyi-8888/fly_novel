@@ -11,6 +11,7 @@ import {
   Tier,
   VolumeMapItem,
 } from "./types";
+import { generateCharacterId } from "../book-config";
 
 /** 输出不符合协议时抛出。 */
 export class ArchitectureValidationError extends Error {
@@ -53,7 +54,7 @@ function requireStringArrayAllowEmpty(value: unknown, field: string): string[] {
 }
 
 /** 解析并校验架构师前四件。 */
-export function parseArchitectureOutput(input: unknown): ArchitectureParts {
+export function parseArchitectureOutput(input: unknown, novelId = ""): ArchitectureParts {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new ArchitectureValidationError("架构师输出必须是 JSON 对象");
   }
@@ -91,7 +92,7 @@ export function parseArchitectureOutput(input: unknown): ArchitectureParts {
   if (!Array.isArray(cardsRaw) || cardsRaw.length === 0) {
     throw new ArchitectureValidationError("字段 characterCards 必须是非空数组");
   }
-  const characterCards: CharacterCard[] = cardsRaw.map((item, index) => {
+  const parsedCards = cardsRaw.map((item, index) => {
     if (typeof item !== "object" || item === null || Array.isArray(item)) {
       throw new ArchitectureValidationError(`字段 characterCards[${index}] 必须是对象`);
     }
@@ -125,6 +126,31 @@ export function parseArchitectureOutput(input: unknown): ArchitectureParts {
       relationships,
     };
   });
+
+  const idsByName = new Map<string, string>();
+  const usedIds = new Set<string>();
+  for (const card of parsedCards) {
+    if (idsByName.has(card.name)) {
+      throw new ArchitectureValidationError(`角色卡名称重复，无法生成唯一角色 ID：${card.name}`);
+    }
+    const characterId = generateCharacterId(novelId, card.name);
+    if (usedIds.has(characterId)) {
+      throw new ArchitectureValidationError(`角色 ID 冲突：${characterId}`);
+    }
+    usedIds.add(characterId);
+    idsByName.set(card.name, characterId);
+  }
+  const characterCards: CharacterCard[] = parsedCards.map((card) => ({
+    ...card,
+    characterId: idsByName.get(card.name)!,
+    relationships: card.relationships.map((relationship) => {
+      const characterId = idsByName.get(relationship.name);
+      if (characterId === undefined) {
+        throw new ArchitectureValidationError(`角色 ${card.name} 的关系对象「${relationship.name}」不在角色卡列表中`);
+      }
+      return { ...relationship, characterId };
+    }),
+  }));
 
   const threadMap = parseThreadMap(obj.threadMap);
 

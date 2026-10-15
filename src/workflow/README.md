@@ -6,7 +6,7 @@
 
 [novel_workflow/](novel_workflow/index.ts) 导出 `buildNovelGraph` 与唯一状态定义 `NovelWorkflowSchema`。调用方提供六个 Agent 实例和产物根目录；图从 `normalized_input` 开始，草案节点同时生成书籍配置，随后并行执行故事基础设定与长期控制，两路完成后汇合生成静态架构，最后生成初始状态、书目录和交接凭据。`persist: true` 时各节点写入 `{artifactRoot}/{novelId}/{nodeName}/`，工作空间在 `workspace_node/`，`ready_node/` 存交接记录，工作空间内仍有 `story/runtime/ready.json`；`persist: false` 时只生成内存预览。`single-step.ts` 只从指定小说 ID 的目录恢复前序产物。旧版全局 `n0-raw-input` 至 `n6-state0` 目录保留，但新入口不自动迁移或读取。模型配置与终端交互由[应用入口](../app/novel-workflow/workflow.ts)提供。
 
-应用入口未传 `--novel-id` 时，在草案确定书名后按时间戳、书名拼音和递增序号生成 ID，并将整理输入与草案保存到该 ID 目录；`ni` 单步使用时间戳和目录冲突序号，因为该节点不生成书名。
+应用入口未传 `--novel-id` 时，在草案确定书名后按时间戳、书名拼音和递增序号生成 ID，并将整理输入与草案保存到该 ID 目录；`ni` 单步使用时间戳和目录冲突序号，因为该节点不生成书名。N7 书目录以 `characters/<characterId>.json` 保存单角色卡，并生成 `characters/index.json` 与 `characters/all.json`；章节流从汇总文件读取角色卡。
 
 `draft` 节点按小说 ID 读取最新草案产物；已有草案时直接复用并跳过 Agent 调用，缺少草案时才生成。该节点同时从草案生成书籍配置，不在图中另设 `book_config` 节点。已有书籍配置随草案复用；缺少时重新生成。两份产物仍分别保存在 `draft_node/` 和 `book_config/`，读取与 `persist` 设置无关。
 

@@ -31,6 +31,7 @@ export interface ArchitectureInput {
   storyBible: StoryBible;
   bookRules: BookRules;
   controls: LongTermControls;
+  novelId?: string;
 }
 
 /**
@@ -65,7 +66,7 @@ export class StoryArchitectAgent {
         };
         const response: ChatResponse = await this.model.chat(request);
         const parsed: unknown = JSON.parse(response.content);
-        return parseArchitectureOutput(parsed);
+        return parseArchitectureOutput(parsed, input.novelId);
       } catch (error) {
         lastError = error;
       }

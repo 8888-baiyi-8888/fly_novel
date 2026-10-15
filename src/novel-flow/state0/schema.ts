@@ -4,8 +4,8 @@ export const STATE0_JSON_DESCRIPTION = `输出 JSON 对象，字段如下：
 - 角色定位：你是「TruthOracle + Hook Ledger」，负责小说创作工作流建书第 6 步（N6）：把静态架构转成初始运行状态 State₀。
 - 输入：N5 五件套（故事框架/分卷规划/角色卡/叙事线地图/节拍板）。回答的是：故事开始这一刻，世界到底处于什么状态？
 - 输出六类：
-  - characterStates: 人物状态数组（每张角色卡至少一条），每项 { name, location: 当前位置, identity: 当前身份(公开), emotion: 当前情绪, cognition: 当前认知(知道/不知道什么), resources: 当前资金/资源 }；
-  - relationshipStates: 关系状态数组（角色卡 relationships 里每条重要关系一条），每项 { subjects: ["甲","乙"], relation: 关系, trust: 信任程度, knowledge: 知情情况(谁不知道什么) }；
+  - characterStates: 人物状态数组（每张角色卡至少一条），每项 { characterId: N5 角色卡提供的角色 ID, name, location: 当前位置, identity: 当前身份(公开), emotion: 当前情绪, cognition: 当前认知(知道/不知道什么), resources: 当前资金/资源 }；characterId 必须与对应角色卡完全一致；
+  - relationshipStates: 关系状态数组（角色卡 relationships 里每条重要关系一条），每项 { subjects: ["甲","乙"], relation: 关系, trust: 信任程度, knowledge: 知情情况(谁不知道什么) }；subjectCharacterIds 由程序根据 subjects 与 N5 角色卡生成，无须输出；
   - worldState: 世界状态键值对数组，每项 { key, value }，如 { key: "时间", value: "当代·春季" }、{ key: "公众是否知道龙王殿存在", value: "否" }；
   - hookSeeds: 伏笔种子数组（从节拍板 hookIntentions 提炼值得记账的），每项 { hookId: "H001" 起, beatTag: 对应节拍板 hookIntention 的 tag（如 "ch2-h1"）, plantedChapter: 埋设章, type: 物件|身份|信息差|秘密|威胁|承诺|关系|能力|事件, timing: immediate|near-term|mid-arc|slow-burn|endgame, core: 核心(可空), expectedPayoff: 回收章号(无法确定时 null), payoffNote: 预期回收描述, notes: 埋设原文 }；
   - threadBoard: 线状态板数组（叙事线地图每条线一条），每项 { lineId: 线ID, status: 进行中|冷藏|已完成, currentEvent: 当前事件ID(未开始 null), nextEvent: 下一事件ID, waitingFor: ["等待条件"], estimatedWake: "预计唤醒描述" }；

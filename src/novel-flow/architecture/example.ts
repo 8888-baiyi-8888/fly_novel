@@ -1,4 +1,5 @@
 import { Beat, BeatBoard, Pacing, StoryArchitecture } from "./types";
+import { generateCharacterId } from "../book-config";
 
 /**
  * 演示/测试用：预置《隐龙》五件套。
@@ -107,6 +108,7 @@ function buildExampleBeatBoard(totalChapters: number): BeatBoard {
 /** 构建《隐龙》五件套（targetChapters=100）。 */
 export function buildExampleArchitecture(): StoryArchitecture {
   return {
+    characterSchemaVersion: 1,
     novelId: "yinlong",
     title: "隐龙",
     storyFrame: {
@@ -137,6 +139,7 @@ export function buildExampleArchitecture(): StoryArchitecture {
     ],
     characterCards: [
       {
+        characterId: generateCharacterId("yinlong", "叶凡"),
         name: "叶凡",
         tier: "S",
         archetype: "protagonist",
@@ -148,12 +151,13 @@ export function buildExampleArchitecture(): StoryArchitecture {
           "不知道苏晴已私下雇了私家侦探（ch18 埋，ch36 揭）",
         ],
         relationships: [
-          { name: "苏晴", relation: "夫妻，两年未圆房，保护但不解释" },
-          { name: "赵芳", relation: "岳母，被嫌弃的一方，从不辩解" },
-          { name: "老陈", relation: "旧部/长辈，灭门夜另一个在场者" },
+          { characterId: generateCharacterId("yinlong", "苏晴"), name: "苏晴", relation: "夫妻，两年未圆房，保护但不解释" },
+          { characterId: generateCharacterId("yinlong", "赵芳"), name: "赵芳", relation: "岳母，被嫌弃的一方，从不辩解" },
+          { characterId: generateCharacterId("yinlong", "老陈"), name: "老陈", relation: "旧部/长辈，灭门夜另一个在场者" },
         ],
       },
       {
+        characterId: generateCharacterId("yinlong", "苏晴"),
         name: "苏晴",
         tier: "A",
         archetype: "deuteragonist",
@@ -162,11 +166,12 @@ export function buildExampleArchitecture(): StoryArchitecture {
         secret: "已经开始怀疑叶凡不简单，但没有证据",
         knowledgeBoundary: ["不知道叶凡的真实身份", "不知道灭门案与龙王殿有关"],
         relationships: [
-          { name: "叶凡", relation: "挂名丈夫，认知从'废物'分层推进" },
-          { name: "赵芳", relation: "母亲，顺从但内心不认同逼婚手段" },
+          { characterId: generateCharacterId("yinlong", "叶凡"), name: "叶凡", relation: "挂名丈夫，认知从'废物'分层推进" },
+          { characterId: generateCharacterId("yinlong", "赵芳"), name: "赵芳", relation: "母亲，顺从但内心不认同逼婚手段" },
         ],
       },
       {
+        characterId: generateCharacterId("yinlong", "赵芳"),
         name: "赵芳",
         tier: "B",
         archetype: "antagonist-support",
@@ -175,11 +180,12 @@ export function buildExampleArchitecture(): StoryArchitecture {
         secret: "无（所有算计都摆在台面上）",
         knowledgeBoundary: ["不知道叶凡真实身份", "不知道离婚协议第三条的用意"],
         relationships: [
-          { name: "叶凡", relation: "女婿，嫌弃并逼离婚" },
-          { name: "苏晴", relation: "女儿，以'为你好'之名操控" },
+          { characterId: generateCharacterId("yinlong", "叶凡"), name: "叶凡", relation: "女婿，嫌弃并逼离婚" },
+          { characterId: generateCharacterId("yinlong", "苏晴"), name: "苏晴", relation: "女儿，以'为你好'之名操控" },
         ],
       },
       {
+        characterId: generateCharacterId("yinlong", "老陈"),
         name: "老陈",
         tier: "A",
         archetype: "mentor",
@@ -188,7 +194,7 @@ export function buildExampleArchitecture(): StoryArchitecture {
         secret: "灭门夜他在场，知道叶凡当时左臂中刀",
         knowledgeBoundary: ["不知道离婚协议第三条是叶凡拟的"],
         relationships: [
-          { name: "叶凡", relation: "旧部/长辈，效忠并守护" },
+          { characterId: generateCharacterId("yinlong", "叶凡"), name: "叶凡", relation: "旧部/长辈，效忠并守护" },
         ],
       },
     ],

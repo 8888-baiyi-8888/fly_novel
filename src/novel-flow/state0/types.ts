@@ -9,6 +9,7 @@ export type HookTiming = "immediate" | "near-term" | "mid-arc" | "slow-burn" | "
 
 /** 6.1 人物状态初始值。 */
 export interface CharacterState {
+  characterId: string;
   name: string;
   /** 当前位置。 */
   location: string;
@@ -26,6 +27,8 @@ export interface CharacterState {
 export interface RelationshipState {
   /** 关系双方。 */
   subjects: string[];
+  /** 与 subjects 一一对应的角色 ID。 */
+  subjectCharacterIds: string[];
   /** 关系，如 "挂名夫妻"。 */
   relation: string;
   /** 信任程度。 */
@@ -93,6 +96,7 @@ export interface ProgressState {
 
 /** N6 产物：State₀ 六类。 */
 export interface State0 {
+  characterSchemaVersion: 1;
   novelId: string;
   title: string;
   characterStates: CharacterState[];

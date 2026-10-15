@@ -39,6 +39,7 @@ export function charactersToMd(cards: CharacterCard[]): string {
     lines.push(
       `## ${card.name}（${card.tier} 级 · ${card.archetype}）`,
       "",
+      `- 角色 ID：${card.characterId}`,
       `- 性格特征：${card.traits.join("；")}`,
       `- 说话风格：${card.speechStyle}`,
       `- 自己知道别人不知道的（secret）：${card.secret}`,
@@ -49,7 +50,7 @@ export function charactersToMd(cards: CharacterCard[]): string {
     }
     lines.push(`- 关系：`);
     for (const rel of card.relationships) {
-      lines.push(`  - ${rel.name}：${rel.relation}`);
+      lines.push(`  - ${rel.name}（${rel.characterId}）：${rel.relation}`);
     }
     lines.push("");
   }

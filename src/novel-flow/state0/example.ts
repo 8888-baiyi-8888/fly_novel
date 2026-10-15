@@ -1,12 +1,15 @@
 import { State0 } from "./types";
+import { generateCharacterId } from "../book-config";
 
 /** 预置《隐龙》State0（六类，与工作流文档 N6 示例一致）。 */
 export function buildExampleState0(): State0 {
   return {
+    characterSchemaVersion: 1,
     novelId: "yinlong",
     title: "隐龙",
     characterStates: [
       {
+        characterId: generateCharacterId("yinlong", "叶凡"),
         name: "叶凡",
         location: "江家·岳母家客房",
         identity: "江氏贸易小职员（公开身份）",
@@ -15,6 +18,7 @@ export function buildExampleState0(): State0 {
         resources: "月薪八千",
       },
       {
+        characterId: generateCharacterId("yinlong", "苏晴"),
         name: "苏晴",
         location: "江家主卧",
         identity: "江氏品牌部职员",
@@ -23,6 +27,7 @@ export function buildExampleState0(): State0 {
         resources: "江氏品牌部职员薪资",
       },
       {
+        characterId: generateCharacterId("yinlong", "赵芳"),
         name: "赵芳",
         location: "江家客厅",
         identity: "江家岳母",
@@ -31,6 +36,7 @@ export function buildExampleState0(): State0 {
         resources: "江家房产与话语权",
       },
       {
+        characterId: generateCharacterId("yinlong", "老陈"),
         name: "老陈",
         location: "城中村酒馆",
         identity: "退休酒馆老板（表面）",
@@ -42,18 +48,21 @@ export function buildExampleState0(): State0 {
     relationshipStates: [
       {
         subjects: ["叶凡", "苏晴"],
+        subjectCharacterIds: [generateCharacterId("yinlong", "叶凡"), generateCharacterId("yinlong", "苏晴")],
         relation: "挂名夫妻",
         trust: "低",
         knowledge: "苏晴不知叶凡真实身份",
       },
       {
         subjects: ["叶凡", "赵芳"],
+        subjectCharacterIds: [generateCharacterId("yinlong", "叶凡"), generateCharacterId("yinlong", "赵芳")],
         relation: "岳母女婿",
         trust: "极低",
         knowledge: "赵芳正在筹谋逼离婚",
       },
       {
         subjects: ["叶凡", "老陈"],
+        subjectCharacterIds: [generateCharacterId("yinlong", "叶凡"), generateCharacterId("yinlong", "老陈")],
         relation: "旧部/长辈",
         trust: "极高",
         knowledge: "双方都知道对方在灭门夜在场",
