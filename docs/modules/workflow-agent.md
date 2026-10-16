@@ -76,9 +76,9 @@ interface AgentGenerateOutput {
 
 ### 4. write（正文写手）
 
-- 指令：`WRITE_INSTRUCTION` = 文风 5 条（`WRITE_STYLE_GUIDE`）+ 禁令 10 条（`WRITE_BANS`，来源文档 §7.3）（`src/workflow/chapter_workflow/nodes/write.ts`）
+- 指令：节点仅提供本章写作任务；稳定的正文格式、文风要求和 §7.3 禁令由 `WriterAgent` 系统提示词维护（`src/agents/writer/system-prompt.ts`）
 - context：merge 产物（weavePlan + scenesheet）
-- 期望输出：纯文本正文（不要 JSON、不要 Markdown 代码块）
+- 期望输出：章节正文文本；格式约束见 [WriterAgent 系统提示词](../../src/agents/writer/system-prompt.ts)
 - 校验：非空即可；质量问题靠 audit 节点兜底。
 
 ### 5. audit（内容审计）

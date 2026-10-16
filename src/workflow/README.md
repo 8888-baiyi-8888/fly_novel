@@ -47,7 +47,7 @@
   [http-agent.test.ts](tests/http-agent.test.ts)：HttpAgent 适配器测试——json/text 响应、apiKey 头、非 2xx/坏响应/超时转抛错。
   [openai-compatible-agent.test.ts](tests/openai-compatible-agent.test.ts)：OpenAI 兼容适配器测试——system/user 映射、response_format、json 解析、jsonMode=false 兜底、temperature 透传、非 2xx/缺 content/超时转抛错。
   [file-store.test.ts](tests/file-store.test.ts)：JsonFileStore 测试——save/load 回读、不存在章返回 undefined、重复 save 覆盖、目录自动创建与小说标识冲突检查。
-  [write.test.ts](tests/write.test.ts)：write 节点指令断言——§7.3 十条禁令全部在指令内（`WRITE_BANS` 计数=10）、context 含拍摄单。
+  [write.test.ts](tests/write.test.ts)：write 节点传入本章任务和拍摄单材料的断言；§7.3 禁令与文风提示词由 WriterAgent 系统提示词及其测试覆盖。
 
 ## 当前状态与边界
 

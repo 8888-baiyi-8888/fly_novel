@@ -3,7 +3,6 @@ import { test } from "node:test";
 import type { NovelId } from "../../novel/types";
 import { StubAgent } from "../stub-agent";
 import { createWriteNode } from "../chapter_workflow/nodes/write";
-import { WRITE_BANS } from "../chapter_workflow/nodes/write";
 import type { ContentAgent } from "../agent-port";
 import type { NodeOutput, StepRunContext } from "../types";
 
@@ -47,7 +46,7 @@ class RecordingAgent implements ContentAgent {
   }
 }
 
-test("write 节点：instruction 含 §7.3 全部禁令，context 含拍摄单", async () => {
+test("write 节点：只传本章任务指令与拍摄单材料", async () => {
   const stub = new StubAgent([{ task: "write", responses: [{ text: "正文……".repeat(40) }] }]);
   const recorder = new RecordingAgent(stub);
   const node = createWriteNode(recorder);
@@ -60,16 +59,11 @@ test("write 节点：instruction 含 §7.3 全部禁令，context 含拍摄单",
   const result = await node.run(ctx);
   assert.equal(result.outcome.kind, "continue");
   const input = recorder.inputs[0] ?? "";
-  for (const ban of WRITE_BANS) {
-    assert.ok(input.includes(ban), `指令应包含禁令：${ban.slice(0, 12)}…`);
-  }
+  assert.match(input, /根据本章排程方案与拍摄单撰写完整正文/);
+  assert.ok(!input.includes("禁黑名单句式"), "稳定写作禁令由 WriterAgent 系统提示词提供");
   const contextText = input.split("本章写作材料：\n")[1] ?? "{}";
   const parsed = JSON.parse(contextText) as { scenesheet?: { writingPlan?: string } };
   assert.ok(parsed.scenesheet?.writingPlan?.includes("H007"), "context 应含拍摄单");
-});
-
-test("write 指令：禁令计数与 §7.3 一致（10 条）", () => {
-  assert.equal(WRITE_BANS.length, 10);
 });
 
 test("write 节点：agent 调用失败（无规则/超时）→ retry 回 write 而非 fail", async () => {
