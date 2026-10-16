@@ -6,12 +6,12 @@
 
 ## 源码布局
 
-- `core/`：所有 Agent 共享的抽象基类。
-- `runtime/`：应用注册的模型解析器，以及共享的受限 Deep Agents 调用。
+- `core/`：所有 Agent 共享的 Deep Agent 创建和文本调用基类。
+- `runtime/`：应用注册的模型解析器，以及结构化输出调用辅助函数。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型。
 - `tests/`：按包运行的自动化测试。
 
-模板之间不跨目录引用业务实现；它们仅通过 `core/` 与 `runtime/` 共享基础能力。`index.ts` 是唯一公共导出入口。
+模板之间不跨目录引用业务实现；它们通过 `core/` 共享 Agent 创建与文本调用，通过 `runtime/` 共享应用模型解析和结构化输出执行能力。`index.ts` 是唯一公共导出入口。
 
 ## 构建与引用
 

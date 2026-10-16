@@ -1,6 +1,5 @@
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import { BaseAgent } from "../core/base-agent.js";
-import { createDeepAgent } from "deepagents";
 import { createMiddleware } from "langchain";
 import { z, type ZodType } from "zod";
 import { systemPrompt } from "./system-prompt.js";
@@ -12,30 +11,26 @@ export interface DirectorAgentOptions {
 
 /** 导演 Agent */
 export class DirectorAgent extends BaseAgent {
-  private readonly model: BaseLanguageModel;
-  private readonly agent;
-
   public constructor(options: DirectorAgentOptions) {
-    super();
-    this.model = options.model;
-    this.agent = createDeepAgent({
-      model: this.model,
+    const middleware = createMiddleware({
+      name: "DirectorJsonOutput",
+      wrapModelCall: (request, handler) => {
+        if (request.runtime.configurable?.directorJsonMode !== true) return handler(request);
+        // RunnableInterface 未暴露供应商调用参数；ChatOpenAI.withConfig 支持 response_format。
+        const model = request.model as typeof request.model & {
+          withConfig(config: { response_format: { type: "json_object" } }): typeof request.model;
+        };
+        return handler({
+          ...request,
+          model: model.withConfig({ response_format: { type: "json_object" } }),
+          tools: [],
+        });
+      },
+    });
+    super({
+      model: options.model,
       systemPrompt,
-      middleware: [createMiddleware({
-        name: "DirectorJsonOutput",
-        wrapModelCall: (request, handler) => {
-          if (request.runtime.configurable?.directorJsonMode !== true) return handler(request);
-          // RunnableInterface 未暴露供应商调用参数；ChatOpenAI.withConfig 支持 response_format。
-          const model = request.model as typeof request.model & {
-            withConfig(config: { response_format: { type: "json_object" } }): typeof request.model;
-          };
-          return handler({
-            ...request,
-            model: model.withConfig({ response_format: { type: "json_object" } }),
-            tools: [],
-          });
-        },
-      })],
+      middleware: [middleware],
     });
   }
 
@@ -44,8 +39,8 @@ export class DirectorAgent extends BaseAgent {
     const prompt = responseFormat === undefined
       ? content
       : `${content}\n\n请仅输出 JSON，不要添加 Markdown 或说明。输出必须符合以下 JSON Schema：\n${JSON.stringify(z.toJSONSchema(responseFormat))}`;
-    const result = await this.agent.invoke(
-      { messages: [{ role: "user", content: prompt }] },
+    const result = await this.invoke(
+      prompt,
       responseFormat === undefined ? undefined : { configurable: { directorJsonMode: true } },
     );
     if (responseFormat === undefined) return result;
@@ -54,7 +49,7 @@ export class DirectorAgent extends BaseAgent {
     const responseText = typeof response?.content === "string"
       ? response.content
       : Array.isArray(response?.content)
-        ? response.content.flatMap((part) => typeof part === "object" && part !== null && "text" in part && typeof part.text === "string" ? [part.text] : []).join("")
+        ? response.content.flatMap((part: unknown) => typeof part === "object" && part !== null && "text" in part && typeof part.text === "string" ? [part.text] : []).join("")
         : "";
     try {
       const value: unknown = JSON.parse(responseText);

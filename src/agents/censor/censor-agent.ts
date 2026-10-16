@@ -1,5 +1,4 @@
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
-import { createDeepAgent } from "deepagents";
 import { BaseAgent } from "../core/base-agent.js";
 import { systemPrompt } from "./system-prompt.js";
 
@@ -10,15 +9,12 @@ export interface CensorAgentOptions {
 
 /** 按调用方提供的内容规范审查正文，并报告违规依据和修改方向。 */
 export class CensorAgent extends BaseAgent {
-  private readonly agent;
-
   public constructor(options: CensorAgentOptions) {
-    super();
-    this.agent = createDeepAgent({ model: options.model, systemPrompt });
+    super({ model: options.model, systemPrompt });
   }
 
   /** 根据调用方提供的正文和审查标准生成审查报告。 */
   public async generate(content: string) {
-    return this.agent.invoke({ messages: [{ role: "user", content }] });
+    return this.invoke(content);
   }
 }
