@@ -135,17 +135,11 @@ async function main(): Promise<void> {
   console.log(`章节：${chapter}~${to}，store：${chapterRoot}/`);
 
   // 专用 Agent 与通用工作流节点复用小说级模型配置。
-  const [model, directorModel, writeModel] = await Promise.all([
+  const [model, writeModel] = await Promise.all([
     createConfiguredChatOpenAI(MODEL_PROVIDER, {
       timeoutMs: 480_000,
       disableThinking: true,
       temperature: 0.7,
-    }),
-    createConfiguredChatOpenAI(MODEL_PROVIDER, {
-      timeoutMs: 480_000,
-      disableThinking: true,
-      temperature: 0.7,
-      responseFormat: "json_object",
     }),
     createConfiguredChatOpenAI(MODEL_PROVIDER, {
       timeoutMs: 480_000,
@@ -155,7 +149,7 @@ async function main(): Promise<void> {
     }),
   ]);
   const agent = createConfiguredAgentPort(model);
-  const directorAgent = new DirectorAgent({ model: directorModel });
+  const directorAgent = new DirectorAgent({ model });
   const writerAgent = new WriterAgent({ model: writeModel });
   const auditAgent = new AuditAgent({ model });
   const censorAgent = new CensorAgent({ model });

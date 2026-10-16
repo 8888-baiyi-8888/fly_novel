@@ -49,7 +49,7 @@ interface AgentGenerateOutput {
 
 ### 1. direct（章节导演）
 
-- 指令：导演 Agent 系统提示（`src/agents/director/system-prompt.ts`），由 `DirectorAgent` 作为 system prompt 使用。
+- 指令：`DIRECT_INSTRUCTION`（`src/workflow/chapter_workflow/nodes/direct.ts`）；节点同时传入 Dispatch 响应 schema。`DirectorAgent.generate` 的格式参数可选，带 schema 时仍调用同一个 Deep Agent 实例，由中间件按本次调用启用模型原生 JSON 输出模式；JSON 语法由模型模式约束，字段结构由调用方 schema 校验。其他调用不传 schema 时保持普通 Agent 调用。
 - context：`{ chapter, hookContext, ledger, threads, characters }`
   - `hookContext`：`runtime.ledger.viewForChapter(chapter)`（mustResolve/mustAdvance/canResolve/mustNotDefer/pressure 等）
   - `ledger`：账本全量视图（含每条伏笔 status/lastAdvancedChapter/notes）

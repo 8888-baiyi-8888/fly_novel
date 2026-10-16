@@ -1,4 +1,5 @@
 import type { Step } from '../novel/types'
+import type { ZodType } from 'zod'
 
 /** workflow 节点消费的 agent 任务标识：与章节流七步一一对应。 */
 export type AgentTask = Step
@@ -32,5 +33,5 @@ export interface AgentPort {
 
 /** 章节专用 Agent 直接提供的文本生成接口。 */
 export interface ContentAgent {
-  readonly generate: (content: string) => Promise<unknown>
+  readonly generate: (content: string, options?: { readonly responseFormat?: ZodType }) => Promise<unknown>
 }
