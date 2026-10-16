@@ -21,7 +21,7 @@ export class DirectorAgent extends BaseAgent {
     });
   }
 
-  public async invoke(content: string) {
+  public async generate(content: string) {
     return this.agent.invoke({
       messages: [
         {

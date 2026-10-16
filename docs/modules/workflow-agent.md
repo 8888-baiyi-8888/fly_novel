@@ -1,8 +1,8 @@
 # workflow 与 Agent 对接规范
 
 本文档定义章节流工作流与外部 Agent 之间的输入输出契约，供 Agent 实现方（自研/第三方/HTTP 服务）对接使用。
-指令原文的唯一事实来源是 `src/workflow/chapter_workflow/nodes/*.ts` 中的常量；本文档摘录并定位，修改指令后须同步本文。
-direct、merge、write、audit、censor、settle 六个节点通过 `AgentPort`（`src/workflow/agent-port.ts`）调用通用 Agent。`simulate` 使用 `@fly-novel/agents` 的 `CharacterAgentManager`，为每个出场的 S/A 级角色单独调用角色 Agent。
+任务指令原文位于对应 Agent 的系统提示或章节节点常量中；本文档摘录并定位，修改指令后须同步本文。
+`buildChapterGraph` 将 `DirectorAgent`、`WriterAgent`、`AuditAgent`、`CensorAgent` 分别注入 `direct`、`write`、`audit`、`censor`；`merge` 和 `settle` 继续使用通用 `AgentPort`。`simulate` 使用 `@fly-novel/agents` 的 `CharacterAgentManager`，为每个出场的 S/A 级角色单独调用角色 Agent。
 
 ## 对接面
 
@@ -22,7 +22,7 @@ interface AgentGenerateOutput {
 }
 ```
 
-- 六个通用节点通过 `AgentPort.generate(input)` 调用 Agent，一次调用对应一个节点任务。
+- `direct`、`write`、`audit`、`censor` 节点分别直接调用对应专用 Agent 的 `generate(content)`；`merge`、`settle` 通过 `AgentPort.generate(input)` 使用通用模型端口。
 - `simulate` 按 Dispatch 中的出场名单逐角色调用 `CharacterAgentManager.generate(characterId, content, options)`；角色 ID 与角色档案从 `BookRuntime` 匹配。S 级使用跨章持久会话，A 级使用当前章节的 thread ID，B 级跳过。
 - `outputFormat='json'` 的任务，节点会自行尝试 `JSON.parse(text)`；Agent 若直接返回结构化 `json` 则跳过解析。
 - 节点内做形状校验：不合法 → `retry` 回本步（预算内自动重跑）或 `fail`。失败原因会带上诊断（如缺失字段清单）。
@@ -33,7 +33,7 @@ interface AgentGenerateOutput {
 |---|---|---|
 | C. OpenAI 兼容端点 | `instruction`→system、`context`→user，POST `/chat/completions` | `src/workflow/openai-compatible-agent.ts`（已实现，含流式） |
 | B. Agent 为 HTTP 服务 | 自定义协议，`POST /task` 请求/响应即上文接口 | 新增薄适配器实现 `AgentPort` |
-| A. Agent 进程内实现 | 直接实现 `AgentPort` 接口注入 | `src/workflow/chapter_workflow/workflow.ts` `buildChapterGraph(options)` |
+| A. Agent 进程内实现 | 直接注入专用内容 Agent，或为通用任务实现 `AgentPort` | `src/workflow/chapter_workflow/workflow.ts` `buildChapterGraph(options)` |
 
 ## 全局约定（Agent 必须遵守）
 
@@ -49,7 +49,7 @@ interface AgentGenerateOutput {
 
 ### 1. direct（章节导演）
 
-- 指令：`DIRECT_INSTRUCTION`（`src/workflow/chapter_workflow/nodes/direct.ts`）
+- 指令：导演 Agent 系统提示（`src/agents/director/system-prompt.ts`），由 `DirectorAgent` 作为 system prompt 使用。
 - context：`{ chapter, hookContext, ledger, threads, characters }`
   - `hookContext`：`runtime.ledger.viewForChapter(chapter)`（mustResolve/mustAdvance/canResolve/mustNotDefer/pressure 等）
   - `ledger`：账本全量视图（含每条伏笔 status/lastAdvancedChapter/notes）
@@ -112,6 +112,6 @@ interface AgentGenerateOutput {
 
 ## 现有实现
 
-- `src/workflow/openai-compatible-agent.ts`：六个通用节点的 OpenAI 兼容端点适配器（阿里云 MaaS `compatible-mode/v1` 等），含 SSE 流式、`enable_thinking=false`；`simulate` 由 `CharacterAgentManager` 直接调用角色 Agent；`src/app/run-chapters.ts` 为现成驱动。
+- `src/workflow/openai-compatible-agent.ts`：通用模型节点的 OpenAI 兼容端点适配器（阿里云 MaaS `compatible-mode/v1` 等），含 SSE 流式、`enable_thinking=false`；`src/app/run-chapters.ts` 将专用 Agent 接入对应节点，并由 `CharacterAgentManager` 支持 `simulate`。
 - `src/workflow/stub-agent.ts`：StubAgent（测试/离线运行用，无真实生成）。
 - 决策记录：`.agents/notes/`（2026-09-23 起，含 OpenAI 兼容接入、SSE 流式、跨章持久化等）。

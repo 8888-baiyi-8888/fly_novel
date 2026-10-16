@@ -21,7 +21,13 @@
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import type { ChatOpenAI } from "@langchain/openai";
-import { CharacterAgentManager } from "@fly-novel/agents";
+import {
+  AuditAgent,
+  CharacterAgentManager,
+  CensorAgent,
+  DirectorAgent,
+  WriterAgent,
+} from "@fly-novel/agents";
 import { createConfiguredChatOpenAI } from "./chat-openai-model";
 import type { AgentGenerateInput, AgentGenerateOutput, AgentPort } from "../workflow/agent-port";
 import { createJsonFileStore } from "../workflow/file-store";
@@ -36,11 +42,10 @@ import type { WorkflowEvent } from "../workflow/types";
 const MODEL_PROVIDER = "deepseek";
 
 /** 把小说级 ModelClient（ConfiguredLlmModel，settings 读+解密）适配成 workflow 的 AgentPort。 */
-function createConfiguredAgentPort(model: ChatOpenAI, writeModel: ChatOpenAI): AgentPort {
+function createConfiguredAgentPort(model: ChatOpenAI): AgentPort {
   return {
     async generate(input: AgentGenerateInput): Promise<AgentGenerateOutput> {
-      const selectedModel = input.task === "write" ? writeModel : model;
-      const response = await selectedModel.invoke([
+      const response = await model.invoke([
         { role: "system", content: input.instruction },
         { role: "user", content: input.context },
         ]);
@@ -78,6 +83,7 @@ function resolveNovelWorkspace(novelIdArg?: string): { novelId: string; dir: str
   const selected = candidates[0];
   return { novelId: selected.novelId, dir: selected.dir };
 }
+
 interface CliOptions {
   readonly novelId?: string;
   readonly chapter?: number;
@@ -128,12 +134,18 @@ async function main(): Promise<void> {
   console.log(`书目录：${workspace}`);
   console.log(`章节：${chapter}~${to}，store：${chapterRoot}/`);
 
-  // Use the same configured LangChain model as the CharacterAgent example.
-  const [model, writeModel] = await Promise.all([
+  // 专用 Agent 与通用工作流节点复用小说级模型配置。
+  const [model, directorModel, writeModel] = await Promise.all([
     createConfiguredChatOpenAI(MODEL_PROVIDER, {
       timeoutMs: 480_000,
       disableThinking: true,
       temperature: 0.7,
+    }),
+    createConfiguredChatOpenAI(MODEL_PROVIDER, {
+      timeoutMs: 480_000,
+      disableThinking: true,
+      temperature: 0.7,
+      responseFormat: "json_object",
     }),
     createConfiguredChatOpenAI(MODEL_PROVIDER, {
       timeoutMs: 480_000,
@@ -142,7 +154,11 @@ async function main(): Promise<void> {
       maxTokens: 8000,
     }),
   ]);
-  const agent = createConfiguredAgentPort(model, writeModel);
+  const agent = createConfiguredAgentPort(model);
+  const directorAgent = new DirectorAgent({ model: directorModel });
+  const writerAgent = new WriterAgent({ model: writeModel });
+  const auditAgent = new AuditAgent({ model });
+  const censorAgent = new CensorAgent({ model });
   const runtime = buildRuntimeFromBookWorkspace(workspace);
   const store = createJsonFileStore({ dir: chapterRoot });
   const characterAgents = new CharacterAgentManager({
@@ -184,6 +200,10 @@ async function main(): Promise<void> {
 
   const runOptions = {
     agent,
+    directorAgent,
+    writerAgent,
+    auditAgent,
+    censorAgent,
     characterAgents,
     runtime,
     store,

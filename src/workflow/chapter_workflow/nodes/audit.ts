@@ -1,6 +1,6 @@
-import type { AgentPort } from '../../agent-port.ts'
+import type { ContentAgent } from '../../agent-port.ts'
 import { artifactOf, type StepNode } from '../../types.ts'
-import { runAgentTask } from '../parse.ts'
+import { agentOutputFromResult } from '../parse.ts'
 import type { ChapterState } from '../../../novel/types'
 import type { ChapterGraphState } from '../state'
 
@@ -15,7 +15,7 @@ export const AUDIT_INSTRUCTION = `你是内容审计员。基于正文与 Dispat
  * audit 节点（参考实现）：报告以 FAIL 开头 → 回 write 重写（transition 节点重试预算内）。
  * context 含正文 + Dispatch + SceneSheet（比对材料）；判定规则为参考策略（§7.7 六步校验语义），真实策略由 B 细化。
  */
-export function createAuditNode(agent: AgentPort): StepNode<'audit'> {
+export function createAuditNode(agent: ContentAgent): StepNode<'audit'> {
   return {
     step: 'audit',
     run: async (ctx) => {
@@ -25,13 +25,15 @@ export function createAuditNode(agent: AgentPort): StepNode<'audit'> {
       if (draft === undefined || dispatch === undefined || merge === undefined) {
         return { outcome: { kind: 'fail', reason: 'audit 缺少 write/direct/merge 产物' } }
       }
-      const call = await runAgentTask(agent, {
-        task: 'audit',
-        instruction: AUDIT_INSTRUCTION,
-        context: JSON.stringify({ draft, dispatch, scenesheet: merge.scenesheet }),
-      })
-      if (!call.ok) return { outcome: { kind: 'fail', reason: `audit agent 调用失败：${call.reason}` } }
-      const report = call.output.text.trim()
+      let result: unknown
+      try {
+        result = await agent.generate(`${AUDIT_INSTRUCTION}\n\n本章审计材料：\n${JSON.stringify({ draft, dispatch, scenesheet: merge.scenesheet }, null, 2)}`)
+      } catch (error) {
+        return { outcome: { kind: 'fail', reason: `audit agent 调用失败：${error instanceof Error ? error.message : String(error)}` } }
+      }
+      const output = agentOutputFromResult(result)
+      if (output === undefined) return { outcome: { kind: 'retry', step: 'audit', reason: 'audit Agent 未返回助手文本' } }
+      const report = output.text.trim()
       if (report === '') return { outcome: { kind: 'retry', step: 'audit', reason: 'audit 产物为空' } }
       if (report.startsWith('FAIL')) {
         return { outcome: { kind: 'retry', step: 'write', reason: `审计未通过：${report.slice(0, 120)}` } }
@@ -42,7 +44,7 @@ export function createAuditNode(agent: AgentPort): StepNode<'audit'> {
 }
 
 /** LangGraph audit 节点入口：调用本文件的业务节点并写回审计报告/outcome。 */
-export function createAuditGraphNode(agent: AgentPort) {
+export function createAuditGraphNode(agent: ContentAgent) {
   const node = createAuditNode(agent)
   return async (state: ChapterGraphState) => {
     const result = await node.run({ novelId: state.novelId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })

@@ -24,8 +24,8 @@ test("审计与内容审查 Agent 使用各自提示词生成报告", async (t) 
   const create = t.mock.method(deepagents, "createDeepAgent");
   const audit = new AuditAgent({ model: auditModel as unknown as BaseLanguageModel });
   const censor = new CensorAgent({ model: censorModel as unknown as BaseLanguageModel });
-  const auditResult = await audit.invoke("正文与 Dispatch、SceneSheet");
-  const censorResult = await censor.invoke("正文与平台规范");
+  const auditResult = await audit.generate("正文与 Dispatch、SceneSheet");
+  const censorResult = await censor.generate("正文与平台规范");
 
   assert.equal(create.mock.callCount(), 2);
   const auditOptions = create.mock.calls[0]?.arguments[0];

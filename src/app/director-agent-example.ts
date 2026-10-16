@@ -41,7 +41,7 @@ async function main(): Promise<void> {
     configuration: { baseURL: modelSettings.baseURL },
   });
   const agent = new DirectorAgent({ model });
-  const result = await agent.invoke("请为林舟和苏晴设计一个发生在雨后渡口的场景，保留双方自主选择的空间。");
+  const result = await agent.generate("请为林舟和苏晴设计一个发生在雨后渡口的场景，保留双方自主选择的空间。");
   console.dir(result, { depth: null });
 }
 

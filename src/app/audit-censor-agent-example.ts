@@ -33,14 +33,14 @@ async function main(): Promise<void> {
   const audit = new AuditAgent({ model });
   const censor = new CensorAgent({ model });
   const draft = "天色已晚，林舟把船票递给苏晴。苏晴没有接，只看着渐渐靠岸的渡船。";
-  const auditResult = await audit.invoke(JSON.stringify({
+  const auditResult = await audit.generate(JSON.stringify({
     draft,
     dispatch: { castPlan: [{ name: "林舟", hardLimits: ["不得透露船票来源"] }], hookDirectives: { resolve: ["渡船秘密"] } },
     scenesheet: { scenes: [{ purpose: "苏晴拒绝船票" }] },
     simulations: [{ character: "苏晴", actions: ["没有接船票"] }],
     facts: ["渡船已于傍晚靠岸"],
   }));
-  const censorResult = await censor.invoke(JSON.stringify({ draft, contentPolicy: ["不得包含平台禁止内容"] }));
+  const censorResult = await censor.generate(JSON.stringify({ draft, contentPolicy: ["不得包含平台禁止内容"] }));
 
   console.log("审计报告：");
   console.dir(auditResult, { depth: null });

@@ -18,7 +18,7 @@ export class AuditAgent extends BaseAgent {
   }
 
   /** 根据调用方提供的正文及核对材料生成审计报告。 */
-  public async invoke(content: string) {
+  public async generate(content: string) {
     return this.agent.invoke({ messages: [{ role: "user", content }] });
   }
 }

@@ -22,7 +22,7 @@ test("写作 Agent 使用传入模型和写作提示词生成草稿", async (t) 
   const model = new RecordingModel({ responses: ["雨停后，林舟站在渡口等候。"] });
   const create = t.mock.method(deepagents, "createDeepAgent");
   const agent = new WriterAgent({ model: model as unknown as BaseLanguageModel });
-  const result = await agent.invoke("已确认：雨停后两人在渡口相遇。写一段克制的场景正文。");
+  const result = await agent.generate("已确认：雨停后两人在渡口相遇。写一段克制的场景正文。");
 
   assert.equal(create.mock.callCount(), 1);
   const options = create.mock.calls[0]?.arguments[0];

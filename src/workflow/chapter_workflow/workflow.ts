@@ -1,7 +1,7 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { NovelId, ChapterState } from "../../novel/types";
 import type { BookRuntime } from "../../novel/runtime";
-import type { AgentPort } from "../agent-port";
+import type { AgentPort, ContentAgent } from "../agent-port";
 import { createJsonFileStore } from "../file-store";
 import {
   createAuditGraphNode,
@@ -18,7 +18,13 @@ import { ChapterGraphStateSchema, type ChapterGraphState } from "./state";
 import type { CharacterSimulationAgent } from "./nodes/simulate";
 
 export interface ChapterGraphOptions {
+  /** merge 与 settle 使用的通用模型端口。 */
   readonly agent: AgentPort;
+  /** direct、write、audit、censor 节点分别直接使用对应的专用 Agent。 */
+  readonly directorAgent: ContentAgent;
+  readonly writerAgent: ContentAgent;
+  readonly auditAgent: ContentAgent;
+  readonly censorAgent: ContentAgent;
   readonly characterAgents: CharacterSimulationAgent;
   readonly runtime: BookRuntime;
   readonly store: WorkflowStore;
@@ -29,12 +35,12 @@ export interface ChapterGraphOptions {
 /** 建立章节 LangGraph；节点行为由现有节点工厂提供，图负责状态流转和重试路由。 */
 export function buildChapterGraph(options: ChapterGraphOptions) {
   const { agent, runtime, store, maxRetries, notify } = options;
-  const directNode = createDirectGraphNode(agent, { runtime });
+  const directNode = createDirectGraphNode(options.directorAgent, { runtime });
   const simulateNode = createSimulateGraphNode(options.characterAgents, runtime);
   const mergeNode = createMergeGraphNode(agent);
-  const writeNode = createWriteGraphNode(agent);
-  const auditNode = createAuditGraphNode(agent);
-  const censorNode = createCensorGraphNode(agent);
+  const writeNode = createWriteGraphNode(options.writerAgent);
+  const auditNode = createAuditGraphNode(options.auditAgent);
+  const censorNode = createCensorGraphNode(options.censorAgent);
   const settleNode = createSettleGraphNode(agent, { runtime });
   const transitionNode = createTransitionNode({ store, maxRetries, notify });
 

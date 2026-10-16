@@ -5,6 +5,35 @@ export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/** 从专用 Agent 的 Deep Agents 状态中读取最后一条助手文本及可解析 JSON。 */
+export function agentOutputFromResult(result: unknown): AgentGenerateOutput | undefined {
+  if (!isRecord(result)) return undefined
+  if (result.structuredResponse !== undefined) {
+    return { text: JSON.stringify(result.structuredResponse), json: result.structuredResponse }
+  }
+  if (!Array.isArray(result.messages)) return undefined
+
+  for (const message of [...result.messages].reverse()) {
+    if (!isRecord(message)) continue
+    if (typeof message.type === 'string' && message.type !== 'ai' && message.type !== 'assistant') continue
+    const content = message.content
+    const text = typeof content === 'string'
+      ? content
+      : Array.isArray(content)
+        ? content.flatMap((part) => isRecord(part) && typeof part.text === 'string' ? [part.text] : []).join('')
+        : ''
+    if (text.trim() === '') continue
+    const trimmed = text.trim()
+    const unfenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1] ?? trimmed
+    try {
+      return { text: trimmed, json: JSON.parse(unfenced) as unknown }
+    } catch {
+      return { text: trimmed }
+    }
+  }
+  return undefined
+}
+
 /** 从 agent 输出取 JSON 值：优先 json 字段，否则解析 text；解析失败返回 undefined。 */
 export function jsonFromOutput(out: AgentGenerateOutput): unknown {
   if (out.json !== undefined) return out.json

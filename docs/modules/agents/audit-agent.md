@@ -1,6 +1,6 @@
 # 审计 Agent
 
-`AuditAgent` 按章节材料核对正文的剧情落实与一致性，使用调用方创建并注入的模型，通过 `invoke(content)` 接收序列化后的审计材料。它只返回报告，不修改正文或正式剧情状态。
+`AuditAgent` 按章节材料核对正文的剧情落实与一致性，使用调用方创建并注入的模型，通过 `generate(content)` 接收序列化后的审计材料。它只返回报告，不修改正文或正式剧情状态。
 
 ## 检查范围
 
@@ -18,7 +18,7 @@ import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 
 declare const model: BaseLanguageModel;
 const audit = new AuditAgent({ model });
-const report = await audit.invoke(JSON.stringify({ draft, dispatch, scenesheet, simulations, facts }));
+const report = await audit.generate(JSON.stringify({ draft, dispatch, scenesheet, simulations, facts }));
 ```
 
 `AuditAgent` 不读取模型配置或凭据，也不读写小说文件。模型或 Deep Agents 调用错误由调用方处理。

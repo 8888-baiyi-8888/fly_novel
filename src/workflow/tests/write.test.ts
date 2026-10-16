@@ -4,7 +4,7 @@ import type { NovelId } from "../../novel/types";
 import { StubAgent } from "../stub-agent";
 import { createWriteNode } from "../chapter_workflow/nodes/write";
 import { WRITE_BANS } from "../chapter_workflow/nodes/write";
-import type { AgentGenerateInput, AgentPort } from "../agent-port";
+import type { ContentAgent } from "../agent-port";
 import type { NodeOutput, StepRunContext } from "../types";
 
 const novelId = "demo-book" as NovelId;
@@ -37,12 +37,13 @@ function makeMerge(): NodeOutput {
 }
 
 /** 记录传给 agent 的原始输入（供指令/上下文断言）。 */
-class RecordingAgent implements AgentPort {
-  readonly inputs: AgentGenerateInput[] = [];
-  constructor(private readonly inner: AgentPort) {}
-  async generate(input: AgentGenerateInput) {
-    this.inputs.push(input);
-    return this.inner.generate(input);
+class RecordingAgent implements ContentAgent {
+  readonly inputs: string[] = [];
+  constructor(private readonly inner: StubAgent) {}
+  async generate(content: string) {
+    this.inputs.push(content);
+    const result = await this.inner.generate({ task: "write", instruction: "", context: content });
+    return { messages: [{ type: "ai", content: result.text }] };
   }
 }
 
@@ -58,11 +59,12 @@ test("write 节点：instruction 含 §7.3 全部禁令，context 含拍摄单",
   };
   const result = await node.run(ctx);
   assert.equal(result.outcome.kind, "continue");
-  const input = recorder.inputs[0];
+  const input = recorder.inputs[0] ?? "";
   for (const ban of WRITE_BANS) {
-    assert.ok(input.instruction.includes(ban), `指令应包含禁令：${ban.slice(0, 12)}…`);
+    assert.ok(input.includes(ban), `指令应包含禁令：${ban.slice(0, 12)}…`);
   }
-  const parsed = JSON.parse(input.context) as { scenesheet?: { writingPlan?: string } };
+  const contextText = input.split("本章写作材料：\n")[1] ?? "{}";
+  const parsed = JSON.parse(contextText) as { scenesheet?: { writingPlan?: string } };
   assert.ok(parsed.scenesheet?.writingPlan?.includes("H007"), "context 应含拍摄单");
 });
 
@@ -73,7 +75,7 @@ test("write 指令：禁令计数与 §7.3 一致（10 条）", () => {
 test("write 节点：agent 调用失败（无规则/超时）→ retry 回 write 而非 fail", async () => {
   // StubAgent 无匹配规则会抛错（模拟超时/网络失败），runAgentTask 捕获为 !ok → 应 retry
   const stub = new StubAgent([]);
-  const node = createWriteNode(stub);
+  const node = createWriteNode(new RecordingAgent(stub));
   const ctx: StepRunContext = {
     novelId,
     chapter: 1,

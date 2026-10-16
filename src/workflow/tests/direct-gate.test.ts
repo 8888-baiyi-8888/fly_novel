@@ -4,7 +4,7 @@ import type { NovelId, CharacterName, Dispatch, EventId, HookId, ThreadId } from
 import { validateDispatch } from "../../novel/gates/dispatch-gate";
 import type { DispatchGateLedgerEntry } from "../../novel/gates/dispatch-gate";
 import { buildFakeBookRuntime } from "../../novel/runtime";
-import type { AgentGenerateInput, AgentPort } from "../agent-port";
+import type { ContentAgent } from "../agent-port";
 import { StubAgent } from "../stub-agent";
 import { withDispatchGate } from "../direct-gate";
 import { createDirectNode } from "../chapter_workflow/nodes/direct";
@@ -68,12 +68,15 @@ function directNode(output: Dispatch): StepNode<"direct"> {
 }
 
 /** 内存存储替身。 */
-class RecordingAgent implements AgentPort {
-  readonly inputs: AgentGenerateInput[] = [];
-  constructor(private readonly inner: AgentPort) {}
-  async generate(input: AgentGenerateInput) {
-    this.inputs.push(input);
-    return this.inner.generate(input);
+class RecordingAgent implements ContentAgent {
+  readonly inputs: string[] = [];
+  constructor(private readonly inner: StubAgent) {}
+  async generate(content: string) {
+    this.inputs.push(content);
+    const result = await this.inner.generate({ task: "direct", instruction: "", context: content, outputFormat: "json" });
+    return result.json === undefined
+      ? { messages: [{ type: "ai", content: result.text }] }
+      : { structuredResponse: result.json };
   }
 }
 
@@ -118,11 +121,14 @@ test("direct 节点：instruction 含 Dispatch 结构示例（few-shot），cont
   };
   const result = await node.run(ctx);
   assert.equal(result.outcome.kind, "continue");
-  const input = recorder.inputs[0];
-  assert.match(input.instruction, /"castPlan"/);
-  assert.match(input.instruction, /"hookDirectives"/);
-  assert.match(input.instruction, /禁止额外包装键/);
-  const parsed = JSON.parse(input.context) as { threads?: Record<string, unknown>; chapter?: number };
+  const input = recorder.inputs[0] ?? "";
+  assert.match(input, /"castPlan"/);
+  assert.match(input, /"hookDirectives"/);
+  assert.match(input, /禁止额外包装键/);
+  assert.match(input, /"chapter": 1/);
+  assert.match(input, /tl-main-share/);
+  const contextText = input.split("本章上下文：\n")[1] ?? "{}";
+  const parsed = JSON.parse(contextText) as { threads?: Record<string, unknown>; chapter?: number };
   assert.equal(parsed.chapter, 1);
   assert.ok(parsed.threads?.["tl-main-share"] !== undefined, "context 应含线程快照");
 });

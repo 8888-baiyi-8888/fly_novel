@@ -159,7 +159,7 @@ Agent 输出携带或关联本次输入依据的版本，版本标识由调用�
 
 代码归属为独立工作区包 `@fly-novel/agents`，包边界与构建方式见[包说明](../../../src/agents/README.md)。测试归属为 `src/agents/tests/`。模板实现按本设计推进，包配置不代表业务工厂已经实现。
 
-基础代码通过抽象 `BaseAgent` 和直接继承它的 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`AuditAgent`、`CensorAgent` 表达模板关系，由包公共入口导出。`CharacterAgent` 提供构造参数、`run(input, options)` 及共享 Agent 运行时注册入口，并通过共享的 Deep Agents 调用函数执行模型请求；其余 Agent 接收模型实例并以 `invoke(content)` 执行各自任务。各模板分别拥有自己的提示词和职责边界，基类仅承载确实共享的职责，不增加多层继承体系。
+基础代码通过抽象 `BaseAgent` 和直接继承它的 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`AuditAgent`、`CensorAgent` 表达模板关系，由包公共入口导出。`CharacterAgent` 提供构造参数、`run(input, options)` 及共享 Agent 运行时注册入口，并通过共享的 Deep Agents 调用函数执行模型请求；其余 Agent 接收模型实例并以 `generate(content)` 执行各自任务。各模板分别拥有自己的提示词和职责边界，基类仅承载确实共享的职责，不增加多层继承体系。
 
 新增模板的要求：说明独立职责，定义必要输入和可验证输出，声明工具范围，实现独立调用，补充拒绝路径及验收用例，更新文档索引。修改现有模板契约时同步调用方；未知模板标识明确拒绝，不回退到其他类型。
 

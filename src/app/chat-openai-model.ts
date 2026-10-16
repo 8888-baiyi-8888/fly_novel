@@ -13,6 +13,7 @@ export interface ConfiguredChatOpenAIOptions {
   readonly disableThinking?: boolean;
   readonly temperature?: number;
   readonly maxTokens?: number;
+  readonly responseFormat?: "json_object";
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -55,8 +56,13 @@ export async function createConfiguredChatOpenAI(
     ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
     ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
     ...(options.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
-    ...(options.disableThinking === true
-      ? { modelKwargs: { thinking: { type: "disabled" } } }
+    ...((options.disableThinking === true || options.responseFormat !== undefined)
+      ? {
+          modelKwargs: {
+            ...(options.disableThinking === true ? { thinking: { type: "disabled" } } : {}),
+            ...(options.responseFormat === undefined ? {} : { response_format: { type: options.responseFormat } }),
+          },
+        }
       : {}),
   });
 }

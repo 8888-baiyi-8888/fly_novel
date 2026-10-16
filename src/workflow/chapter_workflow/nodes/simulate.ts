@@ -3,7 +3,7 @@ import type { BookRuntime } from '../../../novel/runtime'
 import type { ChapterState, Dispatch, Simulation } from '../../../novel/types'
 import type { ChapterGraphState } from '../state'
 import { artifactOf, type StepNode } from '../../types.ts'
-import { isRecord, parseSimulations } from '../parse.ts'
+import { agentOutputFromResult, parseSimulations } from '../parse.ts'
 
 /** CharacterAgentManager 的章节级调用端口。 */
 export interface CharacterSimulationAgent {
@@ -15,37 +15,6 @@ const CHARACTER_SIMULATION_REQUEST = `请只模拟当前角色，不替其他角
 输出严格 JSON 数组，且必须恰有一个元素。元素结构如下：
 [{"character":"当前角色原名","tier":"S|A","lines":["台词素材"],"actions":["动作素材"],"suspects":["当前怀疑；没有则空数组"],"reasoning":"仅 S 级填写，可省略","risk":"仅 S 级填写，可省略"}]
 lines、actions、suspects 必须是字符串数组；不得输出 Markdown 围栏或额外解释。`;
-
-/** 从 CharacterAgent 的 LangGraph 状态中取最后一条助手文本。 */
-function characterAgentOutput(result: unknown): { readonly text: string; readonly json?: unknown } | undefined {
-  if (!isRecord(result)) return undefined
-  if (result.structuredResponse !== undefined) {
-    return { text: JSON.stringify(result.structuredResponse), json: result.structuredResponse }
-  }
-  if (!Array.isArray(result.messages)) return undefined
-
-  for (const message of [...result.messages].reverse()) {
-    if (!isRecord(message)) continue
-    const messageType = message.type
-    if (typeof messageType === 'string' && messageType !== 'ai' && messageType !== 'assistant') continue
-    const content = message.content
-    const text = typeof content === 'string'
-      ? content
-      : Array.isArray(content)
-        ? content.flatMap((part) => isRecord(part) && typeof part.text === 'string' ? [part.text] : []).join('')
-        : ''
-    if (text.trim() === '') continue
-    const trimmed = text.trim()
-    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
-    const jsonText = fenced?.[1] ?? trimmed
-    try {
-      return { text, json: JSON.parse(jsonText) as unknown }
-    } catch {
-      return { text }
-    }
-  }
-  return undefined
-}
 
 function characterProfile(
   card: BookRuntime['characters'][number],
@@ -118,7 +87,7 @@ export function createSimulateNode(
           }
         }
 
-        const agentOutput = characterAgentOutput(output)
+        const agentOutput = agentOutputFromResult(output)
         const parsed = agentOutput === undefined ? undefined : parseSimulations(agentOutput)
         if (!isSimulationForCast(parsed, cast)) {
           const preview = JSON.stringify(agentOutput?.text ?? output).slice(0, 200)

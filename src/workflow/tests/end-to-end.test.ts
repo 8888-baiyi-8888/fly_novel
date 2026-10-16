@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CharacterAgentGenerateOptions } from "@fly-novel/agents";
+import type { ContentAgent } from "../agent-port";
 import type { NovelId, CharacterName, Dispatch, EventId, HookId, ThreadId } from "../../novel/types";
 import type { BookRuntime } from "../../novel/runtime";
 import { buildFakeBookRuntime } from "../../novel/runtime";
@@ -57,7 +58,7 @@ function violatingDispatch() {
 function simulationFixture() {
   return [
     { character: "叶凡", tier: "S", lines: ["念完了？"], actions: ["把笔放回笔筒"], suspects: ["苏晴开始怀疑协议与我有关"] },
-    { character: "苏晴", tier: "S", lines: ["这纸……怎么折过四次？"], actions: [] },
+    { character: "苏晴", tier: "S", lines: ["这纸……怎么折过四次？"], actions: [], suspects: [] },
   ];
 }
 
@@ -122,12 +123,27 @@ class MemoryStore implements WorkflowStore {
 function runGraph(agent: StubAgent, store: WorkflowStore, runtime: BookRuntime, notify?: (e: WorkflowEvent) => void, maxRetries = 2) {
   return runChapterGraph(novelId, chapter, {
     agent,
+    directorAgent: contentAgent(agent, "direct"),
+    writerAgent: contentAgent(agent, "write"),
+    auditAgent: contentAgent(agent, "audit"),
+    censorAgent: contentAgent(agent, "censor"),
     characterAgents: new StubCharacterAgentManager(simulationFixture()),
     store,
     runtime,
     maxRetries,
     notify,
   });
+}
+
+function contentAgent(agent: StubAgent, task: "direct" | "write" | "audit" | "censor"): ContentAgent {
+  return {
+    async generate(content) {
+      const result = await agent.generate({ task, instruction: "", context: content, ...(task === "direct" ? { outputFormat: "json" as const } : {}) });
+      return result.json === undefined
+        ? { messages: [{ type: "ai", content: result.text }] }
+        : { structuredResponse: result.json };
+    },
+  };
 }
 
 test("LangGraph chapter flow completes all seven nodes", async () => {

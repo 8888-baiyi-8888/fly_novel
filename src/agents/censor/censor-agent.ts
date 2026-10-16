@@ -18,7 +18,7 @@ export class CensorAgent extends BaseAgent {
   }
 
   /** 根据调用方提供的正文和审查标准生成审查报告。 */
-  public async invoke(content: string) {
+  public async generate(content: string) {
     return this.agent.invoke({ messages: [{ role: "user", content }] });
   }
 }

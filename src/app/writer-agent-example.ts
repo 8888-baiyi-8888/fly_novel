@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     configuration: { baseURL: modelSettings.baseURL },
   });
   const agent = new WriterAgent({ model });
-  const result = await agent.invoke([
+  const result = await agent.generate([
     "任务：写一段雨后渡口的小说正文。",
     "已确认事实：林舟和苏晴在渡口相遇；渡船即将离岸。",
     "要求：第三人称限知视角，语言克制；不要替角色决定是否同行。",

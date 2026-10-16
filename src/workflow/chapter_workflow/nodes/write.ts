@@ -1,6 +1,6 @@
-import type { AgentPort } from '../../agent-port.ts'
+import type { ContentAgent } from '../../agent-port.ts'
 import { artifactOf, type StepNode } from '../../types.ts'
-import { runAgentTask } from '../parse.ts'
+import { agentOutputFromResult } from '../parse.ts'
 import type { ChapterState } from '../../../novel/types'
 import type { ChapterGraphState } from '../state'
 
@@ -45,20 +45,21 @@ ${WRITE_STYLE_GUIDE.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 ${WRITE_BANS.map((b, i) => `${i + 1}. ${b}`).join('\n')}`
 
 /** write 节点（参考实现）：产出本章正文文本。 */
-export function createWriteNode(agent: AgentPort): StepNode<'write'> {
+export function createWriteNode(agent: ContentAgent): StepNode<'write'> {
   return {
     step: 'write',
     run: async (ctx) => {
       const merge = artifactOf(ctx, 'merge')
       if (merge === undefined) return { outcome: { kind: 'fail', reason: 'write 缺少 merge 产物' } }
-      const call = await runAgentTask(agent, {
-        task: 'write',
-        instruction: WRITE_INSTRUCTION,
-        context: JSON.stringify(merge),
-      })
-      // agent 调用失败（超时/网络抖动）→ retry 回 write，预算内自动重跑；预算耗尽由引擎挂起保留现场。
-      if (!call.ok) return { outcome: { kind: 'retry', step: 'write', reason: `write agent 调用失败：${call.reason}` } }
-      const draft = call.output.text.trim()
+      let result: unknown
+      try {
+        result = await agent.generate(`${WRITE_INSTRUCTION}\n\n本章写作材料：\n${JSON.stringify(merge, null, 2)}`)
+      } catch (error) {
+        return { outcome: { kind: 'retry', step: 'write', reason: `write agent 调用失败：${error instanceof Error ? error.message : String(error)}` } }
+      }
+      const output = agentOutputFromResult(result)
+      if (output === undefined) return { outcome: { kind: 'retry', step: 'write', reason: 'write Agent 未返回助手文本' } }
+      const draft = output.text.trim()
       if (draft === '') return { outcome: { kind: 'retry', step: 'write', reason: 'write 产物为空' } }
       // 质量护栏：正文过短（<100 字）或为占位符（如 "[1]"）判定为模型未真正产出正文，重新生成
       if (draft.length < 5 || /^\[[^\]]*\]$/.test(draft)) {
@@ -70,7 +71,7 @@ export function createWriteNode(agent: AgentPort): StepNode<'write'> {
 }
 
 /** LangGraph write 节点入口：调用本文件的业务节点并写回正文/outcome。 */
-export function createWriteGraphNode(agent: AgentPort) {
+export function createWriteGraphNode(agent: ContentAgent) {
   const node = createWriteNode(agent)
   return async (state: ChapterGraphState) => {
     const result = await node.run({ novelId: state.novelId, chapter: state.chapter, state: state as ChapterState, artifacts: state.artifacts })

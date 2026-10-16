@@ -29,3 +29,8 @@ export interface AgentGenerateOutput {
 export interface AgentPort {
   readonly generate: (input: AgentGenerateInput) => Promise<AgentGenerateOutput>
 }
+
+/** 章节专用 Agent 直接提供的文本生成接口。 */
+export interface ContentAgent {
+  readonly generate: (content: string) => Promise<unknown>
+}

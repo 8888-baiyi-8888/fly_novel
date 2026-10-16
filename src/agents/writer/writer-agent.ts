@@ -18,7 +18,7 @@ export class WriterAgent extends BaseAgent {
   }
 
   /** 根据调用方提供的写作材料生成正文草稿。 */
-  public async invoke(content: string) {
+  public async generate(content: string) {
     return this.agent.invoke({
       messages: [{ role: "user", content }],
     });
