@@ -1,5 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { EvaluatorAgent } from "@fly-novel/agents";
+import { AuditAgent, CensorAgent } from "@fly-novel/agents";
 import { decryptSecret } from "../config/credentials";
 import { readEncryptionKey, readSettings } from "../config/settings";
 
@@ -30,19 +30,27 @@ async function main(): Promise<void> {
     apiKey: decryptSecret(encryptedApiKey, await readEncryptionKey()),
     configuration: { baseURL: modelSettings.baseURL },
   });
-  const agent = new EvaluatorAgent({ model });
-  const result = await agent.invoke([
-    "评估范围：只检查下列正文中的事实依据与人物行为连续性。",
-    "正文版本：draft-1",
-    "正文：天色已晚，林舟把船票递给苏晴。苏晴没有接，只看着渐渐靠岸的渡船。",
-    "请指出可定位的问题、依据和影响；无法判断的内容标明依据不足。给出修订方向，不要改写正文。",
-  ].join("\n"));
-  console.dir(result, { depth: null });
+  const audit = new AuditAgent({ model });
+  const censor = new CensorAgent({ model });
+  const draft = "天色已晚，林舟把船票递给苏晴。苏晴没有接，只看着渐渐靠岸的渡船。";
+  const auditResult = await audit.invoke(JSON.stringify({
+    draft,
+    dispatch: { castPlan: [{ name: "林舟", hardLimits: ["不得透露船票来源"] }], hookDirectives: { resolve: ["渡船秘密"] } },
+    scenesheet: { scenes: [{ purpose: "苏晴拒绝船票" }] },
+    simulations: [{ character: "苏晴", actions: ["没有接船票"] }],
+    facts: ["渡船已于傍晚靠岸"],
+  }));
+  const censorResult = await censor.invoke(JSON.stringify({ draft, contentPolicy: ["不得包含平台禁止内容"] }));
+
+  console.log("审计报告：");
+  console.dir(auditResult, { depth: null });
+  console.log("内容审查报告：");
+  console.dir(censorResult, { depth: null });
 }
 
 if (require.main === module) {
   void main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : "评估 Agent 示例运行失败");
+    console.error(error instanceof Error ? error.message : "审计或内容审查 Agent 示例运行失败");
     process.exitCode = 1;
   });
 }

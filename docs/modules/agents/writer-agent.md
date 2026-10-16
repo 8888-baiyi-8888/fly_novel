@@ -126,7 +126,7 @@
 
 #### 输出与状态影响
 
-返回 `{ basis, output: { status, draft, openIssues } }`。应用保留各稿件版本，写作 Agent 不调用导演、角色或评估 Agent，也不直接写正式文件。
+返回 `{ basis, output: { status, draft, openIssues } }`。应用保留各稿件版本，写作 Agent 不调用导演、角色、审计或内容审查 Agent，也不直接写正式文件。
 
 #### 验证
 

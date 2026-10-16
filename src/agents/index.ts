@@ -5,4 +5,5 @@ export { type CharacterAgentOptions, type CharacterInfos } from "./character/typ
 export { CharacterAgentManager, type CharacterAgentGenerateOptions } from "./character/character-agent-manager.js";
 export { DirectorAgent, type DirectorAgentOptions } from "./director/director-agent.js";
 export { WriterAgent, type WriterAgentOptions } from "./writer/writer-agent.js";
-export { EvaluatorAgent, type EvaluatorAgentOptions } from "./evaluator/evaluator-agent.js";
+export { AuditAgent, type AuditAgentOptions } from "./audit/audit-agent.js";
+export { CensorAgent, type CensorAgentOptions } from "./censor/censor-agent.js";

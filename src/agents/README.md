@@ -2,23 +2,23 @@
 
 小说创作 Agent 的私有 pnpm 工作区包，设计契约见[写作 Agent 模块设计](../../docs/modules/agents/agents.md)。公共入口为 `index.ts`，导入不创建 Agent 或发起网络请求。
 
-各模板的输入、处理逻辑与外部调用草案见[角色](../../docs/modules/agents/character-agent.md)、[导演](../../docs/modules/agents/director-agent.md)、[写作](../../docs/modules/agents/writer-agent.md)和[评估](../../docs/modules/agents/evaluator-agent.md)详细设计；文档示例不是当前可运行接口。
+各模板的输入、处理逻辑与外部调用草案见[角色](../../docs/modules/agents/character-agent.md)、[导演](../../docs/modules/agents/director-agent.md)、[写作](../../docs/modules/agents/writer-agent.md)、[审计](../../docs/modules/agents/audit-agent.md)和[内容审查](../../docs/modules/agents/censor-agent.md)详细设计；文档示例不是当前可运行接口。
 
 ## 源码布局
 
 - `core/`：所有 Agent 共享的抽象基类。
 - `runtime/`：应用注册的模型解析器，以及共享的受限 Deep Agents 调用。
-- `character/`、`director/`、`writer/`、`evaluator/`：各模板的业务实现与专属类型。
+- `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型。
 - `tests/`：按包运行的自动化测试。
 
 模板之间不跨目录引用业务实现；它们仅通过 `core/` 与 `runtime/` 共享基础能力。`index.ts` 是唯一公共导出入口。
 
 ## 构建与引用
 
-公共入口导出抽象基类 `BaseAgent`，以及 `CharacterAgent`、`CharacterAgentManager`、`DirectorAgent`、`WriterAgent`、`EvaluatorAgent`。`CharacterAgentManager` 按小说内的角色 ID 缓存实例，达到容量上限时淘汰最久未使用的实例；章节驱动在一次运行结束后调用 `clear()`。章节模拟把角色档案和当前状态作为 `characterInfos` 提供给对应角色 Agent，不要求复制到旧版 `novel_data` 目录。`CharacterAgent` 通过应用启动时注册的模型解析器调用 Deep Agents；导演、写作和评估 Agent 接收应用创建的模型实例，并通过 `invoke(content)` 调用 Deep Agents。它们不读取应用配置或凭据，也不读写文件。基础使用方式：
+公共入口导出抽象基类 `BaseAgent`，以及 `CharacterAgent`、`CharacterAgentManager`、`DirectorAgent`、`WriterAgent`、`AuditAgent`、`CensorAgent`。`CharacterAgentManager` 按小说内的角色 ID 缓存实例，达到容量上限时淘汰最久未使用的实例；章节驱动在一次运行结束后调用 `clear()`。章节模拟把角色档案和当前状态作为 `characterInfos` 提供给对应角色 Agent，不要求复制到旧版 `novel_data` 目录。`CharacterAgent` 通过应用启动时注册的模型解析器调用 Deep Agents；导演、写作、审计和内容审查 Agent 接收应用创建的模型实例，并通过 `invoke(content)` 调用 Deep Agents。它们不读取应用配置或凭据，也不读写文件。基础使用方式：
 
 ```ts
-import { CharacterAgent, DirectorAgent, WriterAgent, EvaluatorAgent } from "@fly-novel/agents";
+import { CharacterAgent, DirectorAgent, WriterAgent, AuditAgent, CensorAgent } from "@fly-novel/agents";
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 
 const character = new CharacterAgent({
@@ -30,7 +30,8 @@ const character = new CharacterAgent({
 declare const model: BaseLanguageModel; // 由应用配置模型与 API 凭据后创建
 const director = new DirectorAgent({ model });
 const writer = new WriterAgent({ model });
-const evaluator = new EvaluatorAgent({ model });
+const audit = new AuditAgent({ model });
+const censor = new CensorAgent({ model });
 ```
 
 应用启动时调用 `configureAgentRuntime({ resolveModel, characterDataDirectory, characterMemoryDirectory })` 注册模型解析器、小说数据根目录和记忆根目录。`CharacterAgent` 初始化时加载一次该角色的全部记忆，并在后续运行中复用及更新内存副本。`sceneId` 只用于将本轮经历归档到 `<根目录>/<storyId>/character_agent/<branchId>/<characterId>/memory/<sceneId>.json`，同一场景多轮记录追加到同一文件。通过 `CharacterMemory.getAllMemories({ storyId, branchId, characterId })` 查询持久化的全部记忆。框架创建和调用函数位于 `runtime/`，不从包入口导出，不读取应用配置或凭据。会话边界见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。

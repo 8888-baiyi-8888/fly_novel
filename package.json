@@ -12,7 +12,7 @@
     "character-agent-example": "pnpm run build && node dist/app/character-agent-example.js",
     "director-agent-example": "pnpm run build && node dist/app/director-agent-example.js",
     "writer-agent-example": "pnpm run build && node dist/app/writer-agent-example.js",
-    "evaluator-agent-example": "pnpm run build && node dist/app/evaluator-agent-example.js",
+    "audit-censor-agent-example": "pnpm run build && node dist/app/audit-censor-agent-example.js",
     "init-encryption-key": "pnpm run build && node dist/app/init-encryption-key.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "pnpm run build:tests && node --test .test-dist/*/tests/**/*.test.js",
