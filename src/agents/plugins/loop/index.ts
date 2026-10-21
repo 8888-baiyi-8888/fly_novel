@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { AgentLoop } from '../../core/contracts/agent.js'
+import type { AgentLoop, AgentPluginDefinition } from '../../core/contracts/agent.js'
 export type { AgentLoop, AgentLoopInput, AgentLoopResult } from '../../core/contracts/agent.js'
 
 export interface MockLoopConfig {
@@ -26,3 +26,12 @@ export const mockLoopPlugin = Object.assign(function mockLoopPlugin(
 
   ctx.provide('agentLoop', loop)
 }, { provide: 'agentLoop' })
+
+/** mock Agent loop 的注册定义，由 Harness 启动入口统一装配。 */
+export const mockLoopPluginDefinition: AgentPluginDefinition<MockLoopConfig> = {
+  id: 'mock-loop',
+  version: '1.0.0',
+  description: '临时 Agent loop 插件',
+  plugin: mockLoopPlugin,
+  defaultConfig: {},
+}

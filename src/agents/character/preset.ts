@@ -21,5 +21,8 @@ export const characterAgentPreset: AgentPreset = {
         initial: {},
       },
     },
+    {
+      pluginId: 'character-example-memory',
+    },
   ],
 }

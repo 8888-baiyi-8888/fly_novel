@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type { AgentPluginDefinition } from '../../core/contracts/agent.js'
 
 export interface AgentMemory {
   get(key: string): unknown
@@ -34,3 +35,12 @@ export const mockMemoryPlugin = Object.assign(function mockMemoryPlugin(
 
   ctx.provide('memory', memory)
 }, { provide: 'memory' })
+
+/** mock memory 的注册定义，由 Harness 启动入口统一装配。 */
+export const mockMemoryPluginDefinition: AgentPluginDefinition<MockMemoryConfig> = {
+  id: 'mock-memory',
+  version: '1.0.0',
+  description: '临时 Agent memory 插件',
+  plugin: mockMemoryPlugin,
+  defaultConfig: {},
+}

@@ -7,6 +7,7 @@ import type {
 import type { CreateAgentOptions } from '../core/contracts/preset.js'
 import type { PluginRegistry, PresetRegistry } from '../core/preset.js'
 
+/** 按 Preset 装配并初始化独立的 Harness Agent 实例；不持有已创建的实例。 */
 export class AgentFactory {
   constructor(
     private readonly rootContext: Context,
@@ -14,6 +15,12 @@ export class AgentFactory {
     private readonly presets: PresetRegistry,
   ) {}
 
+  /**
+   * 解析插件配置，为插件提供的服务建立隔离 Context，并等待 Cordis 插件启动。
+   * @param options Agent 标识、Preset ID 及可选的参数和插件配置覆盖值。
+   * @returns 已完成初始化的 Agent 实例。
+   * @throws Preset 或插件缺失、插件重复、缺少 agentLoop，或插件启动失败时抛错。
+   */
   async create(options: CreateAgentOptions): Promise<AgentInstance> {
     if (!options.id.trim()) throw new Error('Agent ID 不能为空')
 

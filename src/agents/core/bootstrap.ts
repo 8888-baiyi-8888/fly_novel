@@ -2,8 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { PluginRegistry, PresetRegistry } from './preset.js'
 import { AgentFactory } from '../runtime/agent-factory.js'
 import { AgentManager } from '../runtime/agent-manager.js'
-import { mockLoopPlugin } from '../plugins/loop/index.js'
-import { mockMemoryPlugin } from '../plugins/memory/index.js'
+import { builtInPlugins } from '../plugins/index.js'
 import { characterAgentPreset } from '../character/preset.js'
 import { directorAgentPreset } from '../director/preset.js'
 
@@ -22,25 +21,12 @@ export async function bootstrapAgents(): Promise<AgentFramework> {
   const plugins = new PluginRegistry()
   const presets = new PresetRegistry()
 
-  plugins.register({
-    id: 'mock-loop',
-    version: '1.0.0',
-    description: '临时 Agent loop 插件',
-    plugin: mockLoopPlugin,
-    defaultConfig: {},
-  })
-
-  plugins.register({
-    id: 'mock-memory',
-    version: '1.0.0',
-    description: '临时 Agent memory 插件',
-    plugin: mockMemoryPlugin,
-    defaultConfig: {},
-  })
+  for (const definition of builtInPlugins) plugins.register(definition)
 
   presets.register(characterAgentPreset)
   presets.register(directorAgentPreset)
 
+  // 验证 Preset 中的插件绑定是否存在于 PluginRegistry 中
   for (const preset of presets.list()) {
     for (const binding of preset.plugins) plugins.get(binding.pluginId)
   }
