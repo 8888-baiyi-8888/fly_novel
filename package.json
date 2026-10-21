@@ -10,6 +10,7 @@
     "novel-workflow": "pnpm run build && node dist/app/novel-workflow/workflow.js",
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
     "character-agent-example": "pnpm run build && node dist/app/character-agent-example.js",
+    "agent-harness-debug": "pnpm run build && node dist/app/agent_harness.js",
     "director-agent-example": "pnpm run build && node dist/app/director-agent-example.js",
     "writer-agent-example": "pnpm run build && node dist/app/writer-agent-example.js",
     "audit-censor-agent-example": "pnpm run build && node dist/app/audit-censor-agent-example.js",

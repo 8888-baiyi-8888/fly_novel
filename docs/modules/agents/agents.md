@@ -26,7 +26,7 @@
 
 角色“林舟”和“苏晴”使用同一角色模板，差异来自各自的资料和状态。角色的长期身份不依赖一个长期驻留的 JavaScript 对象或无限累积的消息历史。角色状态有变化时，通过下一次运行输入体现。
 
-模板入口为 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`AuditAgent` 和 `CensorAgent`，由应用创建模型并注入。新增模板时增加对应输入输出、实现与测试，不预建动态插件加载和注册中心。
+Deep Agents 模板入口为 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`AuditAgent` 和 `CensorAgent`，由应用创建模型并注入。独立的 Cordis Harness 通过插件和 Preset 注册创建实例 handle，其边界和用法见[Agent 包说明](../../../src/agents/README.md#cordis-harness)。
 
 ## 五类模板契约
 
@@ -157,7 +157,7 @@ Agent 输出携带或关联本次输入依据的版本，版本标识由调用�
 
 ## 代码组织与扩展
 
-代码归属为独立工作区包 `@fly-novel/agents`，包边界与构建方式见[包说明](../../../src/agents/README.md)。测试归属为 `src/agents/tests/`。模板实现按本设计推进，包配置不代表业务工厂已经实现。
+代码归属为独立工作区包 `@fly-novel/agents`，包边界与构建方式见[包说明](../../../src/agents/README.md)。测试归属为 `src/agents/tests/`。Deep Agents 模板与 Cordis Harness 分别通过各自入口创建，Harness 的 mock 插件不承担真实业务执行。
 
 基础代码通过抽象 `BaseAgent` 和直接继承它的 `CharacterAgent`、`DirectorAgent`、`WriterAgent`、`AuditAgent`、`CensorAgent` 表达模板关系，由包公共入口导出。`BaseAgent` 负责创建 Deep Agent，并提供把文本作为 user message 提交的受保护调用方法；模板类传入模型、系统提示词及必要的框架配置。`CharacterAgent` 在该基础上管理角色会话线程和检查点；`DirectorAgent` 在该基础上按调用需要启用 JSON 输出并校验结果。各模板分别拥有自己的提示词和职责边界，角色管理、结构化输出等不同生命周期和任务语义不放进基类。
 

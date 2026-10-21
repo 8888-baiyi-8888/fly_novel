@@ -7,3 +7,15 @@ export { DirectorAgent, type DirectorAgentOptions } from "./director/director-ag
 export { WriterAgent, type WriterAgentOptions } from "./writer/writer-agent.js";
 export { AuditAgent, type AuditAgentOptions } from "./audit/audit-agent.js";
 export { CensorAgent, type CensorAgentOptions } from "./censor/censor-agent.js";
+
+
+export { AgentInstance, PluginRegistry, PresetRegistry, bootstrapAgents } from './core/index.js'
+export type { Agent, AgentInfo, AgentIdentity, AgentPluginDefinition, AgentPreset, CreateAgentOptions, AgentFramework } from './core/index.js'
+export { AgentFactory } from './runtime/agent-factory.js'
+export { AgentManager } from './runtime/agent-manager.js'
+export { characterAgentPreset } from './character/preset.js'
+export { directorAgentPreset } from './director/preset.js'
+export { mockLoopPlugin } from './plugins/loop/index.js'
+export { mockMemoryPlugin } from './plugins/memory/index.js'
+export type { AgentLoop, AgentLoopInput, AgentLoopResult, MockLoopConfig } from './plugins/loop/index.js'
+export type { AgentMemory, MockMemoryConfig } from './plugins/memory/index.js'

@@ -6,12 +6,36 @@
 
 ## 源码布局
 
-- `core/`：所有 Agent 共享的 Deep Agent 创建和文本调用基类。
-- `runtime/`：应用注册的模型解析器，以及结构化输出调用辅助函数。
+- `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
+- `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
+- `plugins/`：Harness 使用的 mock loop 与 memory 服务插件。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型。
 - `tests/`：按包运行的自动化测试。
 
 模板之间不跨目录引用业务实现；它们通过 `core/` 共享 Agent 创建与文本调用，通过 `runtime/` 共享应用模型解析和结构化输出执行能力。`index.ts` 是唯一公共导出入口。
+
+## Cordis Harness
+
+`await bootstrapAgents()` 创建 Cordis 根 Context、插件注册表、Preset 注册表、工厂和 Manager，并注册角色与导演 Preset。`manager.create({ id, presetId })` 创建 Agent handle，并要求 Preset 装配提供 `agentLoop` 的插件。插件按 Preset 顺序注册，Cordis 按插件的 `inject` 声明安排启动。工厂依据插件的 `provide` 元数据在每个 Agent 的 Context 中隔离服务。每个 Agent 持有一个 Cordis 父插件作用域；`agent.run()` 将输入交给该实例的 `agentLoop` 服务，memory 可通过 `agent.context.get('memory')` 单独访问。`manager.dispose(id)` 和 `manager.disposeAll()` 会等待作用域销毁；失败的初始化不会进入 Manager。
+
+```ts
+import { bootstrapAgents } from '@fly-novel/agents'
+
+async function main() {
+  const { manager } = await bootstrapAgents()
+  try {
+    const agent = await manager.create({ id: 'character-1', presetId: 'character-agent' })
+    const result = await agent.run({ prompt: '你好' })
+    console.log(result.content)
+  } finally {
+    await manager.disposeAll()
+  }
+}
+
+void main()
+```
+
+`@fly-novel/agents` 保持 CommonJS 构建；`bootstrapAgents()` 使用动态导入加载 ESM 版 `@deepseek-ai/cordis`。当前 loop 和 memory 仅用于注册与生命周期验证；`agent.run()` 调用 mock loop 回显输入，不调用模型，也不保存长期记忆。
 
 ## 构建与引用
 
