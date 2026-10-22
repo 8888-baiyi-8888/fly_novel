@@ -8,7 +8,7 @@
 
 - `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
-- `plugins/`：Harness 使用的 mock loop 与 memory 服务插件；各模块导出注册定义，`plugins/index.ts` 汇总内置定义。
+- `plugins/`：Harness 使用的 mock loop 与 memory 服务插件；各已实现模块导出注册定义，`plugins/index.ts` 汇总内置定义。通用 Session 插件在独立的 [`@fly-novel/session`](../session/README.md) 包中开发，完成后由此处汇总注册。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `tests/`：按包运行的自动化测试。
 

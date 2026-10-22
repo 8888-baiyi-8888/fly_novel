@@ -20,6 +20,9 @@
       "@fly-novel/llm": [
         "./src/llm/index.ts"
       ],
+      "@fly-novel/session": [
+        "./src/session/index.ts"
+      ],
       "@fly-novel/util": [
         "./src/util/index.ts"
       ],

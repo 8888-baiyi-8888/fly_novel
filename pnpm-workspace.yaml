@@ -1,6 +1,7 @@
 packages:
   - 'src/harness'
   - 'src/llm'
+  - 'src/session'
   - 'src/util'
   - 'src/novel-flow'
   - src/agents

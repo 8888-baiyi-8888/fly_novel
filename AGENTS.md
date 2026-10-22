@@ -25,9 +25,7 @@ src/*/tests/       按 src 一级模块归属的自动化测试，不在更深�
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
 src/agents/        写作 Agent 工作区包；core/ 定义 Cordis Harness 实例与注册契约，runtime/ 管理装配和生命周期，plugins/ 提供 mock 服务；保留各业务 Agent 实现
-src/harness/session/types/       会话标识、头部与事件协议类型
-src/harness/session/validation/  会话头、历史事件与载荷边界校验
-src/harness/session/surface/     消息视图派生、元数据校验及状态转换
+src/session/       `@fly-novel/session` 独立工作区包；当前只有包骨架与开发说明，尚未实现或注册插件
 src/novel/types/    小说领域共享数据模型（文档 §3：BookConfig/Beat/Fact/HookRecord/Thread/角色卡/ChapterState）与章节级运行时结构（Dispatch/HookContext/SceneSheet/RuntimeDelta 等），公共入口 types/index.ts；测试在 src/novel/tests/
 src/novel/gates/    小说领域确定性校验闸门（纯函数，先于落盘执行；已实现 §5.3 Dispatch 校验闸门 dispatch-gate.ts、§11.2 六步校验链 apply-delta-gate.ts），测试在 src/novel/tests/
 src/novel/services/ 小说领域确定性服务（章节级文档 §16.1 组件接口：HookLedger 的 lifecycle/准入/六步校验与不可变合并已实现；TimelineManager/TruthOracle 接口契约含 insertAll 收 FactDelta），测试在 src/novel/tests/
@@ -39,7 +37,7 @@ src/app/novel-workflow/ 建书命令行入口与 Agent 组装；整图和单步�
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件
-pnpm-workspace.yaml 本地工作区成员：src/harness、src/llm 和 src/util；包清单与构建配置位于各包内
+pnpm-workspace.yaml 本地工作区成员清单；Session 包位于 src/session/，包清单与构建配置位于各包内
 package.json       Node.js 项目配置、依赖与脚本
 README.md          项目介绍
 tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物
