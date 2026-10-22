@@ -17,6 +17,9 @@ importers:
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:src/llm
+      '@fly-novel/session':
+        specifier: workspace:*
+        version: link:src/agents/plugins/session
       '@fly-novel/util':
         specifier: workspace:*
         version: link:src/util
@@ -45,6 +48,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
         version: 4.0.2
+      '@fly-novel/session':
+        specifier: workspace:*
+        version: link:plugins/session
       '@langchain/core':
         specifier: ^1.2.12
         version: 1.2.14(openai@7.27.0(zod@4.6.5))
@@ -77,6 +83,8 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@22.20.2)(vite@8.3.4(@types/node@22.20.2)(yaml@2.9.1))
 
+  src/agents/plugins/session: {}
+
   src/llm:
     dependencies:
       '@deepseek-ai/cordis':
@@ -91,8 +99,6 @@ importers:
       pinyin-pro:
         specifier: ^3.29.4
         version: 3.29.4
-
-  src/agents/plugins/session: {}
 
   src/util: {}
 

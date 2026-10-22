@@ -1,2 +1,4 @@
-/** Session 包入口；会话契约与插件实现将在后续阶段导出。 */
-export {}
+export { Session } from './session.js'
+export type { SessionEvent, SessionOptions } from './session.js'
+export { sessionPlugin, sessionPluginDefinition } from './plugin.js'
+export type { SessionPluginConfig, SessionPluginDefinition } from './plugin.js'

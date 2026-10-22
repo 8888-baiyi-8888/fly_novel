@@ -1,15 +1,22 @@
 # @fly-novel/session
 
-本目录是 Harness 通用内存 Session 插件的独立 pnpm 工作区包。开发顺序见[长期开发计划中的 Session 插件开发](../../../../docs/development-plan.md#session-插件开发)。当前只有包入口和构建配置，没有 Session 行为、插件注册定义或 Preset 绑定。
+`@fly-novel/session` 为 Harness Agent 提供进程内只追加事件日志。设计顺序见[开发计划](../../../../docs/development-plan.md#session-插件开发)，插件形态对照官方 [`@deepseek-ai/dsh-session`](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/core/session)。
 
-## 与 DeepSeek Harness 的对应关系
+## Session 基础类
 
-参考官方 [`@deepseek-ai/dsh-session`](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/core/session)：它在内存中管理会话事件日志，并从事件派生模型消息。本包沿用项目的 CommonJS 工作区包配置；其他插件需要使用 Session 时，通过 `@fly-novel/session` 导入其后续公开的契约或插件定义。
+`Session` 代表一个 Agent 会话，保存 Session ID、创建时间和按追加顺序排列的事件。ID 可由调用方提供，缺省时生成 UUID。`append()` 对事件做结构化复制并深度冻结，避免调用方修改既有历史；`read()` 返回只读历史切片，支持排他游标 `afterIndex` 与数量限制 `limit`。关闭后清空内存事件并拒绝读写，重复关闭安全。
 
-| 官方 Session 包 | 本项目后续归属 |
-| --- | --- |
-| `src/index.ts`：插件入口与 Session 管理服务 | `index.ts`：包公共入口；后续导出插件定义与服务 |
-| `src/types.ts`：会话、事件等类型 | 后续的 Session 契约；模型消息沿用 [`@fly-novel/llm` 的消息类型](../../../llm/message.ts) |
-| `src/surface.ts`：从事件派生消息视图 | 后续的消息历史派生逻辑 |
+事件使用带有非空 `type` 字段的开放对象；本阶段不定义消息、工具调用等领域事件，也不派生 LLM 消息。会话数据不写入文件或数据库，进程重启后不恢复。
 
-存储介质读写和跨进程恢复属于后续独立的 Session 持久化插件。实现插件定义后，`@fly-novel/agents` 再将它纳入内置插件列表，供需要的 Preset 选择；包入口导入本身不注册插件。
+## Harness 插件
+
+`sessionPluginDefinition` 使用项目 `AgentPluginDefinition` 注册契约，Cordis 插件通过 `provide: 'session'` 在 Agent Context 提供 `Session`。插件配置可传 `sessionId`；默认生成随机 UUID。每个 Agent 实例创建自己的 Session，Cordis 插件作用域销毁时关闭并释放历史。插件定义在 Harness 启动时注册，Preset 通过插件 ID `session` 选择装配。
+
+```ts
+const agent = await manager.create({ id: 'writer-1', presetId: 'writer-preset' })
+const session = agent.context.get('session')
+session.append({ type: 'user-input', text: '继续这一幕' })
+const history = session.read()
+```
+
+下一步再定义具体消息与事件类型；多个 Session 的创建和检索由后续 Manager 负责。

@@ -39,6 +39,7 @@
     "@deepseek-ai/cordis": "^4.0.2",
     "@fly-novel/agents": "workspace:*",
     "@fly-novel/llm": "workspace:*",
+    "@fly-novel/session": "workspace:*",
     "@fly-novel/util": "workspace:*",
     "@langchain/langgraph": "^1.4.18",
     "@langchain/openai": "^1.5.13",
