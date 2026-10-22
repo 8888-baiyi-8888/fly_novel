@@ -83,7 +83,11 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@22.20.2)(vite@8.3.4(@types/node@22.20.2)(yaml@2.9.1))
 
-  src/agents/plugins/session: {}
+  src/agents/plugins/session:
+    dependencies:
+      '@fly-novel/llm':
+        specifier: workspace:*
+        version: link:../../../llm
 
   src/llm:
     dependencies:

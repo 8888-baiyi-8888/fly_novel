@@ -1,11 +1,7 @@
 import { deepFreeze } from '@fly-novel/util'
 import { randomUUID } from 'node:crypto'
-
-/** Session 事件负载由事件类型扩展；Session 只负责按序保存独立快照。 */
-export interface SessionEvent {
-  readonly type: string
-  readonly [key: string]: unknown
-}
+import type { SessionEvent, SessionEventMap, SessionEventType } from './types.js'
+export type { SessionEvent, SessionEventMap, SessionEventType } from './types.js'
 
 export interface SessionOptions {
   /** 调用方分配的会话标识；未提供时生成随机 UUID。 */
@@ -32,11 +28,17 @@ export class Session {
   }
 
   /** 追加事件快照，并返回其从零开始的顺序索引。 */
-  append(event: SessionEvent): number {
+  append<T extends SessionEventType>(type: T, data: SessionEventMap[T]): SessionEvent<T> {
     this.assertOpen()
-    if (!event.type.trim()) throw new Error('Session 事件类型不能为空')
-    this.events.push(deepFreeze(structuredClone(event)))
-    return this.events.length - 1
+    if (typeof type !== 'string' || !type.trim()) throw new Error('Session 事件类型不能为空')
+    const event = deepFreeze(structuredClone({
+      type,
+      seq: this.events.length,
+      time: Date.now(),
+      data,
+    })) as SessionEvent<T>
+    this.events.push(event as SessionEvent)
+    return event
   }
 
   /** 按追加顺序读取事件；afterIndex 为排他游标，limit 限制返回数量。 */

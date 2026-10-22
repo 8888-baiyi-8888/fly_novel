@@ -1,44 +1,83 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
+import type { MessageId, UserMessage } from '@fly-novel/llm'
 import { bootstrapAgents } from '../core/bootstrap.js'
 import type { AgentFramework } from '../core/bootstrap.js'
 import { Session } from '@fly-novel/session'
 
-describe('Session 基础类', () => {
-  it('按追加顺序保存事件快照，并支持游标读取', () => {
-    const session = new Session({ id: 'session-1', createdAt: new Date('2026-01-01T00:00:00.000Z') })
-    const firstEvent = { type: 'user-input', text: '第一句' }
+declare module '@fly-novel/session' {
+  interface SessionEventMap {
+    'plugin/note': { readonly text: string }
+  }
+}
 
-    assert.equal(session.append(firstEvent), 0)
-    assert.equal(session.append({ type: 'assistant-output', text: '回应' }), 1)
-    firstEvent.text = '调用方修改后的内容'
+function userMessage(text: string): UserMessage {
+  return {
+    id: 'message-user-1' as MessageId,
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source: { kind: 'user' },
+  }
+}
 
-    assert.equal(session.id, 'session-1')
-    assert.equal(session.size, 2)
-    assert.deepEqual(session.read(), [
-      { type: 'user-input', text: '第一句' },
-      { type: 'assistant-output', text: '回应' },
-    ])
-    assert.deepEqual(session.read({ afterIndex: 0, limit: 1 }), [
-      { type: 'assistant-output', text: '回应' },
-    ])
-    assert.deepEqual(session.read({ afterIndex: 1 }), [])
+describe('Session 事件与消息类型', () => {
+  it('用事件类型区分运行记录、用户消息和插件扩展事件', () => {
+    const session = new Session({ id: 'session-1' })
+    const incoming = userMessage('第一句')
+
+    const turnStart = session.append('turn/start', { turn: 0 })
+    const userEvent = session.append('user/message', incoming)
+    const pluginEvent = session.append('plugin/note', { text: '插件自有事件' })
+    incoming.content[0] = { type: 'text', text: '调用方后来修改' }
+
+    assert.equal(turnStart.seq, 0)
+    assert.equal(turnStart.type, 'turn/start')
+    assert.equal(turnStart.data.turn, 0)
+    assert.equal(userEvent.seq, 1)
+    assert.equal(userEvent.type, 'user/message')
+    assert.equal(userEvent.data.role, 'user')
+    assert.equal(userEvent.data.content[0]?.type, 'text')
+    assert.deepEqual(userEvent.data.content[0], { type: 'text', text: '第一句' })
+    assert.equal(pluginEvent.type, 'plugin/note')
+    assert.equal(pluginEvent.data.text, '插件自有事件')
+
+    const events = session.read()
+    const messageEvents = events.filter((event) =>
+      event.type === 'user/message' || event.type === 'assistant/message' || event.type === 'tool/result',
+    )
+    assert.equal(messageEvents.length, 1)
   })
 
-  it('拒绝无效事件和读取参数，关闭后清空历史并拒绝读写', () => {
-    const session = new Session({ id: 'session-2' })
+  it('按追加顺序读取事件，支持游标和数量限制', () => {
+    const session = new Session({ id: 'session-2', createdAt: new Date('2026-01-01T00:00:00.000Z') })
+    session.append('turn/start', { turn: 0 })
+    session.append('user/message', userMessage('第一句'))
+    session.append('turn/end', { turn: 0, reason: { kind: 'completed' } })
+
+    assert.equal(session.id, 'session-2')
+    assert.equal(session.size, 3)
+    assert.deepEqual(session.read().map(({ type, seq }) => [type, seq]), [
+      ['turn/start', 0],
+      ['user/message', 1],
+      ['turn/end', 2],
+    ])
+    assert.deepEqual(session.read({ afterIndex: 0, limit: 1 }).map(({ type }) => type), ['user/message'])
+    assert.deepEqual(session.read({ afterIndex: 2 }), [])
+  })
+
+  it('拒绝无效读取参数，关闭后清空历史并拒绝读写', () => {
+    const session = new Session({ id: 'session-3' })
 
     assert.throws(() => new Session({ id: '  ' }), /ID 不能为空/)
-    assert.throws(() => session.append({ type: '  ' }), /事件类型不能为空/)
     assert.throws(() => session.read({ afterIndex: -2 }), /历史游标/)
     assert.throws(() => session.read({ limit: -1 }), /读取数量/)
 
-    session.append({ type: 'user-input', text: '临时记录' })
+    session.append('user/message', userMessage('临时记录'))
     session.close()
     session.close()
     assert.equal(session.size, 0)
     assert.throws(() => session.read(), /已关闭/)
-    assert.throws(() => session.append({ type: 'user-input' }), /已关闭/)
+    assert.throws(() => session.append('turn/start', { turn: 1 }), /已关闭/)
   })
 })
 
@@ -69,7 +108,7 @@ describe('Session Harness 插件', () => {
     assert.ok(secondSession)
     assert.equal(firstSession.id, 'session-agent-a')
     assert.notEqual(firstSession, secondSession)
-    firstSession.append({ type: 'user-input', text: '只属于 A' })
+    firstSession.append('user/message', userMessage('只属于 A'))
     assert.equal(secondSession.size, 0)
 
     await framework.manager.dispose('agent-a')
