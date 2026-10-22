@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
-import type { MessageId, UserMessage } from '@fly-novel/llm'
+import type { AssistantMessage, MessageId, SystemMessage, ToolCallId, ToolResultMessage, UserMessage } from '@fly-novel/llm'
 import { bootstrapAgents } from '../core/bootstrap.js'
 import type { AgentFramework } from '../core/bootstrap.js'
 import { Session, SessionManager } from '@fly-novel/session'
@@ -17,6 +17,34 @@ function userMessage(text: string): UserMessage {
     role: 'user',
     content: [{ type: 'text', text }],
     source: { kind: 'user' },
+  }
+}
+
+function assistantMessage(text: string): AssistantMessage {
+  return {
+    id: 'message-assistant-1' as MessageId,
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+    source: { kind: 'model', provider: 'test', model: 'test-model' },
+  }
+}
+
+function systemMessage(text: string): SystemMessage {
+  return {
+    id: 'message-system-1' as MessageId,
+    role: 'system',
+    content: [{ type: 'text', text }],
+    source: { kind: 'plugin', plugin: 'test', form: 'instructions' },
+  }
+}
+
+function toolResultMessage(): ToolResultMessage {
+  const callId = 'call-1' as ToolCallId
+  return {
+    id: 'message-tool-result-1' as MessageId,
+    role: 'user',
+    content: [{ type: 'tool-result', toolCallId: callId, content: [{ type: 'text', text: '工具结果' }] }],
+    source: { kind: 'tool', callId },
   }
 }
 
@@ -65,6 +93,42 @@ describe('Session 事件与消息类型', () => {
     assert.deepEqual(session.read({ afterIndex: 2 }), [])
   })
 
+  it('通过 Surface 按消息事件顺序导出模型上下文并忽略运行事件', () => {
+    const session = new Session({ id: 'session-context' })
+    const system = systemMessage('系统提示')
+    const user = userMessage('用户问题')
+    const assistant = assistantMessage('助手回复')
+    const toolResult = toolResultMessage()
+
+    session.append('turn/start', { turn: 0 })
+    session.append('system/message', { turn: 0, step: 0, message: system })
+    session.append('user/message', user)
+    session.append('tool/call', { turn: 0, step: 0, callId: 'call-1' as ToolCallId, name: 'lookup', arguments: '{}' })
+    session.append('assistant/message', { turn: 0, step: 0, message: assistant })
+    session.append('tool/result', { turn: 0, step: 1, message: toolResult })
+    session.append('turn/end', { turn: 0, reason: { kind: 'completed' } })
+
+    const firstProjection = session.deriveMessages()
+    assert.deepEqual(firstProjection, [system, user, assistant, toolResult])
+    assert.deepEqual(session.deriveMessages(), firstProjection)
+    assert.notEqual(session.deriveMessages(), firstProjection)
+
+    session.append('user/message', userMessage('下一轮问题'))
+    assert.equal(firstProjection.length, 4)
+    assert.equal(session.deriveMessages().length, 5)
+  })
+
+  it('Surface 不导出空助手消息', () => {
+    const session = new Session({ id: 'session-empty-assistant' })
+    session.append('assistant/message', {
+      turn: 0,
+      step: 0,
+      message: { ...assistantMessage(''), content: [] },
+    })
+
+    assert.deepEqual(session.deriveMessages(), [])
+  })
+
   it('拒绝无效读取参数，关闭后清空历史并拒绝读写', () => {
     const session = new Session({ id: 'session-3' })
 
@@ -77,6 +141,7 @@ describe('Session 事件与消息类型', () => {
     session.close()
     assert.equal(session.size, 0)
     assert.throws(() => session.read(), /已关闭/)
+    assert.throws(() => session.deriveMessages(), /已关闭/)
     assert.throws(() => session.append('turn/start', { turn: 1 }), /已关闭/)
   })
 })

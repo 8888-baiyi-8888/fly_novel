@@ -6,7 +6,9 @@
 
 `Session` 代表一个 Agent 会话，保存 Session ID、创建时间和按追加顺序排列的事件。ID 可由调用方提供，缺省时生成 UUID。`append(type, data)` 的事件类型限定为 `SessionEventMap` 的键，并由键推导对应负载；事件自动获得连续序号和写入时间。追加时会复制并深度冻结负载，避免调用方事后修改历史；`read()` 返回只读历史切片，支持排他游标 `afterIndex` 与数量限制 `limit`。关闭后清空内存事件并拒绝读写，重复关闭安全。
 
-`SessionEventMap` 按 DeepSeek Harness 的声明合并方式允许插件扩展。基础类型区分 `turn/start`、`step/start` 等运行事件，以及 `user/message`、`assistant/message`、`tool/result` 等消息事件；消息负载复用 `@fly-novel/llm` 类型。助手消息内容中的 `tool-call` 块保留模型工具调用，独立的 `tool/call` 和 `tool/result` 事件记录执行过程。`SessionMessageEvent` 标明可参与后续模型消息派生的事件类别，本包当前不执行派生。会话数据不写入文件或数据库，进程重启后不恢复。
+`SessionEventMap` 按 DeepSeek Harness 的声明合并方式允许插件扩展。基础类型区分 `turn/start`、`step/start` 等运行事件，以及 `user/message`、`assistant/message`、`tool/result` 等消息事件；消息负载复用 `@fly-novel/llm` 类型。助手消息内容中的 `tool-call` 块保留模型工具调用，独立的 `tool/call` 和 `tool/result` 事件记录执行过程。
+
+`Session` 内部的 Surface 按顺序保存消息事件在事件日志中的序号。`deriveMessages()` 沿 Surface 导出 system、user、assistant 和 tool result 消息；turn/step 等运行事件及独立的 `tool/call` 记录不进入模型上下文，空助手消息也会被跳过。每次调用返回新的消息数组，历史事件中的消息快照保持不可变。当前 Surface 仅支持追加；不执行历史替换、检索或压缩。会话数据不写入文件或数据库，进程重启后不恢复。
 
 ## Session Manager
 
@@ -26,5 +28,6 @@ session.append('user/message', {
   content: [{ type: 'text', text: '继续这一幕' }],
   source: { kind: 'user' },
 })
-const history = session.read()
+const events = session.read()
+const modelHistory = session.deriveMessages()
 ```

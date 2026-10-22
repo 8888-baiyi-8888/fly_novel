@@ -1,6 +1,8 @@
 import { deepFreeze } from '@fly-novel/util'
 import { randomUUID } from 'node:crypto'
-import type { SessionEvent, SessionEventMap, SessionEventType } from './types.js'
+import type { Message } from '@fly-novel/llm'
+import { SessionSurface } from './surface.js'
+import type { SessionEvent, SessionEventMap, SessionEventType, SessionMessageEventType } from './types.js'
 export type { SessionEvent, SessionEventMap, SessionEventType } from './types.js'
 
 export interface SessionOptions {
@@ -15,6 +17,7 @@ export class Session {
   readonly id: string
   readonly createdAt: Date
   private readonly events: SessionEvent[] = []
+  private readonly surface = new SessionSurface()
   private closed = false
 
   constructor(options: SessionOptions) {
@@ -38,6 +41,7 @@ export class Session {
       data,
     })) as SessionEvent<T>
     this.events.push(event as SessionEvent)
+    if (isMessageEvent(type)) this.surface.append(event.seq)
     return event
   }
 
@@ -54,6 +58,27 @@ export class Session {
     return this.events.slice(afterIndex + 1, afterIndex + 1 + limit)
   }
 
+  /** 按消息事件写入顺序导出模型历史；运行事件和工具调用执行记录不进入消息列表。 */
+  deriveMessages(): Message[] {
+    this.assertOpen()
+    return this.surface.read().flatMap<Message>((seq) => {
+      const event = this.events[seq]
+      if (!event) return []
+      switch (event.type) {
+        case 'system/message':
+        case 'assistant/message':
+        case 'tool/result':
+          return event.data.message.role === 'assistant' && event.data.message.content.length === 0
+            ? []
+            : [event.data.message]
+        case 'user/message':
+          return [event.data]
+        default:
+          return []
+      }
+    })
+  }
+
   /** 返回当前事件数。 */
   get size(): number {
     return this.events.length
@@ -64,9 +89,17 @@ export class Session {
     if (this.closed) return
     this.closed = true
     this.events.length = 0
+    this.surface.clear()
   }
 
   private assertOpen(): void {
     if (this.closed) throw new Error(`Session "${this.id}" 已关闭`)
   }
+}
+
+function isMessageEvent(type: SessionEventType): type is SessionMessageEventType {
+  return type === 'system/message'
+    || type === 'user/message'
+    || type === 'assistant/message'
+    || type === 'tool/result'
 }
