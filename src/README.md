@@ -10,7 +10,6 @@
 | [app/](app/README.md) | 应用入口、模型配置组装、凭据命令与 Agent 示例。 |
 | [config/](config/README.md) | 固定应用数据路径、配置校验与本地凭据加密存储。 |
 | [llm/](llm/README.md) | 大语言模型调用接口与提供商适配。 |
-| [session/](session/README.md) | 通用内存 Session 插件的独立工作区包；目前只有包骨架。 |
 | [util/](util/README.md) | 跨模块共用的基础工具。 |
 | [workflow/](workflow/README.md) | 章节级与小说级 LangGraph 工作流，以及共用节点、Agent 和持久化契约。 |
 | [novel-flow/](novel-flow/README.md) | 建书流程的 Agent、数据结构和工作区输出。 |

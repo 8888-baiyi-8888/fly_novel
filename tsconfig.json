@@ -21,7 +21,7 @@
         "./src/llm/index.ts"
       ],
       "@fly-novel/session": [
-        "./src/session/index.ts"
+        "./src/agents/plugins/session/index.ts"
       ],
       "@fly-novel/util": [
         "./src/util/index.ts"
