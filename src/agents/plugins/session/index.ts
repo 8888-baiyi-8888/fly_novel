@@ -1,5 +1,6 @@
 export { Session } from './session.js'
 export type { SessionOptions } from './session.js'
+export { SessionManager } from './session-manager.js'
 export type {
   SessionEvent,
   SessionEventMap,

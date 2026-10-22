@@ -3,7 +3,7 @@ import { afterEach, describe, it } from 'node:test'
 import type { MessageId, UserMessage } from '@fly-novel/llm'
 import { bootstrapAgents } from '../core/bootstrap.js'
 import type { AgentFramework } from '../core/bootstrap.js'
-import { Session } from '@fly-novel/session'
+import { Session, SessionManager } from '@fly-novel/session'
 
 declare module '@fly-novel/session' {
   interface SessionEventMap {
@@ -89,31 +89,55 @@ describe('Session Harness 插件', () => {
     framework = undefined
   })
 
-  it('通过 Preset 装配独立 Session，并在 Agent 销毁时释放历史', async () => {
+  it('创建、查询、列举和关闭多个 Session', () => {
+    const sessions = new SessionManager()
+    const first = sessions.create('session-a')
+    const second = sessions.create('session-b')
+
+    assert.equal(sessions.get('session-a'), first)
+    assert.deepEqual(sessions.list(), [first, second])
+    assert.throws(() => sessions.create('session-a'), /已存在/)
+    assert.equal(sessions.close('missing'), false)
+    assert.equal(sessions.close(' session-a '), true)
+    assert.equal(sessions.get('session-a'), undefined)
+    assert.deepEqual(sessions.list(), [second])
+    assert.equal(first.size, 0)
+    assert.throws(() => first.read(), /已关闭/)
+
+    sessions.closeAll()
+    sessions.closeAll()
+    assert.deepEqual(sessions.list(), [])
+    assert.throws(() => sessions.create(), /Manager 已关闭/)
+  })
+
+  it('通过 Preset 装配 Agent 隔离的 Session Manager，并在 Agent 销毁时关闭所有会话', async () => {
     framework = await bootstrapAgents()
     assert.ok(framework.plugins.get('session'))
     framework.presets.register({
       id: 'session-test', version: '1', role: 'character',
       plugins: [
         { pluginId: 'mock-loop' },
-        { pluginId: 'session', config: { sessionId: 'session-agent-a' } },
+        { pluginId: 'session' },
       ],
     })
 
     const first = await framework.manager.create({ id: 'agent-a', presetId: 'session-test' })
     const second = await framework.manager.create({ id: 'agent-b', presetId: 'session-test' })
-    const firstSession = first.context.get('session')
-    const secondSession = second.context.get('session')
-    assert.ok(firstSession)
-    assert.ok(secondSession)
-    assert.equal(firstSession.id, 'session-agent-a')
-    assert.notEqual(firstSession, secondSession)
+    const firstSessions = first.context.get('sessions')
+    const secondSessions = second.context.get('sessions')
+    assert.ok(firstSessions)
+    assert.ok(secondSessions)
+    assert.notEqual(firstSessions, secondSessions)
+    const firstSession = firstSessions.create('session-agent-a')
+    const secondSession = secondSessions.create('session-agent-b')
     firstSession.append('user/message', userMessage('只属于 A'))
     assert.equal(secondSession.size, 0)
 
     await framework.manager.dispose('agent-a')
-    assert.equal(first.context.get('session'), undefined)
+    assert.equal(first.context.get('sessions'), undefined)
     assert.equal(firstSession.size, 0)
     assert.equal(secondSession.size, 0)
+    assert.deepEqual(firstSessions.list(), [])
+    assert.equal(secondSessions.get('session-agent-b'), secondSession)
   })
 })

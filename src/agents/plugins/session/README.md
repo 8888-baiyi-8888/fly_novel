@@ -8,13 +8,18 @@
 
 `SessionEventMap` 按 DeepSeek Harness 的声明合并方式允许插件扩展。基础类型区分 `turn/start`、`step/start` 等运行事件，以及 `user/message`、`assistant/message`、`tool/result` 等消息事件；消息负载复用 `@fly-novel/llm` 类型。助手消息内容中的 `tool-call` 块保留模型工具调用，独立的 `tool/call` 和 `tool/result` 事件记录执行过程。`SessionMessageEvent` 标明可参与后续模型消息派生的事件类别，本包当前不执行派生。会话数据不写入文件或数据库，进程重启后不恢复。
 
+## Session Manager
+
+`SessionManager` 提供 `create(id?)`、`get(id)`、`list()` 和 `close(id)`。省略 ID 时由 Session 生成 UUID；重复 ID 在同一 Manager 中会报错。`close(id)` 移除并关闭指定 Session，`closeAll()` 幂等关闭 Manager 内所有会话。Manager 关闭后拒绝继续创建。
+
 ## Harness 插件
 
-`sessionPluginDefinition` 使用项目 `AgentPluginDefinition` 注册契约，Cordis 插件通过 `provide: 'session'` 在 Agent Context 提供 `Session`。插件配置可传 `sessionId`；默认生成随机 UUID。每个 Agent 实例创建自己的 Session，Cordis 插件作用域销毁时关闭并释放历史。插件定义在 Harness 启动时注册，Preset 通过插件 ID `session` 选择装配。
+`sessionPluginDefinition` 使用项目 `AgentPluginDefinition` 注册契约，Cordis 插件通过 `provide: 'sessions'` 在 Agent Context 提供 `SessionManager`，使用方式与官方 `ctx.sessions` 对应。Harness 为每个 Agent 隔离该服务；Manager 的所有权属于装配它的 Agent 插件作用域，Agent 销毁时自动关闭该 Agent 的全部 Session。Session ID 在 Manager 内唯一，Agent ID 通过 Manager 所属的 Agent Context 关联，不重复存入 Session。
 
 ```ts
 const agent = await manager.create({ id: 'writer-1', presetId: 'writer-preset' })
-const session = agent.context.get('session')
+const sessions = agent.context.get('sessions')
+const session = sessions.create('writer-conversation-1')
 session.append('user/message', {
   id: messageId,
   role: 'user',
@@ -23,5 +28,3 @@ session.append('user/message', {
 })
 const history = session.read()
 ```
-
-多个 Session 的创建和检索由后续 Manager 负责。
