@@ -16,13 +16,26 @@
 
 ### 开发顺序
 
-1. **Session 插件（`src/agents/plugins/`）**：定义运行时消息与事件的记录、读取和历史派生方式，使后续模型请求能够从同一份 Session 历史组装输入。先完成内存中的运行闭环；持久化格式与恢复机制在确定需求后单独设计。
+1. **Session 插件（`src/agents/plugins/`）**：对照官方 [`@deepseek-ai/dsh-session`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/core/session/README.md)，建立内存中的会话、消息与事件记录、读取及历史派生能力，使后续模型请求能够从同一份 Session 历史组装输入。这一步只管理进程内的 Session，不负责写入存储介质或在进程重启后恢复会话。
 2. **LLM 服务接入**：复用现有的 [LLM 模块](../src/llm/README.md)。应用入口读取配置和凭据，在 Harness 根 Context 提供共享的 LLM 服务并注册模型适配器；各 Agent 的 Loop 使用该服务，取消与错误结果按现有 LLM 契约传播。需要插件封装时，只在 `src/agents/plugins/` 增加装配层，不复制 LLM 实现。
 3. **系统提示词插件（`src/agents/plugins/`）**：提供有序提示词段的注册和组装能力。角色与导演通过各自目录中的插件贡献提示词，模型调用使用组装后的结果。
 4. **真实 Agent Loop 插件（`src/agents/plugins/loop/`）**：替换回显输入的 mock loop，先完成无需工具的一轮调用：读取 Session、组装提示词、调用 LLM、记录结果并返回。该步骤完成后，至少一个 Harness Agent 能通过现有 Preset 运行真实模型。
 5. **工具插件（`src/agents/plugins/`）**：建立工具注册、可见范围和执行结果返回机制，再接入一个小说资料只读工具；扩展 Loop 处理模型发起的工具调用。工具提供的数据遵守调用方确定的角色可见范围。
 6. **角色专有插件与组合**：逐个开发角色、导演等所需的提示词、资料查询和其他专有能力，在各自现有 Preset 中按插件 ID 选择；Session、Loop 和工具基础插件按需复用，LLM 服务由 Harness 根 Context 共享。
-7. **按需求扩展会话能力**：出现跨进程恢复、长历史检索或上下文超限的具体需求时，分别设计持久化、历史检索和上下文压缩插件。对话历史归 Session；角色经历与认知属于小说领域数据，不直接以实例内的 mock memory 代替。
+7. **按需求扩展会话能力**：需要进程重启后继续使用会话时，另建 Session 持久化插件，将第 1 步的会话数据保存到存储介质，并在启动时读取和恢复；对照官方 [`@deepseek-ai/dsh-session-persistence`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence/README.md) 定义持久化服务契约，以及 [`@deepseek-ai/dsh-session-persistence-jsonl`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence-jsonl/README.md) 的具体存储实现。并发写入、异常恢复等生命周期问题在出现实际需求时一并处理；长历史检索和上下文压缩也分别按需设计为独立插件。对话历史归 Session；角色经历与认知属于小说领域数据，不直接以实例内的 mock memory 代替。
+
+#### Session 插件开发
+
+按下面的顺序学习官方 Session 的职责，并在本项目的 Session 插件中逐步实现；第 1 至 4 步属于上方 Harness 开发顺序的第 1 项，第 5 至 6 步留到第 7 项按需求开展。
+
+1. **Session 基础类**：建立内存会话，支持创建会话、追加记录和按顺序读取历史。先明确一份 Session 保存什么，以及 Agent 如何取得它。
+2. **消息与事件类型**：区分发送者、消息内容和运行事件，容纳后续工具调用及结果记录；明确哪些记录属于 Session 历史，以及如何从事件得到消息视图。
+3. **Session Manager**：统一管理多个内存 Session，提供创建、获取和关闭入口，并明确会话与 Agent 实例的归属关系。
+4. **模型上下文导出**：根据指定 Agent 的身份与可见范围，从 Session 历史整理模型调用所需的消息；此步只派生输入，不引入历史检索或压缩。
+5. **Session 持久化（上方开发顺序第 7 项）**：出现跨进程恢复需求时，通过独立持久化插件保存和读取 Session，并设计存储格式、版本及恢复方式；不把文件读写放进基础 Session 插件。
+6. **生命周期完善（上方开发顺序第 7 项）**：在实际出现并发写入、异常恢复等需求时，补全对应的顺序约束、失败处理和资源清理；基础的关闭与资源释放在第 3 步完成。
+
+`5和6，在deepseek harness中，属于session下游插件的内容。综合多方考虑，我这里先写明这两点，但是不进行相关开发。`
 
 ### 本阶段完成标准
 
