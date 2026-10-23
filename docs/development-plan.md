@@ -17,7 +17,7 @@
 ### 开发顺序
 
 1. **Session 插件（`src/agents/plugins/session/`，包名 `@fly-novel/session`）**：对照官方 [`@deepseek-ai/dsh-session`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/core/session/README.md)，建立内存中的会话、消息与事件记录、读取及历史派生能力，使后续模型请求能够从同一份 Session 历史组装输入。这一步只管理进程内的 Session，不负责写入存储介质或在进程重启后恢复会话。
-2. **LLM 服务接入**：复用现有的 [LLM 模块](../src/llm/README.md)。应用入口读取配置和凭据，在 Harness 根 Context 提供共享的 LLM 服务并注册模型适配器；各 Agent 的 Loop 使用该服务，取消与错误结果按现有 LLM 契约传播。需要插件封装时，只在 `src/agents/plugins/` 增加装配层，不复制 LLM 实现。
+2. **LLM 服务接入**：复用现有的 [LLM 模块](../src/llm/README.md)，仅在 src/agents/plugins/llm/ 实现 Cordis 装配插件，不复制 LLM 调用逻辑。插件定义加入现有注册表；需要 LLM 的 Agent 在各自的 Preset 中按插件 ID 选择，由现有 Agent 创建配置向该实例传入适配器。应用入口负责读取模型配置和凭据、创建适配器；插件在该 Agent 的作用域内注册模型路由，并随 Agent 销毁注销。后续真实 Loop 使用本实例的 LLM 服务，取消与错误结果遵循现有 LLM 契约。LLM 不在 Harness 根 Context 注册，不增加公共插件绑定、专用启动入口或专用清理入口。
 3. **系统提示词插件（`src/agents/plugins/`）**：提供有序提示词段的注册和组装能力。角色与导演通过各自目录中的插件贡献提示词，模型调用使用组装后的结果。
 4. **真实 Agent Loop 插件（`src/agents/plugins/loop/`）**：替换回显输入的 mock loop，先完成无需工具的一轮调用：读取 Session、组装提示词、调用 LLM、记录结果并返回。该步骤完成后，至少一个 Harness Agent 能通过现有 Preset 运行真实模型。
 5. **工具插件（`src/agents/plugins/`）**：建立工具注册、可见范围和执行结果返回机制，再接入一个小说资料只读工具；扩展 Loop 处理模型发起的工具调用。工具提供的数据遵守调用方确定的角色可见范围。
