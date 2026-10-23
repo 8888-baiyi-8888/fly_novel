@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
+    "@fly-novel/llm": "workspace:*",
     "@fly-novel/session": "workspace:*",
     "@langchain/core": "^1.2.12",
     "@langchain/langgraph": "^1.4.18",

@@ -20,11 +20,13 @@
 .agents/           Agent 决策记录目录，存放非简单变更的重要工程决定
 .fly-novel/        模型配置样例与本机配置，仅样例提交 Git（见 src/config/README.md）
 docs/              开发文档目录，存放架构、模块设计、开发流程、决策背景、接口约定和排障记录（见 docs/AGENTS.md）
+docs/cookbook/     可重复执行的本地调试与验证步骤
 src/               源码目录，包含应用组装、LLM 调用、Agent 运行框架、工作流引擎和小说业务（见 src/README.md）
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
-src/agents/        写作 Agent 工作区包；core/ 定义 Cordis Harness 实例与注册契约，runtime/ 管理装配和生命周期，plugins/ 提供 mock 服务；保留各业务 Agent 实现
+src/agents/        写作 Agent 工作区包；core/ 定义 Cordis Harness 实例与注册契约，runtime/ 管理装配和生命周期，plugins/ 提供基础服务插件；保留各业务 Agent 实现
+src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理
 src/agents/plugins/session/ `@fly-novel/session` 独立工作区包；当前只有包骨架与开发说明，尚未实现或注册插件
 src/novel/types/    小说领域共享数据模型（文档 §3：BookConfig/Beat/Fact/HookRecord/Thread/角色卡/ChapterState）与章节级运行时结构（Dispatch/HookContext/SceneSheet/RuntimeDelta 等），公共入口 types/index.ts；测试在 src/novel/tests/
 src/novel/gates/    小说领域确定性校验闸门（纯函数，先于落盘执行；已实现 §5.3 Dispatch 校验闸门 dispatch-gate.ts、§11.2 六步校验链 apply-delta-gate.ts），测试在 src/novel/tests/

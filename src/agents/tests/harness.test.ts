@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
+import { LlmAdapter, type GenerateOptions, type MessageId, type StreamChunk } from '@fly-novel/llm'
+import { loadConfiguredAdapter } from '../../app/call-llm.js'
 import { bootstrapAgents } from '../core/bootstrap.js'
 import type { AgentFramework } from '../core/bootstrap.js'
+
+async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[]> {
+  const chunks: StreamChunk[] = []
+  for await (const chunk of stream) chunks.push(chunk)
+  return chunks
+}
 
 describe('Cordis Agent Harness', () => {
   let framework: AgentFramework | undefined
@@ -14,7 +22,7 @@ describe('Cordis Agent Harness', () => {
 
   it('通过外部注册的 Preset 装配角色和导演 Agent', async () => {
     framework = await bootstrapAgents()
-    assert.deepEqual(framework.plugins.list().map((plugin) => plugin.id), ['mock-loop', 'mock-memory', 'session', 'character-example-memory'])
+    assert.deepEqual(framework.plugins.list().map((plugin) => plugin.id), ['mock-loop', 'mock-memory', 'llm', 'session', 'character-example-memory'])
     assert.deepEqual(framework.presets.list().map((preset) => preset.id), ['character-agent', 'director-agent'])
 
     const character = await framework.manager.create({
@@ -32,9 +40,124 @@ describe('Cordis Agent Harness', () => {
     assert.equal(character.info.parameters.novelId, 'novel-001')
     assert.equal(character.info.parameters.temperature, 0.8)
     assert.equal(director.info.identity.role, 'director')
+    assert.equal(character.context.get('llm'), undefined)
+    assert.equal(director.context.get('llm'), undefined)
 
     assert.deepEqual(await character.run({ prompt: '你好' }), { content: '[角色 Agent] 你好' })
     assert.deepEqual(await director.run({ prompt: '你好' }), { content: '[导演 Agent] 你好' })
+  })
+
+  it('LLM 插件由 Preset 选择，实例路由隔离并随 Agent 销毁', async () => {
+    class Adapter extends LlmAdapter {
+      override async *stream(): AsyncIterable<StreamChunk> {
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+    framework = await bootstrapAgents()
+    framework.presets.register({
+      id: 'llm-debug', version: '1', role: 'character',
+      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'llm' }],
+    })
+
+    const first = await framework.manager.create({
+      id: 'first', presetId: 'llm-debug',
+      pluginConfigs: { llm: { adapters: [{ providers: ['first'], adapter: new Adapter() }] } },
+    })
+    const second = await framework.manager.create({
+      id: 'second', presetId: 'llm-debug',
+      pluginConfigs: { llm: { adapters: [{ providers: ['second'], adapter: new Adapter() }] } },
+    })
+    const firstLlm = first.context.get('llm')
+    const secondLlm = second.context.get('llm')
+    assert.ok(firstLlm)
+    assert.ok(secondLlm)
+    assert.notEqual(firstLlm, secondLlm)
+    assert.equal(framework.context.get('llm'), undefined)
+
+    const firstRequest: GenerateOptions = { provider: 'first', model: 'model', messages: [] }
+    const secondRequest: GenerateOptions = { provider: 'second', model: 'model', messages: [] }
+    const finish: StreamChunk = { type: 'finish', reason: { kind: 'stop' } }
+    assert.deepEqual(await collect(firstLlm.stream(firstRequest)), [finish])
+    assert.deepEqual(await collect(secondLlm.stream(secondRequest)), [finish])
+    const missing = await collect(firstLlm.stream(secondRequest))
+    assert.ok(missing[0]?.type === 'finish' && missing[0].reason.kind === 'error')
+    assert.equal(missing[0].reason.failure.code, 'NO_ADAPTER')
+
+    await framework.manager.dispose('first')
+    assert.equal(first.context.get('llm'), undefined)
+    const removed = await collect(firstLlm.stream(firstRequest))
+    assert.ok(removed[0]?.type === 'finish' && removed[0].reason.kind === 'error')
+    assert.equal(removed[0].reason.failure.code, 'NO_ADAPTER')
+    assert.deepEqual(await collect(secondLlm.stream(secondRequest)), [finish])
+  })
+
+  it('LLM 插件调用真实模型', { skip: process.env.FLY_NOVEL_REAL_LLM_TEST !== '1' }, async () => {
+    const { provider, model, adapter } = await loadConfiguredAdapter('deepseek')
+    framework = await bootstrapAgents()
+    framework.presets.register({
+      id: 'llm-real', version: '1', role: 'character',
+      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'llm' }],
+    })
+    const agent = await framework.manager.create({
+      id: 'llm-real', presetId: 'llm-real',
+      pluginConfigs: { llm: { adapters: [{ providers: [provider], adapter }] } },
+    })
+    const llm = agent.context.get('llm')
+    assert.ok(llm)
+    const chunks = await collect(llm.stream({
+      provider, model,
+      messages: [{
+        id: 'llm-real-test' as MessageId,
+        role: 'user',
+        source: { kind: 'user' },
+        content: [{ type: 'text', text: '请只回答：今天日期' }],
+      }],
+    }))
+    const response = chunks.flatMap(chunk => chunk.type === 'block-end' && chunk.block.type === 'text' ? [chunk.block.text] : []).join('')
+    const finish = chunks.find(chunk => chunk.type === 'finish')
+    assert.ok(finish?.type === 'finish')
+    assert.equal(finish.reason.kind, 'stop')
+    assert.ok(response.trim(), '模型应返回非空文本')
+    console.log('LLM 插件真实响应：', response)
+  })
+
+  it('LLM 插件拒绝空配置和无效路由，失败后 Agent ID 可重新创建', async () => {
+    class Adapter extends LlmAdapter {
+      override async *stream(): AsyncIterable<StreamChunk> {
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+    class BadAdapter extends Adapter {
+      override providerInfo() {
+        return { id: 'wrong', name: '错误供应商' }
+      }
+    }
+    framework = await bootstrapAgents()
+    framework.presets.register({
+      id: 'llm-debug', version: '1', role: 'character',
+      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'llm' }],
+    })
+    await assert.rejects(
+      framework.manager.create({ id: 'retry', presetId: 'llm-debug', pluginConfigs: { llm: { adapters: [] } } }),
+      /至少一个适配器配置/,
+    )
+    await assert.rejects(
+      framework.manager.create({
+        id: 'retry', presetId: 'llm-debug',
+        pluginConfigs: { llm: { adapters: [
+          { providers: ['first'], adapter: new Adapter() },
+          { providers: ['second'], adapter: new BadAdapter() },
+        ] } },
+      }),
+      /无效的供应商信息/,
+    )
+    assert.equal(framework.manager.list().length, 0)
+    assert.equal(framework.context.get('llm'), undefined)
+    const agent = await framework.manager.create({
+      id: 'retry', presetId: 'llm-debug',
+      pluginConfigs: { llm: { adapters: [{ providers: ['first'], adapter: new Adapter() }] } },
+    })
+    assert.ok(agent.context.get('llm'))
   })
 
   it('每个 Agent 的插件服务和状态独立，销毁后服务被移除', async () => {
