@@ -66,7 +66,8 @@
 4. **动态能力**：逐步增加动态文本、变量管理与插值，理解组装时求值和渲染时处理的区别。
 5. **作用域与覆盖**：参考官方设计，逐步加入作用域隔离、全局段遮蔽及 `complete` 替换能力。
 6. **Cordis 接入**：将 SystemPrompt 接入现有插件注册表，通过 Preset 装配，验证不同 Agent 的服务隔离及插件生命周期。
-7. **其他官方能力**：了解动态 Runtime Context、工具 Schema 贡献与排序、Assemble Waterfall 等机制。属于当前通用模块的能力按需实现，依赖其他子系统的部分留到后续集成阶段。
+7. **SystemPrompt 独立包**：将 `src/agents/plugins/system-prompt/` 建立为 `@fly-novel/system-prompt` 工作区包，形成独立的包清单、编译配置和公共导出入口，使提示词对象可脱离 `@fly-novel/agents` 单独构建和使用。整理 SystemPrompt 核心能力与 Harness 插件注册适配层的依赖边界，避免 SystemPrompt 核心反向依赖 Agent 包；同步 workspace、包依赖、导入路径及构建配置。Cordis 插件可由该包提供，但 Harness 注册表和 Preset 仍由 `@fly-novel/agents` 管理。验收独立包构建、公共入口导入、Agents 集成构建及现有行为测试。
+8. **其他官方能力（其他插件开发后，再进行）**：了解动态 Runtime Context、工具 Schema 贡献与排序、Assemble Waterfall 等机制。属于当前通用模块的能力按需实现，依赖其他子系统的部分留到后续集成阶段。
 
 **开发要求：**
 
