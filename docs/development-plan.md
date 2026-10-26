@@ -1,6 +1,6 @@
 # 长期开发计划
 
-本计划记录已确定的开发顺序。后续阶段在开始开发时再确定详细范围与验收标准。
+本计划记录已确定的开发顺序。Agent Loop 的详细实施流程见下文；其他阶段在开始开发时再确定详细范围与验收标准。
 
 1. 开发 Agent Harness。
 2. 更新现有的小说级工作流。
@@ -79,6 +79,41 @@
 
 最终实现一个符合 DSH 设计思路、可独立使用并能接入现有 Harness 的 SystemPrompt 插件。
 
+#### 真实 Agent Loop 插件
+
+**目标**：参考 DeepSeek Harness 的 Agent Loop 设计，将现有只回显输入的 mock loop 替换为能够管理完整 Agent Turn 的真实 Loop 插件。
+
+Agent Loop 作为 Harness 的执行协调层，负责 Turn 生命周期、Step 执行控制、上下文组织、LLM 调用协调、Session 事件记录及最终结果返回，并为后续工具调用循环预留扩展能力。
+
+第一阶段实现最小可运行闭环：一个 Turn 只执行一个 Step，该 Step 完成一次不带工具的模型请求。通过当前 Agent 实例的 Session、SystemPrompt 和 LLM 服务完成上下文组装、模型调用和结果记录。
+
+后续在不改变 Turn 基本执行契约的前提下，逐步扩展为支持多个 Step、工具调用和完整 ReAct 循环的 Agent Loop。工具注册、工具权限及工具执行能力仍由后续独立插件开发阶段负责。
+
+**开发主线：**
+
+1. **官方 Loop 职责与执行流程**：阅读 DeepSeek Harness 官方 Agent Loop 的设计与实现，明确 Turn、Step、LLM Call 的概念和关系。结合当前 `AgentLoop`、`AgentInstance.run()`、Preset 和 mock loop，梳理一次 `agent.run({ prompt })` 的完整调用路径。本步只理解职责和现有接口，不修改代码。
+
+2. **Turn 执行契约**：确定 Loop 的输入、输出及 Turn 的生命周期，包括开始、执行、完成、失败和取消。明确 Turn 与 Step 的关系，以及 Loop 如何管理执行过程。核对现有 `AgentLoopInput`、`AgentLoopResult` 等契约，优先复用已有类型，不提前建立复杂的状态管理框架。
+
+3. **独立 Loop 包与 Cordis 插件注册**：参考现有 Harness 插件的组织方式，为真实 Loop 建立独立的模块或工作区包，明确入口文件、公共导出、依赖及构建配置。实现 Cordis 插件注册，将 `agentLoop` 服务提供给当前 Agent Context，声明对 Session、SystemPrompt 和 LLM 服务的依赖。通过最小示例验证插件能够注册、获取服务及正确卸载，不执行真实模型请求。
+
+4. **Turn 与 Step 最小执行闭环**：在真实 Loop 中实现最小 Turn 执行流程，一个 Turn 只执行一个 Step，先使用固定结果模拟 Step 执行。通过现有 Agent 和 Preset 完成 `agent.run()` → Loop → Turn → Step → Result 的实际调用，验证插件装配及结果返回，并保留 mock loop 的切换能力。
+
+5. **LLM 服务接入与模型调用**：让 Step 通过当前 Agent Context 的 LLM 服务完成一次无工具模型请求。确定模型选择、请求消息及结果处理方式，通过固定模型适配器验证模型调用、路由和返回结果，并区分成功响应与 LLM 失败结果。
+
+6. **Session 接入与多轮对话**：通过 Session 获取历史消息，记录 Turn 开始、结束、用户输入和助手回复。明确成功、失败及取消时的最小事件规则，避免失败轮次产生伪成功消息。验证同一 Agent 连续调用能够使用前轮历史，不同 Agent 的 Session 相互隔离。
+
+7. **SystemPrompt 接入与上下文组装**：通过已有 `assemble()` / `renderPrompt()` 获取动态系统提示词，将系统提示词、Session 历史和当前用户输入统一组装为模型请求。明确消息顺序、系统提示词快照及其与 Session 历史的关系，避免重复拼接或污染上下文。
+
+8. **Turn 生命周期与执行控制**：完善 Turn 的执行状态、终止条件、错误传播、取消和资源清理。明确同一 Agent 并发运行的行为及 Agent 销毁后的资源释放。保持 Step 执行结构可扩展，但暂不引入工具循环、自动重试、复杂调度器或历史压缩。
+
+9. **完整集成与端到端验收**：通过现有 Preset 装配真实 Loop、Session、SystemPrompt 和 LLM 插件，验证 `agent.run()` 到 Turn 执行、模型调用、Session 记录及最终结果返回的完整流程。检查独立包的构建、导出、Cordis 注册、依赖解析与插件卸载行为。固定模型适配器作为常规测试方式；本地配置可用时，再使用一个真实模型验证。保留 mock loop，并更新必要文档与 Agent Note。
+
+**开发要求：**
+
+每一步沿用学习型开发方式：先核对官方对应实现，说明该步解决的问题、最简单的使用示例、输入输出及预期行为；确认后实现最小功能并实际验证；最后对照官方实现解释异同，完成后停止，等待下一步指示。
+
+整个开发过程以 **Turn 为核心、Step 为执行单元、LLM Call 为具体模型请求**。第一版只支持一个 Turn 执行一个无工具 Step，后续逐步扩展为多 Step 和工具调用循环，不提前开发尚未使用的抽象与机制。
 ### 本阶段完成标准
 
 - 至少一个 Agent 通过现有 Preset 完成真实模型调用，Session 可提供该调用所需的历史并记录结果。
