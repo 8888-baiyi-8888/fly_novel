@@ -8,7 +8,7 @@
 
 - `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
-- `plugins/`：Harness 使用的 mock loop、memory 与 LLM 服务插件；各已实现模块导出注册定义，`plugins/index.ts` 汇总内置定义。通用 Session 插件位于此目录下的独立 [`@fly-novel/session`](plugins/session/README.md) 包，注册方式相同。
+- `plugins/`：Harness 使用的 mock loop、memory、LLM 与 SystemPrompt 服务插件；各已实现模块导出注册定义，`plugins/index.ts` 汇总内置定义。通用 Session 插件位于此目录下的独立 [`@fly-novel/session`](plugins/session/README.md) 包，注册方式相同。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `tests/`：按包运行的自动化测试。
 
@@ -19,6 +19,8 @@
 `await bootstrapAgents()` 创建 Cordis 根 Context、插件注册表、Preset 注册表、工厂和 Manager，遍历 `plugins/index.ts` 汇总的内置定义注册插件，并注册角色与导演 Preset。新增内置插件时在所属模块导出注册定义，再加入汇总列表；各 Agent 的 Preset 通过插件 ID 选择所需插件。`manager.create({ id, presetId })` 创建 Agent handle，并要求 Preset 装配提供 `agentLoop` 的插件。插件按 Preset 顺序装配，Cordis 按插件的 `inject` 声明安排启动。工厂依据插件的 `provide` 元数据在每个 Agent 的 Context 中隔离服务。每个 Agent 持有一个 Cordis 父插件作用域；`agent.run()` 将输入交给该实例的 `agentLoop` 服务，memory 可通过 `agent.context.get('memory')` 单独访问。`manager.dispose(id)` 和 `manager.disposeAll()` 会等待作用域销毁；失败的初始化不会进入 Manager。
 
 `llmPluginDefinition` 已加入内置插件注册表。需要模型服务的 Preset 声明 `{ pluginId: 'llm' }`；应用创建实例时通过 `pluginConfigs.llm` 提供 `{ adapters: [{ providers: ['provider-id'], adapter }] }`。插件要求至少一条适配器路由，在该 Agent 的 Context 中提供 `llm` 服务，并随插件作用域注销路由。配置和凭据由应用入口读取，插件只接收已创建的适配器。当前角色与导演的 mock Preset 不装配 LLM，mock loop 仍只回显输入。
+
+`systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。通用对象与渲染接口也可直接从 `@fly-novel/agents` 导入。
 
 逐步检查注册、装配、路由隔离和清理时，使用[LLM 插件调试步骤](../../docs/cookbook/llm-plugin-debug.md)。
 

@@ -4,6 +4,7 @@ import { mockLoopPluginDefinition } from './loop/index.js'
 import { mockMemoryPluginDefinition } from './memory/index.js'
 import { llmPluginDefinition } from './llm/index.js'
 import { sessionPluginDefinition } from '@fly-novel/session'
+import { systemPromptPluginDefinition } from './system-prompt/index.js'
 
 /** 启动时可用的内置插件定义；具体 Agent 由各自 Preset 选择。 */
 export const builtInPlugins: AgentPluginDefinition[] = [
@@ -11,5 +12,6 @@ export const builtInPlugins: AgentPluginDefinition[] = [
   mockMemoryPluginDefinition,
   llmPluginDefinition,
   sessionPluginDefinition,
+  systemPromptPluginDefinition,
   ...characterPluginDefinitions,
 ]

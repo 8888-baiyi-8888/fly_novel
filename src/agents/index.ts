@@ -18,5 +18,18 @@ export { directorAgentPreset } from './director/preset.js'
 export { mockLoopPlugin } from './plugins/loop/index.js'
 export { mockMemoryPlugin } from './plugins/memory/index.js'
 export { llmPlugin, llmPluginDefinition, type LlmPluginConfig } from './plugins/llm/index.js'
+export {
+  SystemPrompt,
+  renderPrompt,
+  systemPromptPlugin,
+  systemPromptPluginDefinition,
+  type AssembleContext,
+  type AssembledSection,
+  type PromptAssembly,
+  type PromptSection,
+  type PromptTextProvider,
+  type PromptVariableProvider,
+  type SystemPromptPluginConfig,
+} from './plugins/system-prompt/index.js'
 export type { AgentLoop, AgentLoopInput, AgentLoopResult, MockLoopConfig } from './plugins/loop/index.js'
 export type { AgentMemory, MockMemoryConfig } from './plugins/memory/index.js'

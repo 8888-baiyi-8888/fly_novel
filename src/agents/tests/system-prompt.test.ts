@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { bootstrapAgents } from '../core/bootstrap.js'
 import { renderPrompt, SystemPrompt } from '../plugins/system-prompt/index.js'
 
 test('SystemPrompt registers and reads named sections', () => {
@@ -190,4 +191,40 @@ test('assembly rejects multiple effective complete sections', () => {
   systemPrompt.section({ name: 'scoped-full', order: 10, text: '作用域完整。', complete: true }, 'writer')
 
   assert.throws(() => systemPrompt.assemble({ scope: 'writer' }), /多个完整提示词段同时生效/)
+})
+
+test('Cordis plugin isolates SystemPrompt per Agent and disposes it with the Agent', async () => {
+  const framework = await bootstrapAgents()
+  try {
+    assert.ok(framework.plugins.get('system-prompt'))
+    framework.presets.register({
+      id: 'system-prompt-test',
+      version: '1',
+      role: 'character',
+      plugins: [
+        { pluginId: 'mock-loop' },
+        { pluginId: 'system-prompt' },
+      ],
+    })
+
+    const first = await framework.manager.create({ id: 'prompt-agent-a', presetId: 'system-prompt-test' })
+    const second = await framework.manager.create({ id: 'prompt-agent-b', presetId: 'system-prompt-test' })
+    const firstPrompt = first.context.get('systemPrompt')
+    const secondPrompt = second.context.get('systemPrompt')
+    assert.ok(firstPrompt)
+    assert.ok(secondPrompt)
+    assert.notEqual(firstPrompt, secondPrompt)
+
+    firstPrompt.section({ name: 'identity', order: 0, text: '仅 Agent A 可见。' })
+    secondPrompt.section({ name: 'identity', order: 0, text: '仅 Agent B 可见。' })
+    assert.equal(renderPrompt(firstPrompt.assemble()), '仅 Agent A 可见。')
+    assert.equal(renderPrompt(secondPrompt.assemble()), '仅 Agent B 可见。')
+
+    await framework.manager.dispose('prompt-agent-a')
+    assert.equal(first.context.get('systemPrompt'), undefined)
+    assert.throws(() => firstPrompt.assemble(), /已销毁/)
+    assert.equal(renderPrompt(secondPrompt.assemble()), '仅 Agent B 可见。')
+  } finally {
+    await framework.manager.disposeAll()
+  }
 })

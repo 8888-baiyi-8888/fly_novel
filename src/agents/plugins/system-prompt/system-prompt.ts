@@ -49,9 +49,11 @@ const VARIABLE_NAME = /^[a-z][a-z0-9_]*$/
 export class SystemPrompt {
   private readonly globalLayer = createLayer()
   private readonly scopedLayers = new Map<string, PromptLayer>()
+  private disposed = false
 
   /** 注册提示词段；返回的函数可注销该次注册。 */
   section(section: PromptSection, scope?: string): () => void {
+    this.assertOpen()
     const { name, order, text } = section
     if (!name.trim()) throw new Error('PromptSection name 不能为空')
     if (!Number.isFinite(order)) throw new TypeError(`PromptSection "${name}" order 必须是有限数值`)
@@ -75,12 +77,14 @@ export class SystemPrompt {
 
   /** 按名称读取已注册提示词段；不存在时返回 undefined。 */
   getSection(name: string, scope?: string): PromptSection | undefined {
+    this.assertOpen()
     const scoped = scope === undefined ? undefined : this.getLayer(scope, false)?.sections.get(name)
     return scoped ?? this.globalLayer.sections.get(name)
   }
 
   /** 返回指定作用域可见的提示词段快照；同名作用域段覆盖全局段。 */
   listSections(scope?: string): readonly PromptSection[] {
+    this.assertOpen()
     const merged = new Map(this.globalLayer.sections)
     if (scope !== undefined) {
       for (const [name, section] of this.getLayer(scope, false)?.sections ?? []) merged.set(name, section)
@@ -90,6 +94,7 @@ export class SystemPrompt {
 
   /** 注册一个提示词变量提供函数；返回的函数可注销该次注册。 */
   variable(name: string, provider: PromptVariableProvider, scope?: string): () => void {
+    this.assertOpen()
     if (!VARIABLE_NAME.test(name)) throw new Error(`Prompt variable 名称无效: "${name}"`)
     const layer = this.getLayer(scope, true)
     if (layer.variables.has(name)) throw new Error(`Prompt variable "${name}" 已在当前作用域注册`)
@@ -105,6 +110,7 @@ export class SystemPrompt {
 
   /** 求值动态文本和变量提供函数，并生成有序的组装快照。 */
   assemble(context: AssembleContext = {}): PromptAssembly {
+    this.assertOpen()
     const variables: Record<string, string | undefined> = Object.create(null) as Record<string, string | undefined>
     const variableEntries = new Map(this.globalLayer.variables)
     for (const [name, entry] of this.getLayer(context.scope, false)?.variables ?? []) {
@@ -135,6 +141,19 @@ export class SystemPrompt {
       sections: Object.freeze(sections.map((section) => Object.freeze(section))),
       variables: Object.freeze(variables),
     })
+  }
+
+  /** 释放所有注册内容并关闭对象；重复调用安全。 */
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.globalLayer.sections.clear()
+    this.globalLayer.variables.clear()
+    this.scopedLayers.clear()
+  }
+
+  private assertOpen(): void {
+    if (this.disposed) throw new Error('SystemPrompt 已销毁')
   }
 
   private getLayer(scope: string | undefined, create: true): PromptLayer
