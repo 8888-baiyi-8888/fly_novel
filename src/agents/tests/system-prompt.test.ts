@@ -78,3 +78,67 @@ test('assemble returns a snapshot unaffected by later registration changes', () 
   assert.equal(renderPrompt(assembly), '你是写作助手。')
   assert.equal(renderPrompt(systemPrompt.assemble()), '回答应简洁。')
 })
+
+test('dynamic section text is evaluated during assembly and remains in its snapshot', () => {
+  const systemPrompt = new SystemPrompt()
+  let currentFact = '第一轮事实'
+  systemPrompt.section({
+    name: 'fact',
+    order: 0,
+    text: () => currentFact,
+  })
+
+  const assembly = systemPrompt.assemble()
+  currentFact = '第二轮事实'
+
+  assert.equal(renderPrompt(assembly), '第一轮事实')
+  assert.equal(renderPrompt(systemPrompt.assemble()), '第二轮事实')
+})
+
+test('variables are resolved during assembly and interpolated during rendering', () => {
+  const systemPrompt = new SystemPrompt()
+  let language = '中文'
+  let variableCalls = 0
+  systemPrompt.variable('response_language', () => {
+    variableCalls += 1
+    return language
+  })
+  systemPrompt.section({ name: 'instructions', order: 0, text: '请使用{{response_language}}回答。' })
+
+  const assembly = systemPrompt.assemble()
+  language = 'English'
+
+  assert.equal(variableCalls, 1)
+  assert.equal(renderPrompt(assembly), '请使用中文回答。')
+  assert.equal(renderPrompt(systemPrompt.assemble()), '请使用English回答。')
+})
+
+test('interpolate false preserves variable syntax literally', () => {
+  const systemPrompt = new SystemPrompt()
+  systemPrompt.section({ name: 'literal', order: 0, text: '模板 {{unknown}}', interpolate: false })
+
+  assert.equal(renderPrompt(systemPrompt.assemble()), '模板 {{unknown}}')
+})
+
+test('variable registration validates names and rejects duplicate names', () => {
+  const systemPrompt = new SystemPrompt()
+  systemPrompt.variable('language', () => '中文')
+
+  assert.throws(() => systemPrompt.variable('language', () => 'English'), /已注册/)
+  assert.throws(() => systemPrompt.variable('Invalid-Name', () => '值'), /名称无效/)
+})
+
+test('renderPrompt rejects malformed, unknown, and undefined variables', () => {
+  const malformed = new SystemPrompt()
+  malformed.section({ name: 'malformed', order: 0, text: '错误 {{name space}}' })
+  assert.throws(() => renderPrompt(malformed.assemble()), /无效变量/)
+
+  const unknown = new SystemPrompt()
+  unknown.section({ name: 'unknown', order: 0, text: '未知 {{missing}}' })
+  assert.throws(() => renderPrompt(unknown.assemble()), /未注册变量/)
+
+  const missingValue = new SystemPrompt()
+  missingValue.variable('optional', () => undefined)
+  missingValue.section({ name: 'missing-value', order: 0, text: '空值 {{optional}}' })
+  assert.throws(() => renderPrompt(missingValue.assemble()), /未提供值/)
+})
