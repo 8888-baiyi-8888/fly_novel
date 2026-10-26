@@ -1,4 +1,4 @@
-/** 保存并读取一份静态系统提示词。 */
+/** 注册时保存的静态系统提示词段。 */
 export interface PromptSection {
   /** 在当前 SystemPrompt 中唯一的名称。 */
   readonly name: string
@@ -8,20 +8,14 @@ export interface PromptSection {
   readonly text: string
 }
 
-/** 保存系统提示词，并注册可独立管理的静态提示词段。 */
+/** 已排序的提示词段快照。 */
+export interface PromptAssembly {
+  readonly sections: readonly PromptSection[]
+}
+
+/** 保存并组装可独立管理的静态提示词段。 */
 export class SystemPrompt {
-  private prompt = ''
   private readonly sections = new Map<string, PromptSection>()
-
-  /** 替换当前保存的系统提示词。 */
-  setPrompt(prompt: string): void {
-    this.prompt = prompt
-  }
-
-  /** 返回当前系统提示词；尚未设置时返回空字符串。 */
-  getPrompt(): string {
-    return this.prompt
-  }
 
   /** 注册提示词段；返回的函数可注销该次注册。 */
   section(section: PromptSection): () => void {
@@ -46,4 +40,23 @@ export class SystemPrompt {
   listSections(): readonly PromptSection[] {
     return [...this.sections.values()]
   }
+
+  /** 按顺序值和名称排序，生成独立于注册表的静态组装快照。 */
+  assemble(): PromptAssembly {
+    const sections = [...this.sections.values()]
+      .sort((left, right) => left.order - right.order || compareNames(left.name, right.name))
+    return { sections }
+  }
+}
+
+/** 过滤空段并以空行连接提示词文本。 */
+export function renderPrompt(assembly: PromptAssembly): string {
+  return assembly.sections
+    .map((section) => section.text)
+    .filter((text) => text.length > 0)
+    .join('\n\n')
+}
+
+function compareNames(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }

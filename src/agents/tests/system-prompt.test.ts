@@ -1,29 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { SystemPrompt } from '../plugins/system-prompt/index.js'
-
-test('SystemPrompt saves and returns prompt text', () => {
-  const systemPrompt = new SystemPrompt()
-
-  systemPrompt.setPrompt('你是写作助手。')
-
-  assert.equal(systemPrompt.getPrompt(), '你是写作助手。')
-})
-
-test('SystemPrompt can replace the saved prompt', () => {
-  const systemPrompt = new SystemPrompt()
-
-  systemPrompt.setPrompt('你是写作助手。')
-  systemPrompt.setPrompt('回答应简洁。')
-
-  assert.equal(systemPrompt.getPrompt(), '回答应简洁。')
-})
-
-test('SystemPrompt returns an empty string before a prompt is set', () => {
-  const systemPrompt = new SystemPrompt()
-
-  assert.equal(systemPrompt.getPrompt(), '')
-})
+import { renderPrompt, SystemPrompt } from '../plugins/system-prompt/index.js'
 
 test('SystemPrompt registers and reads named sections', () => {
   const systemPrompt = new SystemPrompt()
@@ -66,4 +43,38 @@ test('section disposer unregisters only the registration that created it', () =>
 
   disposeSecond()
   assert.deepEqual(systemPrompt.listSections(), [])
+})
+
+test('assemble sorts sections by order and then by name', () => {
+  const systemPrompt = new SystemPrompt()
+  systemPrompt.section({ name: 'z-last', order: 20, text: '最后。' })
+  systemPrompt.section({ name: 'b-second', order: 10, text: '第二。' })
+  systemPrompt.section({ name: 'a-first', order: 10, text: '第一。' })
+
+  const assembly = systemPrompt.assemble()
+
+  assert.deepEqual(assembly.sections.map(({ name }) => name), ['a-first', 'b-second', 'z-last'])
+  assert.equal(renderPrompt(assembly), '第一。\n\n第二。\n\n最后。')
+})
+
+test('renderPrompt skips empty text and returns an empty string for no sections', () => {
+  const systemPrompt = new SystemPrompt()
+  assert.equal(renderPrompt(systemPrompt.assemble()), '')
+
+  systemPrompt.section({ name: 'empty', order: 0, text: '' })
+  systemPrompt.section({ name: 'text', order: 1, text: '正文。' })
+
+  assert.equal(renderPrompt(systemPrompt.assemble()), '正文。')
+})
+
+test('assemble returns a snapshot unaffected by later registration changes', () => {
+  const systemPrompt = new SystemPrompt()
+  const dispose = systemPrompt.section({ name: 'identity', order: 0, text: '你是写作助手。' })
+  const assembly = systemPrompt.assemble()
+
+  dispose()
+  systemPrompt.section({ name: 'behavior', order: 10, text: '回答应简洁。' })
+
+  assert.equal(renderPrompt(assembly), '你是写作助手。')
+  assert.equal(renderPrompt(systemPrompt.assemble()), '回答应简洁。')
 })
