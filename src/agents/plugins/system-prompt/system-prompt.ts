@@ -1,6 +1,7 @@
 /** 一次组装时可用于计算提示词段的调用上下文。 */
 export interface AssembleContext {
   readonly [key: string]: unknown
+  readonly scope?: string
 }
 
 export type PromptTextProvider = (context: AssembleContext) => string
@@ -15,6 +16,8 @@ export interface PromptSection {
   readonly text: string | PromptTextProvider
   /** 是否在渲染时解析变量；默认解析。 */
   readonly interpolate?: boolean
+  /** 设为 true 时，该段成为此作用域的完整提示词。 */
+  readonly complete?: boolean
 }
 
 export interface AssembledSection {
@@ -31,70 +34,125 @@ export interface PromptAssembly {
 
 export type PromptVariableProvider = (context: AssembleContext) => string | undefined
 
+interface PromptLayer {
+  readonly sections: Map<string, PromptSection>
+  readonly variables: Map<string, PromptVariableEntry>
+}
+
+interface PromptVariableEntry {
+  readonly provider: PromptVariableProvider
+}
+
 const VARIABLE_NAME = /^[a-z][a-z0-9_]*$/
 
 /** 保存并组装可独立管理的提示词段与变量。 */
 export class SystemPrompt {
-  private readonly sections = new Map<string, PromptSection>()
-  private readonly variables = new Map<string, PromptVariableProvider>()
+  private readonly globalLayer = createLayer()
+  private readonly scopedLayers = new Map<string, PromptLayer>()
 
   /** 注册提示词段；返回的函数可注销该次注册。 */
-  section(section: PromptSection): () => void {
+  section(section: PromptSection, scope?: string): () => void {
     const { name, order, text } = section
     if (!name.trim()) throw new Error('PromptSection name 不能为空')
     if (!Number.isFinite(order)) throw new TypeError(`PromptSection "${name}" order 必须是有限数值`)
-    if (this.sections.has(name)) throw new Error(`PromptSection "${name}" 已注册`)
+    const layer = this.getLayer(scope, true)
+    if (layer.sections.has(name)) throw new Error(`PromptSection "${name}" 已在当前作用域注册`)
 
     const registered = Object.freeze({
       name,
       order,
       text,
       ...(section.interpolate !== undefined ? { interpolate: section.interpolate } : {}),
+      ...(section.complete !== undefined ? { complete: section.complete } : {}),
     })
-    this.sections.set(name, registered)
+    layer.sections.set(name, registered)
     return () => {
-      if (this.sections.get(name) === registered) this.sections.delete(name)
+      if (layer.sections.get(name) !== registered) return
+      layer.sections.delete(name)
+      this.pruneLayer(scope, layer)
     }
   }
 
   /** 按名称读取已注册提示词段；不存在时返回 undefined。 */
-  getSection(name: string): PromptSection | undefined {
-    return this.sections.get(name)
+  getSection(name: string, scope?: string): PromptSection | undefined {
+    const scoped = scope === undefined ? undefined : this.getLayer(scope, false)?.sections.get(name)
+    return scoped ?? this.globalLayer.sections.get(name)
   }
 
-  /** 返回当前提示词段的快照，顺序为注册顺序。 */
-  listSections(): readonly PromptSection[] {
-    return [...this.sections.values()]
+  /** 返回指定作用域可见的提示词段快照；同名作用域段覆盖全局段。 */
+  listSections(scope?: string): readonly PromptSection[] {
+    const merged = new Map(this.globalLayer.sections)
+    if (scope !== undefined) {
+      for (const [name, section] of this.getLayer(scope, false)?.sections ?? []) merged.set(name, section)
+    }
+    return [...merged.values()]
   }
 
   /** 注册一个提示词变量提供函数；返回的函数可注销该次注册。 */
-  variable(name: string, provider: PromptVariableProvider): () => void {
+  variable(name: string, provider: PromptVariableProvider, scope?: string): () => void {
     if (!VARIABLE_NAME.test(name)) throw new Error(`Prompt variable 名称无效: "${name}"`)
-    if (this.variables.has(name)) throw new Error(`Prompt variable "${name}" 已注册`)
+    const layer = this.getLayer(scope, true)
+    if (layer.variables.has(name)) throw new Error(`Prompt variable "${name}" 已在当前作用域注册`)
 
-    this.variables.set(name, provider)
+    const entry = { provider }
+    layer.variables.set(name, entry)
     return () => {
-      if (this.variables.get(name) === provider) this.variables.delete(name)
+      if (layer.variables.get(name) !== entry) return
+      layer.variables.delete(name)
+      this.pruneLayer(scope, layer)
     }
   }
 
   /** 求值动态文本和变量提供函数，并生成有序的组装快照。 */
   assemble(context: AssembleContext = {}): PromptAssembly {
     const variables: Record<string, string | undefined> = Object.create(null) as Record<string, string | undefined>
-    for (const [name, provider] of this.variables) variables[name] = provider(context)
+    const variableEntries = new Map(this.globalLayer.variables)
+    for (const [name, entry] of this.getLayer(context.scope, false)?.variables ?? []) {
+      variableEntries.set(name, entry)
+    }
+    for (const [name, entry] of variableEntries) variables[name] = entry.provider(context)
 
-    const sections = [...this.sections.values()]
+    const sectionDefinitions = new Map(this.globalLayer.sections)
+    for (const [name, section] of this.getLayer(context.scope, false)?.sections ?? []) {
+      sectionDefinitions.set(name, section)
+    }
+    const resolvedSections = [...sectionDefinitions.values()]
       .sort((left, right) => left.order - right.order || compareNames(left.name, right.name))
       .map((section): AssembledSection => ({
         name: section.name,
         text: typeof section.text === 'function' ? section.text(context) : section.text,
         ...(section.interpolate !== undefined ? { interpolate: section.interpolate } : {}),
       }))
+    const completeSections = [...sectionDefinitions.values()].filter((section) => section.complete === true)
+    if (completeSections.length > 1) {
+      throw new Error(`多个完整提示词段同时生效: ${completeSections.map(({ name }) => `"${name}"`).join(', ')}`)
+    }
+    const sections = completeSections.length === 1
+      ? resolvedSections.filter(({ name }) => name === completeSections[0].name)
+      : resolvedSections
 
     return Object.freeze({
       sections: Object.freeze(sections.map((section) => Object.freeze(section))),
       variables: Object.freeze(variables),
     })
+  }
+
+  private getLayer(scope: string | undefined, create: true): PromptLayer
+  private getLayer(scope: string | undefined, create: false): PromptLayer | undefined
+  private getLayer(scope: string | undefined, create: boolean): PromptLayer | undefined {
+    if (scope === undefined) return this.globalLayer
+    if (!scope.trim()) throw new Error('Prompt scope 不能为空')
+    const existing = this.scopedLayers.get(scope)
+    if (existing || !create) return existing
+    const layer = createLayer()
+    this.scopedLayers.set(scope, layer)
+    return layer
+  }
+
+  private pruneLayer(scope: string | undefined, layer: PromptLayer): void {
+    if (scope !== undefined && layer.sections.size === 0 && layer.variables.size === 0) {
+      if (this.scopedLayers.get(scope) === layer) this.scopedLayers.delete(scope)
+    }
   }
 }
 
@@ -139,4 +197,8 @@ function interpolate(section: AssembledSection, variables: Readonly<Record<strin
 
 function compareNames(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
+}
+
+function createLayer(): PromptLayer {
+  return { sections: new Map(), variables: new Map() }
 }

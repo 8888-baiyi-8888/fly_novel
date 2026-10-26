@@ -18,7 +18,7 @@ test('SystemPrompt rejects duplicate names and invalid section definitions', () 
 
   assert.throws(
     () => systemPrompt.section({ name: 'identity', order: 20, text: '其他身份。' }),
-    /已注册/,
+    /当前作用域注册/,
   )
   assert.throws(
     () => systemPrompt.section({ name: ' ', order: 10, text: '空名称。' }),
@@ -124,7 +124,7 @@ test('variable registration validates names and rejects duplicate names', () => 
   const systemPrompt = new SystemPrompt()
   systemPrompt.variable('language', () => '中文')
 
-  assert.throws(() => systemPrompt.variable('language', () => 'English'), /已注册/)
+  assert.throws(() => systemPrompt.variable('language', () => 'English'), /当前作用域注册/)
   assert.throws(() => systemPrompt.variable('Invalid-Name', () => '值'), /名称无效/)
 })
 
@@ -141,4 +141,53 @@ test('renderPrompt rejects malformed, unknown, and undefined variables', () => {
   missingValue.variable('optional', () => undefined)
   missingValue.section({ name: 'missing-value', order: 0, text: '空值 {{optional}}' })
   assert.throws(() => renderPrompt(missingValue.assemble()), /未提供值/)
+})
+
+test('scoped sections shadow globals without affecting other scopes', () => {
+  const systemPrompt = new SystemPrompt()
+  systemPrompt.section({ name: 'identity', order: 10, text: '通用身份。' })
+  systemPrompt.section({ name: 'identity', order: 10, text: '写作身份。' }, 'writer')
+  systemPrompt.section({ name: 'style', order: 20, text: '回答应简洁。' }, 'writer')
+
+  assert.equal(renderPrompt(systemPrompt.assemble()), '通用身份。')
+  assert.equal(renderPrompt(systemPrompt.assemble({ scope: 'writer' })), '写作身份。\n\n回答应简洁。')
+  assert.deepEqual(systemPrompt.listSections('writer').map(({ name }) => name), ['identity', 'style'])
+  assert.equal(systemPrompt.getSection('identity', 'writer')?.text, '写作身份。')
+})
+
+test('variables are isolated by scope and scoped providers shadow globals', () => {
+  const systemPrompt = new SystemPrompt()
+  systemPrompt.variable('response_language', () => '通用语言')
+  systemPrompt.variable('response_language', () => '中文', 'writer')
+  systemPrompt.section({ name: 'instruction', order: 0, text: '使用{{response_language}}。' })
+
+  assert.equal(renderPrompt(systemPrompt.assemble()), '使用通用语言。')
+  assert.equal(renderPrompt(systemPrompt.assemble({ scope: 'writer' })), '使用中文。')
+
+  const sameProvider = () => '保留'
+  const disposeOld = systemPrompt.variable('same', sameProvider, 'agent')
+  disposeOld()
+  const disposeNew = systemPrompt.variable('same', sameProvider, 'agent')
+  disposeOld()
+  systemPrompt.section({ name: 'same-value', order: 0, text: '{{same}}' }, 'agent')
+  assert.equal(renderPrompt(systemPrompt.assemble({ scope: 'agent' })), '使用通用语言。\n\n保留')
+  disposeNew()
+})
+
+test('complete section replaces other active sections only in its scope', () => {
+  const systemPrompt = new SystemPrompt()
+  systemPrompt.section({ name: 'identity', order: 0, text: '通用身份。' })
+  systemPrompt.section({ name: 'policy', order: 10, text: '通用规则。' })
+  systemPrompt.section({ name: 'full', order: 0, text: '完整提示词。', complete: true }, 'writer')
+
+  assert.equal(renderPrompt(systemPrompt.assemble()), '通用身份。\n\n通用规则。')
+  assert.equal(renderPrompt(systemPrompt.assemble({ scope: 'writer' })), '完整提示词。')
+})
+
+test('assembly rejects multiple effective complete sections', () => {
+  const systemPrompt = new SystemPrompt()
+  systemPrompt.section({ name: 'global-full', order: 0, text: '全局完整。', complete: true })
+  systemPrompt.section({ name: 'scoped-full', order: 10, text: '作用域完整。', complete: true }, 'writer')
+
+  assert.throws(() => systemPrompt.assemble({ scope: 'writer' }), /多个完整提示词段同时生效/)
 })
