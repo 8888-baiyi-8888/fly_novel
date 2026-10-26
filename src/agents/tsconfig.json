@@ -3,9 +3,10 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "@fly-novel/agents": ["./index.ts"]
+      "@fly-novel/agents": ["./index.ts"],
+      "@fly-novel/system-prompt": ["./plugins/system-prompt/index.ts"]
     }
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "plugins/session"]
+  "exclude": ["node_modules", "dist", "plugins/session", "plugins/system-prompt"]
 }

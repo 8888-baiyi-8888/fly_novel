@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { bootstrapAgents } from '../core/bootstrap.js'
-import { renderPrompt, SystemPrompt } from '../plugins/system-prompt/index.js'
+import { renderPrompt, SystemPrompt } from '@fly-novel/system-prompt'
 
 test('SystemPrompt registers and reads named sections', () => {
   const systemPrompt = new SystemPrompt()

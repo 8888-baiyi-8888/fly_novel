@@ -23,6 +23,9 @@
       "@fly-novel/session": [
         "./src/agents/plugins/session/index.ts"
       ],
+      "@fly-novel/system-prompt": [
+        "./src/agents/plugins/system-prompt/index.ts"
+      ],
       "@fly-novel/util": [
         "./src/util/index.ts"
       ],

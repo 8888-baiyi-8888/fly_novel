@@ -20,6 +20,9 @@ importers:
       '@fly-novel/session':
         specifier: workspace:*
         version: link:src/agents/plugins/session
+      '@fly-novel/system-prompt':
+        specifier: workspace:*
+        version: link:src/agents/plugins/system-prompt
       '@fly-novel/util':
         specifier: workspace:*
         version: link:src/util
@@ -54,6 +57,9 @@ importers:
       '@fly-novel/session':
         specifier: workspace:*
         version: link:plugins/session
+      '@fly-novel/system-prompt':
+        specifier: workspace:*
+        version: link:plugins/system-prompt
       '@langchain/core':
         specifier: ^1.2.12
         version: 1.2.14(openai@7.27.0(zod@4.6.5))
@@ -91,6 +97,12 @@ importers:
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:../../../llm
+
+  src/agents/plugins/system-prompt:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
 
   src/llm:
     dependencies:

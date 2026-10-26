@@ -8,5 +8,5 @@ export {
   type PromptTextProvider,
   type PromptVariableProvider,
 } from './system-prompt.js'
-export { systemPromptPlugin, systemPromptPluginDefinition } from './plugin.js'
+export { systemPromptPlugin } from './plugin.js'
 export type { SystemPromptPluginConfig } from './plugin.js'

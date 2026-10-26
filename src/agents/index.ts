@@ -22,7 +22,6 @@ export {
   SystemPrompt,
   renderPrompt,
   systemPromptPlugin,
-  systemPromptPluginDefinition,
   type AssembleContext,
   type AssembledSection,
   type PromptAssembly,
@@ -30,6 +29,7 @@ export {
   type PromptTextProvider,
   type PromptVariableProvider,
   type SystemPromptPluginConfig,
-} from './plugins/system-prompt/index.js'
+} from '@fly-novel/system-prompt'
+export { systemPromptPluginDefinition } from './plugins/system-prompt-plugin.js'
 export type { AgentLoop, AgentLoopInput, AgentLoopResult, MockLoopConfig } from './plugins/loop/index.js'
 export type { AgentMemory, MockMemoryConfig } from './plugins/memory/index.js'
