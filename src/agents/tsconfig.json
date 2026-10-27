@@ -4,6 +4,7 @@
     "rootDir": ".",
     "paths": {
       "@fly-novel/agents": ["./index.ts"],
+      "@fly-novel/agent-loop": ["./plugins/loop/index.ts"],
       "@fly-novel/system-prompt": ["./plugins/system-prompt/index.ts"]
     }
   },

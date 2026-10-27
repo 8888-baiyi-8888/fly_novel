@@ -2,6 +2,7 @@ packages:
   - 'src/harness'
   - 'src/llm'
   - 'src/agents/plugins/session'
+  - 'src/agents/plugins/loop'
   - 'src/agents/plugins/system-prompt'
   - 'src/util'
   - 'src/novel-flow'

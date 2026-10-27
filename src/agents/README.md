@@ -8,7 +8,7 @@
 
 - `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
-- `plugins/`：Harness 使用的 AgentLoop Runtime、mock loop、memory 与 LLM 服务插件；各已实现模块导出注册定义，`plugins/index.ts` 汇总内置定义。通用 Session 和 SystemPrompt 位于各自的独立工作区包中，Harness 注册定义由本包适配。
+- `plugins/`：Harness 使用的 mock loop、memory、LLM 服务与 Harness 插件注册适配；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中，Harness 注册定义由本包适配。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `tests/`：按包运行的自动化测试。
 
@@ -26,7 +26,7 @@
 
 `AgentLoop.run({ prompt })` 每次调用对应一个 Turn，成功返回 `{ content }`；执行失败时以拒绝的 Promise 向 `agent.run()` 调用方传播错误，不转换为成功文本。Turn 与 Step 的运行事件使用当前 Agent 的 Session 记录；首阶段一个 Turn 只执行一个 Step。当前 `AgentLoopInput` 不带取消信号，Agent 也没有取消方法，取消控制留到生命周期阶段定义。
 
-`agent-loop-runtime` 插件声明依赖 Cordis `sessions` 服务，并在当前 Agent Context 中提供 `agentLoop`。`AgentLoopRuntime` 从该 Context 的 `SessionManager` 创建并持有 Session；`run()` 的用户输入仍通过 `{ prompt }` 传入。`run()` 进入私有 `turn()`，再由 `turn()` 调用私有 `step()`。当前每个 Turn 执行一个 Step；Turn 与 Step 序号从 1 开始递增，并记录开始、结束和失败事件。Step 失败时记录通用错误原因并向调用方传播原错误。后续需要 SystemPrompt 或 LLM 时由 Runtime 从同一 Context 获取服务，不增加构造参数。
+`@fly-novel/agent-loop` 导出 `AgentLoopRuntime`、`agentLoopRuntimePlugin` 和 Harness 注册定义。插件声明依赖 Cordis `sessions`、`systemPrompt` 和 `llm` 服务，并在当前 Agent Context 中提供 `agentLoop`。通过 Preset 装配 Runtime 时须同时装配这三个服务插件。`AgentLoopRuntime` 从 Context 的 `SessionManager` 创建并持有 Session；`run()` 的用户输入仍通过 `{ prompt }` 传入，运行服务从同一 Context 获取，不增加构造参数。当前固定 Step 只回传输入，用于验证插件装配、Turn/Step 生命周期和卸载；此步骤不调用 SystemPrompt 或 LLM。Turn 与 Step 序号从 1 开始递增，并记录开始、结束和失败事件。Step 失败时记录通用错误原因并向调用方传播原错误。`@fly-novel/agents` 仅负责注册 Loop 插件，不再转导 Runtime；mock loop 仍归 Agents 包。
 
 逐步检查注册、装配、路由隔离和清理时，使用[LLM 插件调试步骤](../../docs/cookbook/llm-plugin-debug.md)。
 

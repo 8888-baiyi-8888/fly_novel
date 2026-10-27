@@ -3,17 +3,10 @@ import type {
   AgentLoop,
   AgentLoopInput,
   AgentLoopResult,
-  AgentPluginDefinition,
-} from '../../core/contracts/agent.js'
+} from './types.js'
 import type { Session, TurnEndReason } from '@fly-novel/session'
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    agentLoop: AgentLoop
-  }
-}
-
-/** 从当前 Agent Context 获取 Session 服务，并协调 Turn 与 Step 生命周期。 */
+/** 从当前 Agent Context 获取 Session，并协调 Turn 与 Step 生命周期。 */
 export class AgentLoopRuntime implements AgentLoop {
   private readonly session: Session
   private turnNumber: number
@@ -54,13 +47,13 @@ export class AgentLoopRuntime implements AgentLoop {
   }
 }
 
-/** 在当前 Agent Context 中注册由 Cordis Session 服务支持的 Loop。 */
+/** 声明 Session、SystemPrompt 与 LLM 服务依赖，并在当前 Context 注册 Loop。 */
 export const agentLoopRuntimePlugin = Object.assign(function agentLoopRuntimePlugin(ctx: Context): void {
   ctx.provide('agentLoop', new AgentLoopRuntime(ctx))
-}, { inject: ['sessions'], provide: 'agentLoop' })
+}, { inject: ['sessions', 'systemPrompt', 'llm'], provide: 'agentLoop' })
 
 /** Agent Loop Runtime 的 Harness 注册定义。 */
-export const agentLoopRuntimePluginDefinition: AgentPluginDefinition = {
+export const agentLoopRuntimePluginDefinition = {
   id: 'agent-loop-runtime',
   version: '1.0.0',
   description: '通过当前 Agent Context 管理 Turn、Step 与 Session 生命周期',

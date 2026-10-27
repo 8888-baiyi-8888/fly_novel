@@ -2,7 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {}
   },
-  "exclude": ["node_modules", "dist", "tests/**", "plugins/session", "plugins/system-prompt"]
+  "exclude": ["node_modules", "dist", "tests/**", "plugins/loop", "plugins/session", "plugins/system-prompt"]
 }

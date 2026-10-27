@@ -15,8 +15,7 @@ export { AgentFactory } from './runtime/agent-factory.js'
 export { AgentManager } from './runtime/agent-manager.js'
 export { characterAgentPreset } from './character/preset.js'
 export { directorAgentPreset } from './director/preset.js'
-export { mockLoopPlugin } from './plugins/loop/index.js'
-export { AgentLoopRuntime, agentLoopRuntimePlugin, agentLoopRuntimePluginDefinition } from './plugins/loop/agent-loop-runtime.js'
+export { mockLoopPlugin, mockLoopPluginDefinition } from './plugins/mock-loop.js'
 export { mockMemoryPlugin } from './plugins/memory/index.js'
 export { llmPlugin, llmPluginDefinition, type LlmPluginConfig } from './plugins/llm/index.js'
 export {
@@ -32,5 +31,5 @@ export {
   type SystemPromptPluginConfig,
 } from '@fly-novel/system-prompt'
 export { systemPromptPluginDefinition } from './plugins/system-prompt-plugin.js'
-export type { AgentLoop, AgentLoopInput, AgentLoopResult, MockLoopConfig } from './plugins/loop/index.js'
+export type { MockLoopConfig } from './plugins/mock-loop.js'
 export type { AgentMemory, MockMemoryConfig } from './plugins/memory/index.js'

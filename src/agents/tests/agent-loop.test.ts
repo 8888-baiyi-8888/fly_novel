@@ -1,8 +1,20 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
+import { LlmAdapter, type StreamChunk } from '@fly-novel/llm'
+import { AgentLoopRuntime } from '@fly-novel/agent-loop'
+import type { AgentLoop } from '@fly-novel/agent-loop'
 import { bootstrapAgents } from '@fly-novel/agents'
-import type { AgentFramework, AgentLoop } from '@fly-novel/agents'
+import type { AgentFramework } from '@fly-novel/agents'
+
+class NoRequestAdapter extends LlmAdapter {
+  requests = 0
+
+  override async *stream(): AsyncIterable<StreamChunk> {
+    this.requests += 1
+    throw new Error('第三步测试不应发起模型请求')
+  }
+}
 
 describe('AgentLoop Runtime', () => {
   let framework: AgentFramework | undefined
@@ -18,23 +30,49 @@ describe('AgentLoop Runtime', () => {
       id: 'runtime-test',
       version: '1',
       role: 'character',
-      plugins: [{ pluginId: 'session' }, { pluginId: 'agent-loop-runtime' }],
+      plugins: [
+        { pluginId: 'agent-loop-runtime' },
+        { pluginId: 'system-prompt' },
+        { pluginId: 'llm' },
+        { pluginId: 'session' },
+      ],
     })
 
-    const agent = await framework.manager.create({ id: 'runtime-agent', presetId: 'runtime-test' })
+    const adapter = new NoRequestAdapter()
+    const agent = await framework.manager.create({
+      id: 'runtime-agent',
+      presetId: 'runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter }] } },
+    })
     const sessions = agent.context.get('sessions')
+    const systemPrompt = agent.context.get('systemPrompt')
+    const llm = agent.context.get('llm')
+    const loop = agent.context.get('agentLoop')
     assert.ok(sessions)
+    assert.ok(systemPrompt)
+    assert.ok(llm)
+    assert.ok(loop)
+    assert.ok(loop instanceof AgentLoopRuntime)
     assert.equal(sessions.list().length, 1)
     const session = sessions.list()[0]
     assert.ok(session)
 
     assert.deepEqual(await agent.run({ prompt: '继续这一幕' }), { content: '继续这一幕' })
+    assert.equal(adapter.requests, 0)
     assert.deepEqual(session.read().map(({ type, data }) => ({ type, data })), [
       { type: 'turn/start', data: { turn: 1 } },
       { type: 'step/start', data: { turn: 1, step: 1 } },
       { type: 'step/end', data: { turn: 1, step: 1 } },
       { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
     ])
+
+    await framework.manager.dispose('runtime-agent')
+    assert.equal(agent.context.get('agentLoop'), undefined)
+    assert.equal(agent.context.get('systemPrompt'), undefined)
+    assert.equal(agent.context.get('llm'), undefined)
+    assert.throws(() => session.read(), /已关闭/)
+    assert.throws(() => systemPrompt.assemble(), /已销毁/)
+    assert.equal(adapter.requests, 0)
   })
 
   it('同一 Agent 连续运行时复用 Context 中的 Session', async () => {
@@ -43,10 +81,19 @@ describe('AgentLoop Runtime', () => {
       id: 'runtime-test',
       version: '1',
       role: 'character',
-      plugins: [{ pluginId: 'session' }, { pluginId: 'agent-loop-runtime' }],
+      plugins: [
+        { pluginId: 'agent-loop-runtime' },
+        { pluginId: 'system-prompt' },
+        { pluginId: 'llm' },
+        { pluginId: 'session' },
+      ],
     })
 
-    const agent = await framework.manager.create({ id: 'runtime-agent', presetId: 'runtime-test' })
+    const agent = await framework.manager.create({
+      id: 'runtime-agent',
+      presetId: 'runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter: new NoRequestAdapter() }] } },
+    })
     const sessions = agent.context.get('sessions')
     assert.ok(sessions)
     const session = sessions.list()[0]
@@ -66,11 +113,24 @@ describe('AgentLoop Runtime', () => {
       id: 'runtime-test',
       version: '1',
       role: 'character',
-      plugins: [{ pluginId: 'session' }, { pluginId: 'agent-loop-runtime' }],
+      plugins: [
+        { pluginId: 'agent-loop-runtime' },
+        { pluginId: 'system-prompt' },
+        { pluginId: 'llm' },
+        { pluginId: 'session' },
+      ],
     })
 
-    const first = await framework.manager.create({ id: 'runtime-first', presetId: 'runtime-test' })
-    const second = await framework.manager.create({ id: 'runtime-second', presetId: 'runtime-test' })
+    const first = await framework.manager.create({
+      id: 'runtime-first',
+      presetId: 'runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter: new NoRequestAdapter() }] } },
+    })
+    const second = await framework.manager.create({
+      id: 'runtime-second',
+      presetId: 'runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter: new NoRequestAdapter() }] } },
+    })
     const firstSession = first.context.sessions.list()[0]
     const secondSession = second.context.sessions.list()[0]
     assert.ok(firstSession)

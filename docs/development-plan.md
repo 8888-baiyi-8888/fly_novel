@@ -95,7 +95,7 @@ Agent Loop 作为 Harness 的执行协调层，负责 Turn 生命周期、Step �
 
 2. **Turn 执行契约**：确定 Loop 的输入、输出及 Turn 的生命周期，包括开始、执行、完成、失败和取消。明确 Turn 与 Step 的关系，以及 Loop 如何管理执行过程。核对现有 `AgentLoopInput`、`AgentLoopResult` 等契约，优先复用已有类型，不提前建立复杂的状态管理框架。
 
-3. **独立 Loop 包与 Cordis 插件注册**：参考现有 Harness 插件的组织方式，为真实 Loop 建立独立的模块或工作区包，明确入口文件、公共导出、依赖及构建配置。实现 Cordis 插件注册，将 `agentLoop` 服务提供给当前 Agent Context，声明对 Session、SystemPrompt 和 LLM 服务的依赖。通过最小示例验证插件能够注册、获取服务及正确卸载，不执行真实模型请求。
+3. **独立 Loop 包与 Cordis 插件注册**：在 `src/agents/plugins/loop/` 建立独立工作区包 `@fly-novel/agent-loop`，明确入口文件、公共导出、依赖及构建配置。实现 Cordis 插件注册，将 `agentLoop` 服务提供给当前 Agent Context，声明对 Session、SystemPrompt 和 LLM 服务的依赖。通过最小示例验证插件能够注册、获取服务及正确卸载，不执行真实模型请求；Agents 包只负责注册，不转导 Loop Runtime。
 
 4. **Turn 与 Step 最小执行闭环**：在真实 Loop 中实现最小 Turn 执行流程，一个 Turn 只执行一个 Step，先使用固定结果模拟 Step 执行。通过现有 Agent 和 Preset 完成 `agent.run()` → Loop → Turn → Step → Result 的实际调用，验证插件装配及结果返回，并保留 mock loop 的切换能力。
 

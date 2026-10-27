@@ -31,6 +31,9 @@
       ],
       "@fly-novel/agents": [
         "./src/agents/index.ts"
+      ],
+      "@fly-novel/agent-loop": [
+        "./src/agents/plugins/loop/index.ts"
       ]
     }
   },

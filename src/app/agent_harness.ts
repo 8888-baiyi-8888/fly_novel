@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { bootstrapAgents, type AgentLoopResult } from '@fly-novel/agents'
+import { bootstrapAgents } from '@fly-novel/agents'
+import type { AgentLoopResult } from '@fly-novel/agent-loop'
 
 /** 手动调试 Preset 装配、Agent.run() 和 Cordis 作用域销毁。 */
 export async function debugAgentHarness(prompt: string): Promise<AgentLoopResult> {
