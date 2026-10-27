@@ -8,7 +8,7 @@
 
 - `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
-- `plugins/`：Harness 使用的 mock loop、memory 与 LLM 服务插件；各已实现模块导出注册定义，`plugins/index.ts` 汇总内置定义。通用 Session 和 SystemPrompt 位于各自的独立工作区包中，Harness 注册定义由本包适配。
+- `plugins/`：Harness 使用的 AgentLoop Runtime、mock loop、memory 与 LLM 服务插件；各已实现模块导出注册定义，`plugins/index.ts` 汇总内置定义。通用 Session 和 SystemPrompt 位于各自的独立工作区包中，Harness 注册定义由本包适配。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `tests/`：按包运行的自动化测试。
 
@@ -21,6 +21,12 @@
 `llmPluginDefinition` 已加入内置插件注册表。需要模型服务的 Preset 声明 `{ pluginId: 'llm' }`；应用创建实例时通过 `pluginConfigs.llm` 提供 `{ adapters: [{ providers: ['provider-id'], adapter }] }`。插件要求至少一条适配器路由，在该 Agent 的 Context 中提供 `llm` 服务，并随插件作用域注销路由。配置和凭据由应用入口读取，插件只接收已创建的适配器。当前角色与导演的 mock Preset 不装配 LLM，mock loop 仍只回显输入。
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供；Harness 注册定义保留在本包。
+
+### Agent Loop 调用契约
+
+`AgentLoop.run({ prompt })` 每次调用对应一个 Turn，成功返回 `{ content }`；执行失败时以拒绝的 Promise 向 `agent.run()` 调用方传播错误，不转换为成功文本。Turn 与 Step 的运行事件使用当前 Agent 的 Session 记录；首阶段一个 Turn 只执行一个 Step。当前 `AgentLoopInput` 不带取消信号，Agent 也没有取消方法，取消控制留到生命周期阶段定义。
+
+`agent-loop-runtime` 插件声明依赖 Cordis `sessions` 服务，并在当前 Agent Context 中提供 `agentLoop`。`AgentLoopRuntime` 从该 Context 的 `SessionManager` 创建并持有 Session；`run()` 的用户输入仍通过 `{ prompt }` 传入。`run()` 进入私有 `turn()`，再由 `turn()` 调用私有 `step()`。当前每个 Turn 执行一个 Step；Turn 与 Step 序号从 1 开始递增，并记录开始、结束和失败事件。Step 失败时记录通用错误原因并向调用方传播原错误。后续需要 SystemPrompt 或 LLM 时由 Runtime 从同一 Context 获取服务，不增加构造参数。
 
 逐步检查注册、装配、路由隔离和清理时，使用[LLM 插件调试步骤](../../docs/cookbook/llm-plugin-debug.md)。
 
