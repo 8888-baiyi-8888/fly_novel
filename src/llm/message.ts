@@ -1,6 +1,7 @@
 import type { MessageId, ToolCallId} from './brand'
 import type { ContentBlock, ToolResultBlock} from './types'
 import { deepFreeze } from '@fly-novel/util'
+import { randomUUID } from 'node:crypto'
 /** 助手消息的供应商、模型身份和适配器私有重放数据。 */
 export interface AssistantProviderMetadata {
   /** 生成此消息的供应商路由。 */
@@ -81,6 +82,95 @@ export interface UserMessage extends Message {
  */
 export function freezeMessage<T extends Message>(message: T): T {
   return deepFreeze(structuredClone(message))
+}
+
+type NewMessage = Omit<Message, 'id'>
+type NewUserMessage = Omit<UserMessage, 'id' | 'role'>
+type NewAssistantMessage = Omit<AssistantMessage, 'id' | 'role' | 'source'> & {
+  readonly source: Omit<ModelMessageSource, 'kind'> & { readonly kind?: never }
+}
+
+/**
+ * 创建带新标识并冻结的消息。
+ * @param input 不含消息标识的完整消息内容。
+ * @returns 带新标识的不可变消息。
+ */
+export function createMessage<T extends NewMessage>(input: T & { readonly id?: never }): T & Pick<Message, 'id'> {
+  return freezeMessage({
+    ...input,
+    id: randomUUID() as MessageId,
+  })
+}
+
+/**
+ * 创建带新标识并冻结的用户消息。
+ * @param input 用户消息的内容和来源。
+ * @returns 角色固定为 user 的不可变消息。
+ */
+export function createUserMessage<T extends NewUserMessage>(
+  input: T & { readonly id?: never; readonly role?: never },
+): T & Pick<UserMessage, 'id' | 'role'> {
+  return createMessage({
+    ...input,
+    role: 'user',
+  })
+}
+
+/**
+ * 创建带新标识并冻结的模型助手消息。
+ * @param input 助手内容及 provider、model 和可选 replay state。
+ * @returns 角色和来源类型固定的不可变助手消息。
+ */
+export function createAssistantMessage(
+  input: NewAssistantMessage & { readonly id?: never; readonly role?: never },
+): AssistantMessage {
+  return createMessage({
+    role: 'assistant',
+    content: input.content,
+    source: {
+      kind: 'model',
+      ...input.source,
+    },
+  })
+}
+
+/**
+ * 创建带新标识并冻结的系统提示消息。
+ * @param text 已渲染的系统提示词；空字符串表示没有提示词。
+ * @param plugin 负责组装提示词的插件标识。
+ * @returns 来源标记为指定插件的不可变系统消息。
+ */
+export function createSystemMessage(text: string, plugin: string): SystemMessage {
+  return createMessage({
+    role: 'system',
+    content: text.length === 0 ? [] : [{ type: 'text', text }],
+    source: { kind: 'plugin', plugin },
+  })
+}
+
+/** 新建工具结果消息时所需的调用关联和结果内容。 */
+export interface ToolResultMessageInput {
+  readonly callId: ToolCallId
+  readonly content: ContentBlock[]
+  readonly isError?: boolean
+}
+
+/**
+ * 创建带新标识并冻结的工具结果消息。
+ * @param input 工具调用标识、结果内容和可选错误状态。
+ * @returns 关联到指定工具调用的不可变用户消息。
+ */
+export function createToolResultMessage(input: ToolResultMessageInput): ToolResultMessage {
+  return createMessage({
+    role: 'user',
+    source: { kind: 'tool', callId: input.callId },
+    content: [{
+      type: 'tool-result',
+      toolCallId: input.callId,
+      content: input.content,
+      ...(input.isError === undefined ? {} : { isError: input.isError }),
+    }],
+  })
 }
 
 /**

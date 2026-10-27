@@ -14,7 +14,7 @@
 | `adapter.ts` | 适配器接口、模型解析及绑定到同一代实例的调用。 |
 | `runtime.ts` | Cordis 服务、路由注册、默认参数解析、内容投影和流式分发。 |
 | `types.ts` | 供应商、附件、内容块、模型请求及流式响应协议；附件类型只在此定义。 |
-| `message.ts`、`brand.ts` | 消息结构、来源、不可变快照和专用标识类型。 |
+| `message.ts`、`brand.ts` | 消息结构、来源、带新标识的消息创建工厂、不可变快照和专用标识类型。 |
 | `call-config.ts`、`retry-policy.ts` | 调用配置比较和重试策略类型声明。 |
 | `content.ts` | 文件路径说明和纯文本模型的图片占位转换。 |
 | `error.ts`、`adapter-failure.ts` | LLM 错误分类、参数校验和外部失败快照。 |
@@ -25,6 +25,8 @@
 `LlmRuntime` 通过 Cordis Context 创建为 `llm` 服务。调用 `registerAdapter(providers, adapter)` 注册路由；注册方持有返回的清理函数，在所属插件或应用结束时调用，清理可以重复执行。批量注册发生重复或元数据错误时，不留下部分注册。注销阻止后续请求选中该路由；已经开始的请求继续使用已取得的适配器，并由调用方的 `AbortSignal` 控制取消。
 
 `stream(options)` 通过 `llm/stream` 中间件分发：调用 `next()` 继续，不调用则返回替代流。适配器选择、模型解析和流迭代错误转换成 `error` 或 `aborted` 结束块；中间件和消费者异常直接传播。收到结束块、消费者提前停止或迭代失败时关闭迭代器，关闭失败继续抛出。运行时将取消信号传给适配器，适配器负责结束正在进行的网络操作。
+
+创建新消息使用 `createMessage()`、`createUserMessage()`、`createAssistantMessage()`、`createSystemMessage()` 或 `createToolResultMessage()`；工厂生成新 `MessageId` 并冻结消息，角色专用工厂同时固定角色及来源类型。工具结果按当前消息契约保存在 user 消息的 `tool-result` 内容块中。已有标识的消息使用 `freezeMessage()` 制作不可变快照，不替换原标识。
 
 文件投影可使用 Context 中的 `attachments.fileHostPath(ref)` 和 `fs.processPathFromHostPath(path)` 服务。服务缺失或附件返回 `ATTACHMENT_NOT_FOUND` 时，模型收到无法访问的文本说明；其他错误进入请求失败流程。纯文本模型的图片被替换为占位文本，原消息不变。
 
