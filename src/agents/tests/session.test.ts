@@ -118,6 +118,27 @@ describe('Session 事件与消息类型', () => {
     assert.equal(session.deriveMessages().length, 5)
   })
 
+  it('派生消息只保留最新的系统提示快照并将其放在历史开头', () => {
+    const session = new Session({ id: 'session-system-snapshot' })
+    const firstSystem = systemMessage('第一版提示')
+    const secondSystem = { ...systemMessage('第二版提示'), id: 'message-system-2' as MessageId }
+    const firstUser = userMessage('第一问')
+    const assistant = assistantMessage('回答')
+    const secondUser = userMessage('第二问')
+
+    session.append('system/message', { turn: 1, step: 1, message: firstSystem })
+    session.append('user/message', firstUser)
+    session.append('assistant/message', { turn: 1, step: 1, message: assistant })
+    session.append('system/message', { turn: 2, step: 1, message: secondSystem })
+    session.append('user/message', secondUser)
+
+    assert.deepEqual(session.deriveMessages(), [secondSystem, firstUser, assistant, secondUser])
+
+    const emptySystem = { ...systemMessage(''), id: 'message-system-empty' as MessageId, content: [] }
+    session.append('system/message', { turn: 3, step: 1, message: emptySystem })
+    assert.deepEqual(session.deriveMessages(), [firstUser, assistant, secondUser])
+  })
+
   it('Surface 不导出空助手消息', () => {
     const session = new Session({ id: 'session-empty-assistant' })
     session.append('assistant/message', {

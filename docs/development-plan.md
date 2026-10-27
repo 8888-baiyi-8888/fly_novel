@@ -103,7 +103,7 @@ Agent Loop 作为 Harness 的执行协调层，负责 Turn 生命周期、Step �
 
 6. **Session 接入与多轮对话**：通过 `session.deriveMessages()` 获取历史消息；Turn 开始后记录当前 user 输入，模型以 `stop` 成功结束后记录 assistant 回复。模型失败时保留已提交的 user 输入，不写入 assistant 消息；取消事件规则留待生命周期阶段（当前 AgentLoop 输入尚无取消信号）。生命周期驱动函数从 Loop 运行阶段读取当前状态，不接收重复的 Turn 参数。验证同一 Agent 连续调用能够使用前轮历史，不同 Agent 的 Session 相互隔离。
 
-7. **SystemPrompt 接入与上下文组装**：通过已有 `assemble()` / `renderPrompt()` 获取动态系统提示词，将系统提示词、Session 历史和当前用户输入统一组装为模型请求。明确消息顺序、系统提示词快照及其与 Session 历史的关系，避免重复拼接或污染上下文。
+7. **SystemPrompt 接入与上下文组装**：通过当前 Agent Context 的 `assemble()` / `renderPrompt()` 获取动态系统提示词，将系统提示词快照、Session 历史和当前用户输入统一组装为模型请求。Session 事件保留每次提示词快照，派生模型历史只投影最新非空 system 消息并放在历史开头；空快照清除旧提示词。验证多轮提示词更新不会重复发送旧快照，并检查提示词渲染失败时按 Turn 错误结束。
 
 8. **Turn 生命周期与执行控制**：完善 Turn 的执行状态、终止条件、错误传播、取消和资源清理。明确同一 Agent 并发运行的行为及 Agent 销毁后的资源释放。保持 Step 执行结构可扩展，但暂不引入工具循环、自动重试、复杂调度器或历史压缩。
 

@@ -5,8 +5,9 @@ import type {
   AgentLoopResult,
 } from './types.js'
 import type { Session, TurnEndReason } from '@fly-novel/session'
-import { createAssistantMessage, createUserMessage, LlmError } from '@fly-novel/llm'
+import { createAssistantMessage, createSystemMessage, createUserMessage, LlmError } from '@fly-novel/llm'
 import type { ContentBlock, GenerateOptions } from '@fly-novel/llm'
+import { renderPrompt } from '@fly-novel/system-prompt'
 
 export interface AgentLoopRuntimeConfig {
   readonly provider: string
@@ -97,6 +98,15 @@ export class AgentLoopRuntime implements AgentLoop {
     const { turn, step } = this.phase.turn
     this.session.append('step/start', { turn, step })
     try {
+      const systemPrompt = renderPrompt(this.context.systemPrompt.assemble())
+      const previousSystemPrompt = this.session.deriveMessages().some(({ role }) => role === 'system')
+      if (systemPrompt.length > 0 || previousSystemPrompt) {
+        this.session.append('system/message', {
+          turn,
+          step,
+          message: createSystemMessage(systemPrompt, 'system-prompt'),
+        })
+      }
       this.session.append('user/message', createUserMessage({
         source: { kind: 'user' },
         content: [{ type: 'text', text: this.phase.turn.prompt }],

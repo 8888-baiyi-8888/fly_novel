@@ -8,7 +8,7 @@
 
 `SessionEventMap` 按 DeepSeek Harness 的声明合并方式允许插件扩展。基础类型区分 `turn/start`、`step/start` 等运行事件，以及 `user/message`、`assistant/message`、`tool/result` 等消息事件；消息负载复用 `@fly-novel/llm` 类型。助手消息内容中的 `tool-call` 块保留模型工具调用，独立的 `tool/call` 和 `tool/result` 事件记录执行过程。
 
-`Session` 内部的 Surface 按顺序保存消息事件在事件日志中的序号。`deriveMessages()` 沿 Surface 导出 system、user、assistant 和 tool result 消息；turn/step 等运行事件及独立的 `tool/call` 记录不进入模型上下文，空助手消息也会被跳过。每次调用返回新的消息数组，历史事件中的消息快照保持不可变。当前 Surface 仅支持追加；不执行历史替换、检索或压缩。会话数据不写入文件或数据库，进程重启后不恢复。
+`Session` 内部的 Surface 按顺序保存消息事件在事件日志中的序号。`deriveMessages()` 将最新的非空 system 消息置于历史开头，其余 user、assistant 和 tool result 消息按写入顺序导出；空 system 消息用于清除先前提示词，不进入模型上下文。turn/step 等运行事件及独立的 `tool/call` 记录不进入模型上下文，空助手消息也会被跳过。每次调用返回新的消息数组，历史事件中的消息快照保持不可变。Surface 只追加事件，不执行历史检索或压缩。会话数据不写入文件或数据库，进程重启后不恢复。
 
 ## Session Manager
 

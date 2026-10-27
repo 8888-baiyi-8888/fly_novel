@@ -61,11 +61,14 @@ export class Session {
   /** 按消息事件写入顺序导出模型历史；运行事件和工具调用执行记录不进入消息列表。 */
   deriveMessages(): Message[] {
     this.assertOpen()
-    return this.surface.read().flatMap<Message>((seq) => {
+    let systemMessage: Message | undefined
+    const messages = this.surface.read().flatMap<Message>((seq) => {
       const event = this.events[seq]
       if (!event) return []
       switch (event.type) {
         case 'system/message':
+          systemMessage = event.data.message
+          return []
         case 'assistant/message':
         case 'tool/result':
           return event.data.message.role === 'assistant' && event.data.message.content.length === 0
@@ -77,6 +80,7 @@ export class Session {
           return []
       }
     })
+    return systemMessage?.content.length ? [systemMessage, ...messages] : messages
   }
 
   /** 返回当前事件数。 */

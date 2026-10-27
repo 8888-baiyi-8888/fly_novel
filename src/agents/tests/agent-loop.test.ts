@@ -166,6 +166,46 @@ describe('AgentLoop Runtime', () => {
     ])
   })
 
+  it('每轮组装最新 SystemPrompt 并将其作为唯一系统消息放在历史开头', async () => {
+    framework = await bootstrapAgents()
+    registerRuntimePreset(framework)
+    const adapter = new FixedResponseAdapter()
+    const agent = await framework.manager.create({
+      id: 'runtime-prompt-agent',
+      presetId: 'runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter }] } },
+    })
+    let instruction = '第一版系统提示'
+    agent.context.systemPrompt.section({ name: 'identity', order: 0, text: () => instruction })
+
+    await agent.run({ prompt: '第一轮' })
+    instruction = '第二版系统提示'
+    await agent.run({ prompt: '第二轮' })
+
+    assert.deepEqual(adapter.requests.map(({ messages }) => messages.map(({ role }) => role)), [
+      ['system', 'user'],
+      ['system', 'user', 'assistant', 'user'],
+    ])
+    assert.deepEqual(adapter.requests.map(({ messages }) => messages[0]?.content), [
+      [{ type: 'text', text: '第一版系统提示' }],
+      [{ type: 'text', text: '第二版系统提示' }],
+    ])
+
+    const session = agent.context.sessions.list()[0]
+    assert.ok(session)
+    assert.deepEqual(session.read().filter(({ type }) => type === 'system/message').length, 2)
+    assert.deepEqual(session.deriveMessages().map(({ role, content }) => ({
+      role,
+      text: content.flatMap((block) => block.type === 'text' ? [block.text] : []).join(''),
+    })), [
+      { role: 'system', text: '第二版系统提示' },
+      { role: 'user', text: '第一轮' },
+      { role: 'assistant', text: '第一轮' },
+      { role: 'user', text: '第二轮' },
+      { role: 'assistant', text: '第二轮' },
+    ])
+  })
+
   it('Session 按 Agent Context 隔离并随 Agent 销毁', async () => {
     framework = await bootstrapAgents()
     registerRuntimePreset(framework)

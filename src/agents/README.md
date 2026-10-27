@@ -26,7 +26,7 @@
 
 `AgentLoop.run({ prompt })` 每次调用对应一个 Turn，成功返回 `{ content }`；执行失败时以拒绝的 Promise 向 `agent.run()` 调用方传播错误，不转换为成功文本。Turn 与 Step 的运行事件使用当前 Agent 的 Session 记录；首阶段一个 Turn 只执行一个 Step。当前 `AgentLoopInput` 不带取消信号，Agent 也没有取消方法，取消控制留到生命周期阶段定义。
 
-`@fly-novel/agent-loop` 导出 `AgentLoopRuntime`、`agentLoopRuntimePlugin` 和 Harness 注册定义。插件声明依赖 Cordis `sessions`、`systemPrompt` 和 `llm` 服务，并在当前 Agent Context 中提供 `agentLoop`。通过 Preset 装配 Runtime 时须同时装配这三个服务插件，并在 Loop 插件配置中指定 `provider` 与 `model`。`AgentLoopRuntime` 从 Context 的 `SessionManager` 创建并持有 Session；`run({ prompt })` 接收用户输入，运行服务从同一 Context 获取，不增加构造参数。Loop 以无参数 `turn()` 驱动生命周期、以无参数 `step()` 执行模型步骤，活动输入与序号保存在运行阶段状态中。每轮请求使用 Session 派生的完整消息历史；成功时将完整响应内容块及模型来源、可选 replay state 记录为 assistant 消息，并从文本块生成返回文本。失败时保留 user 输入且不产生 assistant 消息，并传播 `LlmError`。当前尚未组装 SystemPrompt，留待后续步骤。Turn 与 Step 序号从 1 开始递增，并记录开始、结束和失败事件。`@fly-novel/agents` 仅负责注册 Loop 插件，不转导 Runtime；mock loop 仍归 Agents 包。
+`@fly-novel/agent-loop` 导出 `AgentLoopRuntime`、`agentLoopRuntimePlugin` 和 Harness 注册定义。插件声明依赖 Cordis `sessions`、`systemPrompt` 和 `llm` 服务，并在当前 Agent Context 中提供 `agentLoop`。通过 Preset 装配 Runtime 时须同时装配这三个服务插件，并在 Loop 插件配置中指定 `provider` 与 `model`。`AgentLoopRuntime` 从 Context 的 `SessionManager` 创建并持有 Session；`run({ prompt })` 接收用户输入，运行服务从同一 Context 获取，不增加构造参数。Loop 以无参数 `turn()` 驱动生命周期、以无参数 `step()` 执行模型步骤，活动输入与序号保存在运行阶段状态中。每个 Step 从当前 Context 组装 SystemPrompt，将提示词快照与 user 消息写入 Session 后派生完整请求历史；Session 的模型视图只保留最新 system 提示词并置于历史开头。成功时将完整响应内容块及模型来源、可选 replay state 记录为 assistant 消息，并从文本块生成返回文本。失败时保留已写入消息且不产生 assistant 消息，并传播 `LlmError`。Turn 与 Step 序号从 1 开始递增，并记录开始、结束和失败事件。`@fly-novel/agents` 仅负责注册 Loop 插件，不转导 Runtime；mock loop 仍归 Agents 包。
 
 逐步检查注册、装配、路由隔离和清理时，使用[LLM 插件调试步骤](../../docs/cookbook/llm-plugin-debug.md)。
 

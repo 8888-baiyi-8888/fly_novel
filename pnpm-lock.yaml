@@ -109,6 +109,9 @@ importers:
       '@fly-novel/session':
         specifier: workspace:*
         version: link:../session
+      '@fly-novel/system-prompt':
+        specifier: workspace:*
+        version: link:../system-prompt
     devDependencies:
       '@types/node':
         specifier: ^22.20.2
