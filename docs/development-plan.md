@@ -99,7 +99,7 @@ Agent Loop 作为 Harness 的执行协调层，负责 Turn 生命周期、Step �
 
 4. **Turn 与 Step 最小执行闭环**：在真实 Loop 中实现最小 Turn 执行流程，一个 Turn 只执行一个 Step，先使用固定结果模拟 Step 执行。通过现有 Agent 和 Preset 完成 `agent.run()` → Loop → Turn → Step → Result 的实际调用，验证插件装配及结果返回，并保留 mock loop 的切换能力。
 
-5. **LLM 服务接入与模型调用**：让 Step 通过当前 Agent Context 的 LLM 服务完成一次无工具模型请求。确定模型选择、请求消息及结果处理方式，通过固定模型适配器验证模型调用、路由和返回结果，并区分成功响应与 LLM 失败结果。
+5. **LLM 服务接入与模型调用**：让 Step 通过当前 Agent Context 的 LLM 服务完成一次无工具模型请求。模型由 `agent-loop-runtime` 插件配置中的 `provider` 与 `model` 选择；请求只包含当前 user 输入，成功时汇总文本块并返回，LLM 失败、取消、工具调用或未完成响应作为失败传播。通过固定模型适配器验证模型调用、路由和返回结果。Session 消息历史与 SystemPrompt 组装留待后续步骤。
 
 6. **Session 接入与多轮对话**：通过 Session 获取历史消息，记录 Turn 开始、结束、用户输入和助手回复。明确成功、失败及取消时的最小事件规则，避免失败轮次产生伪成功消息。验证同一 Agent 连续调用能够使用前轮历史，不同 Agent 的 Session 相互隔离。
 

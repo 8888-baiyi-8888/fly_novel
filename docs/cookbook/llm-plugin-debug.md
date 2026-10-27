@@ -1,6 +1,6 @@
 # LLM 插件逐步调试
 
-本文在 [Harness 测试入口](../../src/agents/tests/harness.test.ts)中检查 LLM 插件装配、路由隔离与清理，并按需运行真实模型用例。真实 Agent Loop 尚未接入此插件；`agent.run()` 仍由 mock loop 回显输入，真实用例直接调用 Agent 的 `llm.stream()`。
+本文在 [Harness 测试入口](../../src/agents/tests/harness.test.ts)中检查 LLM 插件装配、路由隔离与清理，并按需运行真实模型用例。文末另有真实 Agent Loop 请求用例，通过 `agent.run()` 触发 Loop 内部的 `llm.stream()`。
 
 ## 1. 编译调试入口
 
@@ -100,3 +100,15 @@ Remove-Item Env:\FLY_NOVEL_REAL_LLM_TEST
   "skipFiles": ["<node_internals>/**"]
 }
 ```
+
+## 10. 从真实 Agent Loop 发起模型请求
+
+[Agent Loop 测试](../../src/agents/tests/agent-loop.test.ts)另有“真实 Agent Loop 调用 DeepSeek 模型”用例。它读取本机 DeepSeek 配置，将 `agent-loop-runtime`、`session`、`system-prompt` 和 `llm` 装配到 Preset，再调用 `agent.run()`；模型响应经真实 Loop 返回。该步骤只验证一次请求，不写入 Session 消息历史。
+
+从仓库根目录运行：
+
+```powershell
+node --test --test-isolation=none --test-name-pattern="真实 Agent Loop 调用 DeepSeek 模型" .test-dist/agents/tests/agent-loop.test.js
+```
+
+也可在 VS Code 的“运行和调试”中选择“调试 AgentLoop 真实模型请求（DeepSeek）”。该配置会编译测试并只运行这一项；需要有效的本机 DeepSeek 配置、凭据和网络。运行整个 `agent-loop.test.ts` 文件也会执行这条真实请求用例。

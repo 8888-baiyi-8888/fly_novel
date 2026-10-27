@@ -3,4 +3,5 @@ export {
   AgentLoopRuntime,
   agentLoopRuntimePlugin,
   agentLoopRuntimePluginDefinition,
+  type AgentLoopRuntimeConfig,
 } from './agent-loop-runtime.js'
