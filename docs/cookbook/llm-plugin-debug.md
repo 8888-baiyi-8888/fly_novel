@@ -103,7 +103,7 @@ Remove-Item Env:\FLY_NOVEL_REAL_LLM_TEST
 
 ## 10. 从真实 Agent Loop 发起模型请求
 
-[Agent Loop 测试](../../src/agents/tests/agent-loop.test.ts)另有“真实 Agent Loop 调用 DeepSeek 模型”用例。它读取本机 DeepSeek 配置，将 `agent-loop-runtime`、`session`、`system-prompt` 和 `llm` 装配到 Preset，再调用 `agent.run()`；模型响应经真实 Loop 返回。该步骤只验证一次请求，不写入 Session 消息历史。
+[Agent Loop 测试](../../src/agents/tests/agent-loop.test.ts)另有“真实 Agent Loop 调用 DeepSeek 模型”用例。它读取本机 DeepSeek 配置，将 `agent-loop-runtime`、`session`、`system-prompt` 和 `llm` 装配到 Preset，再调用 `agent.run()`；模型响应经真实 Loop 返回，成功的 user/assistant 消息会记录在 Session。
 
 从仓库根目录运行：
 

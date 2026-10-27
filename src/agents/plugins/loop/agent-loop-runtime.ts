@@ -5,19 +5,36 @@ import type {
   AgentLoopResult,
 } from './types.js'
 import type { Session, TurnEndReason } from '@fly-novel/session'
-import { randomUUID } from 'node:crypto'
-import { freezeMessage, LlmError, type MessageId } from '@fly-novel/llm'
-import type { GenerateOptions } from '@fly-novel/llm'
+import { createAssistantMessage, createUserMessage, LlmError } from '@fly-novel/llm'
+import type { ContentBlock, GenerateOptions } from '@fly-novel/llm'
 
 export interface AgentLoopRuntimeConfig {
   readonly provider: string
   readonly model: string
 }
 
+interface PendingTurn {
+  readonly prompt: string
+  readonly resolve: (result: AgentLoopResult) => void
+  readonly reject: (error: unknown) => void
+}
+
+interface RunningTurn {
+  readonly prompt: string
+  readonly turn: number
+  readonly step: number
+}
+
 /** 从当前 Agent Context 获取 Session，并协调 Turn 与 Step 生命周期。 */
 export class AgentLoopRuntime implements AgentLoop {
   private readonly session: Session
   private turnNumber: number
+  private readonly pendingTurns: PendingTurn[] = []
+  private phase:
+    | { kind: 'idle' }
+    | { kind: 'reserved'; prompt: string }
+    | { kind: 'running'; turn: RunningTurn } = { kind: 'idle' }
+  private driving = false
 
   constructor(private readonly context: Context, private readonly config: AgentLoopRuntimeConfig) {
     this.session = context.sessions.create()
@@ -26,35 +43,81 @@ export class AgentLoopRuntime implements AgentLoop {
 
   /** 执行一个 Turn，并返回其 Step 结果。 */
   run(input: AgentLoopInput): Promise<AgentLoopResult> {
-    return this.turn(input.prompt)
+    return new Promise((resolve, reject) => {
+      this.pendingTurns.push({ prompt: input.prompt, resolve, reject })
+      void this.kick()
+    })
   }
 
-  private async turn(prompt: string): Promise<AgentLoopResult> {
+  private async kick(): Promise<void> {
+    if (this.driving) return
+    this.driving = true
+    try {
+      while (this.pendingTurns.length > 0) {
+        const pending = this.pendingTurns.shift()
+        if (!pending) continue
+        try {
+          this.phase = { kind: 'reserved', prompt: pending.prompt }
+          pending.resolve(await this.turn())
+        } catch (error) {
+          pending.reject(error)
+        }
+      }
+    } finally {
+      this.driving = false
+      if (this.pendingTurns.length > 0) await this.kick()
+    }
+  }
+
+  private async turn(): Promise<AgentLoopResult> {
+    if (this.phase.kind !== 'reserved') throw new Error('Turn 执行时没有已接收的输入')
+    const { prompt } = this.phase
     const turn = this.turnNumber + 1
     this.session.append('turn/start', { turn })
     this.turnNumber = turn
+    this.phase = { kind: 'running', turn: { prompt, turn, step: 1 } }
 
     let reason: TurnEndReason = { kind: 'completed' }
     try {
-      return await this.step({ turn, step: 1, prompt })
+      return await this.step()
     } catch (error) {
       reason = { kind: 'error', message: 'Turn 执行失败' }
       throw error
     } finally {
-      this.session.append('turn/end', { turn, reason })
+      try {
+        this.session.append('turn/end', { turn, reason })
+      } finally {
+        this.phase = { kind: 'idle' }
+      }
     }
   }
 
-  private async step(input: { readonly turn: number; readonly step: number; readonly prompt: string }): Promise<AgentLoopResult> {
-    this.session.append('step/start', { turn: input.turn, step: input.step })
+  private async step(): Promise<AgentLoopResult> {
+    if (this.phase.kind !== 'running') throw new Error('Step 执行时没有活动 Turn')
+    const { turn, step } = this.phase.turn
+    this.session.append('step/start', { turn, step })
     try {
-      const request = this.buildRequest(input.prompt)
-      let content = ''
+      this.session.append('user/message', createUserMessage({
+        source: { kind: 'user' },
+        content: [{ type: 'text', text: this.phase.turn.prompt }],
+      }))
+      const request = this.buildRequest()
+      const content: ContentBlock[] = []
       for await (const chunk of this.context.llm.stream(request)) {
         if (chunk.type === 'finish') {
           switch (chunk.reason.kind) {
-            case 'stop':
-              return { content }
+            case 'stop': {
+              const message = createAssistantMessage({
+                content,
+                source: {
+                  provider: this.config.provider,
+                  model: this.config.model,
+                  ...(chunk.replayState === undefined ? {} : { replayState: chunk.replayState }),
+                },
+              })
+              this.session.append('assistant/message', { turn, step, message })
+              return { content: message.content.flatMap((block) => block.type === 'text' ? [block.text] : []).join('') }
+            }
             case 'error':
             case 'aborted':
               throw new LlmError(chunk.reason.failure.message, chunk.reason.failure.code, {
@@ -72,27 +135,21 @@ export class AgentLoopRuntime implements AgentLoop {
             }
           }
         }
-        if (chunk.type === 'text-delta') content += chunk.text
+        if (chunk.type === 'block-end') content.push(chunk.block)
       }
       throw new LlmError('LLM 响应流未包含结束块', 'INVALID_RESPONSE')
     } finally {
-      this.session.append('step/end', { turn: input.turn, step: input.step })
+      this.session.append('step/end', { turn, step })
     }
   }
 
-  private buildRequest(prompt: string): GenerateOptions {
-    const message = freezeMessage({
-      id: randomUUID() as MessageId,
-      role: 'user' as const,
-      source: { kind: 'user' as const },
-      content: [{ type: 'text' as const, text: prompt }],
-    })
-    const options: GenerateOptions = {
+  private buildRequest(): GenerateOptions {
+    if (this.phase.kind !== 'running') throw new Error('构建模型请求时没有活动 Turn')
+    return {
       provider: this.config.provider,
       model: this.config.model,
-      messages: [message],
+      messages: this.session.deriveMessages(),
     }
-    return options
   }
 }
 

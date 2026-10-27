@@ -18,8 +18,13 @@ class FixedResponseAdapter extends LlmAdapter {
       yield this.failure
       return
     }
-    const input = options.messages[0]?.content[0]
-    yield { type: 'text-delta', index: 0, text: input?.type === 'text' ? input.text : '' }
+    const input = options.messages.at(-1)?.content[0]
+    yield { type: 'block-start', index: 0, block: 'reasoning' }
+    yield { type: 'reasoning-delta', index: 0, text: '固定推理' }
+    yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: '固定推理' } }
+    yield { type: 'block-start', index: 1, block: 'text' }
+    yield { type: 'text-delta', index: 1, text: input?.type === 'text' ? input.text : '' }
+    yield { type: 'block-end', index: 1, block: { type: 'text', text: input?.type === 'text' ? input.text : '' } }
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
@@ -71,6 +76,7 @@ describe('AgentLoop Runtime', () => {
     const session = agent.context.sessions.list()[0]
     assert.ok(session)
     assert.deepEqual(session.read().filter((event) => event.type === 'turn/end')[0]?.data.reason, { kind: 'completed' })
+    assert.deepEqual(session.deriveMessages().map(({ role }) => role), ['user', 'assistant'])
     console.log('Agent Loop 真实模型响应：', result.content)
   })
 
@@ -103,11 +109,15 @@ describe('AgentLoop Runtime', () => {
     assert.equal(adapter.requests[0]?.model, 'test-model')
     assert.equal(adapter.requests[0]?.messages.length, 1)
     assert.equal(adapter.requests[0]?.messages[0]?.role, 'user')
-    assert.deepEqual(session.read().map(({ type, data }) => ({ type, data })), [
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'step/start', data: { turn: 1, step: 1 } },
-      { type: 'step/end', data: { turn: 1, step: 1 } },
-      { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+    assert.deepEqual(session.read().map(({ type }) => type), [
+      'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    ])
+    assert.deepEqual(session.deriveMessages().map(({ role, content }) => ({
+      role,
+      content: content.map(({ type }) => type),
+    })), [
+      { role: 'user', content: ['text'] },
+      { role: 'assistant', content: ['reasoning', 'text'] },
     ])
 
     await framework.manager.dispose('runtime-agent')
@@ -123,22 +133,37 @@ describe('AgentLoop Runtime', () => {
     framework = await bootstrapAgents()
     registerRuntimePreset(framework)
 
+    const adapter = new FixedResponseAdapter()
     const agent = await framework.manager.create({
       id: 'runtime-agent',
       presetId: 'runtime-test',
-      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter: new FixedResponseAdapter() }] } },
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter }] } },
     })
     const sessions = agent.context.get('sessions')
     assert.ok(sessions)
     const session = sessions.list()[0]
     assert.ok(session)
 
-    await agent.run({ prompt: '第一轮' })
-    await agent.run({ prompt: '第二轮' })
+    await Promise.all([
+      agent.run({ prompt: '第一轮' }),
+      agent.run({ prompt: '第二轮' }),
+    ])
 
     assert.deepEqual(session.read()
       .filter((event) => event.type === 'turn/start')
       .map((event) => event.data.turn), [1, 2])
+    assert.deepEqual(adapter.requests.map(({ messages }) => messages.map(({ role }) => role)), [
+      ['user'],
+      ['user', 'assistant', 'user'],
+    ])
+    assert.deepEqual(adapter.requests[1]?.messages.map(({ role, content }) => ({
+      role,
+      blocks: content.map(({ type }) => type),
+    })), [
+      { role: 'user', blocks: ['text'] },
+      { role: 'assistant', blocks: ['reasoning', 'text'] },
+      { role: 'user', blocks: ['text'] },
+    ])
   })
 
   it('Session 按 Agent Context 隔离并随 Agent 销毁', async () => {
@@ -231,6 +256,10 @@ describe('AgentLoop Runtime', () => {
     })
     const session = agent.context.sessions.list()[0]
     assert.ok(session)
+    assert.deepEqual(session.read().map(({ type }) => type), [
+      'turn/start', 'step/start', 'user/message', 'step/end', 'turn/end',
+    ])
+    assert.deepEqual(session.deriveMessages().map(({ role }) => role), ['user'])
     assert.deepEqual(session.read().filter((event) => event.type === 'turn/end')[0]?.data.reason,
       { kind: 'error', message: 'Turn 执行失败' })
   })
