@@ -18,8 +18,8 @@ Agent Loop 开发需要先明确 `agent.run()` 的执行边界，避免把公开
 
 ## 影响
 
-现有 `AgentLoopInput` 与 `AgentLoopResult` 保持稳定，不增加 Turn ID、公开执行状态或取消参数。Loop 包依赖 Cordis 和 Session；SystemPrompt、LLM 服务由宿主 Preset 提供，Loop 包不依赖 Agents 包。当前固定 Step 不使用 SystemPrompt 或 LLM，也不发起模型请求。
+现有 `AgentLoopInput` 与 `AgentLoopResult` 保持稳定，不增加 Turn ID、公开执行状态或取消参数。Loop 包依赖 Cordis 和 Session；SystemPrompt、LLM 服务由宿主 Preset 提供，Loop 包不依赖 Agents 包。当前固定 Step 不使用 SystemPrompt 或 LLM，也不发起模型请求。Harness Preset 可在真实 Runtime 与 Agents 包提供的 mock loop 之间选择。
 
 ## 验证
 
-AgentLoop 测试覆盖 Cordis 依赖装配、Context 服务读取、Agent 销毁时的服务和 Session 清理、固定 Step 不调用测试 Adapter、同一 Agent 的 Session 复用、不同 Agent 的 Session 隔离，以及 `agent.run()` 的成功透传和错误传播。运行命令与结果记录在本次开发回复中。
+AgentLoop 测试覆盖 Cordis 依赖装配、Context 服务读取、Agent 销毁时的服务和 Session 清理、固定 Step 不调用测试 Adapter、同一 Agent 的 Session 复用、不同 Agent 的 Session 隔离、Preset 在 Runtime 与 mock loop 间切换，以及 `agent.run()` 的成功透传和错误传播。运行命令与结果记录在本次开发回复中。

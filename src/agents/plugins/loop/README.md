@@ -8,6 +8,10 @@
 
 Runtime 从当前 Context 的 `sessions` 创建并持有 Session，通过私有 `turn()` 和 `step()` 记录运行事件。当前 Step 使用固定结果返回输入，只用于验证 Turn 执行契约；不调用 SystemPrompt 或 LLM。模型请求、Session 消息历史和提示词组装按开发计划后续步骤接入。
 
+## Harness Preset 装配
+
+Preset 选择 `agent-loop-runtime` 时，还需选择 `session`、`system-prompt` 和 `llm` 服务插件。当前最小运行结果与输入相同，并按 `turn/start`、`step/start`、`step/end`、`turn/end` 顺序写入 Session；需要回显前缀时，Preset 可改选由 `@fly-novel/agents` 提供的 `mock-loop`。
+
 ```ts
 import { AgentLoopRuntime, agentLoopRuntimePlugin } from '@fly-novel/agent-loop'
 ```

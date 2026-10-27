@@ -12,8 +12,22 @@ class NoRequestAdapter extends LlmAdapter {
 
   override async *stream(): AsyncIterable<StreamChunk> {
     this.requests += 1
-    throw new Error('第三步测试不应发起模型请求')
+    throw new Error('此测试不应发起模型请求')
   }
+}
+
+function registerRuntimePreset(framework: AgentFramework): void {
+  framework.presets.register({
+    id: 'runtime-test',
+    version: '1',
+    role: 'character',
+    plugins: [
+      { pluginId: 'agent-loop-runtime' },
+      { pluginId: 'system-prompt' },
+      { pluginId: 'llm' },
+      { pluginId: 'session' },
+    ],
+  })
 }
 
 describe('AgentLoop Runtime', () => {
@@ -26,17 +40,7 @@ describe('AgentLoop Runtime', () => {
 
   it('从当前 Agent Context 获取 Session 并记录 Turn/Step 生命周期', async () => {
     framework = await bootstrapAgents()
-    framework.presets.register({
-      id: 'runtime-test',
-      version: '1',
-      role: 'character',
-      plugins: [
-        { pluginId: 'agent-loop-runtime' },
-        { pluginId: 'system-prompt' },
-        { pluginId: 'llm' },
-        { pluginId: 'session' },
-      ],
-    })
+    registerRuntimePreset(framework)
 
     const adapter = new NoRequestAdapter()
     const agent = await framework.manager.create({
@@ -77,17 +81,7 @@ describe('AgentLoop Runtime', () => {
 
   it('同一 Agent 连续运行时复用 Context 中的 Session', async () => {
     framework = await bootstrapAgents()
-    framework.presets.register({
-      id: 'runtime-test',
-      version: '1',
-      role: 'character',
-      plugins: [
-        { pluginId: 'agent-loop-runtime' },
-        { pluginId: 'system-prompt' },
-        { pluginId: 'llm' },
-        { pluginId: 'session' },
-      ],
-    })
+    registerRuntimePreset(framework)
 
     const agent = await framework.manager.create({
       id: 'runtime-agent',
@@ -109,17 +103,7 @@ describe('AgentLoop Runtime', () => {
 
   it('Session 按 Agent Context 隔离并随 Agent 销毁', async () => {
     framework = await bootstrapAgents()
-    framework.presets.register({
-      id: 'runtime-test',
-      version: '1',
-      role: 'character',
-      plugins: [
-        { pluginId: 'agent-loop-runtime' },
-        { pluginId: 'system-prompt' },
-        { pluginId: 'llm' },
-        { pluginId: 'session' },
-      ],
-    })
+    registerRuntimePreset(framework)
 
     const first = await framework.manager.create({
       id: 'runtime-first',
@@ -140,6 +124,30 @@ describe('AgentLoop Runtime', () => {
     await framework.manager.dispose(first.info.identity.id)
     assert.throws(() => firstSession.read(), /已关闭/)
     assert.deepEqual(await second.run({ prompt: '第二个 Agent 仍可运行' }), { content: '第二个 Agent 仍可运行' })
+  })
+
+  it('Preset 可选择真实 Loop 或 mock loop', async () => {
+    framework = await bootstrapAgents()
+    registerRuntimePreset(framework)
+    framework.presets.register({
+      id: 'mock-test',
+      version: '1',
+      role: 'character',
+      plugins: [{ pluginId: 'mock-loop', config: { prefix: '[Mock]' } }],
+    })
+
+    const adapter = new NoRequestAdapter()
+    const runtimeAgent = await framework.manager.create({
+      id: 'runtime-agent',
+      presetId: 'runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter }] } },
+    })
+    const mockAgent = await framework.manager.create({ id: 'mock-agent', presetId: 'mock-test' })
+
+    assert.ok(runtimeAgent.context.get('agentLoop') instanceof AgentLoopRuntime)
+    assert.deepEqual(await runtimeAgent.run({ prompt: '真实 Loop' }), { content: '真实 Loop' })
+    assert.deepEqual(await mockAgent.run({ prompt: 'Mock Loop' }), { content: '[Mock] Mock Loop' })
+    assert.equal(adapter.requests, 0)
   })
 
   it('Agent.run 将输入交给装配的 Loop 并返回其结果', async () => {
