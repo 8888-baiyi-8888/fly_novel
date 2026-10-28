@@ -66,6 +66,9 @@ importers:
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:plugins/system-prompt
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../util
       '@langchain/core':
         specifier: ^1.2.12
         version: 1.2.14(openai@7.27.0(zod@4.6.5))

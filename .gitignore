@@ -46,3 +46,6 @@ temp/
 *.bak
 artifacts/
 .fly-novel-store/
+
+
+data/

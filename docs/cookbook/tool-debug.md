@@ -32,3 +32,7 @@ node --test .test-dist/tools/tests/read-file.test.js
 ## 调试工具服务
 
 在“运行和调试”中选择“调试 Tools 服务测试”并按 F5。启动前自动编译测试。在[服务测试](../../src/agents/tests/tools-service.test.ts)和[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `register`、`schemas` 和 `dispose` 设置断点。观察两个 Agent 的独立服务、重复名称的错误、schema 副本、注销和销毁后的清理。服务测试使用固定适配器，不发起真实模型请求。
+
+## 调试工具执行和 schema 校验
+
+选择“调试 Tools 执行测试”并按 F5。启动前自动编译测试。在[执行测试](../../src/agents/tests/tools-execution.test.ts)的 `tools.execute(...)`、[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `execute`、[真实文件工具](../../src/tools/filesystem/read-file.ts)和 [schema 校验](../../src/agents/plugins/tools/json-schema.ts)的 `validateJsonSchemaValue` 设置断点。真实工具用例在临时目录写入文件，经服务读取后检查调用 ID、规范输出和模型内容；测试结束自动清理临时目录。其余固定工具用于检查不同 schema、错误和取消，不调用模型。

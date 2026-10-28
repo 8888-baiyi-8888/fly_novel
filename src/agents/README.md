@@ -23,7 +23,7 @@
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供；Harness 注册定义保留在本包。
 
-Preset 声明 `{ pluginId: 'tools' }` 后，Agent Context 获得独立的 `tools` 服务。`register(definition)` 返回注销函数；`get(name)`、`definitions()` 和 `schemas()` 查询定义与模型可见 schema，重复名称被拒绝，Agent 销毁时清理注册表。服务不自动注册具体工具，也不执行工具调用。
+Preset 声明 `{ pluginId: 'tools' }` 后，Agent Context 获得独立的 `tools` 服务。`register(definition)` 返回注销函数；`get(name)`、`definitions()` 和 `schemas()` 查询定义与模型可见 schema，重复名称被拒绝，Agent 销毁时清理注册表。服务不自动注册具体工具；`execute` 接受单项工具调用和调用方提供的授权目录与取消信号，返回按调用 ID 关联的规范值、模型内容或错误。
 
 ### Agent Loop 调用契约
 
