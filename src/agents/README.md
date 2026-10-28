@@ -8,7 +8,7 @@
 
 - `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
-- `plugins/`：Harness 使用的 mock loop、memory、LLM 服务与 Harness 插件注册适配；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中，Harness 注册定义由本包适配。
+- `plugins/`：Harness 的 memory、LLM 服务与插件注册适配；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中，Harness 注册定义由本包适配。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `tests/`：按包运行的自动化测试。
 
@@ -18,7 +18,7 @@
 
 `await bootstrapAgents()` 创建 Cordis 根 Context、插件注册表、Preset 注册表、工厂和 Manager，遍历 `plugins/index.ts` 汇总的内置定义注册插件，并注册角色与导演 Preset。新增内置插件时在所属模块导出注册定义，再加入汇总列表；各 Agent 的 Preset 通过插件 ID 选择所需插件。`manager.create({ id, presetId })` 创建 Agent handle，并要求 Preset 装配提供 `agentLoop` 的插件。插件按 Preset 顺序装配，Cordis 按插件的 `inject` 声明安排启动。工厂依据插件的 `provide` 元数据在每个 Agent 的 Context 中隔离服务。每个 Agent 持有一个 Cordis 父插件作用域；`agent.run()` 将输入交给该实例的 `agentLoop` 服务，memory 可通过 `agent.context.get('memory')` 单独访问。`manager.dispose(id)` 和 `manager.disposeAll()` 会等待作用域销毁；失败的初始化不会进入 Manager。
 
-`llmPluginDefinition` 已加入内置插件注册表。需要模型服务的 Preset 声明 `{ pluginId: 'llm' }`；应用创建实例时通过 `pluginConfigs.llm` 提供 `{ adapters: [{ providers: ['provider-id'], adapter }] }`。插件要求至少一条适配器路由，在该 Agent 的 Context 中提供 `llm` 服务，并随插件作用域注销路由。配置和凭据由应用入口读取，插件只接收已创建的适配器。当前角色与导演的 mock Preset 不装配 LLM，mock loop 仍只回显输入。
+角色和导演 Preset 均装配真实 `agent-loop-runtime`、`system-prompt`、`llm` 与 `session`。创建 Agent 时，应用须通过 `pluginConfigs['agent-loop-runtime']` 提供 `provider`、`model`，并通过 `pluginConfigs.llm` 提供 `{ adapters: [{ providers: [provider], adapter }] }`。`llmPluginDefinition` 在该 Agent 的 Context 中提供独立 LLM 服务，并随插件作用域注销路由。配置和凭据由应用入口读取，插件只接收已创建的适配器。
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供；Harness 注册定义保留在本包。
 
@@ -26,7 +26,7 @@
 
 `AgentLoop.run({ prompt })` 每次调用对应一个 Turn，成功返回 `{ content }`；执行失败或取消时以拒绝的 Promise 向调用方传播错误。`agent.cancel()` 中止当前模型请求并拒绝尚未开始的排队调用；活动 Turn 在 Session 写入 `aborted` 结束原因。`agent.dispose()` 先等待 Loop 取消并完成 Session 收尾，再销毁 Cordis 插件作用域。Loop 按顺序执行同一 Agent 的并发 `run()` 调用；一个 Turn 当前只执行一个 Step。
 
-`@fly-novel/agent-loop` 导出 `AgentLoopRuntime`、`agentLoopRuntimePlugin` 和 Harness 注册定义。插件声明依赖 Cordis `sessions`、`systemPrompt` 和 `llm` 服务，并在当前 Agent Context 中提供 `agentLoop`。通过 Preset 装配 Runtime 时须同时装配这三个服务插件，并在 Loop 插件配置中指定 `provider` 与 `model`。`AgentLoopRuntime` 从 Context 的 `SessionManager` 创建并持有 Session；`run({ prompt })` 接收用户输入，运行服务从同一 Context 获取，不增加构造参数。Loop 以无参数 `turn()` 驱动生命周期、以无参数 `step()` 执行模型步骤，活动输入与序号保存在运行阶段状态中。每个 Step 从当前 Context 组装 SystemPrompt，将提示词快照与 user 消息写入 Session 后派生完整请求历史；Session 的模型视图只保留最新 system 提示词并置于历史开头。成功时将完整响应内容块及模型来源、可选 replay state 记录为 assistant 消息，并从文本块生成返回文本。失败时保留已写入消息且不产生 assistant 消息，并传播 `LlmError`。Turn 与 Step 序号从 1 开始递增，并记录开始、结束和失败事件。`@fly-novel/agents` 仅负责注册 Loop 插件，不转导 Runtime；mock loop 仍归 Agents 包。
+`@fly-novel/agent-loop` 导出 `AgentLoopRuntime`、`agentLoopRuntimePlugin` 和 Harness 注册定义。插件声明依赖 Cordis `sessions`、`systemPrompt` 和 `llm` 服务，并在当前 Agent Context 中提供 `agentLoop`。Preset 同时装配这三个服务插件；Agent 创建配置提供模型路由的 `provider` 与 `model`。`AgentLoopRuntime` 从 Context 的 `SessionManager` 创建并持有 Session；`run({ prompt })` 接收用户输入，运行服务从同一 Context 获取，不增加构造参数。Loop 以无参数 `turn()` 驱动生命周期、以无参数 `step()` 执行模型步骤，活动输入与序号保存在运行阶段状态中。每个 Step 从当前 Context 组装 SystemPrompt，将提示词快照与 user 消息写入 Session 后派生完整请求历史；Session 的模型视图只保留最新 system 提示词并置于历史开头。成功时将完整响应内容块及模型来源、可选 replay state 记录为 assistant 消息，并从文本块生成返回文本。失败时保留已写入消息且不产生 assistant 消息，并传播 `LlmError`。Turn 与 Step 序号从 1 开始递增，并记录开始、结束和失败事件。`@fly-novel/agents` 仅负责注册 Loop 插件，不转导 Runtime。
 
 逐步检查注册、装配、路由隔离和清理时，使用[LLM 插件调试步骤](../../docs/cookbook/llm-plugin-debug.md)。
 
@@ -34,11 +34,23 @@
 
 ```ts
 import { bootstrapAgents } from '@fly-novel/agents'
+import type { LlmAdapter } from '@fly-novel/llm'
+
+declare const provider: string // 由应用配置读取
+declare const model: string
+declare const adapter: LlmAdapter // 由应用配置创建并注入
 
 async function main() {
   const { manager } = await bootstrapAgents()
   try {
-    const agent = await manager.create({ id: 'character-1', presetId: 'character-agent' })
+    const agent = await manager.create({
+      id: 'character-1',
+      presetId: 'character-agent',
+      pluginConfigs: {
+        'agent-loop-runtime': { provider, model },
+        llm: { adapters: [{ providers: [provider], adapter }] },
+      },
+    })
     const result = await agent.run({ prompt: '你好' })
     console.log(result.content)
   } finally {
@@ -49,7 +61,7 @@ async function main() {
 void main()
 ```
 
-`@fly-novel/agents` 保持 CommonJS 构建；`bootstrapAgents()` 使用动态导入加载 ESM 版 `@deepseek-ai/cordis`。Harness 可通过 Preset 选择真实 Agent Loop 或 mock loop：真实 Loop 经当前 Agent 的 LLM 服务请求模型，并将成功对话消息记录在 Session；mock loop 只回显输入。memory 插件目前仍是注册与生命周期替身，不保存长期记忆。
+`@fly-novel/agents` 保持 CommonJS 构建；`bootstrapAgents()` 使用动态导入加载 ESM 版 `@deepseek-ai/cordis`。角色和导演 Harness Preset 使用真实 Agent Loop，经当前 Agent 的 LLM 服务请求模型，并将成功对话消息记录在 Session。memory 插件目前仍是注册与生命周期替身，不保存长期记忆。
 
 ## 构建与引用
 

@@ -9,12 +9,10 @@ export const directorAgentPreset: AgentPreset = {
     temperature: 0.5,
   },
   plugins: [
-    {
-      pluginId: 'mock-loop',
-      config: {
-        prefix: '[导演 Agent]',
-      },
-    },
+    { pluginId: 'agent-loop-runtime' },
+    { pluginId: 'system-prompt' },
+    { pluginId: 'llm' },
+    { pluginId: 'session' },
     {
       pluginId: 'mock-memory',
       config: {

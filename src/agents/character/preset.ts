@@ -9,12 +9,10 @@ export const characterAgentPreset: AgentPreset = {
     temperature: 0.7,
   },
   plugins: [
-    {
-      pluginId: 'mock-loop',
-      config: {
-        prefix: '[角色 Agent]',
-      },
-    },
+    { pluginId: 'agent-loop-runtime' },
+    { pluginId: 'system-prompt' },
+    { pluginId: 'llm' },
+    { pluginId: 'session' },
     {
       pluginId: 'mock-memory',
       config: {

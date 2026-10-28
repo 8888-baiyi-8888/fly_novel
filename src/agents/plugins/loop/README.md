@@ -12,12 +12,12 @@ Runtime 从当前 Context 的 `sessions` 创建并持有 Session。`run({ prompt
 
 ## Harness Preset 装配
 
-Preset 选择 `agent-loop-runtime` 时，还需选择 `session`、`system-prompt` 和 `llm` 服务插件，并配置模型路由，例如 `{ provider: 'deepseek', model: 'deepseek-chat' }`。成功运行按 `turn/start`、`step/start`、可选 `system/message`、`user/message`、`assistant/message`、`step/end`、`turn/end` 顺序写入 Session；失败时保留已写入的提示词快照和 `user/message`，不写入 `assistant/message`。需要回显前缀时，Preset 可改选由 `@fly-novel/agents` 提供的 `mock-loop`。
+角色和导演 Preset 均装配 `agent-loop-runtime`、`session`、`system-prompt` 和 `llm`。创建 Agent 时，`pluginConfigs['agent-loop-runtime']` 指定模型路由，例如 `{ provider: 'deepseek', model: 'deepseek-chat' }`；`pluginConfigs.llm` 提供该 provider 对应的适配器。成功运行按 `turn/start`、`step/start`、可选 `system/message`、`user/message`、`assistant/message`、`step/end`、`turn/end` 顺序写入 Session；失败时保留已写入的提示词快照和 `user/message`，不写入 `assistant/message`。
 
 ```ts
 import { AgentLoopRuntime, agentLoopRuntimePlugin } from '@fly-novel/agent-loop'
 ```
 
-Harness 插件注册定义由 `agentLoopRuntimePluginDefinition` 导出，负责装配的 `@fly-novel/agents` 包将其加入内置插件表。mock loop 属于 Harness 测试替身，仍由 `@fly-novel/agents` 提供。
+Harness 插件注册定义由 `agentLoopRuntimePluginDefinition` 导出，负责装配的 `@fly-novel/agents` 包将其加入内置插件表。Agent Loop 测试使用固定适配器验证模型交互，不提供生产 mock loop 插件。
 
 本包采用 CommonJS，与仓库 workspace 包保持一致。运行 `pnpm --filter @fly-novel/agent-loop typecheck` 检查源码，运行 `pnpm --filter @fly-novel/agent-loop build` 生成 `dist/`。

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { bootstrapAgents } from '../core/bootstrap.js'
+import { createTestAgent, withAgentLoop } from './agent-loop-fixtures.js'
 import { renderPrompt, SystemPrompt } from '@fly-novel/system-prompt'
 
 test('SystemPrompt registers and reads named sections', () => {
@@ -201,14 +202,11 @@ test('Cordis plugin isolates SystemPrompt per Agent and disposes it with the Age
       id: 'system-prompt-test',
       version: '1',
       role: 'character',
-      plugins: [
-        { pluginId: 'mock-loop' },
-        { pluginId: 'system-prompt' },
-      ],
+      plugins: withAgentLoop([]),
     })
 
-    const first = await framework.manager.create({ id: 'prompt-agent-a', presetId: 'system-prompt-test' })
-    const second = await framework.manager.create({ id: 'prompt-agent-b', presetId: 'system-prompt-test' })
+    const first = await createTestAgent(framework, { id: 'prompt-agent-a', presetId: 'system-prompt-test' })
+    const second = await createTestAgent(framework, { id: 'prompt-agent-b', presetId: 'system-prompt-test' })
     const firstPrompt = first.context.get('systemPrompt')
     const secondPrompt = second.context.get('systemPrompt')
     assert.ok(firstPrompt)

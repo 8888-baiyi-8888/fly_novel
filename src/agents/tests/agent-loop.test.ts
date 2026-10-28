@@ -4,9 +4,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { LlmAdapter, LlmError, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 import { AgentLoopRuntime } from '@fly-novel/agent-loop'
 import type { AgentLoop } from '@fly-novel/agent-loop'
-import { bootstrapAgents } from '@fly-novel/agents'
+import { bootstrapAgents, characterAgentPreset, directorAgentPreset } from '@fly-novel/agents'
 import type { AgentFramework } from '@fly-novel/agents'
-import { characterAgentPreset } from '@fly-novel/agents'
 import { loadConfiguredAdapter } from '../../app/call-llm.js'
 
 class FixedResponseAdapter extends LlmAdapter {
@@ -72,21 +71,13 @@ describe('AgentLoop Runtime', () => {
   it('真实 Agent Loop 调用 DeepSeek 模型', async () => {
     const { provider, model, adapter } = await loadConfiguredAdapter('deepseek')
     framework = await bootstrapAgents()
-    framework.presets.register({
-      id: 'agent-loop-real-test',
-      version: '1',
-      role: 'character',
-      plugins: [
-        { pluginId: 'agent-loop-runtime', config: { provider, model } },
-        { pluginId: 'system-prompt' },
-        { pluginId: 'llm' },
-        { pluginId: 'session' },
-      ],
-    })
     const agent = await framework.manager.create({
       id: 'agent-loop-real-test',
-      presetId: 'agent-loop-real-test',
-      pluginConfigs: { llm: { adapters: [{ providers: [provider], adapter }] } },
+      presetId: characterAgentPreset.id,
+      pluginConfigs: {
+        'agent-loop-runtime': { provider, model },
+        llm: { adapters: [{ providers: [provider], adapter }] },
+      },
     })
 
     const result = await agent.run({ prompt: '请只用一句话说明什么是 Agent Loop。' })
@@ -147,19 +138,15 @@ describe('AgentLoop Runtime', () => {
     assert.equal(adapter.requests.length, 1)
   })
 
-  it('现有角色 Preset 可替换为真实 Loop 并贯通固定适配器', async () => {
+  it('角色 Preset 通过固定适配器运行真实 Loop', async () => {
     framework = await bootstrapAgents()
     const basePreset = characterAgentPreset
     framework.presets.register({
       ...basePreset,
       id: 'character-runtime-test',
-      plugins: [
-        { pluginId: 'agent-loop-runtime', config: { provider: 'test-provider', model: 'test-model' } },
-        { pluginId: 'system-prompt' },
-        { pluginId: 'llm' },
-        { pluginId: 'session' },
-        ...basePreset.plugins.filter(({ pluginId }) => pluginId !== 'mock-loop'),
-      ],
+      plugins: basePreset.plugins.map((binding) => binding.pluginId === 'agent-loop-runtime'
+        ? { ...binding, config: { provider: 'test-provider', model: 'test-model' } }
+        : binding),
     })
 
     const adapter = new FixedResponseAdapter()
@@ -284,28 +271,33 @@ describe('AgentLoop Runtime', () => {
     assert.deepEqual(await second.run({ prompt: '第二个 Agent 仍可运行' }), { content: '第二个 Agent 仍可运行' })
   })
 
-  it('Preset 可选择真实 Loop 或 mock loop', async () => {
+  it('内置角色和导演 Preset 均装配真实 Loop', async () => {
     framework = await bootstrapAgents()
-    registerRuntimePreset(framework)
-    framework.presets.register({
-      id: 'mock-test',
-      version: '1',
-      role: 'character',
-      plugins: [{ pluginId: 'mock-loop', config: { prefix: '[Mock]' } }],
-    })
-
     const adapter = new FixedResponseAdapter()
-    const runtimeAgent = await framework.manager.create({
-      id: 'runtime-agent',
-      presetId: 'runtime-test',
-      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter }] } },
+    const character = await framework.manager.create({
+      id: 'character-agent',
+      presetId: characterAgentPreset.id,
+      pluginConfigs: {
+        'agent-loop-runtime': { provider: 'test-provider', model: 'test-model' },
+        llm: { adapters: [{ providers: ['test-provider'], adapter }] },
+      },
     })
-    const mockAgent = await framework.manager.create({ id: 'mock-agent', presetId: 'mock-test' })
+    const directorAdapter = new FixedResponseAdapter()
+    const director = await framework.manager.create({
+      id: 'director-agent',
+      presetId: directorAgentPreset.id,
+      pluginConfigs: {
+        'agent-loop-runtime': { provider: 'test-provider', model: 'test-model' },
+        llm: { adapters: [{ providers: ['test-provider'], adapter: directorAdapter }] },
+      },
+    })
 
-    assert.ok(runtimeAgent.context.get('agentLoop') instanceof AgentLoopRuntime)
-    assert.deepEqual(await runtimeAgent.run({ prompt: '真实 Loop' }), { content: '真实 Loop' })
-    assert.deepEqual(await mockAgent.run({ prompt: 'Mock Loop' }), { content: '[Mock] Mock Loop' })
+    assert.ok(character.context.get('agentLoop') instanceof AgentLoopRuntime)
+    assert.ok(director.context.get('agentLoop') instanceof AgentLoopRuntime)
+    assert.deepEqual(await character.run({ prompt: '角色输入' }), { content: '角色输入' })
+    assert.deepEqual(await director.run({ prompt: '导演输入' }), { content: '导演输入' })
     assert.equal(adapter.requests.length, 1)
+    assert.equal(directorAdapter.requests.length, 1)
   })
 
   it('Agent.run 将输入交给装配的 Loop 并返回其结果', async () => {

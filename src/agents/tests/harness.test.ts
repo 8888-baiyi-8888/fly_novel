@@ -5,6 +5,7 @@ import { LlmAdapter, type GenerateOptions, type MessageId, type StreamChunk } fr
 import { loadConfiguredAdapter } from '../../app/call-llm.js'
 import { bootstrapAgents } from '../core/bootstrap.js'
 import type { AgentFramework } from '../core/bootstrap.js'
+import { createTestAgent, withAgentLoop } from './agent-loop-fixtures.js'
 
 async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[]> {
   const chunks: StreamChunk[] = []
@@ -22,15 +23,15 @@ describe('Cordis Agent Harness', () => {
 
   it('通过外部注册的 Preset 装配角色和导演 Agent', async () => {
     framework = await bootstrapAgents()
-    assert.deepEqual(framework.plugins.list().map((plugin) => plugin.id), ['mock-loop', 'agent-loop-runtime', 'mock-memory', 'llm', 'session', 'system-prompt', 'character-example-memory'])
+    assert.deepEqual(framework.plugins.list().map((plugin) => plugin.id), ['agent-loop-runtime', 'mock-memory', 'llm', 'session', 'system-prompt', 'character-example-memory'])
     assert.deepEqual(framework.presets.list().map((preset) => preset.id), ['character-agent', 'director-agent'])
 
-    const character = await framework.manager.create({
+    const character = await createTestAgent(framework, {
       id: 'character-001',
       presetId: 'character-agent',
       parameters: { novelId: 'novel-001', temperature: 0.8 },
     })
-    const director = await framework.manager.create({
+    const director = await createTestAgent(framework, {
       id: 'director-001',
       presetId: 'director-agent',
     })
@@ -40,11 +41,11 @@ describe('Cordis Agent Harness', () => {
     assert.equal(character.info.parameters.novelId, 'novel-001')
     assert.equal(character.info.parameters.temperature, 0.8)
     assert.equal(director.info.identity.role, 'director')
-    assert.equal(character.context.get('llm'), undefined)
-    assert.equal(director.context.get('llm'), undefined)
+    assert.ok(character.context.get('llm'))
+    assert.ok(director.context.get('llm'))
 
-    assert.deepEqual(await character.run({ prompt: '你好' }), { content: '[角色 Agent] 你好' })
-    assert.deepEqual(await director.run({ prompt: '你好' }), { content: '[导演 Agent] 你好' })
+    assert.deepEqual(await character.run({ prompt: '你好' }), { content: '你好' })
+    assert.deepEqual(await director.run({ prompt: '你好' }), { content: '你好' })
   })
 
   it('LLM 插件由 Preset 选择，实例路由隔离并随 Agent 销毁', async () => {
@@ -56,14 +57,14 @@ describe('Cordis Agent Harness', () => {
     framework = await bootstrapAgents()
     framework.presets.register({
       id: 'llm-debug', version: '1', role: 'character',
-      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'llm' }],
+      plugins: withAgentLoop([]),
     })
 
-    const first = await framework.manager.create({
+    const first = await createTestAgent(framework, {
       id: 'first', presetId: 'llm-debug',
       pluginConfigs: { llm: { adapters: [{ providers: ['first'], adapter: new Adapter() }] } },
     })
-    const second = await framework.manager.create({
+    const second = await createTestAgent(framework, {
       id: 'second', presetId: 'llm-debug',
       pluginConfigs: { llm: { adapters: [{ providers: ['second'], adapter: new Adapter() }] } },
     })
@@ -96,9 +97,9 @@ describe('Cordis Agent Harness', () => {
     framework = await bootstrapAgents()
     framework.presets.register({
       id: 'llm-real', version: '1', role: 'character',
-      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'llm' }],
+      plugins: withAgentLoop([]),
     })
-    const agent = await framework.manager.create({
+    const agent = await createTestAgent(framework, {
       id: 'llm-real', presetId: 'llm-real',
       pluginConfigs: { llm: { adapters: [{ providers: [provider], adapter }] } },
     })
@@ -135,14 +136,14 @@ describe('Cordis Agent Harness', () => {
     framework = await bootstrapAgents()
     framework.presets.register({
       id: 'llm-debug', version: '1', role: 'character',
-      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'llm' }],
+      plugins: withAgentLoop([]),
     })
     await assert.rejects(
-      framework.manager.create({ id: 'retry', presetId: 'llm-debug', pluginConfigs: { llm: { adapters: [] } } }),
+      createTestAgent(framework, { id: 'retry', presetId: 'llm-debug', pluginConfigs: { llm: { adapters: [] } } }),
       /至少一个适配器配置/,
     )
     await assert.rejects(
-      framework.manager.create({
+      createTestAgent(framework, {
         id: 'retry', presetId: 'llm-debug',
         pluginConfigs: { llm: { adapters: [
           { providers: ['first'], adapter: new Adapter() },
@@ -153,7 +154,7 @@ describe('Cordis Agent Harness', () => {
     )
     assert.equal(framework.manager.list().length, 0)
     assert.equal(framework.context.get('llm'), undefined)
-    const agent = await framework.manager.create({
+    const agent = await createTestAgent(framework, {
       id: 'retry', presetId: 'llm-debug',
       pluginConfigs: { llm: { adapters: [{ providers: ['first'], adapter: new Adapter() }] } },
     })
@@ -162,8 +163,8 @@ describe('Cordis Agent Harness', () => {
 
   it('每个 Agent 的插件服务和状态独立，销毁后服务被移除', async () => {
     framework = await bootstrapAgents()
-    const first = await framework.manager.create({ id: 'first', presetId: 'character-agent' })
-    const second = await framework.manager.create({ id: 'second', presetId: 'character-agent' })
+    const first = await createTestAgent(framework, { id: 'first', presetId: 'character-agent' })
+    const second = await createTestAgent(framework, { id: 'second', presetId: 'character-agent' })
     const firstMemory = first.context.get('memory')
     const secondMemory = second.context.get('memory')
     assert.ok(firstMemory)
@@ -193,16 +194,16 @@ describe('Cordis Agent Harness', () => {
     })
     framework.presets.register({
       id: 'broken-preset', version: '1', role: 'character',
-      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'cleanup-marker' }, { pluginId: 'broken-plugin' }],
+      plugins: withAgentLoop([{ pluginId: 'cleanup-marker' }, { pluginId: 'broken-plugin' }]),
     })
 
     await assert.rejects(
-      framework.manager.create({ id: 'broken', presetId: 'broken-preset' }),
+      createTestAgent(framework, { id: 'broken', presetId: 'broken-preset' }),
       /启动失败/,
     )
     assert.equal(cleaned, true)
     assert.equal(framework.manager.list().length, 0)
-    const next = await framework.manager.create({ id: 'broken', presetId: 'character-agent' })
+    const next = await createTestAgent(framework, { id: 'broken', presetId: 'character-agent' })
     assert.equal(next.state, 'ready')
   })
 
@@ -215,10 +216,10 @@ describe('Cordis Agent Harness', () => {
     framework.plugins.register({ id: 'consumer', version: '1', plugin: consumer })
     framework.presets.register({
       id: 'injected', version: '1', role: 'character',
-      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'consumer' }, { pluginId: 'mock-memory' }],
+      plugins: withAgentLoop([{ pluginId: 'consumer' }, { pluginId: 'mock-memory' }]),
     })
 
-    const agent = await framework.manager.create({ id: 'injected', presetId: 'injected' })
+    const agent = await createTestAgent(framework, { id: 'injected', presetId: 'injected' })
     assert.equal(agent.state, 'ready')
     assert.equal(started, true)
   })
@@ -226,7 +227,7 @@ describe('Cordis Agent Harness', () => {
   it('拒绝缺少 loop 的 Preset、重复注册和并发创建同名 Agent', async () => {
     framework = await bootstrapAgents()
     assert.throws(() => framework!.plugins.register({
-      id: 'mock-loop', version: '1', plugin: () => undefined,
+      id: 'agent-loop-runtime', version: '1', plugin: () => undefined,
     }), /已注册/)
     assert.throws(() => framework!.plugins.get('missing-plugin'), /尚未注册/)
     framework.presets.register({
@@ -238,8 +239,8 @@ describe('Cordis Agent Harness', () => {
       /缺少 agentLoop 插件/,
     )
 
-    const first = framework.manager.create({ id: 'same', presetId: 'character-agent' })
-    await assert.rejects(framework.manager.create({ id: 'same', presetId: 'character-agent' }), /已存在/)
+    const first = createTestAgent(framework, { id: 'same', presetId: 'character-agent' })
+    await assert.rejects(createTestAgent(framework, { id: 'same', presetId: 'character-agent' }), /已存在/)
     await first
   })
 
@@ -252,10 +253,10 @@ describe('Cordis Agent Harness', () => {
     })
     framework.presets.register({
       id: 'delayed-preset', version: '1', role: 'character',
-      plugins: [{ pluginId: 'mock-loop' }, { pluginId: 'delayed' }],
+      plugins: withAgentLoop([{ pluginId: 'delayed' }]),
     })
 
-    const creating = framework.manager.create({ id: 'pending', presetId: 'delayed-preset' })
+    const creating = createTestAgent(framework, { id: 'pending', presetId: 'delayed-preset' })
     const disposing = framework.manager.disposeAll()
     release()
     const agent = await creating

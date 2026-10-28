@@ -18,13 +18,13 @@ pnpm run build:tests
 node --test --test-name-pattern="LLM 插件由 Preset 选择" .test-dist/agents/tests/harness.test.js
 ```
 
-预期结果是 `tests 1`、`pass 1`、`fail 0`。该测试在运行时注册 `llm-debug` Preset；它包含 `mock-loop` 和 `llm`，不会修改角色、导演的 mock Preset。
+预期结果是 `tests 1`、`pass 1`、`fail 0`。该测试在运行时注册 `llm-debug` Preset，并使用固定适配器验证每个 Agent 的 LLM 路由隔离。
 
 ## 3. 在 VS Code 中下断点
 
 打开“运行和调试”，选择本机现有的“调试 Cordis Agent Harness 测试（真实请求跳过）”，按 F5。该配置的 `preLaunchTask` 是“编译调试测试”，入口是 `.test-dist/agents/tests/harness.test.js`；默认运行此文件中的全部 Harness 测试，真实模型用例会跳过。要在 VS Code 中只执行第 2 步的用例，可在本机 `.vscode/launch.json` 的该配置中将 `runtimeArgs` 临时改为 `["--test", "--test-isolation=none", "--test-name-pattern=LLM 插件由 Preset 选择"]`；检查第 4、5 步时换成对应命令中的测试名称。随后在下面位置下断点：
 
-1. [测试入口](../../src/agents/tests/harness.test.ts)中“LLM 插件由 Preset 选择”用例的 `framework.presets.register(...)`：观察 `framework.plugins.list()` 含 `llm`，以及角色、导演的 mock Preset 未声明 `llm`。
+1. [测试入口](../../src/agents/tests/harness.test.ts)中“通过外部注册的 Preset 装配角色和导演 Agent”用例：观察 `framework.plugins.list()` 含 `llm`，以及两个内置 Preset 都包含真实 Loop 依赖。
 2. [Agent 工厂](../../src/agents/runtime/agent-factory.ts)中解析 `preset.plugins` 的位置：观察本次 `llm-debug` Preset 选中 `llm`，以及 `options.pluginConfigs.llm` 分别包含 `first`、`second` 路由。
 3. [LLM 插件](../../src/agents/plugins/llm/index.ts)中 `new LlmRuntime(ctx)` 和 `ctx.effect(...)`：观察每个 Agent 创建自己的服务，并注册对应适配器。
 4. [LLM 运行时](../../src/llm/runtime.ts)中 `registerAdapter(...)` 和 `stream(...)`：观察 `first`、`second` 请求各自命中适配器；在第一个 Agent 的服务中请求 `second` 应返回 `NO_ADAPTER` 结束块。
@@ -40,13 +40,13 @@ node --test --test-name-pattern="LLM 插件拒绝空配置" .test-dist/agents/te
 
 预期结果同样是 `tests 1`、`pass 1`、`fail 0`。在[失败路径用例](../../src/agents/tests/harness.test.ts)的两次 `manager.create(...)`、[LLM 插件](../../src/agents/plugins/llm/index.ts)的配置检查和路由注册、[Agent 实例](../../src/agents/core/agent.ts)的异常清理处下断点：空 `adapters` 被拒绝；第二条路由的适配器元数据错误使创建失败；`manager.list()` 为空，同一 ID 随后可用有效配置创建。要观察第一条路由的注销，可在 [LLM 运行时](../../src/llm/runtime.ts)的 `registerAdapter()` 返回的清理函数中下断点，跟进失败后的作用域销毁。
 
-## 5. 检查原有 mock Preset
+## 5. 检查内置真实 Loop Preset
 
 ```powershell
 node --test --test-name-pattern="通过外部注册的 Preset" .test-dist/agents/tests/harness.test.js
 ```
 
-预期结果仍是 `tests 1`、`pass 1`、`fail 0`。测试会检查插件注册表包含 `llm`，而角色、导演 Agent 的 `context.get('llm')` 均为 `undefined`；两者的 `agent.run()` 继续返回各自 mock loop 的文本。
+预期结果仍是 `tests 1`、`pass 1`、`fail 0`。测试使用固定 LLM 适配器创建角色和导演 Agent，检查两个实例都有隔离的 `llm` 服务，并由真实 Loop 返回适配器生成的响应。
 
 ## 6. 运行整个 Harness 测试文件
 

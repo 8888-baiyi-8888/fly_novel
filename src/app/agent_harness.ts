@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { AgentLoopResult } from '@fly-novel/agent-loop'
+import { loadConfiguredAdapter } from './call-llm.js'
 
 /** 手动调试 Preset 装配、Agent.run() 和 Cordis 作用域销毁。 */
 export async function debugAgentHarness(prompt: string): Promise<AgentLoopResult> {
   if (!prompt.trim()) throw new Error('调试输入不能为空')
 
   const { plugins, presets, manager } = await bootstrapAgents()
+  const { provider, model, adapter } = await loadConfiguredAdapter('deepseek')
   console.log('插件：', plugins.list().map((plugin) => plugin.id))
   console.log('Preset：', presets.list().map((preset) => preset.id))
 
@@ -15,11 +17,14 @@ export async function debugAgentHarness(prompt: string): Promise<AgentLoopResult
     agent = await manager.create({
       id: 'debug-character',
       presetId: 'character-agent',
+      pluginConfigs: {
+        'agent-loop-runtime': { provider, model },
+        llm: { adapters: [{ providers: [provider], adapter }] },
+      },
     })
     console.log('Agent：', agent.info, '状态：', agent.state)
 
     const result = await agent.run({ prompt })
-    assert.equal(result.content, `[角色 Agent] ${prompt}`)
     console.log('输出：', result.content)
     return result
   } finally {

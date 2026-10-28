@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import type { AssistantMessage, MessageId, SystemMessage, ToolCallId, ToolResultMessage, UserMessage } from '@fly-novel/llm'
 import { bootstrapAgents } from '../core/bootstrap.js'
+import { createTestAgent, withAgentLoop } from './agent-loop-fixtures.js'
 import type { AgentFramework } from '../core/bootstrap.js'
 import { Session, SessionManager } from '@fly-novel/session'
 
@@ -201,14 +202,11 @@ describe('Session Harness 插件', () => {
     assert.ok(framework.plugins.get('session'))
     framework.presets.register({
       id: 'session-test', version: '1', role: 'character',
-      plugins: [
-        { pluginId: 'mock-loop' },
-        { pluginId: 'session' },
-      ],
+      plugins: withAgentLoop([]),
     })
 
-    const first = await framework.manager.create({ id: 'agent-a', presetId: 'session-test' })
-    const second = await framework.manager.create({ id: 'agent-b', presetId: 'session-test' })
+    const first = await createTestAgent(framework, { id: 'agent-a', presetId: 'session-test' })
+    const second = await createTestAgent(framework, { id: 'agent-b', presetId: 'session-test' })
     const firstSessions = first.context.get('sessions')
     const secondSessions = second.context.get('sessions')
     assert.ok(firstSessions)
