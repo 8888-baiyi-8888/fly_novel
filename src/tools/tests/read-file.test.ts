@@ -12,9 +12,14 @@ test('read_file 读取 UTF-8 文件并拒绝越界和无效文件', async (t) =>
   await mkdir(root)
   await writeFile(join(root, 'outline.txt'), '第一章：启程')
   await writeFile(join(base, 'outside.txt'), 'private')
-  const context = { workingDirectory: root }
+  const context = { workingDirectory: root, signal: new AbortController().signal }
   const rootPath = await realpath(root)
   assert.equal(await readFileTool.execute({ path: 'outline.txt' }, context), '第一章：启程')
+  assert.deepEqual(readFileTool.output.render({ path: 'outline.txt' }, '内容'), [{ type: 'text', text: '内容' }])
+  assert.deepEqual(readFileTool.parameters, { type: 'object', properties: { path: { type: 'string', description: '相对于工作目录的文件路径' } }, required: ['path'] })
+  await assert.rejects(readFileTool.execute({}, context), { name: 'ToolArgsError', code: 'INVALID_ARGS' })
+  await assert.rejects(readFileTool.execute({ path: 123 }, context), { name: 'ToolArgsError', code: 'INVALID_ARGS' })
+  await assert.rejects(readFileTool.execute({ path: 'outline.txt' }, { workingDirectory: root, signal: AbortSignal.abort() }), { name: 'AbortError' })
   await assert.rejects(readFileTool.execute({ path: '../outside.txt' }, context), { message: `文件路径超出授权工作目录：${rootPath}` })
   await assert.rejects(readFileTool.execute({ path: resolve(root, 'outline.txt') }, context), /相对路径/)
   await assert.rejects(readFileTool.execute({ path: 'missing.txt' }, context), { code: 'ENOENT' })
@@ -41,5 +46,5 @@ test('read_file 拒绝指向授权目录外的符号链接', async (t) => {
     throw error
   }
   const rootPath = await realpath(root)
-  await assert.rejects(readFileTool.execute({ path: 'link.txt' }, { workingDirectory: root }), { message: `文件路径超出授权工作目录：${rootPath}` })
+  await assert.rejects(readFileTool.execute({ path: 'link.txt' }, { workingDirectory: root, signal: new AbortController().signal }), { message: `文件路径超出授权工作目录：${rootPath}` })
 })

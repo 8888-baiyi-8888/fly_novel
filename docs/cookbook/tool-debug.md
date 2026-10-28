@@ -27,4 +27,4 @@ node --test .test-dist/tools/tests/read-file.test.js
 }
 ```
 
-在[测试](../../src/tools/tests/read-file.test.ts)的 `readFileTool.execute(...)` 和[实现](../../src/tools/filesystem/read-file.ts)的路径检查、`file.read(...)` 以及返回语句处设置断点。按 F5 后观察 `args.path`、`exec.workingDirectory`、解析后的 `target` 和读取字节数；成功调用返回 `第一章：启程`。继续执行可观察越界、缺失文件和大小限制等拒绝路径。每次启动调试都会重新编译。
+在[测试](../../src/tools/tests/read-file.test.ts)的 `readFileTool.execute(...)`、[工具定义](../../src/agents/plugins/tools/schema.ts)的参数校验和[实现](../../src/tools/filesystem/read-file.ts)的路径检查、`file.read(...)` 以及返回语句处设置断点。按 F5 后观察 `args.path`、`exec.workingDirectory`、`exec.signal`、解析后的 `target` 和读取字节数；成功调用返回 `第一章：启程`。继续执行可观察无效参数、取消、越界、缺失文件和大小限制等拒绝路径。每次启动调试都会重新编译。

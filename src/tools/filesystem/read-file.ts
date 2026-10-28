@@ -5,16 +5,16 @@ import { defineTool } from '../../agents/plugins/tools/index.js'
 const MAX_BYTES = 1024 * 1024
 
 /** 读取授权工作目录内的 UTF-8 普通文件，最大 1 MiB。 */
-export const readFileTool = defineTool<{ path: string }, string>({
+export const readFileTool = defineTool({
   name: 'read_file',
   description: '读取授权工作目录内的 UTF-8 文本文件',
   parameters: {
-    type: 'object',
-    properties: { path: { type: 'string', description: '相对于工作目录的文件路径' } },
-    required: ['path'],
+    path: { type: 'string', required: true, description: '相对于工作目录的文件路径' },
   },
+  output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
   async execute(args, exec) {
-    if (!args || typeof args.path !== 'string' || !args.path || isAbsolute(args.path)) {
+    exec.signal.throwIfAborted()
+    if (!args.path || isAbsolute(args.path)) {
       throw new Error('path 必须是非空相对路径')
     }
     const root = await realpath(exec.workingDirectory)
@@ -30,6 +30,7 @@ export const readFileTool = defineTool<{ path: string }, string>({
       const buffer = Buffer.alloc(MAX_BYTES + 1)
       let length = 0
       while (length < buffer.length) {
+        exec.signal.throwIfAborted()
         const { bytesRead } = await file.read(buffer, length, buffer.length - length, length)
         if (bytesRead === 0) break
         length += bytesRead
