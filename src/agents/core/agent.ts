@@ -55,7 +55,24 @@ export class AgentInstance implements AgentHandle {
   }
 
   async dispose(): Promise<void> {
-    await this.scope?.dispose()
+    const errors: unknown[] = []
+    try {
+      await this.context.get('agentLoop')?.dispose()
+    } catch (error) {
+      errors.push(error)
+    }
+    try {
+      await this.scope?.dispose()
+    } catch (error) {
+      errors.push(error)
+    }
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, `Agent "${this.info.identity.id}" 清理失败`)
+  }
+
+  cancel(): void {
+    if (this.state !== 'ready') return
+    this.context.get('agentLoop')?.cancel()
   }
 
   async run(input: AgentLoopInput): Promise<AgentLoopResult> {

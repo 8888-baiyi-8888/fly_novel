@@ -24,6 +24,7 @@ export interface Agent {
   readonly context: Context
   readonly state: 'initializing' | 'ready' | 'disposing' | 'disposed' | 'failed'
   run(input: AgentLoopInput): Promise<AgentLoopResult>
+  cancel(): void
   dispose(): Promise<void>
 }
 

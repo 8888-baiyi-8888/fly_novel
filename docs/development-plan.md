@@ -101,11 +101,11 @@ Agent Loop 作为 Harness 的执行协调层，负责 Turn 生命周期、Step �
 
 5. **LLM 服务接入与模型调用**：让 Step 通过当前 Agent Context 的 LLM 服务完成一次无工具模型请求。模型由 `agent-loop-runtime` 插件配置中的 `provider` 与 `model` 选择；请求只包含当前 user 输入，成功时汇总文本块并返回，LLM 失败、取消、工具调用或未完成响应作为失败传播。通过固定模型适配器验证模型调用、路由和返回结果。Session 消息历史与 SystemPrompt 组装留待后续步骤。
 
-6. **Session 接入与多轮对话**：通过 `session.deriveMessages()` 获取历史消息；Turn 开始后记录当前 user 输入，模型以 `stop` 成功结束后记录 assistant 回复。模型失败时保留已提交的 user 输入，不写入 assistant 消息；取消事件规则留待生命周期阶段（当前 AgentLoop 输入尚无取消信号）。生命周期驱动函数从 Loop 运行阶段读取当前状态，不接收重复的 Turn 参数。验证同一 Agent 连续调用能够使用前轮历史，不同 Agent 的 Session 相互隔离。
+6. **Session 接入与多轮对话**：通过 `session.deriveMessages()` 获取历史消息；Turn 开始后记录当前 user 输入，模型以 `stop` 成功结束后记录 assistant 回复。模型失败时保留已提交的 user 输入，不写入 assistant 消息。生命周期驱动函数从 Loop 运行阶段读取当前状态，不接收重复的 Turn 参数。验证同一 Agent 连续调用能够使用前轮历史，不同 Agent 的 Session 相互隔离。
 
 7. **SystemPrompt 接入与上下文组装**：通过当前 Agent Context 的 `assemble()` / `renderPrompt()` 获取动态系统提示词，将系统提示词快照、Session 历史和当前用户输入统一组装为模型请求。Session 事件保留每次提示词快照，派生模型历史只投影最新非空 system 消息并放在历史开头；空快照清除旧提示词。验证多轮提示词更新不会重复发送旧快照，并检查提示词渲染失败时按 Turn 错误结束。
 
-8. **Turn 生命周期与执行控制**：完善 Turn 的执行状态、终止条件、错误传播、取消和资源清理。明确同一 Agent 并发运行的行为及 Agent 销毁后的资源释放。保持 Step 执行结构可扩展，但暂不引入工具循环、自动重试、复杂调度器或历史压缩。
+8. **Turn 生命周期与执行控制**：完善 Turn 的执行状态、终止条件、错误传播、取消和资源清理。`Agent.cancel()` 中止活动模型请求并拒绝尚未开始的排队调用；活动 Turn 记录 aborted 结束原因。Agent 销毁先取消并等待 Loop 收尾，再销毁 Session 和插件作用域。同一 Agent 的并发调用按提交顺序串行执行，验证取消后的新调用仍可运行。保持 Step 执行结构可扩展，但暂不引入工具循环、自动重试、复杂调度器或历史压缩。
 
 9. **完整集成与端到端验收**：通过现有 Preset 装配真实 Loop、Session、SystemPrompt 和 LLM 插件，验证 `agent.run()` 到 Turn 执行、模型调用、Session 记录及最终结果返回的完整流程。检查独立包的构建、导出、Cordis 注册、依赖解析与插件卸载行为。固定模型适配器作为常规测试方式；本地配置可用时，再使用一个真实模型验证。保留 mock loop，并更新必要文档与 Agent Note。
 

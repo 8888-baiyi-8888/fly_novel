@@ -17,6 +17,8 @@ export const mockLoopPlugin = Object.assign(function mockLoopPlugin(
         content: `${config.prefix ?? '[MockLoop]'} ${input.prompt}`,
       }
     },
+    cancel() {},
+    async dispose() {},
   }
 
   ctx.provide('agentLoop', loop)

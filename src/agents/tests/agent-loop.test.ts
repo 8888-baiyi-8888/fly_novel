@@ -29,6 +29,23 @@ class FixedResponseAdapter extends LlmAdapter {
   }
 }
 
+class AbortAwareAdapter extends LlmAdapter {
+  private notifyStarted: () => void = () => undefined
+  readonly started = new Promise<void>((resolve) => { this.notifyStarted = resolve })
+
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    this.notifyStarted()
+    await new Promise<void>((resolve) => {
+      if (options.signal?.aborted) {
+        resolve()
+        return
+      }
+      options.signal?.addEventListener('abort', () => resolve(), { once: true })
+    })
+    yield { type: 'finish', reason: { kind: 'aborted', failure: { message: '请求已取消', code: 'ABORTED' } } }
+  }
+}
+
 function registerRuntimePreset(framework: AgentFramework): void {
   framework.presets.register({
     id: 'runtime-test',
@@ -264,6 +281,8 @@ describe('AgentLoop Runtime', () => {
           receivedPrompt = input.prompt
           return { content: '完成的助手回复' }
         },
+        cancel() {},
+        async dispose() {},
       }
       ctx.provide('agentLoop', agentLoop)
     }, { provide: 'agentLoop' })
@@ -304,6 +323,51 @@ describe('AgentLoop Runtime', () => {
       { kind: 'error', message: 'Turn 执行失败' })
   })
 
+  it('cancel 中止活动模型请求并拒绝尚未开始的排队 Turn', async () => {
+    framework = await bootstrapAgents()
+    registerRuntimePreset(framework)
+    const adapter = new AbortAwareAdapter()
+    const agent = await framework.manager.create({
+      id: 'runtime-cancel-agent',
+      presetId: 'runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter }] } },
+    })
+    const active = agent.run({ prompt: '正在运行' })
+    await adapter.started
+    const queued = agent.run({ prompt: '排队中' })
+
+    agent.cancel()
+
+    await assert.rejects(active, (error) => error instanceof LlmError && error.code === 'ABORTED')
+    await assert.rejects(queued, (error) => error instanceof LlmError && error.code === 'ABORTED')
+    const session = agent.context.sessions.list()[0]
+    assert.ok(session)
+    assert.deepEqual(session.read().flatMap((event) => event.type === 'turn/end' ? [event.data.reason] : []), [
+      { kind: 'aborted', reason: 'user' },
+    ])
+    assert.deepEqual(session.deriveMessages().map(({ role }) => role), ['user'])
+  })
+
+  it('销毁 Agent 时取消活动请求、拒绝排队 Turn 并等待 Loop 收尾', async () => {
+    framework = await bootstrapAgents()
+    registerRuntimePreset(framework)
+    const adapter = new AbortAwareAdapter()
+    const agent = await framework.manager.create({
+      id: 'runtime-dispose-agent',
+      presetId: 'runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter }] } },
+    })
+    const active = agent.run({ prompt: '正在运行' })
+    await adapter.started
+    const queued = agent.run({ prompt: '排队中' })
+
+    await framework.manager.dispose('runtime-dispose-agent')
+
+    await assert.rejects(active, (error) => error instanceof LlmError && error.code === 'ABORTED')
+    await assert.rejects(queued, (error) => error instanceof LlmError && error.code === 'ABORTED')
+    assert.equal(agent.state, 'disposed')
+  })
+
   it('Agent.run 原样传播 Loop 的失败', async () => {
     framework = await bootstrapAgents()
     const expectedError = new Error('Turn 执行失败')
@@ -312,6 +376,8 @@ describe('AgentLoop Runtime', () => {
         async run() {
           throw expectedError
         },
+        cancel() {},
+        async dispose() {},
       }
       ctx.provide('agentLoop', agentLoop)
     }, { provide: 'agentLoop' })

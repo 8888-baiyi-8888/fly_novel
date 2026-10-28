@@ -15,6 +15,8 @@ export interface AgentLoopResult {
  */
 export interface AgentLoop {
   run(input: AgentLoopInput): Promise<AgentLoopResult>
+  cancel(): void
+  dispose(): Promise<void>
 }
 
 declare module '@deepseek-ai/cordis' {

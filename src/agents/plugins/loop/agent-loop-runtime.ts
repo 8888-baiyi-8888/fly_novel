@@ -24,6 +24,7 @@ interface RunningTurn {
   readonly prompt: string
   readonly turn: number
   readonly step: number
+  readonly abort: AbortController
 }
 
 /** 从当前 Agent Context 获取 Session，并协调 Turn 与 Step 生命周期。 */
@@ -36,6 +37,8 @@ export class AgentLoopRuntime implements AgentLoop {
     | { kind: 'reserved'; prompt: string }
     | { kind: 'running'; turn: RunningTurn } = { kind: 'idle' }
   private driving = false
+  private disposed = false
+  private driverPromise: Promise<void> = Promise.resolve()
 
   constructor(private readonly context: Context, private readonly config: AgentLoopRuntimeConfig) {
     this.session = context.sessions.create()
@@ -44,29 +47,54 @@ export class AgentLoopRuntime implements AgentLoop {
 
   /** 执行一个 Turn，并返回其 Step 结果。 */
   run(input: AgentLoopInput): Promise<AgentLoopResult> {
+    if (this.disposed) return Promise.reject(new LlmError('Agent Loop 已销毁', 'ABORTED'))
     return new Promise((resolve, reject) => {
       this.pendingTurns.push({ prompt: input.prompt, resolve, reject })
-      void this.kick()
+      this.startDriver()
+    })
+  }
+
+  /** 取消当前 Turn，并拒绝尚未开始的排队调用。 */
+  cancel(): void {
+    this.abort({ kind: 'user' })
+  }
+
+  /** 中止运行、拒绝排队输入，并等待活动 Turn 完成清理。 */
+  async dispose(): Promise<void> {
+    if (this.disposed) return this.driverPromise
+    this.disposed = true
+    this.abort({ kind: 'disposed' })
+    await this.driverPromise
+  }
+
+  private abort(reason: { readonly kind: 'user' | 'disposed' }): void {
+    const error = new LlmError(
+      reason.kind === 'disposed' ? 'Agent Loop 已销毁' : 'Agent Loop 已取消',
+      'ABORTED',
+    )
+    if (this.phase.kind === 'running') this.phase.turn.abort.abort(reason)
+    for (const pending of this.pendingTurns.splice(0)) pending.reject(error)
+  }
+
+  private startDriver(): void {
+    if (this.driving || this.disposed) return
+    this.driving = true
+    this.driverPromise = this.kick().finally(() => {
+      this.driving = false
+      if (this.pendingTurns.length > 0 && !this.disposed) this.startDriver()
     })
   }
 
   private async kick(): Promise<void> {
-    if (this.driving) return
-    this.driving = true
-    try {
-      while (this.pendingTurns.length > 0) {
-        const pending = this.pendingTurns.shift()
-        if (!pending) continue
-        try {
-          this.phase = { kind: 'reserved', prompt: pending.prompt }
-          pending.resolve(await this.turn())
-        } catch (error) {
-          pending.reject(error)
-        }
+    while (this.pendingTurns.length > 0 && !this.disposed) {
+      const pending = this.pendingTurns.shift()
+      if (!pending) continue
+      try {
+        this.phase = { kind: 'reserved', prompt: pending.prompt }
+        pending.resolve(await this.turn())
+      } catch (error) {
+        pending.reject(error)
       }
-    } finally {
-      this.driving = false
-      if (this.pendingTurns.length > 0) await this.kick()
     }
   }
 
@@ -76,13 +104,16 @@ export class AgentLoopRuntime implements AgentLoop {
     const turn = this.turnNumber + 1
     this.session.append('turn/start', { turn })
     this.turnNumber = turn
-    this.phase = { kind: 'running', turn: { prompt, turn, step: 1 } }
+    const abort = new AbortController()
+    this.phase = { kind: 'running', turn: { prompt, turn, step: 1, abort } }
 
     let reason: TurnEndReason = { kind: 'completed' }
     try {
       return await this.step()
     } catch (error) {
-      reason = { kind: 'error', message: 'Turn 执行失败' }
+      reason = abort.signal.aborted
+        ? { kind: 'aborted', reason: abort.signal.reason.kind }
+        : { kind: 'error', message: 'Turn 执行失败' }
       throw error
     } finally {
       try {
@@ -95,9 +126,10 @@ export class AgentLoopRuntime implements AgentLoop {
 
   private async step(): Promise<AgentLoopResult> {
     if (this.phase.kind !== 'running') throw new Error('Step 执行时没有活动 Turn')
-    const { turn, step } = this.phase.turn
+    const { turn, step, abort } = this.phase.turn
     this.session.append('step/start', { turn, step })
     try {
+      if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
       const systemPrompt = renderPrompt(this.context.systemPrompt.assemble())
       const previousSystemPrompt = this.session.deriveMessages().some(({ role }) => role === 'system')
       if (systemPrompt.length > 0 || previousSystemPrompt) {
@@ -111,9 +143,10 @@ export class AgentLoopRuntime implements AgentLoop {
         source: { kind: 'user' },
         content: [{ type: 'text', text: this.phase.turn.prompt }],
       }))
-      const request = this.buildRequest()
+      const request = this.buildRequest(abort.signal)
       const content: ContentBlock[] = []
       for await (const chunk of this.context.llm.stream(request)) {
+        if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
         if (chunk.type === 'finish') {
           switch (chunk.reason.kind) {
             case 'stop': {
@@ -153,12 +186,13 @@ export class AgentLoopRuntime implements AgentLoop {
     }
   }
 
-  private buildRequest(): GenerateOptions {
+  private buildRequest(signal: AbortSignal): GenerateOptions {
     if (this.phase.kind !== 'running') throw new Error('构建模型请求时没有活动 Turn')
     return {
       provider: this.config.provider,
       model: this.config.model,
       messages: this.session.deriveMessages(),
+      signal,
     }
   }
 }
@@ -172,7 +206,9 @@ export const agentLoopRuntimePlugin = Object.assign(function agentLoopRuntimePlu
       typeof config.model !== 'string' || !config.model.trim()) {
     throw new Error('Agent Loop 插件需要有效的 provider 和 model 配置')
   }
-  ctx.provide('agentLoop', new AgentLoopRuntime(ctx, config))
+  const runtime = new AgentLoopRuntime(ctx, config)
+  ctx.provide('agentLoop', runtime)
+  ctx.effect(() => () => runtime.dispose())
 }, { inject: ['sessions', 'systemPrompt', 'llm'], provide: 'agentLoop' })
 
 /** Agent Loop Runtime 的 Harness 注册定义。 */
