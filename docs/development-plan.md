@@ -1,6 +1,6 @@
 # 长期开发计划
 
-本计划记录已确定的开发顺序。Agent Loop 的详细实施流程见下文；其他阶段在开始开发时再确定详细范围与验收标准。
+本计划记录已确定的开发顺序；各模块的详细开发计划见对应子文件。其他阶段在开始开发时再确定详细范围与验收标准。
 
 1. 开发 Agent Harness。
 2. 更新现有的小说级工作流。
@@ -33,87 +33,12 @@
 
 1. **Session 插件（`src/agents/plugins/session/`，包名 `@fly-novel/session`）**：对照官方 [`@deepseek-ai/dsh-session`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/core/session/README.md)，建立内存中的会话、消息与事件记录、读取及历史派生能力，使后续模型请求能够从同一份 Session 历史组装输入。这一步只管理进程内的 Session，不负责写入存储介质或在进程重启后恢复会话。
 2. **LLM 服务接入**：复用现有的 [LLM 模块](../src/llm/README.md)，仅在 src/agents/plugins/llm/ 实现 Cordis 装配插件，不复制 LLM 调用逻辑。插件定义加入现有注册表；需要 LLM 的 Agent 在各自的 Preset 中按插件 ID 选择，由现有 Agent 创建配置向该实例传入适配器。应用入口负责读取模型配置和凭据、创建适配器；插件在该 Agent 的作用域内注册模型路由，并随 Agent 销毁注销。后续真实 Loop 使用本实例的 LLM 服务，取消与错误结果遵循现有 LLM 契约。LLM 不在 Harness 根 Context 注册，不增加公共插件绑定、专用启动入口或专用清理入口。
-3. **系统提示词插件（`src/agents/plugins/`）**：先学习并实现可独立使用的通用提示词对象，再逐步支持多段组装，最后通过现有注册方式提供给 Harness Agent；本项开发顺序见下文。
+3. **系统提示词插件（`src/agents/plugins/`）**：先学习并实现可独立使用的通用提示词对象，再逐步支持多段组装，最后通过现有注册方式提供给 Harness Agent；详细开发顺序见[系统提示词插件开发计划](modules/agents/system-prompt-development-plan.md)。
 4. **真实 Agent Loop 插件（`src/agents/plugins/loop/`）**：替换回显输入的 mock loop，先完成无需工具的一轮调用：读取 Session、组装提示词、调用 LLM、记录结果并返回。该步骤完成后，至少一个 Harness Agent 能通过现有 Preset 运行真实模型。
-5. **工具插件（`src/agents/plugins/`）**：建立工具注册、可见范围和执行结果返回机制，再接入一个小说资料只读工具；扩展 Loop 处理模型发起的工具调用。工具提供的数据遵守调用方确定的角色可见范围。
+5. **工具插件（`src/agents/plugins/tools/`）**：按[工具插件开发计划](modules/agents/tool-plugin-development-plan.md)，学习 DeepSeek Harness 的工具定义、注册、执行和 Loop 调用方案；先建立最小可用注册与执行闭环，再通过只读小说资料工具验证。工具提供的数据遵守调用方确定的角色可见范围。
 6. **角色专有插件与组合**：逐个开发角色、导演等所需的提示词、资料查询和其他专有能力，在各自现有 Preset 中按插件 ID 选择；Session、LLM、Loop 和工具基础插件按需复用。
 7. **按需求扩展会话能力**：需要进程重启后继续使用会话时，另建 Session 持久化插件，将第 1 步的会话数据保存到存储介质，并在启动时读取和恢复；对照官方 [`@deepseek-ai/dsh-session-persistence`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence/README.md) 定义持久化服务契约，以及 [`@deepseek-ai/dsh-session-persistence-jsonl`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence-jsonl/README.md) 的具体存储实现。并发写入、异常恢复等生命周期问题在出现实际需求时一并处理；长历史检索和上下文压缩也分别按需设计为独立插件。对话历史归 Session；角色经历与认知属于小说领域数据，不直接以实例内的 mock memory 代替。
 
-#### Session 插件开发
-
-按下面的顺序学习官方 Session 的职责，并在本项目的 Session 插件中逐步实现；第 1 至 4 步属于上方 Harness 开发顺序的第 1 项，第 5 至 6 步留到第 7 项按需求开展。
-
-1. **Session 基础类**：建立内存会话，支持创建会话、追加事件和按顺序读取历史。先明确一份 Session 保存什么，以及 Agent 如何取得它。
-2. **消息与事件类型**：明确“会话事件”和“模型消息”的区别，区分发送者、消息内容与运行事件，逐步加入轮次、助手回复、工具调用及结果记录；明确哪些事件属于 Session 历史，以及如何从事件得到消息视图。模型消息复用项目已有的 [`@fly-novel/llm` 消息类型](../src/llm/message.ts)，对照学习官方的 `SessionEvent` 类型体系。
-3. **Session Manager**：统一创建、获取、列出和关闭多个 Session，确定 Session ID、Agent ID 及实例生命周期的关系。对应学习官方的 ctx.sessions 管理服务。
-4. **模型上下文导出**：从会话记录生成下一次模型请求需要的消息历史，支持同一 Agent 连续多轮运行。角色能读取哪些小说资料由角色插件或调用方控制；通用 Session 负责整理该会话的历史。对应学习官方的 deriveMessages()。此步只派生输入，不引入历史检索或压缩。
-5. **Session 持久化（上方开发顺序第 7 项）**：出现跨进程恢复需求时，通过独立持久化插件保存和读取 Session，并设计存储格式、版本及恢复方式；不把文件读写放进基础 Session 插件。
-6. **生命周期完善（上方开发顺序第 7 项）**：在实际出现并发写入、异常恢复等需求时，补全对应的顺序约束、失败处理和资源清理；基础的关闭与资源释放在第 3 步完成。
-
-#### 系统提示词插件
-
-**目标**：参考 DeepSeek Harness 官方 [`@deepseek-ai/dsh-system-prompt`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/core/system-prompt/README.zh.md)，逐步实现通用 SystemPrompt 插件。
-
-以官方架构为最终参考，但不一次性实现所有功能。先建立最小可运行闭环，再沿主线逐步增强，每一步对照官方对应设计。
-
-当前仅开发 `src/agents/plugins/system-prompt/`，不涉及角色、导演等业务插件及真实 Loop 接入。
-
-**开发主线：**
-
-1. **基础对象**：了解官方 SystemPrompt 的整体职责和使用方式，建立最小服务对象，能够保存并读取提示词。
-2. **Section 注册**：参考官方 `PromptSection` 和 `section()`，支持多个提示词段的注册、管理及注销。
-3. **组装与渲染**：实现 `assemble()` 和 `renderPrompt()`，完成从多个 Section 到最终系统提示词的核心闭环。
-4. **动态能力**：逐步增加动态文本、变量管理与插值，理解组装时求值和渲染时处理的区别。
-5. **作用域与覆盖**：参考官方设计，逐步加入作用域隔离、全局段遮蔽及 `complete` 替换能力。
-6. **Cordis 接入**：将 SystemPrompt 接入现有插件注册表，通过 Preset 装配，验证不同 Agent 的服务隔离及插件生命周期。
-7. **SystemPrompt 独立包**：将 `src/agents/plugins/system-prompt/` 建立为 `@fly-novel/system-prompt` 工作区包，形成独立的包清单、编译配置和公共导出入口，使提示词对象可脱离 `@fly-novel/agents` 单独构建和使用。整理 SystemPrompt 核心能力与 Harness 插件注册适配层的依赖边界，避免 SystemPrompt 核心反向依赖 Agent 包；同步 workspace、包依赖、导入路径及构建配置。Cordis 插件可由该包提供，但 Harness 注册表和 Preset 仍由 `@fly-novel/agents` 管理。验收独立包构建、公共入口导入、Agents 集成构建及现有行为测试。
-8. **其他官方能力（其他插件开发后，再进行）**：了解动态 Runtime Context、工具 Schema 贡献与排序、Assemble Waterfall 等机制。属于当前通用模块的能力按需实现，依赖其他子系统的部分留到后续集成阶段。
-
-**开发要求：**
-
-- 每次只推进一步，先了解官方对应设计及使用方式，再讨论并实现。
-- 每一步完成后进行实际调用验证，并简要对照官方实现。
-- 不提前开发后续功能，但需说明后续可扩展的能力。
-- 不要求逐行复刻源码，但核心接口和架构尽量与官方保持一致，不能擅自重新设计简化替代品。
-- 每一步完成后停止，等待下一步指示。
-
-最终实现一个符合 DSH 设计思路、可独立使用并能接入现有 Harness 的 SystemPrompt 插件。
-
-#### 真实 Agent Loop 插件
-
-**目标**：参考 DeepSeek Harness 的 Agent Loop 设计，以管理完整 Agent Turn 的真实 Loop 作为 Harness 的执行实现。
-
-Agent Loop 作为 Harness 的执行协调层，负责 Turn 生命周期、Step 执行控制、上下文组织、LLM 调用协调、Session 事件记录及最终结果返回，并为后续工具调用循环预留扩展能力。
-
-第一阶段实现最小可运行闭环：一个 Turn 只执行一个 Step，该 Step 完成一次不带工具的模型请求。通过当前 Agent 实例的 Session、SystemPrompt 和 LLM 服务完成上下文组装、模型调用和结果记录。
-
-后续在不改变 Turn 基本执行契约的前提下，逐步扩展为支持多个 Step、工具调用和完整 ReAct 循环的 Agent Loop。工具注册、工具权限及工具执行能力仍由后续独立插件开发阶段负责。
-
-**开发主线：**
-
-1. **官方 Loop 职责与执行流程**：阅读 DeepSeek Harness 官方 Agent Loop 的设计与实现，明确 Turn、Step、LLM Call 的概念和关系。结合当前 `AgentLoop`、`AgentInstance.run()` 和 Preset，梳理一次 `agent.run({ prompt })` 的完整调用路径。本步只理解职责和现有接口，不修改代码。
-
-2. **Turn 执行契约**：确定 Loop 的输入、输出及 Turn 的生命周期，包括开始、执行、完成、失败和取消。明确 Turn 与 Step 的关系，以及 Loop 如何管理执行过程。核对现有 `AgentLoopInput`、`AgentLoopResult` 等契约，优先复用已有类型，不提前建立复杂的状态管理框架。
-
-3. **独立 Loop 包与 Cordis 插件注册**：在 `src/agents/plugins/loop/` 建立独立工作区包 `@fly-novel/agent-loop`，明确入口文件、公共导出、依赖及构建配置。实现 Cordis 插件注册，将 `agentLoop` 服务提供给当前 Agent Context，声明对 Session、SystemPrompt 和 LLM 服务的依赖。通过最小示例验证插件能够注册、获取服务及正确卸载，不执行真实模型请求；Agents 包只负责注册，不转导 Loop Runtime。
-
-4. **Turn 与 Step 最小执行闭环**：在真实 Loop 中实现最小 Turn 执行流程，一个 Turn 只执行一个 Step，先使用固定结果模拟 Step 执行。通过现有 Agent 和 Preset 完成 `agent.run()` → Loop → Turn → Step → Result 的实际调用，验证插件装配及结果返回。
-
-5. **LLM 服务接入与模型调用**：让 Step 通过当前 Agent Context 的 LLM 服务完成一次无工具模型请求。模型由 `agent-loop-runtime` 插件配置中的 `provider` 与 `model` 选择；请求只包含当前 user 输入，成功时汇总文本块并返回，LLM 失败、取消、工具调用或未完成响应作为失败传播。通过固定模型适配器验证模型调用、路由和返回结果。Session 消息历史与 SystemPrompt 组装留待后续步骤。
-
-6. **Session 接入与多轮对话**：通过 `session.deriveMessages()` 获取历史消息；Turn 开始后记录当前 user 输入，模型以 `stop` 成功结束后记录 assistant 回复。模型失败时保留已提交的 user 输入，不写入 assistant 消息。生命周期驱动函数从 Loop 运行阶段读取当前状态，不接收重复的 Turn 参数。验证同一 Agent 连续调用能够使用前轮历史，不同 Agent 的 Session 相互隔离。
-
-7. **SystemPrompt 接入与上下文组装**：通过当前 Agent Context 的 `assemble()` / `renderPrompt()` 获取动态系统提示词，将系统提示词快照、Session 历史和当前用户输入统一组装为模型请求。Session 事件保留每次提示词快照，派生模型历史只投影最新非空 system 消息并放在历史开头；空快照清除旧提示词。验证多轮提示词更新不会重复发送旧快照，并检查提示词渲染失败时按 Turn 错误结束。
-
-8. **Turn 生命周期与执行控制**：完善 Turn 的执行状态、终止条件、错误传播、取消和资源清理。`Agent.cancel()` 中止活动模型请求并拒绝尚未开始的排队调用；活动 Turn 记录 aborted 结束原因。Agent 销毁先取消并等待 Loop 收尾，再销毁 Session 和插件作用域。同一 Agent 的并发调用按提交顺序串行执行，验证取消后的新调用仍可运行。保持 Step 执行结构可扩展，但暂不引入工具循环、自动重试、复杂调度器或历史压缩。
-
-9. **完整集成与端到端验收**：通过现有 Preset 装配真实 Loop、Session、SystemPrompt 和 LLM 插件，验证 `agent.run()` 到 Turn 执行、模型调用、Session 记录及最终结果返回的完整流程。检查独立包的构建、导出、Cordis 注册、依赖解析与插件卸载行为。固定模型适配器作为常规测试方式；本地配置可用时，再使用一个真实模型验证。**已完成**：角色和导演 Preset 均装配真实 Loop；固定适配器覆盖 Harness 和生命周期测试，真实 DeepSeek 调用成功。移除旧 mock loop 插件及生产导出，Harness 调试入口改用本地模型配置。
-
-**开发要求：**
-
-每一步沿用学习型开发方式：先核对官方对应实现，说明该步解决的问题、最简单的使用示例、输入输出及预期行为；确认后实现最小功能并实际验证；最后对照官方实现解释异同，完成后停止，等待下一步指示。
-
-整个开发过程以 **Turn 为核心、Step 为执行单元、LLM Call 为具体模型请求**。第一版只支持一个 Turn 执行一个无工具 Step，后续逐步扩展为多 Step 和工具调用循环，不提前开发尚未使用的抽象与机制。
 ### 本阶段完成标准
 
 - 至少一个 Agent 通过现有 Preset 完成真实模型调用，Session 可提供该调用所需的历史并记录结果。
