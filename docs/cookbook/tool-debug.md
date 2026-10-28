@@ -28,3 +28,7 @@ node --test .test-dist/tools/tests/read-file.test.js
 ```
 
 在[测试](../../src/tools/tests/read-file.test.ts)的 `readFileTool.execute(...)`、[工具定义](../../src/agents/plugins/tools/schema.ts)的参数校验和[实现](../../src/tools/filesystem/read-file.ts)的路径检查、`file.read(...)` 以及返回语句处设置断点。按 F5 后观察 `args.path`、`exec.workingDirectory`、`exec.signal`、解析后的 `target` 和读取字节数；成功调用返回 `第一章：启程`。继续执行可观察无效参数、取消、越界、缺失文件和大小限制等拒绝路径。每次启动调试都会重新编译。
+
+## 调试工具服务
+
+在“运行和调试”中选择“调试 Tools 服务测试”并按 F5。启动前自动编译测试。在[服务测试](../../src/agents/tests/tools-service.test.ts)和[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `register`、`schemas` 和 `dispose` 设置断点。观察两个 Agent 的独立服务、重复名称的错误、schema 副本、注销和销毁后的清理。服务测试使用固定适配器，不发起真实模型请求。

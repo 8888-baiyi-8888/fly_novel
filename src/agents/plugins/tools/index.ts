@@ -1,3 +1,5 @@
 export type { ToolDefinition, ToolOutputDefinition, ToolRunContext } from './contracts.js'
 export { defineTool, ToolArgsError } from './schema.js'
 export type { ParameterSchemaSpec, StringValueSchemaSpec } from './schema.js'
+export { ToolsService } from './tools-service.js'
+export { toolsPlugin, toolsPluginDefinition } from './plugin.js'

@@ -28,7 +28,7 @@ src/tools/         具体工具实现，测试放在 src/tools/tests/
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
 src/agents/        写作 Agent 工作区包；core/ 定义 Cordis Harness 实例与注册契约，runtime/ 管理装配和生命周期，plugins/ 提供 Harness 插件适配；Session、SystemPrompt 与 Agent Loop 分别位于独立工作区包；保留各业务 Agent 实现
 src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理
-src/agents/plugins/tools/ 工具定义契约，当前支持直接调用，尚未注册服务
+src/agents/plugins/tools/ 工具定义契约和按 Agent 隔离的工具注册服务
 src/agents/plugins/session/ `@fly-novel/session` 独立工作区包；当前只有包骨架与开发说明，尚未实现或注册插件
 src/agents/plugins/loop/ `@fly-novel/agent-loop` 独立工作区包，提供 AgentLoop 契约、Runtime 与 Cordis 插件
 src/agents/plugins/system-prompt/ `@fly-novel/system-prompt` 独立工作区包，提供通用提示词核心与 Cordis 服务插件；Harness 注册定义由 src/agents/plugins/system-prompt-plugin.ts 提供

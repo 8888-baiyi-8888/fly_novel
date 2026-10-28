@@ -9,7 +9,7 @@
 - `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
 - `plugins/`：Harness 的 memory、LLM 服务与插件注册适配；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中，Harness 注册定义由本包适配。
-- `plugins/tools/`：工具定义契约；具体工具及直接调用说明见[工具目录](../tools/README.md)。
+- `plugins/tools/`：工具定义契约与 Tools 注册服务；具体工具及直接调用说明见[工具目录](../tools/README.md)。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `tests/`：按包运行的自动化测试。
 
@@ -22,6 +22,8 @@
 角色和导演 Preset 均装配真实 `agent-loop-runtime`、`system-prompt`、`llm` 与 `session`。创建 Agent 时，应用须通过 `pluginConfigs['agent-loop-runtime']` 提供 `provider`、`model`，并通过 `pluginConfigs.llm` 提供 `{ adapters: [{ providers: [provider], adapter }] }`。`llmPluginDefinition` 在该 Agent 的 Context 中提供独立 LLM 服务，并随插件作用域注销路由。配置和凭据由应用入口读取，插件只接收已创建的适配器。
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供；Harness 注册定义保留在本包。
+
+Preset 声明 `{ pluginId: 'tools' }` 后，Agent Context 获得独立的 `tools` 服务。`register(definition)` 返回注销函数；`get(name)`、`definitions()` 和 `schemas()` 查询定义与模型可见 schema，重复名称被拒绝，Agent 销毁时清理注册表。服务不自动注册具体工具，也不执行工具调用。
 
 ### Agent Loop 调用契约
 
