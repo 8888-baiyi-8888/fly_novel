@@ -9,7 +9,7 @@
 - `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
 - `plugins/`：Harness 的 memory、LLM 服务与插件注册适配；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中，Harness 注册定义由本包适配。
-- `plugins/tools/`：工具定义契约与 Tools 注册服务；具体工具及直接调用说明见[工具目录](../tools/README.md)。
+- `plugins/tools/`：独立工作区包 `@fly-novel/tools`，提供工具定义与注册执行服务；具体工具见[工具目录](../tools/README.md)。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `tests/`：按包运行的自动化测试。
 
@@ -27,9 +27,9 @@ Preset 声明 `{ pluginId: 'tools' }` 后，Agent Context 获得独立的 `tools
 
 ### Agent Loop 调用契约
 
-`AgentLoop.run({ prompt })` 每次调用对应一个 Turn，成功返回 `{ content }`；执行失败或取消时以拒绝的 Promise 向调用方传播错误。`agent.cancel()` 中止当前模型请求并拒绝尚未开始的排队调用；活动 Turn 在 Session 写入 `aborted` 结束原因。`agent.dispose()` 先等待 Loop 取消并完成 Session 收尾，再销毁 Cordis 插件作用域。Loop 按顺序执行同一 Agent 的并发 `run()` 调用；一个 Turn 当前只执行一个 Step。
+`AgentLoop.run({ prompt })` 每次调用对应一个 Turn，成功返回 `{ content }`；执行失败或取消时以拒绝的 Promise 向调用方传播错误。`agent.cancel()` 中止当前请求并拒绝尚未开始的排队调用；活动 Turn 在 Session 写入 `aborted` 结束原因。`agent.dispose()` 先等待 Loop 取消并完成 Session 收尾，再销毁 Cordis 插件作用域。Loop 按顺序执行同一 Agent 的并发 `run()` 调用；工具调用后进入下一 Step。
 
-`@fly-novel/agent-loop` 导出 `AgentLoopRuntime`、`agentLoopRuntimePlugin` 和 Harness 注册定义。插件声明依赖 Cordis `sessions`、`systemPrompt` 和 `llm` 服务，并在当前 Agent Context 中提供 `agentLoop`。Preset 同时装配这三个服务插件；Agent 创建配置提供模型路由的 `provider` 与 `model`。`AgentLoopRuntime` 从 Context 的 `SessionManager` 创建并持有 Session；`run({ prompt })` 接收用户输入，运行服务从同一 Context 获取，不增加构造参数。Loop 以无参数 `turn()` 驱动生命周期、以无参数 `step()` 执行模型步骤，活动输入与序号保存在运行阶段状态中。每个 Step 从当前 Context 组装 SystemPrompt，将提示词快照与 user 消息写入 Session 后派生完整请求历史；Session 的模型视图只保留最新 system 提示词并置于历史开头。成功时将完整响应内容块及模型来源、可选 replay state 记录为 assistant 消息，并从文本块生成返回文本。失败时保留已写入消息且不产生 assistant 消息，并传播 `LlmError`。Turn 与 Step 序号从 1 开始递增，并记录开始、结束和失败事件。`@fly-novel/agents` 仅负责注册 Loop 插件，不转导 Runtime。
+`@fly-novel/agent-loop` 导出 `AgentLoopRuntime`、插件和 Harness 注册定义。模型请求、单工具调用、Session 记录及授权目录配置见 [Agent Loop 包说明](plugins/loop/README.md)。
 
 逐步检查注册、装配、路由隔离和清理时，使用[LLM 插件调试步骤](../../docs/cookbook/llm-plugin-debug.md)。
 

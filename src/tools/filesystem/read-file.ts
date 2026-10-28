@@ -1,6 +1,6 @@
 import { open, realpath } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import { defineTool } from '../../agents/plugins/tools/index.js'
+import { defineTool } from '@fly-novel/tools'
 
 const MAX_BYTES = 1024 * 1024
 

@@ -36,3 +36,11 @@ node --test .test-dist/tools/tests/read-file.test.js
 ## 调试工具执行和 schema 校验
 
 选择“调试 Tools 执行测试”并按 F5。启动前自动编译测试。在[执行测试](../../src/agents/tests/tools-execution.test.ts)的 `tools.execute(...)`、[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `execute`、[真实文件工具](../../src/tools/filesystem/read-file.ts)和 [schema 校验](../../src/agents/plugins/tools/json-schema.ts)的 `validateJsonSchemaValue` 设置断点。真实工具用例在临时目录写入文件，经服务读取后检查调用 ID、规范输出和模型内容；测试结束自动清理临时目录。其余固定工具用于检查不同 schema、错误和取消，不调用模型。
+
+## 调试 Agent Loop 工具调用
+
+选择“调试 Agent Loop 工具调用”并按 F5，启动前自动编译测试。在[闭环测试](../../src/agents/tests/agent-loop-tools.test.ts)、[Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的 `step`、[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `execute` 和[文件工具](../../src/tools/filesystem/read-file.ts)设置断点。固定适配器第一次返回 `read_file` 调用，第二次返回最终文本；观察两次请求、Session 的 `tool/call` 和 `tool/result` 以及相同的调用 ID。测试使用临时目录和固定模型响应，不发起真实模型请求。
+
+## 调试 Agent Loop 工具调用
+
+选择“调试 Agent Loop 工具调用”并按 F5，启动前自动编译测试。在[闭环测试](../../src/agents/tests/agent-loop-tools.test.ts)、[Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的 `step`、[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `execute` 和[文件工具](../../src/tools/filesystem/read-file.ts)设置断点。固定适配器第一次返回 `read_file` 调用，第二次返回最终文本；观察两次请求、Session 的 `tool/call` 和 `tool/result` 以及相同的调用 ID。测试使用临时目录和固定模型响应，不发起真实模型请求。

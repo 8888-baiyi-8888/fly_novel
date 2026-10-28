@@ -9,5 +9,5 @@
     }
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "plugins/session", "plugins/system-prompt"]
+  "exclude": ["node_modules", "dist", "plugins/session", "plugins/system-prompt", "plugins/tools"]
 }

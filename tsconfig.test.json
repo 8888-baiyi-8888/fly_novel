@@ -6,7 +6,8 @@
     "declaration": false,
     "paths": {
       "@fly-novel/llm": ["./src/llm/index.ts"],
-      "@fly-novel/system-prompt": ["./src/agents/plugins/system-prompt/index.ts"]
+      "@fly-novel/system-prompt": ["./src/agents/plugins/system-prompt/index.ts"],
+      "@fly-novel/tools": ["./src/agents/plugins/tools/index.ts"]
     }
   }
 }

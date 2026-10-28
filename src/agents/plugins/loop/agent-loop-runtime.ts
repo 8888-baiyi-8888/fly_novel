@@ -5,13 +5,16 @@ import type {
   AgentLoopResult,
 } from './types.js'
 import type { Session, TurnEndReason } from '@fly-novel/session'
-import { createAssistantMessage, createSystemMessage, createUserMessage, LlmError } from '@fly-novel/llm'
+import { createAssistantMessage, createSystemMessage, createToolResultMessage, createUserMessage, LlmError } from '@fly-novel/llm'
 import type { ContentBlock, GenerateOptions } from '@fly-novel/llm'
 import { renderPrompt } from '@fly-novel/system-prompt'
+import type {} from '@fly-novel/tools'
 
 export interface AgentLoopRuntimeConfig {
   readonly provider: string
   readonly model: string
+  /** 工具执行的授权工作目录；使用工具时必须提供。 */
+  readonly workingDirectory?: string
 }
 
 interface PendingTurn {
@@ -109,7 +112,12 @@ export class AgentLoopRuntime implements AgentLoop {
 
     let reason: TurnEndReason = { kind: 'completed' }
     try {
-      return await this.step()
+      while (true) {
+        const result = await this.step()
+        if (result !== undefined) return result
+        if (this.phase.kind !== 'running') throw new Error('Step 完成时没有活动 Turn')
+        this.phase = { kind: 'running', turn: { ...this.phase.turn, step: this.phase.turn.step + 1 } }
+      }
     } catch (error) {
       reason = abort.signal.aborted
         ? { kind: 'aborted', reason: abort.signal.reason.kind }
@@ -124,7 +132,7 @@ export class AgentLoopRuntime implements AgentLoop {
     }
   }
 
-  private async step(): Promise<AgentLoopResult> {
+  private async step(): Promise<AgentLoopResult | undefined> {
     if (this.phase.kind !== 'running') throw new Error('Step 执行时没有活动 Turn')
     const { turn, step, abort } = this.phase.turn
     this.session.append('step/start', { turn, step })
@@ -139,10 +147,12 @@ export class AgentLoopRuntime implements AgentLoop {
           message: createSystemMessage(systemPrompt, 'system-prompt'),
         })
       }
-      this.session.append('user/message', createUserMessage({
-        source: { kind: 'user' },
-        content: [{ type: 'text', text: this.phase.turn.prompt }],
-      }))
+      if (step === 1) {
+        this.session.append('user/message', createUserMessage({
+          source: { kind: 'user' },
+          content: [{ type: 'text', text: this.phase.turn.prompt }],
+        }))
+      }
       const request = this.buildRequest(abort.signal)
       const content: ContentBlock[] = []
       for await (const chunk of this.context.llm.stream(request)) {
@@ -168,8 +178,27 @@ export class AgentLoopRuntime implements AgentLoop {
                 providerRetryAfterMs: chunk.reason.failure.providerRetryAfterMs,
                 requestId: chunk.reason.failure.requestId,
               })
-            case 'tool-calls':
-              throw new LlmError('当前 Agent Loop 尚不支持工具调用', 'UNSUPPORTED_TOOL_CALLS')
+            case 'tool-calls': {
+              const tools = this.context.get('tools')
+              if (!tools) throw new LlmError('当前 Agent 未装配工具服务', 'UNSUPPORTED_TOOL_CALLS')
+              const calls = content.filter((block) => block.type === 'tool-call')
+              if (calls.length !== 1) throw new LlmError('当前只支持一次工具调用', 'UNSUPPORTED_TOOL_CALLS')
+              if (!this.config.workingDirectory) throw new Error('工具调用需要配置授权工作目录')
+              const call = calls[0]!
+              const message = createAssistantMessage({
+                content,
+                source: { provider: this.config.provider, model: this.config.model,
+                  ...(chunk.replayState === undefined ? {} : { replayState: chunk.replayState }) },
+              })
+              this.session.append('assistant/message', { turn, step, message })
+              this.session.append('tool/call', { turn, step, callId: call.id, name: call.name, arguments: call.arguments })
+              const result = await tools.execute({ calls, signal: abort.signal, workingDirectory: this.config.workingDirectory })
+              const outcome = result.results[0]!
+              const toolMessage = createToolResultMessage({ callId: outcome.callId, content: outcome.result.content, isError: outcome.result.isError })
+              this.session.append('tool/result', { turn, step, message: toolMessage })
+              if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
+              return undefined
+            }
             case 'max-tokens':
               throw new LlmError('模型响应达到最大 token 数，未完成本次请求', 'MAX_TOKENS')
             default: {
@@ -188,10 +217,15 @@ export class AgentLoopRuntime implements AgentLoop {
 
   private buildRequest(signal: AbortSignal): GenerateOptions {
     if (this.phase.kind !== 'running') throw new Error('构建模型请求时没有活动 Turn')
+    const tools = this.context.get('tools')?.schemas()
+    if (tools && tools.length > 0 && !this.config.workingDirectory) {
+      throw new Error('工具调用需要配置授权工作目录')
+    }
     return {
       provider: this.config.provider,
       model: this.config.model,
       messages: this.session.deriveMessages(),
+      ...(tools && tools.length > 0 ? { tools } : {}),
       signal,
     }
   }
@@ -203,7 +237,8 @@ export const agentLoopRuntimePlugin = Object.assign(function agentLoopRuntimePlu
   config: AgentLoopRuntimeConfig,
 ): void {
   if (!config || typeof config.provider !== 'string' || !config.provider.trim() ||
-      typeof config.model !== 'string' || !config.model.trim()) {
+      typeof config.model !== 'string' || !config.model.trim() ||
+      (config.workingDirectory !== undefined && (typeof config.workingDirectory !== 'string' || !config.workingDirectory.trim()))) {
     throw new Error('Agent Loop 插件需要有效的 provider 和 model 配置')
   }
   const runtime = new AgentLoopRuntime(ctx, config)

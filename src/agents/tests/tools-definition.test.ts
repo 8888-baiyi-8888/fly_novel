@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { defineTool, ToolArgsError } from '../plugins/tools/index.js'
+import { defineTool, ToolArgsError } from '@fly-novel/tools'
 
 test('工具定义编译参数并在执行前校验，不受原始声明的后续修改影响', async () => {
   const parameters = { path: { type: 'string' as const, required: true as const } }

@@ -28,7 +28,7 @@ src/tools/         具体工具实现，测试放在 src/tools/tests/
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
 src/agents/        写作 Agent 工作区包；core/ 定义 Cordis Harness 实例与注册契约，runtime/ 管理装配和生命周期，plugins/ 提供 Harness 插件适配；Session、SystemPrompt 与 Agent Loop 分别位于独立工作区包；保留各业务 Agent 实现
 src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理
-src/agents/plugins/tools/ 工具定义契约和按 Agent 隔离的工具注册服务
+src/agents/plugins/tools/ `@fly-novel/tools` 独立工作区包，提供工具定义、注册与执行服务
 src/agents/plugins/session/ `@fly-novel/session` 独立工作区包；当前只有包骨架与开发说明，尚未实现或注册插件
 src/agents/plugins/loop/ `@fly-novel/agent-loop` 独立工作区包，提供 AgentLoop 契约、Runtime 与 Cordis 插件
 src/agents/plugins/system-prompt/ `@fly-novel/system-prompt` 独立工作区包，提供通用提示词核心与 Cordis 服务插件；Harness 注册定义由 src/agents/plugins/system-prompt-plugin.ts 提供
@@ -43,7 +43,7 @@ src/app/novel-workflow/ 建书命令行入口与 Agent 组装；整图和单步�
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件
-pnpm-workspace.yaml 本地工作区成员清单；Session、SystemPrompt 与 Agent Loop 包位于 src/agents/plugins/ 下，包清单与构建配置位于各包内
+pnpm-workspace.yaml 本地工作区成员清单；Session、SystemPrompt、Agent Loop 与 Tools 包位于 src/agents/plugins/ 下，包清单与构建配置位于各包内
 package.json       Node.js 项目配置、依赖与脚本
 README.md          项目介绍
 tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物

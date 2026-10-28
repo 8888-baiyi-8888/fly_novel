@@ -26,6 +26,9 @@ importers:
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:src/agents/plugins/system-prompt
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:src/agents/plugins/tools
       '@fly-novel/util':
         specifier: workspace:*
         version: link:src/util
@@ -66,6 +69,9 @@ importers:
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:plugins/system-prompt
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:plugins/tools
       '@fly-novel/util':
         specifier: workspace:*
         version: link:../util
@@ -115,6 +121,9 @@ importers:
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:../system-prompt
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:../tools
     devDependencies:
       '@types/node':
         specifier: ^22.20.2
@@ -134,6 +143,18 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
         version: 4.0.2
+
+  src/agents/plugins/tools:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/llm':
+        specifier: workspace:*
+        version: link:../../../llm
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../../../util
 
   src/llm:
     dependencies:

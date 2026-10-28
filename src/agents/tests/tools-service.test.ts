@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { bootstrapAgents } from '../core/bootstrap.js'
-import { defineTool } from '../plugins/tools/index.js'
+import { defineTool } from '@fly-novel/tools'
 import { createTestAgent, withAgentLoop } from './agent-loop-fixtures.js'
 
 test('Tools 服务注册、投影和注销在 Agent 之间隔离，随 Agent 清理', async () => {

@@ -6,13 +6,13 @@
 
 `AgentLoop.run({ prompt })` 执行一次 Turn，并返回 `{ content }`。`agentLoopRuntimePlugin` 通过 Cordis `inject` 声明依赖 `sessions`、`systemPrompt` 和 `llm`，并在当前 Context 提供 `agentLoop`。装配该插件的 Preset 必须同时装配这些服务的提供插件；Agent 作用域销毁时 Cordis 会移除 Loop 服务，Session、SystemPrompt 和 LLM 提供插件分别释放其资源。
 
-Runtime 从当前 Context 的 `sessions` 创建并持有 Session。`run({ prompt })` 是输入边界；无参数的 `turn()` 驱动当前 Turn，无参数的 `step()` 执行其中一个模型步骤，活动输入和序号保存在 Loop 的运行阶段状态中。Preset 需在 `agent-loop-runtime` 配置中指定 `provider` 和 `model`。Step 开始后通过当前 Context 的 `systemPrompt.assemble()` 和 `renderPrompt()` 生成提示词，将非空提示词快照及 user 消息写入 Session，再通过 `session.deriveMessages()` 取得模型历史。Session 派生视图始终把最新 system 提示词放在历史开头，避免多轮请求重复发送旧快照；空提示词快照清除之前的系统提示词。Context 的 `llm.stream()` 发起无工具请求。Step 保留流返回的完整内容块；仅在 `stop` 时记录带 provider、model 和 replay state 的 assistant 消息，并从文本块生成 `{ content }`。模型错误、取消、工具调用和未完成响应均作为失败传播，失败输入保留在 Session 中且不生成 assistant 消息。
+Runtime 从当前 Context 的 `sessions` 创建并持有 Session。`run({ prompt })` 对应一个 Turn，`step()` 负责模型请求。配置需要 `provider` 和 `model`；有可见工具时还需由调用方提供 `workingDirectory` 作为授权工作目录。Loop 从 `systemPrompt` 和 Session 组装请求，将可见工具 schema 传给 LLM；模型返回一个工具调用时，记录 assistant、tool/call 与关联的 tool/result，再从 Session 派生历史进入下一 Step。模型返回最终文本时结束 Turn。当前每次响应只接受一个工具调用，不限制 Turn 的 Step 数；多个调用会被拒绝。模型错误、取消和未完成响应以错误传播。
 
 `agent.cancel()` 中止当前 Step 的 `AbortSignal`，拒绝等待队列中的 Turn，并使活动 Turn 以 `{ kind: 'aborted', reason: 'user' }` 结束。Agent 销毁时先调用 Loop 的 `dispose()`，中止活动请求、拒绝排队输入并等待 Turn 写入结束事件，再释放插件作用域和 Session。多个 `run()` 按提交顺序串行执行；取消不影响之后提交的新调用。
 
 ## Harness Preset 装配
 
-角色和导演 Preset 均装配 `agent-loop-runtime`、`session`、`system-prompt` 和 `llm`。创建 Agent 时，`pluginConfigs['agent-loop-runtime']` 指定模型路由，例如 `{ provider: 'deepseek', model: 'deepseek-chat' }`；`pluginConfigs.llm` 提供该 provider 对应的适配器。成功运行按 `turn/start`、`step/start`、可选 `system/message`、`user/message`、`assistant/message`、`step/end`、`turn/end` 顺序写入 Session；失败时保留已写入的提示词快照和 `user/message`，不写入 `assistant/message`。
+角色和导演 Preset 均装配 `agent-loop-runtime`、`session`、`system-prompt` 和 `llm`。创建 Agent 时，`pluginConfigs['agent-loop-runtime']` 指定模型路由，例如 `{ provider: 'deepseek', model: 'deepseek-chat' }`；`pluginConfigs.llm` 提供该 provider 对应的适配器。需要工具时在 Preset 添加 `tools`，注册工具，并为 Loop 配置可信的 `workingDirectory`；工具失败结果也记录到 Session 并交给下一次模型请求。
 
 ```ts
 import { AgentLoopRuntime, agentLoopRuntimePlugin } from '@fly-novel/agent-loop'
