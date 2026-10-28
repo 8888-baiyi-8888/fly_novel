@@ -107,7 +107,7 @@ Agent Loop 作为 Harness 的执行协调层，负责 Turn 生命周期、Step �
 
 8. **Turn 生命周期与执行控制**：完善 Turn 的执行状态、终止条件、错误传播、取消和资源清理。`Agent.cancel()` 中止活动模型请求并拒绝尚未开始的排队调用；活动 Turn 记录 aborted 结束原因。Agent 销毁先取消并等待 Loop 收尾，再销毁 Session 和插件作用域。同一 Agent 的并发调用按提交顺序串行执行，验证取消后的新调用仍可运行。保持 Step 执行结构可扩展，但暂不引入工具循环、自动重试、复杂调度器或历史压缩。
 
-9. **完整集成与端到端验收**：通过现有 Preset 装配真实 Loop、Session、SystemPrompt 和 LLM 插件，验证 `agent.run()` 到 Turn 执行、模型调用、Session 记录及最终结果返回的完整流程。检查独立包的构建、导出、Cordis 注册、依赖解析与插件卸载行为。固定模型适配器作为常规测试方式；本地配置可用时，再使用一个真实模型验证。保留 mock loop，并更新必要文档与 Agent Note。
+9. **完整集成与端到端验收**：通过现有 Preset 装配真实 Loop、Session、SystemPrompt 和 LLM 插件，验证 `agent.run()` 到 Turn 执行、模型调用、Session 记录及最终结果返回的完整流程。检查独立包的构建、导出、Cordis 注册、依赖解析与插件卸载行为。固定模型适配器作为常规测试方式；本地配置可用时，再使用一个真实模型验证。保留 mock loop，并更新必要文档与 Agent Note。**已完成**：以角色 Preset 派生配置替换 mock loop 并通过固定适配器验证端到端调用；Agent Loop 测试中的真实 DeepSeek 调用及其余生命周期、失败和 mock 行为均通过。
 
 **开发要求：**
 

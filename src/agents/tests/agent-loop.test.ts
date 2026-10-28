@@ -6,6 +6,7 @@ import { AgentLoopRuntime } from '@fly-novel/agent-loop'
 import type { AgentLoop } from '@fly-novel/agent-loop'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { AgentFramework } from '@fly-novel/agents'
+import { characterAgentPreset } from '@fly-novel/agents'
 import { loadConfiguredAdapter } from '../../app/call-llm.js'
 
 class FixedResponseAdapter extends LlmAdapter {
@@ -144,6 +145,41 @@ describe('AgentLoop Runtime', () => {
     assert.throws(() => session.read(), /已关闭/)
     assert.throws(() => systemPrompt.assemble(), /已销毁/)
     assert.equal(adapter.requests.length, 1)
+  })
+
+  it('现有角色 Preset 可替换为真实 Loop 并贯通固定适配器', async () => {
+    framework = await bootstrapAgents()
+    const basePreset = characterAgentPreset
+    framework.presets.register({
+      ...basePreset,
+      id: 'character-runtime-test',
+      plugins: [
+        { pluginId: 'agent-loop-runtime', config: { provider: 'test-provider', model: 'test-model' } },
+        { pluginId: 'system-prompt' },
+        { pluginId: 'llm' },
+        { pluginId: 'session' },
+        ...basePreset.plugins.filter(({ pluginId }) => pluginId !== 'mock-loop'),
+      ],
+    })
+
+    const adapter = new FixedResponseAdapter()
+    const agent = await framework.manager.create({
+      id: 'character-runtime-agent',
+      presetId: 'character-runtime-test',
+      pluginConfigs: { llm: { adapters: [{ providers: ['test-provider'], adapter }] } },
+    })
+    const result = await agent.run({ prompt: '续写这一幕' })
+    const session = agent.context.sessions.list()[0]
+
+    assert.ok(session)
+    assert.equal(result.content, '续写这一幕')
+    assert.equal(adapter.requests.length, 1)
+    assert.equal(adapter.requests[0]?.provider, 'test-provider')
+    assert.equal(adapter.requests[0]?.model, 'test-model')
+    assert.deepEqual(session.read().flatMap((event) => event.type === 'turn/end' ? [event.data.reason] : []), [
+      { kind: 'completed' },
+    ])
+    assert.deepEqual(session.deriveMessages().map(({ role }) => role), ['user', 'assistant'])
   })
 
   it('同一 Agent 连续运行时复用 Context 中的 Session', async () => {
