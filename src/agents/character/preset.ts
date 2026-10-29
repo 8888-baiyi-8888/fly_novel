@@ -11,6 +11,7 @@ export const characterAgentPreset: AgentPreset = {
   plugins: [
     { pluginId: 'agent-loop-runtime' },
     { pluginId: 'system-prompt' },
+    { pluginId: 'character-system-prompt' },
     { pluginId: 'llm' },
     { pluginId: 'session' },
     {

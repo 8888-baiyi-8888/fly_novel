@@ -85,7 +85,7 @@ describe('AgentLoop Runtime', () => {
     const session = agent.context.sessions.list()[0]
     assert.ok(session)
     assert.deepEqual(session.read().filter((event) => event.type === 'turn/end')[0]?.data.reason, { kind: 'completed' })
-    assert.deepEqual(session.deriveMessages().map(({ role }) => role), ['user', 'assistant'])
+    assert.deepEqual(session.deriveMessages().map(({ role }) => role), ['system', 'user', 'assistant'])
     console.log('Agent Loop 真实模型响应：', result.content)
   })
 
@@ -166,7 +166,7 @@ describe('AgentLoop Runtime', () => {
     assert.deepEqual(session.read().flatMap((event) => event.type === 'turn/end' ? [event.data.reason] : []), [
       { kind: 'completed' },
     ])
-    assert.deepEqual(session.deriveMessages().map(({ role }) => role), ['user', 'assistant'])
+    assert.deepEqual(session.deriveMessages().map(({ role }) => role), ['system', 'user', 'assistant'])
   })
 
   it('同一 Agent 连续运行时复用 Context 中的 Session', async () => {
