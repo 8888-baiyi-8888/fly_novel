@@ -7,6 +7,7 @@ import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } f
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { ToolDefinition, ToolRunContext } from '@fly-novel/tools'
 import { readFileTool } from '../../tools/filesystem/read-file.js'
+import { loadConfiguredAdapter } from '../../app/call-llm.js'
 
 class ToolCallAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
@@ -24,6 +25,34 @@ class ToolCallAdapter extends LlmAdapter {
     }
   }
 }
+
+test('真实 DeepSeek 模型调用 read_file', { skip: process.env.FLY_NOVEL_REAL_LLM_TEST !== '1' }, async (t) => {
+  const workingDirectory = await mkdtemp(join(tmpdir(), 'fly-novel-real-tool-'))
+  t.after(() => rm(workingDirectory, { recursive: true, force: true }))
+  const contents = '第一章：星河启程'
+  await writeFile(join(workingDirectory, 'outline.txt'), contents, 'utf8')
+  const { provider, model, adapter } = await loadConfiguredAdapter('deepseek')
+  const framework = await bootstrapAgents()
+  t.after(() => framework.manager.disposeAll())
+  framework.presets.register({ id: 'real-tool', version: '1', role: 'character', plugins: [
+    { pluginId: 'agent-loop-runtime', config: { provider, model, workingDirectory, maxSteps: 3 } },
+    { pluginId: 'session' }, { pluginId: 'system-prompt' }, { pluginId: 'llm' }, { pluginId: 'tools' },
+  ] })
+  const agent = await framework.manager.create({ id: 'real-tool', presetId: 'real-tool',
+    pluginConfigs: { llm: { adapters: [{ providers: [provider], adapter }] } } })
+  agent.context.tools.register(readFileTool)
+  const result = await agent.run({ prompt: '请使用 read_file 读取 outline.txt，然后原样输出文件内容。' })
+  assert.ok(result.content.includes(contents), '模型回答应包含文件内容')
+  const session = agent.context.sessions.list()[0]
+  assert.ok(session)
+  const calls = session.read().filter(event => event.type === 'tool/call').filter(event => event.data.name === 'read_file')
+  const results = session.read().filter(event => event.type === 'tool/result')
+  assert.ok(calls.length > 0, '模型必须实际调用 read_file')
+  assert.ok(calls.some(call => results.some(event => event.data.message.source.callId === call.data.callId
+    && event.data.message.content.some(block => block.type === 'tool-result' && !block.isError
+      && block.content.some(item => item.type === 'text' && item.text === contents)))), 'Session 应包含匹配调用 ID 的成功读取结果')
+  assert.deepEqual(session.read().filter(event => event.type === 'turn/end').at(-1)?.data.reason, { kind: 'completed' })
+})
 
 test('Agent Loop 使用真实 read_file 完成两次模型请求', async (t) => {
   const workingDirectory = await mkdtemp(join(tmpdir(), 'fly-novel-loop-tools-'))

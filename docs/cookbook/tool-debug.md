@@ -1,5 +1,20 @@
 # 调试 read_file 工具
 
+## 调试真实 DeepSeek 工具闭环
+
+按[模型配置说明](llm-plugin-debug.md#7-准备真实模型配置)准备 DeepSeek 配置和凭据。在 VS Code 选择“调试真实 DeepSeek 工具调用”并按 F5，启动配置会编译测试并设置 `FLY_NOVEL_REAL_LLM_TEST=1`。在[测试](../../src/agents/tests/agent-loop-tools.test.ts)、[Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)、[工具服务](../../src/agents/plugins/tools/tools-service.ts)和[文件工具](../../src/tools/filesystem/read-file.ts)设置断点。测试在临时目录创建 `outline.txt`，要求模型调用 `read_file`，验证 Session 的调用 ID 和成功结果、最终回答及 Turn 完成状态，结束时清理临时目录。请求需要网络并产生模型调用费用；模型未调用工具或回答不包含文件内容时测试失败。
+
+也可在仓库根目录运行：
+
+```powershell
+pnpm run build:tests
+$env:FLY_NOVEL_REAL_LLM_TEST = '1'
+node --test --test-name-pattern="真实 DeepSeek 模型调用 read_file" .test-dist/agents/tests/agent-loop-tools.test.js
+Remove-Item Env:\FLY_NOVEL_REAL_LLM_TEST
+```
+
+普通测试未设置启用变量时跳过真实请求；模型配置、凭据或网络不可用时真实测试会报告失败。
+
 调试多工具批次和 Step 上限时，在 VS Code 选择“调试多工具调用”，并在[批次测试](../../src/agents/tests/agent-loop-batch.test.ts)、[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `execute` 和 [Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的 `turn`、`step` 设置断点。测试使用真实 `read_file`、临时文件和固定模型，观察调用顺序、失败后的继续执行、取消结果及 `maxSteps`；不会发起网络请求。
 
 本指南通过固定文件测试直接调用工具，不需要模型配置或凭据。在仓库根目录执行：
