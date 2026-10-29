@@ -27,6 +27,8 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 角色 Preset 同时装配 `character-system-prompt`，在角色实例中注册角色扮演职责提示词；具体角色信息和场景由调用输入提供。插件随 Agent 作用域注销，不读取角色档案。调试步骤见[角色提示词调试](../../docs/cookbook/character-system-prompt-debug.md)。
 
+导演 Preset 装配 `director-system-prompt`，在导演实例中注册导演职责提示词；创作目标、世界规则和人物状态由调用输入提供。插件随 Agent 作用域注销。调试步骤见[导演提示词调试](../../docs/cookbook/director-system-prompt-debug.md)。
+
 Preset 声明 `{ pluginId: 'tools' }` 后，Agent Context 获得独立的 `tools` 服务。`register(definition)` 返回注销函数；`get(name)`、`definitions()` 和 `schemas()` 查询定义与模型可见 schema，重复名称被拒绝，Agent 销毁时清理注册表。服务不自动注册具体工具；`execute` 串行处理工具调用批次，返回按调用 ID 关联的规范值、模型内容或错误。
 
 ### Agent Loop 调用契约
