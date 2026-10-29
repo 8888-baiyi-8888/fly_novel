@@ -36,7 +36,7 @@
 3. **系统提示词插件（`src/agents/plugins/`）**：先学习并实现可独立使用的通用提示词对象，再逐步支持多段组装，最后通过现有注册方式提供给 Harness Agent；详细开发顺序见[系统提示词插件开发计划](modules/agents/system-prompt-development-plan.md)。
 4. **真实 Agent Loop 插件（`src/agents/plugins/loop/`）**：替换回显输入的 mock loop，先完成无需工具的一轮调用：读取 Session、组装提示词、调用 LLM、记录结果并返回。该步骤完成后，至少一个 Harness Agent 能通过现有 Preset 运行真实模型。
 5. **工具插件（`src/agents/plugins/tools/`）**：按[工具插件开发计划](modules/agents/tool-plugin-development-plan.md)，学习 DeepSeek Harness 的工具定义、注册、执行和 Loop 调用方案；先建立最小可用注册与执行闭环，再通过只读小说资料工具验证。工具提供的数据遵守调用方确定的角色可见范围。
-6. **角色专有插件与组合**：逐个开发角色、导演等所需的提示词、资料查询和其他专有能力，在各自现有 Preset 中按插件 ID 选择；Session、LLM、Loop 和工具基础插件按需复用。
+6. **角色专有插件与组合**：逐个开发角色、导演等所需的提示词、资料查询和其他专有能力，在各自现有 Preset 中按插件 ID 选择；Session、LLM、Loop 和工具基础插件按需复用。详细顺序见[角色专有插件与组合开发计划](modules/agents/role-specific-plugin-development-plan.md)。
 7. **按需求扩展会话能力**：需要进程重启后继续使用会话时，另建 Session 持久化插件，将第 1 步的会话数据保存到存储介质，并在启动时读取和恢复；对照官方 [`@deepseek-ai/dsh-session-persistence`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence/README.md) 定义持久化服务契约，以及 [`@deepseek-ai/dsh-session-persistence-jsonl`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence-jsonl/README.md) 的具体存储实现。并发写入、异常恢复等生命周期问题在出现实际需求时一并处理；长历史检索和上下文压缩也分别按需设计为独立插件。对话历史归 Session；角色经历与认知属于小说领域数据，不直接以实例内的 mock memory 代替。
 
 ### 本阶段完成标准
