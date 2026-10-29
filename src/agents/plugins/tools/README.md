@@ -10,6 +10,8 @@
 
 `ToolsService.execute` 按输入顺序串行执行批次，按调用 ID 返回结果。可选的 `log` 包含 Session、Turn 和 Step，使服务在工具开始前记录 `tool/call` 并在结束后记录 `tool/result`；未开始且因取消跳过的调用只记录取消结果。独立调用不提供 `log` 时不写 Session。
 
+`log.checkpoint` 由 Loop 提供时，在记录 `tool/call` 后、调用工具前等待持久化刷新；刷新失败时工具不会执行。
+
 `@fly-novel/tools` 是独立工作区包，公开工具定义、ToolsService 和 Cordis 插件。Harness Preset 按插件 ID `tools` 装配服务，具体工具由调用方注册。
 
 `@fly-novel/tools` 是独立工作区包，公开工具定义、ToolsService 和 Cordis 插件。Harness Preset 按插件 ID `tools` 装配服务，具体工具由调用方注册。

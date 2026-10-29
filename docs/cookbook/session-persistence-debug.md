@@ -1,5 +1,14 @@
 # 调试 Session 持久化契约
 
+## 调试中断恢复和格式迁移
+
+在 VS Code 选择“调试 Session 中断恢复”并按 F5。在[中断测试](../../src/agents/tests/agent-loop-interrupted.test.ts)、[恢复逻辑](../../src/agents/plugins/loop/interrupted-turn.ts)、[Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的恢复和刷新位置及 [JSONL 后端](../../src/agents/plugins/session-persistence-jsonl/index.ts)的 `prepareWrite` 设置断点。测试使用临时文件，观察已开始与未开始的工具结果、`interrupted` Turn、v1 原文件保留及尾部修复。
+
+```powershell
+pnpm run build:tests
+node --test .test-dist/agents/tests/agent-loop-interrupted.test.js
+```
+
 ## 调试 Agent Loop 会话恢复
 
 在 VS Code 选择“调试 Agent Loop 会话恢复”并按 F5。测试使用固定模型和临时 JSONL 文件。在[测试](../../src/agents/tests/agent-loop-persistence.test.ts)、[Agent Loop 初始化](../../src/agents/plugins/loop/agent-loop-runtime.ts)与 [JSONL 后端](../../src/agents/plugins/session-persistence-jsonl/index.ts)的 `create`、`open` 设置断点，观察 `sessionId` 与 `resumeSessionId`、恢复的模型消息、Turn 编号及失败路径。
@@ -20,7 +29,7 @@ node --test .test-dist/agents/tests/session-persistence-recovery.test.js
 
 ## 调试 JSONL 后端
 
-在 VS Code 选择“调试 Session JSONL 后端”并按 F5。测试使用临时目录，在[测试](../../src/agents/tests/session-persistence-jsonl.test.ts)和 [JSONL 后端](../../src/agents/plugins/session-persistence-jsonl/index.ts)的 `create`、`load`、`append` 和 `flush` 设置断点。观察文件头、事件序号、重新打开和不支持版本或不完整尾部的拒绝；测试结束会删除临时目录。
+在 VS Code 选择“调试 Session JSONL 后端”并按 F5。测试使用临时目录，在[测试](../../src/agents/tests/session-persistence-jsonl.test.ts)和 [JSONL 后端](../../src/agents/plugins/session-persistence-jsonl/index.ts)的 `create`、`load`、`append` 和 `flush` 设置断点。观察文件头、事件序号、重新打开、不支持版本的拒绝及不完整尾部恢复；测试结束会删除临时目录。
 
 ```powershell
 pnpm run build:tests

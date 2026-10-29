@@ -63,6 +63,7 @@ export class ToolsService {
       if (!input.signal.aborted && input.log) {
         input.log.session.append('tool/call', { turn: input.log.turn, step: input.log.step,
           callId: call.id, name: call.name, arguments: call.arguments })
+        await input.log.checkpoint?.()
       }
       const result = await this.executeCall(call, input)
       if (input.log) {

@@ -4,6 +4,8 @@ import type { SessionEvent } from '@fly-novel/session'
 export interface SessionHeader {
   readonly id: string
   readonly createdAt: string
+  /** 是否确保每次工具执行前持久化其开始记录。 */
+  readonly toolCallCheckpoint?: boolean
 }
 
 export type SessionAccess = 'read' | 'write'

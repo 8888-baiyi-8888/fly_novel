@@ -9,8 +9,9 @@ import { createAssistantMessage, createSystemMessage, createUserMessage, LlmErro
 import type { ContentBlock, GenerateOptions } from '@fly-novel/llm'
 import { renderPrompt } from '@fly-novel/system-prompt'
 import type {} from '@fly-novel/tools'
-import type {} from '@fly-novel/session-persistence'
+import type { SessionPersistence } from '@fly-novel/session-persistence'
 import { recoverToolCall } from './tool-call-recovery.js'
+import { interruptedTurnClosers } from './interrupted-turn.js'
 
 export interface AgentLoopRuntimeConfig {
   readonly provider: string
@@ -52,7 +53,8 @@ export class AgentLoopRuntime implements AgentLoop {
   private disposed = false
   private driverPromise: Promise<void> = Promise.resolve()
 
-  constructor(private readonly context: Context, private readonly config: AgentLoopRuntimeConfig, session?: Session) {
+  constructor(private readonly context: Context, private readonly config: AgentLoopRuntimeConfig, session?: Session,
+    private readonly persistence?: SessionPersistence) {
     this.maxSteps = config.maxSteps === undefined ? 10 : config.maxSteps
     if (!Number.isSafeInteger(this.maxSteps) || this.maxSteps < 1) throw new Error('maxSteps 必须是正整数')
     this.session = session ?? context.sessions.create()
@@ -114,6 +116,7 @@ export class AgentLoopRuntime implements AgentLoop {
 
   private async turn(): Promise<AgentLoopResult> {
     if (this.phase.kind !== 'reserved') throw new Error('Turn 执行时没有已接收的输入')
+    this.assertPersistence()
     const { prompt } = this.phase
     const turn = this.turnNumber + 1
     this.session.append('turn/start', { turn })
@@ -122,6 +125,8 @@ export class AgentLoopRuntime implements AgentLoop {
     this.phase = { kind: 'running', turn: { prompt, turn, step: 1, abort } }
 
     let reason: TurnEndReason = { kind: 'completed' }
+    let failed = false
+    let turnFailure: unknown
     try {
       while (true) {
         const result = await this.step()
@@ -134,6 +139,8 @@ export class AgentLoopRuntime implements AgentLoop {
         this.phase = { kind: 'running', turn: { ...this.phase.turn, step: this.phase.turn.step + 1 } }
       }
     } catch (error) {
+      failed = true
+      turnFailure = error
       reason = abort.signal.aborted
         ? { kind: 'aborted', reason: abort.signal.reason.kind }
         : reason.kind === 'max-steps'
@@ -143,6 +150,10 @@ export class AgentLoopRuntime implements AgentLoop {
     } finally {
       try {
         this.session.append('turn/end', { turn, reason })
+        await this.checkpoint()
+      } catch (error) {
+        if (failed) throw new AggregateError([turnFailure, error], 'Turn 失败且结束记录或刷新失败')
+        throw error
       } finally {
         this.phase = { kind: 'idle' }
       }
@@ -171,6 +182,7 @@ export class AgentLoopRuntime implements AgentLoop {
         }))
       }
       const request = this.buildRequest(abort.signal)
+      await this.checkpoint()
       const content: ContentBlock[] = []
       for await (const chunk of this.context.llm.stream(request)) {
         if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
@@ -211,7 +223,7 @@ export class AgentLoopRuntime implements AgentLoop {
               this.session.append('assistant/message', { turn, step, message })
               try {
                 const result = await tools.execute({ calls, signal: abort.signal, workingDirectory: this.config.workingDirectory,
-                  log: { session: this.session, turn, step } })
+                  log: { session: this.session, turn, step, checkpoint: () => this.checkpoint() } })
                 if (result.results.length !== calls.length ||
                     result.results.some((outcome, index) => outcome.callId !== calls[index]?.id)) {
                   throw new Error('工具结果与调用 ID 不匹配')
@@ -257,6 +269,16 @@ export class AgentLoopRuntime implements AgentLoop {
       signal,
     }
   }
+
+  private assertPersistence(): void {
+    if (this.persistence && this.context.get('sessionPersistence')?.identity !== this.persistence.identity) throw new Error('Session 持久化后端不可用')
+  }
+
+  private async checkpoint(): Promise<void> {
+    this.assertPersistence()
+    await this.context.sessions.flush(this.session)
+    this.assertPersistence()
+  }
 }
 
 /** 声明 Session、SystemPrompt 与 LLM 服务依赖，并在当前 Context 注册 Loop。 */
@@ -274,14 +296,18 @@ export const agentLoopRuntimePlugin = Object.assign(async function agentLoopRunt
   if (config.sessionId !== undefined && config.resumeSessionId !== undefined) throw new Error('sessionId 与 resumeSessionId 不能同时指定')
   if (config.maxSteps !== undefined && (!Number.isSafeInteger(config.maxSteps) || config.maxSteps < 1)) throw new Error('maxSteps 必须是正整数')
   let session: Session | undefined
+  let persistence: SessionPersistence | undefined
   if (config.sessionId !== undefined || config.resumeSessionId !== undefined) {
-    const persistence = ctx.get('sessionPersistence')
+    persistence = ctx.get('sessionPersistence')
     if (!persistence) throw new Error('未配置 Session 持久化后端')
     const handle = config.resumeSessionId !== undefined
       ? await persistence.open(config.resumeSessionId, 'write')
-      : await persistence.create({ id: config.sessionId!, createdAt: new Date().toISOString() })
+      : await persistence.create({ id: config.sessionId!, createdAt: new Date().toISOString(), toolCallCheckpoint: true })
     try {
-      const seed = config.resumeSessionId === undefined ? [] : (await handle.read()).events
+      const stored = config.resumeSessionId === undefined ? [] : (await handle.read()).events
+      const closers = interruptedTurnClosers(stored, handle.header.toolCallCheckpoint === true)
+      if (closers.length) { await handle.append(closers); await handle.flush() }
+      const seed = [...stored, ...closers]
       if ([FiberState.UNLOADING, FiberState.DISPOSED, FiberState.FAILED].includes(ctx.fiber.state)) throw new Error('Agent Loop 初始化期间已销毁')
       session = ctx.sessions.create(handle.id, { seed, createdAt: new Date(handle.header.createdAt) })
     } catch (error) {
@@ -289,7 +315,7 @@ export const agentLoopRuntimePlugin = Object.assign(async function agentLoopRunt
       throw error
     }
   }
-  const runtime = new AgentLoopRuntime(ctx, config, session)
+  const runtime = new AgentLoopRuntime(ctx, config, session, persistence)
   ctx.provide('agentLoop', runtime)
   ctx.effect(() => () => runtime.dispose())
 }, { inject: ['sessions', 'systemPrompt', 'llm'], provide: 'agentLoop' })

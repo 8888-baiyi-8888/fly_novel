@@ -42,7 +42,7 @@ export interface ToolBatchInput {
   readonly signal: AbortSignal
   readonly workingDirectory: string
   /** 写入当前 Step 的调用和结果；独立调用时可省略。 */
-  readonly log?: { readonly session: Session; readonly turn: number; readonly step: number }
+  readonly log?: { readonly session: Session; readonly turn: number; readonly step: number; readonly checkpoint?: () => Promise<void> }
 }
 
 /** 按调用 ID 关联执行结果。 */

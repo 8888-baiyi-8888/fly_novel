@@ -1,18 +1,19 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { mkdir, open, readFile, readdir, lstat } from 'node:fs/promises'
+import { mkdir, open, readFile, readdir, lstat, link, unlink } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { isAbsolute, join, resolve } from 'node:path'
 import { snapshotJsonValue } from '@fly-novel/util'
 import type { SessionEvent } from '@fly-novel/session'
 import { SessionPersistence, type SessionAccess, type SessionHandle, type SessionHeader } from '@fly-novel/session-persistence'
 
-const VERSION = 1
-const FILENAME = 'session.v1.jsonl'
+const VERSION = 2
+const FILENAME = 'session.v2.jsonl'
 const TYPES = new Set(['turn/start', 'turn/end', 'step/start', 'step/end', 'system/message', 'user/message', 'assistant/message', 'tool/call', 'tool/result'])
 
 /** JSONL 后端配置；root 是应用指定的绝对目录。 */
 export interface JsonlSessionPersistenceConfig { readonly root: string }
 
-/** 项目格式 v1：第一行是 session 头，其余每行是一个事件。 */
+/** 项目格式 v2：第一行是 session 头，其余每行是一个事件。 */
 export class JsonlSessionPersistence extends SessionPersistence {
   private readonly root: string
   private readonly handles = new Set<SessionHandle>()
@@ -65,7 +66,9 @@ export class JsonlSessionPersistence extends SessionPersistence {
 
   async open(id: string, access: SessionAccess): Promise<SessionHandle> {
     if (access !== 'read' && access !== 'write') throw new Error('Session 访问模式无效')
-    const { header } = await this.load(id)
+    const loaded = await this.load(id)
+    if (access === 'write') await this.prepareWrite(id, loaded)
+    const { header } = loaded
     return this.makeHandle(header, access)
   }
 
@@ -102,27 +105,55 @@ export class JsonlSessionPersistence extends SessionPersistence {
     if (errors.length) throw new AggregateError(errors, '刷新 Session 失败')
   }
 
-  private async load(id: string): Promise<{ header: SessionHeader; events: SessionEvent[] }> {
+  private async load(id: string): Promise<{ header: SessionHeader; events: SessionEvent[]; version: number; validBytes: number; totalBytes: number }> {
     const dir = this.directory(id)
     if ((await lstat(dir)).isSymbolicLink()) throw new Error('Session 目录不能是符号链接')
-    const filename = join(dir, FILENAME)
+    const entries = await readdir(dir)
+    const versions = entries.flatMap(name => { const match = /^session\.v([1-9]\d*)\.jsonl$/.exec(name); return match ? [Number(match[1])] : [] })
+    if (versions.length === 0) throw Object.assign(new Error('Session 文件不存在'), { code: 'ENOENT' })
+    const version = Math.max(...versions)
+    if (version > VERSION) throw new Error('Session 格式版本不支持')
+    const filename = join(dir, `session.v${version}.jsonl`)
     if ((await lstat(filename)).isSymbolicLink()) throw new Error('Session 文件不能是符号链接')
     const bytes = await readFile(filename)
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-    if (!text.endsWith('\n')) throw new Error('Session 日志尾部不完整')
+    const validBytes = bytes.lastIndexOf(10) + 1
+    if (validBytes === 0) throw new Error('Session 日志头部不完整')
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, validBytes))
     const rows = text.slice(0, -1).split('\n')
     let values: unknown[]
     try { values = rows.map(row => JSON.parse(row) as unknown) } catch { throw new Error('Session 日志不是有效 JSONL') }
     const head = values[0]
     if (!isRecord(head) || head.type !== 'session') throw new Error('Session 头部无效')
-    if (head.version !== VERSION) throw new Error('Session 格式版本不支持')
+    if (head.version !== version) throw new Error('Session 格式版本不支持')
     if (head.id !== id || typeof head.createdAt !== 'string' || !Number.isFinite(Date.parse(head.createdAt))) throw new Error('Session 头部无效')
     const events: SessionEvent[] = []
     for (const value of values.slice(1)) {
       if (!isSessionEvent(value, events.length)) throw new Error('Session 事件无效或序号不连续')
       events.push(value)
     }
-    return { header: { id, createdAt: head.createdAt }, events }
+    if (head.toolCallCheckpoint !== undefined && typeof head.toolCallCheckpoint !== 'boolean') throw new Error('Session 头部无效')
+    return { header: { id, createdAt: head.createdAt, ...(version === 1 || head.toolCallCheckpoint === undefined ? {} : { toolCallCheckpoint: head.toolCallCheckpoint }) }, events, version, validBytes, totalBytes: bytes.length }
+  }
+
+  private async prepareWrite(id: string, loaded: { header: SessionHeader; events: SessionEvent[]; version: number; validBytes: number; totalBytes: number }): Promise<void> {
+    const dir = this.directory(id)
+    if (loaded.version === VERSION) {
+      if (loaded.validBytes !== loaded.totalBytes) {
+        const file = await open(join(dir, FILENAME), 'r+')
+        try { await file.truncate(loaded.validBytes); await file.sync() } finally { await file.close() }
+      }
+      return
+    }
+    const temp = join(dir, `.migration-${randomUUID()}`)
+    const file = await open(temp, 'wx')
+    try {
+      try {
+        const rows = [JSON.stringify({ type: 'session', version: VERSION, ...loaded.header }), ...loaded.events.map(event => JSON.stringify(event))]
+        await file.writeFile(rows.join('\n') + '\n', 'utf8')
+        await file.sync()
+      } finally { await file.close() }
+      await link(temp, join(dir, FILENAME))
+    } finally { await unlink(temp) }
   }
 
   private makeHandle(header: SessionHeader, access: SessionAccess): SessionHandle {
@@ -139,6 +170,7 @@ export class JsonlSessionPersistence extends SessionPersistence {
         assertOpen()
         if (access !== 'write') throw new Error('Session 句柄只读')
         const current = await this.load(header.id)
+        if (current.validBytes !== current.totalBytes) throw new Error('Session 日志尾部不完整，请重新打开会话')
         const snapshot = snapshotJsonValue(events)
         if (!snapshot || snapshot.some((event, i) => !isSessionEvent(event, current.events.length + i))) throw new Error('Session 事件无效或序号不连续')
         if (!snapshot.length) return
@@ -232,7 +264,7 @@ function isSessionEvent(value: unknown, seq: number): value is SessionEvent {
   if (!positiveInteger(data.turn)) return false
   if (value.type === 'turn/start') return true
   if (value.type === 'turn/end') return isRecord(data.reason) && typeof data.reason.kind === 'string'
-    && ['completed', 'aborted', 'blocked', 'error', 'max-tokens', 'max-steps'].includes(data.reason.kind)
+    && ['completed', 'aborted', 'blocked', 'error', 'max-tokens', 'max-steps', 'interrupted'].includes(data.reason.kind)
     && (data.reason.kind !== 'aborted' || ['user', 'parent', 'disposed'].includes(String(data.reason.reason)))
     && (data.reason.kind !== 'error' || typeof data.reason.message === 'string')
     && (data.reason.kind !== 'max-steps' || positiveInteger(data.reason.maxSteps))

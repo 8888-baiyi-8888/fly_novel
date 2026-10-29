@@ -16,6 +16,8 @@ declare module '@deepseek-ai/cordis' {
 
 /** 持久化服务契约；具体存储后端提供实现。 */
 export abstract class SessionPersistence extends Service {
+  /** 在 Cordis 代理之间保持稳定的服务实例标识。 */
+  readonly identity: symbol = Symbol('sessionPersistence')
   constructor(ctx: Context) { super(ctx, 'sessionPersistence') }
 
   /** 创建新会话并返回写句柄；ID 已存在时拒绝。 */

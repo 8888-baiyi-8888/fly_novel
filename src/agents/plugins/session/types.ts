@@ -9,6 +9,7 @@ export interface TurnEndReasonMap {
   error: { readonly kind: 'error'; readonly message: string }
   'max-tokens': { readonly kind: 'max-tokens' }
   'max-steps': { readonly kind: 'max-steps'; readonly maxSteps: number }
+  interrupted: { readonly kind: 'interrupted' }
 }
 
 /** 由事件生产方说明本轮为何结束；可通过声明合并扩展。 */
