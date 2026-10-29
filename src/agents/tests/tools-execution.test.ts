@@ -65,7 +65,8 @@ test('工具服务拒绝无效输出并传递取消信号', async () => {
   const canceled = (await tools.execute({ ...input, signal: AbortSignal.abort() })).results[0]?.result
   assert.ok(canceled?.isError)
   assert.equal(canceled.error.info.code, 'ABORTED_BEFORE_DISPATCH')
-  await assert.rejects(tools.execute({ ...input, calls: [] }), /只支持一项/)
+  assert.deepEqual(await tools.execute({ ...input, calls: [] }), { results: [] })
+  await assert.rejects(tools.execute({ ...input, calls: [call('invalid', '{}'), call('invalid', '{}')] }), /调用 ID 重复/)
 })
 
 test('工具执行中的取消信号传给工具并等待其结束', async () => {

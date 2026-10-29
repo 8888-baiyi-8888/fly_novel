@@ -5,7 +5,7 @@ import type {
   AgentLoopResult,
 } from './types.js'
 import type { Session, TurnEndReason } from '@fly-novel/session'
-import { createAssistantMessage, createSystemMessage, createToolResultMessage, createUserMessage, LlmError } from '@fly-novel/llm'
+import { createAssistantMessage, createSystemMessage, createUserMessage, LlmError } from '@fly-novel/llm'
 import type { ContentBlock, GenerateOptions } from '@fly-novel/llm'
 import { renderPrompt } from '@fly-novel/system-prompt'
 import type {} from '@fly-novel/tools'
@@ -16,6 +16,8 @@ export interface AgentLoopRuntimeConfig {
   readonly model: string
   /** 工具执行的授权工作目录；使用工具时必须提供。 */
   readonly workingDirectory?: string
+  /** 一个 Turn 中最多执行的模型 Step 数，默认 10。 */
+  readonly maxSteps?: number
 }
 
 interface PendingTurn {
@@ -34,6 +36,7 @@ interface RunningTurn {
 /** 从当前 Agent Context 获取 Session，并协调 Turn 与 Step 生命周期。 */
 export class AgentLoopRuntime implements AgentLoop {
   private readonly session: Session
+  private readonly maxSteps: number
   private turnNumber: number
   private readonly pendingTurns: PendingTurn[] = []
   private phase:
@@ -45,6 +48,8 @@ export class AgentLoopRuntime implements AgentLoop {
   private driverPromise: Promise<void> = Promise.resolve()
 
   constructor(private readonly context: Context, private readonly config: AgentLoopRuntimeConfig) {
+    this.maxSteps = config.maxSteps === undefined ? 10 : config.maxSteps
+    if (!Number.isSafeInteger(this.maxSteps) || this.maxSteps < 1) throw new Error('maxSteps 必须是正整数')
     this.session = context.sessions.create()
     this.turnNumber = this.session.read().filter((event) => event.type === 'turn/start').length
   }
@@ -117,11 +122,17 @@ export class AgentLoopRuntime implements AgentLoop {
         const result = await this.step()
         if (result !== undefined) return result
         if (this.phase.kind !== 'running') throw new Error('Step 完成时没有活动 Turn')
+        if (this.phase.turn.step >= this.maxSteps) {
+          reason = { kind: 'max-steps', maxSteps: this.maxSteps }
+          throw new LlmError('Agent Loop 达到最大 Step 数', 'MAX_STEPS')
+        }
         this.phase = { kind: 'running', turn: { ...this.phase.turn, step: this.phase.turn.step + 1 } }
       }
     } catch (error) {
       reason = abort.signal.aborted
         ? { kind: 'aborted', reason: abort.signal.reason.kind }
+        : reason.kind === 'max-steps'
+          ? reason
         : { kind: 'error', message: 'Turn 执行失败' }
       throw error
     } finally {
@@ -183,9 +194,10 @@ export class AgentLoopRuntime implements AgentLoop {
               const tools = this.context.get('tools')
               if (!tools) throw new LlmError('当前 Agent 未装配工具服务', 'UNSUPPORTED_TOOL_CALLS')
               const calls = content.filter((block) => block.type === 'tool-call')
-              if (calls.length !== 1) throw new LlmError('当前只支持一次工具调用', 'UNSUPPORTED_TOOL_CALLS')
+              if (calls.length === 0 || new Set(calls.map(call => call.id)).size !== calls.length) {
+                throw new LlmError('工具调用为空或调用 ID 重复', 'INVALID_RESPONSE')
+              }
               if (!this.config.workingDirectory) throw new Error('工具调用需要配置授权工作目录')
-              const call = calls[0]!
               const message = createAssistantMessage({
                 content,
                 source: { provider: this.config.provider, model: this.config.model,
@@ -193,20 +205,17 @@ export class AgentLoopRuntime implements AgentLoop {
               })
               this.session.append('assistant/message', { turn, step, message })
               try {
-                this.session.append('tool/call', { turn, step, callId: call.id, name: call.name, arguments: call.arguments })
-                const result = await tools.execute({ calls, signal: abort.signal, workingDirectory: this.config.workingDirectory })
-                const outcome = result.results[0]
-                if (result.results.length !== 1 || !outcome || outcome.callId !== call.id) {
+                const result = await tools.execute({ calls, signal: abort.signal, workingDirectory: this.config.workingDirectory,
+                  log: { session: this.session, turn, step } })
+                if (result.results.length !== calls.length ||
+                    result.results.some((outcome, index) => outcome.callId !== calls[index]?.id)) {
                   throw new Error('工具结果与调用 ID 不匹配')
                 }
-                const toolMessage = createToolResultMessage({ callId: call.id, content: outcome.result.content, isError: outcome.result.isError })
-                this.session.append('tool/result', { turn, step, message: toolMessage,
-                  ...(outcome.result.isError ? { error: outcome.result.error.info } : {}) })
                 if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
                 return undefined
               } catch (error) {
                 try {
-                  recoverToolCall(this.session, turn, step, call)
+                  for (const call of calls) recoverToolCall(this.session, turn, step, call)
                 } catch (recoveryError) {
                   throw new AggregateError([error, recoveryError], '工具调用失败且无法记录恢复结果')
                 }

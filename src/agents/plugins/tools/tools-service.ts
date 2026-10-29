@@ -1,4 +1,5 @@
-import type { ToolSchema } from '@fly-novel/llm'
+import { createToolResultMessage } from '@fly-novel/llm'
+import type { ToolCallBlock, ToolSchema } from '@fly-novel/llm'
 import { snapshotJsonValue } from '@fly-novel/util'
 import { validateJsonSchemaValue, assertSupportedJsonSchema, isJsonValue } from './json-schema.js'
 import type { ToolAgentIdentity, ToolDefinition, ToolBatchInput, ToolBatchResult, ToolExecutionResult } from './contracts.js'
@@ -51,11 +52,30 @@ export class ToolsService {
     }))
   }
 
-  /** 执行一项模型调用；错误返回结构化结果。 */
+  /** 串行执行工具批次，按调用顺序记录并返回结果。 */
   async execute(input: ToolBatchInput): Promise<ToolBatchResult> {
     this.assertOpen()
-    if (input.calls.length !== 1) throw new Error('当前只支持一项工具调用')
-    const call = input.calls[0]!
+    if (new Set(input.calls.map(call => call.id)).size !== input.calls.length) {
+      throw new Error('工具调用 ID 重复')
+    }
+    const results: ToolBatchResult['results'][number][] = []
+    for (const call of input.calls) {
+      if (!input.signal.aborted && input.log) {
+        input.log.session.append('tool/call', { turn: input.log.turn, step: input.log.step,
+          callId: call.id, name: call.name, arguments: call.arguments })
+      }
+      const result = await this.executeCall(call, input)
+      if (input.log) {
+        const message = createToolResultMessage({ callId: call.id, content: result.content, isError: result.isError })
+        input.log.session.append('tool/result', { turn: input.log.turn, step: input.log.step, message,
+          ...(result.isError ? { error: result.error.info } : {}) })
+      }
+      results.push({ callId: call.id, result })
+    }
+    return { results }
+  }
+
+  private async executeCall(call: ToolCallBlock, input: ToolBatchInput): Promise<ToolExecutionResult> {
     const failure = (code: string, message: string): ToolExecutionResult => ({
       isError: true, error: { message, info: { name: 'ToolError', code } },
       content: [{ type: 'text', text: `Error: ${message}` }],
@@ -88,7 +108,7 @@ export class ToolsService {
         result = failure(code, error instanceof Error ? error.message : '工具执行失败')
       }
     }
-    return { results: [{ callId: call.id, result }] }
+    return result
   }
 
   /** 清空注册并关闭服务，可重复调用。 */

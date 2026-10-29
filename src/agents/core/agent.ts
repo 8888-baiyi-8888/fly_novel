@@ -36,15 +36,24 @@ export class AgentInstance implements AgentHandle {
 
   async initialize(): Promise<void> {
     try {
-      const scope = this.context.plugin(async (ctx) => {
+      let children: Fiber[] = []
+      const scope = this.context.plugin((ctx) => {
         ctx.provide('agent', Object.freeze({ ...this.info.identity }))
-        const children = this.plugins.map((item) =>
+        children = this.plugins.map((item) =>
           ctx.plugin(item.definition.plugin, item.config),
         )
-        await Promise.all(children.map((child) => child.await()))
       })
       this.scope = scope
       await scope
+      let previousActive = -1
+      while (true) {
+        await Promise.all(children.map((child) => child.await()))
+        const waiting = children.flatMap((child, index) => child.state === FiberState.ACTIVE ? [] : [this.plugins[index]!.definition.id])
+        if (waiting.length === 0) break
+        const active = children.length - waiting.length
+        if (active <= previousActive) throw new Error(`插件依赖未就绪：${waiting.join('、')}`)
+        previousActive = active
+      }
     } catch (error) {
       try {
         await this.scope?.dispose()

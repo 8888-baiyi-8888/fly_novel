@@ -1,5 +1,7 @@
 # 调试 read_file 工具
 
+调试多工具批次和 Step 上限时，在 VS Code 选择“调试多工具调用”，并在[批次测试](../../src/agents/tests/agent-loop-batch.test.ts)、[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `execute` 和 [Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的 `turn`、`step` 设置断点。测试使用真实 `read_file`、临时文件和固定模型，观察调用顺序、失败后的继续执行、取消结果及 `maxSteps`；不会发起网络请求。
+
 本指南通过固定文件测试直接调用工具，不需要模型配置或凭据。在仓库根目录执行：
 
 调试工具调用中断与 Session 恢复时，在 VS Code 选择“调试工具结果恢复”，并在[恢复测试](../../src/agents/tests/agent-loop-tool-recovery.test.ts)、[Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的工具调用分支和[恢复逻辑](../../src/agents/plugins/loop/tool-call-recovery.ts)设置断点。观察 `tool/call`、`tool/result` 的调用 ID 和错误码，以及下一次请求的消息历史。测试使用固定模型响应，不发起网络请求。

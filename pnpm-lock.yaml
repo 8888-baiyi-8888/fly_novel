@@ -152,6 +152,9 @@ importers:
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:../../../llm
+      '@fly-novel/session':
+        specifier: workspace:*
+        version: link:../session
       '@fly-novel/util':
         specifier: workspace:*
         version: link:../../../util

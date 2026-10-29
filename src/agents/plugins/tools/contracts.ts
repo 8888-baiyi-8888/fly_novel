@@ -1,6 +1,7 @@
 import type { ContentBlock, ToolCallBlock, ToolCallId, ToolSchema } from '@fly-novel/llm'
 import type { JsonValue } from '@fly-novel/util'
 import type { JsonSchemaNode } from './json-schema.js'
+import type { Session } from '@fly-novel/session'
 
 /** 由 Harness 提供的 Agent 身份；独立服务调用时不存在。 */
 export interface ToolAgentIdentity {
@@ -35,11 +36,13 @@ export type ToolExecutionResult =
   | { readonly isError: false; readonly value: JsonValue; readonly content: ContentBlock[] }
   | { readonly isError: true; readonly error: { readonly message: string; readonly info: { readonly name: string; readonly code: string } }; readonly content: ContentBlock[] }
 
-/** 本阶段只接受一项调用；授权目录由调用方提供。 */
+/** 工具调用批次；授权目录由调用方提供。 */
 export interface ToolBatchInput {
   readonly calls: readonly ToolCallBlock[]
   readonly signal: AbortSignal
   readonly workingDirectory: string
+  /** 写入当前 Step 的调用和结果；独立调用时可省略。 */
+  readonly log?: { readonly session: Session; readonly turn: number; readonly step: number }
 }
 
 /** 按调用 ID 关联执行结果。 */

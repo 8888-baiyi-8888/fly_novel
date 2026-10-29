@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { SessionEventMap, SessionEventType } from '@fly-novel/session'
+import type { ToolBatchInput } from '@fly-novel/tools'
 import { readFileTool } from '../../tools/filesystem/read-file.js'
 
 class RecoveryAdapter extends LlmAdapter {
@@ -38,7 +39,11 @@ async function setup(t: TestContext, register = true) {
 
 test('执行器异常后补齐结果未知记录，后续请求包含配对结果', async (t) => {
   const { agent, adapter, session } = await setup(t)
-  const mock = t.mock.method(agent.context.tools, 'execute', async () => { throw new Error('执行器中断') })
+  const mock = t.mock.method(agent.context.tools, 'execute', async (input: ToolBatchInput) => {
+    const call = input.calls[0]!
+    session.append('tool/call', { turn: 1, step: 1, callId: call.id, name: call.name, arguments: call.arguments })
+    throw new Error('执行器中断')
+  })
   await assert.rejects(agent.run({ prompt: '第一次' }), /执行器中断/)
   const results = session.read().filter(event => event.type === 'tool/result')
   assert.equal(results.length, 1)
@@ -58,8 +63,12 @@ test('执行器异常后补齐结果未知记录，后续请求包含配对结�
 
 test('工具结果 ID 不匹配时拒绝错配并补齐原调用的结果', async (t) => {
   const { agent, session } = await setup(t)
-  t.mock.method(agent.context.tools, 'execute', async () => ({ results: [{ callId: 'wrong' as ToolCallId,
-    result: { isError: false as const, value: 'x', content: [{ type: 'text' as const, text: 'x' }] } }] }))
+  t.mock.method(agent.context.tools, 'execute', async (input: ToolBatchInput) => {
+    const call = input.calls[0]!
+    session.append('tool/call', { turn: 1, step: 1, callId: call.id, name: call.name, arguments: call.arguments })
+    return { results: [{ callId: 'wrong' as ToolCallId,
+      result: { isError: false as const, value: 'x', content: [{ type: 'text' as const, text: 'x' }] } }] }
+  })
   await assert.rejects(agent.run({ prompt: '读取' }), /工具结果与调用 ID 不匹配/)
   const results = session.read().filter(event => event.type === 'tool/result')
   assert.equal(results.length, 1)

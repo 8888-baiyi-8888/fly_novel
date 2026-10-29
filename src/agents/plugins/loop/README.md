@@ -6,7 +6,9 @@
 
 `AgentLoop.run({ prompt })` 执行一次 Turn，并返回 `{ content }`。`agentLoopRuntimePlugin` 通过 Cordis `inject` 声明依赖 `sessions`、`systemPrompt` 和 `llm`，并在当前 Context 提供 `agentLoop`。装配该插件的 Preset 必须同时装配这些服务的提供插件；Agent 作用域销毁时 Cordis 会移除 Loop 服务，Session、SystemPrompt 和 LLM 提供插件分别释放其资源。
 
-Runtime 从当前 Context 的 `sessions` 创建并持有 Session。`run({ prompt })` 对应一个 Turn，`step()` 负责模型请求。配置需要 `provider` 和 `model`；有可见工具时还需由调用方提供 `workingDirectory` 作为授权工作目录。Loop 从 `systemPrompt` 和 Session 组装请求，将可见工具 schema 传给 LLM；模型返回一个工具调用时，记录 assistant、tool/call 与关联的 tool/result，再从 Session 派生历史进入下一 Step。模型返回最终文本时结束 Turn。当前每次响应只接受一个工具调用，不限制 Turn 的 Step 数；多个调用会被拒绝。模型错误、取消和未完成响应以错误传播。
+Runtime 从当前 Context 的 `sessions` 创建并持有 Session。`run({ prompt })` 对应一个 Turn，`step()` 负责模型请求。配置需要 `provider` 和 `model`；有可见工具时还需由调用方提供 `workingDirectory` 作为授权工作目录。Loop 从 `systemPrompt` 和 Session 组装请求，将可见工具 schema 传给 LLM；模型返回工具调用时，Tools 服务按模型顺序串行执行并记录各调用和结果，再从 Session 派生历史进入下一 Step。单个工具失败不阻止后续调用；取消时等待已启动工具结束，并为尚未启动的调用记录取消结果。
+
+`maxSteps` 是每个 Turn 的模型 Step 上限，必须为正整数，默认 10。最后允许的 Step 若返回工具调用，先完成并记录当前批次，再以 `MAX_STEPS` 错误结束 Turn；Session 记录 `{ kind: 'max-steps', maxSteps }`，不发起下一次模型请求。最后允许的 Step 若返回最终文本则正常结束。
 
 `agent.cancel()` 中止当前 Step 的 `AbortSignal`，拒绝等待队列中的 Turn，并使活动 Turn 以 `{ kind: 'aborted', reason: 'user' }` 结束。Agent 销毁时先调用 Loop 的 `dispose()`，中止活动请求、拒绝排队输入并等待 Turn 写入结束事件，再释放插件作用域和 Session。多个 `run()` 按提交顺序串行执行；取消不影响之后提交的新调用。
 

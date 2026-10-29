@@ -7,6 +7,10 @@ import { bootstrapAgents } from '../core/bootstrap.js'
 import type { AgentFramework } from '../core/bootstrap.js'
 import { createTestAgent, withAgentLoop } from './agent-loop-fixtures.js'
 
+declare module '@deepseek-ai/cordis' {
+  interface Context { harnessStageA: object; harnessStageB: object }
+}
+
 async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[]> {
   const chunks: StreamChunk[] = []
   for await (const chunk of stream) chunks.push(chunk)
@@ -222,6 +226,32 @@ describe('Cordis Agent Harness', () => {
     const agent = await createTestAgent(framework, { id: 'injected', presetId: 'injected' })
     assert.equal(agent.state, 'ready')
     assert.equal(started, true)
+  })
+
+  it('链式依赖的插件启动失败时清理并拒绝创建 Agent', async () => {
+    framework = await bootstrapAgents()
+    const last = Object.assign(() => { throw new Error('链式启动失败') }, { inject: ['harnessStageB'] })
+    const middle = Object.assign((ctx: Context) => { ctx.provide('harnessStageB', {}) },
+      { inject: ['harnessStageA'], provide: 'harnessStageB' })
+    const first = Object.assign((ctx: Context) => { ctx.provide('harnessStageA', {}) }, { provide: 'harnessStageA' })
+    framework.plugins.register({ id: 'chain-last', version: '1', plugin: last })
+    framework.plugins.register({ id: 'chain-middle', version: '1', plugin: middle })
+    framework.plugins.register({ id: 'chain-first', version: '1', plugin: first })
+    framework.presets.register({ id: 'chain', version: '1', role: 'character', plugins: withAgentLoop([
+      { pluginId: 'chain-last' }, { pluginId: 'chain-middle' }, { pluginId: 'chain-first' },
+    ]) })
+    await assert.rejects(createTestAgent(framework, { id: 'chain', presetId: 'chain' }), /链式启动失败/)
+    assert.equal(framework.manager.list().length, 0)
+  })
+
+  it('插件依赖缺失时拒绝创建 Agent', async () => {
+    framework = await bootstrapAgents()
+    const consumer = Object.assign(() => undefined, { inject: ['harnessStageA'] })
+    framework.plugins.register({ id: 'missing-dependency', version: '1', plugin: consumer })
+    framework.presets.register({ id: 'missing-dependency', version: '1', role: 'character',
+      plugins: withAgentLoop([{ pluginId: 'missing-dependency' }]) })
+    await assert.rejects(createTestAgent(framework, { id: 'missing', presetId: 'missing-dependency' }), /插件依赖未就绪/)
+    assert.equal(framework.manager.list().length, 0)
   })
 
   it('拒绝缺少 loop 的 Preset、重复注册和并发创建同名 Agent', async () => {

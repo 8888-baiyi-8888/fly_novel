@@ -127,7 +127,7 @@ test('未知工具的错误结果关联调用并传给下一次模型请求', as
   assert.equal(result?.data.error?.code, 'UNKNOWN_TOOL')
 })
 
-test('单个 Step 拒绝多个工具调用', async (t) => {
+test('单个 Step 按模型顺序记录多个工具结果', async (t) => {
   const framework = await bootstrapAgents()
   t.after(() => framework.manager.disposeAll())
   const adapter = new ToolCallAdapter('read_file', 2)
@@ -137,8 +137,10 @@ test('单个 Step 拒绝多个工具调用', async (t) => {
   ] })
   const agent = await framework.manager.create({ id: 'tool-multiple', presetId: 'tool-multiple',
     pluginConfigs: { llm: { adapters: [{ providers: ['test'], adapter }] } } })
-  await assert.rejects(agent.run({ prompt: '测试' }), { code: 'UNSUPPORTED_TOOL_CALLS' })
-  assert.equal(adapter.requests.length, 1)
+  assert.deepEqual(await agent.run({ prompt: '测试' }), { content: '提纲总结' })
+  assert.equal(adapter.requests.length, 2)
+  const results = agent.context.sessions.list()[0]?.read().filter(event => event.type === 'tool/result')
+  assert.deepEqual(results?.map(event => event.data.message.source.callId), ['call-1', 'call-2'])
 })
 
 test('有可见工具但没有授权目录时不发送模型请求', async (t) => {
