@@ -3,7 +3,7 @@ import { mkdir, open, readFile, readdir, lstat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { snapshotJsonValue } from '@fly-novel/util'
 import type { SessionEvent } from '@fly-novel/session'
-import { SessionPersistence, type SessionAccess, type SessionHandle, type SessionHeader } from '../session-persistence/index.js'
+import { SessionPersistence, type SessionAccess, type SessionHandle, type SessionHeader } from '@fly-novel/session-persistence'
 
 const VERSION = 1
 const FILENAME = 'session.v1.jsonl'

@@ -23,6 +23,9 @@ importers:
       '@fly-novel/session':
         specifier: workspace:*
         version: link:src/agents/plugins/session
+      '@fly-novel/session-persistence':
+        specifier: workspace:*
+        version: link:src/agents/plugins/session-persistence
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:src/agents/plugins/system-prompt
@@ -66,6 +69,9 @@ importers:
       '@fly-novel/session':
         specifier: workspace:*
         version: link:plugins/session
+      '@fly-novel/session-persistence':
+        specifier: workspace:*
+        version: link:plugins/session-persistence
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:plugins/system-prompt
@@ -118,6 +124,9 @@ importers:
       '@fly-novel/session':
         specifier: workspace:*
         version: link:../session
+      '@fly-novel/session-persistence':
+        specifier: workspace:*
+        version: link:../session-persistence
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:../system-prompt
@@ -137,6 +146,15 @@ importers:
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:../../../llm
+
+  src/agents/plugins/session-persistence:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/session':
+        specifier: workspace:*
+        version: link:../session
 
   src/agents/plugins/system-prompt:
     dependencies:

@@ -2,6 +2,7 @@ packages:
   - 'src/harness'
   - 'src/llm'
   - 'src/agents/plugins/session'
+  - 'src/agents/plugins/session-persistence'
   - 'src/agents/plugins/loop'
   - 'src/agents/plugins/tools'
   - 'src/agents/plugins/system-prompt'

@@ -1,4 +1,4 @@
-import type { Context } from '@deepseek-ai/cordis'
+import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type {
   AgentLoop,
   AgentLoopInput,
@@ -9,6 +9,7 @@ import { createAssistantMessage, createSystemMessage, createUserMessage, LlmErro
 import type { ContentBlock, GenerateOptions } from '@fly-novel/llm'
 import { renderPrompt } from '@fly-novel/system-prompt'
 import type {} from '@fly-novel/tools'
+import type {} from '@fly-novel/session-persistence'
 import { recoverToolCall } from './tool-call-recovery.js'
 
 export interface AgentLoopRuntimeConfig {
@@ -18,6 +19,10 @@ export interface AgentLoopRuntimeConfig {
   readonly workingDirectory?: string
   /** 一个 Turn 中最多执行的模型 Step 数，默认 10。 */
   readonly maxSteps?: number
+  /** 新建持久化 Session 的 ID。 */
+  readonly sessionId?: string
+  /** 要恢复的持久化 Session ID。 */
+  readonly resumeSessionId?: string
 }
 
 interface PendingTurn {
@@ -47,11 +52,11 @@ export class AgentLoopRuntime implements AgentLoop {
   private disposed = false
   private driverPromise: Promise<void> = Promise.resolve()
 
-  constructor(private readonly context: Context, private readonly config: AgentLoopRuntimeConfig) {
+  constructor(private readonly context: Context, private readonly config: AgentLoopRuntimeConfig, session?: Session) {
     this.maxSteps = config.maxSteps === undefined ? 10 : config.maxSteps
     if (!Number.isSafeInteger(this.maxSteps) || this.maxSteps < 1) throw new Error('maxSteps 必须是正整数')
-    this.session = context.sessions.create()
-    this.turnNumber = this.session.read().filter((event) => event.type === 'turn/start').length
+    this.session = session ?? context.sessions.create()
+    this.turnNumber = this.session.read().reduce((latest, event) => event.type === 'turn/start' ? Math.max(latest, event.data.turn) : latest, 0)
   }
 
   /** 执行一个 Turn，并返回其 Step 结果。 */
@@ -255,16 +260,36 @@ export class AgentLoopRuntime implements AgentLoop {
 }
 
 /** 声明 Session、SystemPrompt 与 LLM 服务依赖，并在当前 Context 注册 Loop。 */
-export const agentLoopRuntimePlugin = Object.assign(function agentLoopRuntimePlugin(
+export const agentLoopRuntimePlugin = Object.assign(async function agentLoopRuntimePlugin(
   ctx: Context,
   config: AgentLoopRuntimeConfig,
-): void {
+): Promise<void> {
   if (!config || typeof config.provider !== 'string' || !config.provider.trim() ||
       typeof config.model !== 'string' || !config.model.trim() ||
       (config.workingDirectory !== undefined && (typeof config.workingDirectory !== 'string' || !config.workingDirectory.trim()))) {
     throw new Error('Agent Loop 插件需要有效的 provider 和 model 配置')
   }
-  const runtime = new AgentLoopRuntime(ctx, config)
+  if (config.sessionId !== undefined && (typeof config.sessionId !== 'string' || !config.sessionId.trim() || config.sessionId !== config.sessionId.trim())) throw new Error('sessionId 必须非空且不能包含首尾空白')
+  if (config.resumeSessionId !== undefined && (typeof config.resumeSessionId !== 'string' || !config.resumeSessionId.trim() || config.resumeSessionId !== config.resumeSessionId.trim())) throw new Error('resumeSessionId 必须非空且不能包含首尾空白')
+  if (config.sessionId !== undefined && config.resumeSessionId !== undefined) throw new Error('sessionId 与 resumeSessionId 不能同时指定')
+  if (config.maxSteps !== undefined && (!Number.isSafeInteger(config.maxSteps) || config.maxSteps < 1)) throw new Error('maxSteps 必须是正整数')
+  let session: Session | undefined
+  if (config.sessionId !== undefined || config.resumeSessionId !== undefined) {
+    const persistence = ctx.get('sessionPersistence')
+    if (!persistence) throw new Error('未配置 Session 持久化后端')
+    const handle = config.resumeSessionId !== undefined
+      ? await persistence.open(config.resumeSessionId, 'write')
+      : await persistence.create({ id: config.sessionId!, createdAt: new Date().toISOString() })
+    try {
+      const seed = config.resumeSessionId === undefined ? [] : (await handle.read()).events
+      if ([FiberState.UNLOADING, FiberState.DISPOSED, FiberState.FAILED].includes(ctx.fiber.state)) throw new Error('Agent Loop 初始化期间已销毁')
+      session = ctx.sessions.create(handle.id, { seed, createdAt: new Date(handle.header.createdAt) })
+    } catch (error) {
+      try { await handle.close() } catch (cleanup) { throw new AggregateError([error, cleanup], 'Session 初始化与句柄清理失败') }
+      throw error
+    }
+  }
+  const runtime = new AgentLoopRuntime(ctx, config, session)
   ctx.provide('agentLoop', runtime)
   ctx.effect(() => () => runtime.dispose())
 }, { inject: ['sessions', 'systemPrompt', 'llm'], provide: 'agentLoop' })

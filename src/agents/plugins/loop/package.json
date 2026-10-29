@@ -23,6 +23,7 @@
     "@deepseek-ai/cordis": "^4.0.2",
     "@fly-novel/llm": "workspace:*",
     "@fly-novel/session": "workspace:*",
+    "@fly-novel/session-persistence": "workspace:*",
     "@fly-novel/system-prompt": "workspace:*",
     "@fly-novel/tools": "workspace:*"
   },

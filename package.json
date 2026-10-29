@@ -41,6 +41,7 @@
     "@fly-novel/agent-loop": "workspace:*",
     "@fly-novel/llm": "workspace:*",
     "@fly-novel/session": "workspace:*",
+    "@fly-novel/session-persistence": "workspace:*",
     "@fly-novel/system-prompt": "workspace:*",
     "@fly-novel/tools": "workspace:*",
     "@fly-novel/util": "workspace:*",

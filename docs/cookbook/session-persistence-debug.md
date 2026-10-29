@@ -1,5 +1,14 @@
 # 调试 Session 持久化契约
 
+## 调试 Agent Loop 会话恢复
+
+在 VS Code 选择“调试 Agent Loop 会话恢复”并按 F5。测试使用固定模型和临时 JSONL 文件。在[测试](../../src/agents/tests/agent-loop-persistence.test.ts)、[Agent Loop 初始化](../../src/agents/plugins/loop/agent-loop-runtime.ts)与 [JSONL 后端](../../src/agents/plugins/session-persistence-jsonl/index.ts)的 `create`、`open` 设置断点，观察 `sessionId` 与 `resumeSessionId`、恢复的模型消息、Turn 编号及失败路径。
+
+```powershell
+pnpm run build:tests
+node --test .test-dist/agents/tests/agent-loop-persistence.test.js
+```
+
 ## 调试 Session 保存与历史恢复
 
 在 VS Code 选择“调试 Session 持久化恢复”并按 F5。在[恢复测试](../../src/agents/tests/session-persistence-recovery.test.ts)、[Session 追加和历史派生](../../src/agents/plugins/session/session.ts)、[Session Manager](../../src/agents/plugins/session/session-manager.ts)的 `flush`、[JSONL 后端](../../src/agents/plugins/session-persistence-jsonl/index.ts)的 `drain` 设置断点。测试写入临时文件，检查系统提示词、工具调用和结果的 ID、事件序号，以及写入失败后的显式重试；结束时清理临时目录。

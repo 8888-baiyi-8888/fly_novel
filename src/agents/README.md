@@ -25,7 +25,7 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供；Harness 注册定义保留在本包。
 
-`SessionPersistence` 定义 `sessionPersistence` 服务及会话句柄契约；`JsonlSessionPersistence` 提供 JSONL 文件后端。后端须显式指定绝对 `root`，按编码后的 Session ID 分目录保存项目格式 `session.v1.jsonl`；拒绝不支持的版本、无效事件及不完整尾部。写句柄创建后，后端接收同 ID 的 Session 事件并顺序写入，`sessions.flush(session)` 等待写入并报告失败；调用方可将读取的事件作为种子恢复 Session。文件格式与官方格式不兼容；尚无 Agent Loop 自动创建写句柄或恢复接入。接口和调试方式见[会话持久化调试](../../docs/cookbook/session-persistence-debug.md)。
+`@fly-novel/session-persistence` 定义 `sessionPersistence` 服务及会话句柄契约；`JsonlSessionPersistence` 提供 JSONL 文件后端。后端须显式指定绝对 `root`，按编码后的 Session ID 分目录保存项目格式 `session.v1.jsonl`；拒绝不支持的版本、无效事件及不完整尾部。写句柄创建后，后端接收同 ID 的 Session 事件并顺序写入，`sessions.flush(session)` 等待写入并报告失败。Agent Loop 可通过 `sessionId` 新建或 `resumeSessionId` 恢复持久化会话，应用负责装配后端；文件格式与官方格式不兼容。接口和调试方式见[会话持久化调试](../../docs/cookbook/session-persistence-debug.md)。
 
 角色 Preset 同时装配 `character-system-prompt`，在角色实例中注册角色扮演职责提示词；具体角色信息和场景由调用输入提供。插件随 Agent 作用域注销，不读取角色档案。调试步骤见[角色提示词调试](../../docs/cookbook/character-system-prompt-debug.md)。
 

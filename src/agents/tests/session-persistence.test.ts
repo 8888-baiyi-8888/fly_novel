@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
 import { Session } from '@fly-novel/session'
 import type { SessionEvent } from '@fly-novel/session'
-import { SessionPersistence, type SessionAccess, type SessionHandle, type SessionHeader } from '../plugins/session-persistence/index.js'
+import { SessionPersistence, type SessionAccess, type SessionHandle, type SessionHeader } from '@fly-novel/session-persistence'
 
 interface RecordEntry { header: SessionHeader; events: SessionEvent[] }
 
