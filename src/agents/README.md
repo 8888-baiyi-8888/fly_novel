@@ -25,6 +25,8 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供；Harness 注册定义保留在本包。
 
+`SessionPersistence` 定义 `sessionPersistence` 服务及会话句柄契约；目前仅测试用内存后端实现该契约，尚无文件持久化或 Agent Loop 恢复接入。接口和调试方式见[会话持久化调试](../../docs/cookbook/session-persistence-debug.md)。
+
 角色 Preset 同时装配 `character-system-prompt`，在角色实例中注册角色扮演职责提示词；具体角色信息和场景由调用输入提供。插件随 Agent 作用域注销，不读取角色档案。调试步骤见[角色提示词调试](../../docs/cookbook/character-system-prompt-debug.md)。
 
 导演 Preset 装配 `director-system-prompt`，在导演实例中注册导演职责提示词；创作目标、世界规则和人物状态由调用输入提供。插件随 Agent 作用域注销。调试步骤见[导演提示词调试](../../docs/cookbook/director-system-prompt-debug.md)。

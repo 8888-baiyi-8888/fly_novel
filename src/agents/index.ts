@@ -16,6 +16,8 @@ export { AgentManager } from './runtime/agent-manager.js'
 export { characterAgentPreset } from './character/preset.js'
 export { directorAgentPreset } from './director/preset.js'
 export { writerAgentPreset } from './writer/preset.js'
+export { SessionPersistence } from './plugins/session-persistence/index.js'
+export type { SessionAccess, SessionHandle, SessionHeader, SessionPersistenceSnapshot } from './plugins/session-persistence/index.js'
 export { mockMemoryPlugin } from './plugins/memory/index.js'
 export { llmPlugin, llmPluginDefinition, type LlmPluginConfig } from './plugins/llm/index.js'
 export {
