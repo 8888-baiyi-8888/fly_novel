@@ -10,6 +10,8 @@ export interface SessionOptions {
   id?: string
   /** 会话创建时间；未提供时使用当前时间。 */
   createdAt?: Date
+  /** 恢复时的完整事件前缀；不会作为新事件发布。 */
+  seed?: readonly SessionEvent[]
 }
 
 /** 进程内只追加会话事件日志。 */
@@ -19,8 +21,9 @@ export class Session {
   private readonly events: SessionEvent[] = []
   private readonly surface = new SessionSurface()
   private closed = false
+  private closing = false
 
-  constructor(options: SessionOptions) {
+  constructor(options: SessionOptions, private readonly onEvent?: (session: Session, event: SessionEvent) => void) {
     const id = options.id?.trim() ?? randomUUID()
     if (!id) throw new Error('Session ID 不能为空')
     const createdAt = options.createdAt ?? new Date()
@@ -28,11 +31,19 @@ export class Session {
 
     this.id = id
     this.createdAt = new Date(createdAt)
+    for (const item of options.seed ?? []) {
+      if (item.seq !== this.events.length) throw new Error('Session 恢复事件序号不连续')
+      const event = deepFreeze(structuredClone(item))
+      this.events.push(event)
+      if (isMessageEvent(event.type)) this.surface.append(event.seq)
+    }
+    if (options.seed) this.deriveMessages()
   }
 
   /** 追加事件快照，并返回其从零开始的顺序索引。 */
   append<T extends SessionEventType>(type: T, data: SessionEventMap[T]): SessionEvent<T> {
     this.assertOpen()
+    if (this.closing) throw new Error(`Session "${this.id}" 正在关闭`)
     if (typeof type !== 'string' || !type.trim()) throw new Error('Session 事件类型不能为空')
     const event = deepFreeze(structuredClone({
       type,
@@ -42,6 +53,7 @@ export class Session {
     })) as SessionEvent<T>
     this.events.push(event as SessionEvent)
     if (isMessageEvent(type)) this.surface.append(event.seq)
+    this.onEvent?.(this, event as SessionEvent)
     return event
   }
 
@@ -88,6 +100,11 @@ export class Session {
   get size(): number {
     return this.events.length
   }
+
+  /** 管理器关闭期间禁止新事件，避免刷新后仍有未保存事件。 */
+  beginClose(): void { this.assertOpen(); this.closing = true }
+  /** 持久化失败时允许调用方修复后重试关闭。 */
+  cancelClose(): void { this.assertOpen(); this.closing = false }
 
   /** 关闭 Session 并释放内存中的事件；重复关闭安全。 */
   close(): void {

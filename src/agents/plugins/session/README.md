@@ -12,11 +12,11 @@
 
 `tool/result` 保存工具结果消息，并可保存失败的结构化名称与错误码；模型历史只包含消息内容，不包含事件的错误元数据。派生模型历史时检查工具调用与结果的 ID 配对，缺失、错配或重复会抛错。
 
-`Session` 内部的 Surface 按顺序保存消息事件在事件日志中的序号。`deriveMessages()` 将最新的非空 system 消息置于历史开头，其余 user、assistant 和 tool result 消息按写入顺序导出；空 system 消息用于清除先前提示词，不进入模型上下文。turn/step 等运行事件及独立的 `tool/call` 记录不进入模型上下文，空助手消息也会被跳过。每次调用返回新的消息数组，历史事件中的消息快照保持不可变。Surface 只追加事件，不执行历史检索或压缩。会话数据不写入文件或数据库，进程重启后不恢复。
+`Session` 内部的 Surface 按顺序保存消息事件在事件日志中的序号。`deriveMessages()` 将最新的非空 system 消息置于历史开头，其余 user、assistant 和 tool result 消息按写入顺序导出；空 system 消息用于清除先前提示词，不进入模型上下文。turn/step 等运行事件及独立的 `tool/call` 记录不进入模型上下文，空助手消息也会被跳过。每次调用返回新的消息数组，历史事件中的消息快照保持不可变。Surface 只追加事件，不执行历史检索或压缩。调用方可用已验证的持久化事件作为 `create(id, { seed, createdAt })` 的种子恢复 Session；种子按原序号重建 Surface，不发布为新事件，工具消息不配对时恢复失败。
 
 ## Session Manager
 
-`SessionManager` 提供 `create(id?)`、`get(id)`、`list()` 和 `close(id)`。省略 ID 时由 Session 生成 UUID；重复 ID 在同一 Manager 中会报错。`close(id)` 移除并关闭指定 Session，`closeAll()` 幂等关闭 Manager 内所有会话。Manager 关闭后拒绝继续创建。
+`SessionManager` 提供 `create(id?, options?)`、`get(id)`、`list()`、`flush(session)` 和异步 `close(id)`。省略 ID 时由 Session 生成 UUID；重复 ID 在同一 Manager 中会报错。持久化后端接收 `session/event`，`flush(session)` 等待 `session/flush` 监听器；`close(id)` 禁止追加并等待刷新及 `session/disposed` 后关闭，失败时保留会话供重试。`closeAll()` 异步关闭 Manager 内所有会话，失败时报告错误；关闭后拒绝继续创建。
 
 ## Harness 插件
 

@@ -203,7 +203,7 @@ describe('Session Harness 插件', () => {
     framework = undefined
   })
 
-  it('创建、查询、列举和关闭多个 Session', () => {
+  it('创建、查询、列举和关闭多个 Session', async () => {
     const sessions = new SessionManager()
     const first = sessions.create('session-a')
     const second = sessions.create('session-b')
@@ -211,15 +211,15 @@ describe('Session Harness 插件', () => {
     assert.equal(sessions.get('session-a'), first)
     assert.deepEqual(sessions.list(), [first, second])
     assert.throws(() => sessions.create('session-a'), /已存在/)
-    assert.equal(sessions.close('missing'), false)
-    assert.equal(sessions.close(' session-a '), true)
+    assert.equal(await sessions.close('missing'), false)
+    assert.equal(await sessions.close(' session-a '), true)
     assert.equal(sessions.get('session-a'), undefined)
     assert.deepEqual(sessions.list(), [second])
     assert.equal(first.size, 0)
     assert.throws(() => first.read(), /已关闭/)
 
-    sessions.closeAll()
-    sessions.closeAll()
+    await sessions.closeAll()
+    await sessions.closeAll()
     assert.deepEqual(sessions.list(), [])
     assert.throws(() => sessions.create(), /Manager 已关闭/)
   })

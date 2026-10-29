@@ -16,11 +16,25 @@ export interface JsonlSessionPersistenceConfig { readonly root: string }
 export class JsonlSessionPersistence extends SessionPersistence {
   private readonly root: string
   private readonly handles = new Set<SessionHandle>()
+  private readonly writers = new Map<string, { handle: SessionHandle; pending: SessionEvent[]; active?: Promise<void>; failed: boolean }>()
 
   constructor(ctx: Context, config: JsonlSessionPersistenceConfig) {
     if (!config.root || !isAbsolute(config.root)) throw new Error('Session 存储 root 必须是绝对路径')
     super(ctx)
     this.root = resolve(config.root)
+    ctx.on('session/event', (session, event) => {
+      const writer = this.writers.get(session.id)
+      if (!writer) return
+      writer.pending.push(event)
+      if (!writer.failed) void this.drain(writer).catch(() => undefined)
+    })
+    ctx.on('session/flush', async session => { await this.flushSession(session) })
+    ctx.on('session/disposed', async session => {
+      const writer = this.writers.get(session.id)
+      if (!writer) return
+      await this.flushSession(session)
+      await writer.handle.close()
+    })
     ctx.effect(() => async () => {
       const results = await Promise.allSettled([...this.handles].map(handle => handle.close()))
       const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
@@ -80,7 +94,10 @@ export class JsonlSessionPersistence extends SessionPersistence {
   }
 
   async flush(): Promise<void> {
-    const results = await Promise.allSettled([...this.handles].filter(handle => handle.access === 'write').map(handle => handle.flush()))
+    const results = await Promise.allSettled([...this.writers.values()].map(async writer => {
+      await this.drain(writer, true)
+      await writer.handle.flush()
+    }))
     const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
     if (errors.length) throw new AggregateError(errors, '刷新 Session 失败')
   }
@@ -144,18 +161,51 @@ export class JsonlSessionPersistence extends SessionPersistence {
       flush: async () => {
         assertOpen()
         if (access !== 'write') throw new Error('Session 句柄只读')
+        const writer = this.writers.get(header.id)
+        if (writer?.handle === handle) await this.drain(writer, true)
         const file = await open(join(this.directory(header.id), FILENAME), 'r+')
         try { await file.sync() } finally { await file.close() }
       },
       close: async () => {
         if (closed) return
-        if (access === 'write') await handle.flush()
+        if (access === 'write') {
+          const writer = this.writers.get(header.id)
+          if (writer?.handle === handle) await this.drain(writer, true)
+          await handle.flush()
+          if (writer?.handle === handle) this.writers.delete(header.id)
+        }
         closed = true
         this.handles.delete(handle)
       },
     }
     this.handles.add(handle)
+    if (access === 'write') this.writers.set(header.id, { handle, pending: [], failed: false })
     return handle
+  }
+
+  private async flushSession(session: { readonly id: string }): Promise<void> {
+    const writer = this.writers.get(session.id)
+    if (!writer) return
+    await this.drain(writer, true)
+    await writer.handle.flush()
+  }
+
+  private async drain(writer: { handle: SessionHandle; pending: SessionEvent[]; active?: Promise<void>; failed: boolean }, retry = false): Promise<void> {
+    if (writer.active) {
+      await writer.active
+      if (!writer.pending.length) return
+    }
+    if (writer.failed && !retry) return
+    writer.failed = false
+    const operation = (async () => {
+      while (writer.pending.length) {
+        const batch = writer.pending.slice()
+        await writer.handle.append(batch)
+        writer.pending.splice(0, batch.length)
+      }
+    })()
+    writer.active = operation
+    try { await operation } catch (error) { writer.failed = true; throw error } finally { writer.active = undefined }
   }
 }
 
