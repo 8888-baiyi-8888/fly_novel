@@ -32,7 +32,13 @@ export interface SessionEventMap {
     /** 模型生成的原始 JSON 参数文本。 */
     readonly arguments: string
   }
-  'tool/result': { readonly turn: number; readonly step: number; readonly message: ToolResultMessage }
+  'tool/result': {
+    readonly turn: number
+    readonly step: number
+    readonly message: ToolResultMessage
+    /** 执行失败的结构化信息，不进入模型消息。 */
+    readonly error?: { readonly name: string; readonly code: string }
+  }
 }
 
 /** 事件类型表中的可追加类型。 */

@@ -10,6 +10,10 @@ Runtime 从当前 Context 的 `sessions` 创建并持有 Session。`run({ prompt
 
 `agent.cancel()` 中止当前 Step 的 `AbortSignal`，拒绝等待队列中的 Turn，并使活动 Turn 以 `{ kind: 'aborted', reason: 'user' }` 结束。Agent 销毁时先调用 Loop 的 `dispose()`，中止活动请求、拒绝排队输入并等待 Turn 写入结束事件，再释放插件作用域和 Session。多个 `run()` 按提交顺序串行执行；取消不影响之后提交的新调用。
 
+工具结果的模型可见内容写入 Session；失败时附带结构化错误名称和错误码。工具调用写入后如结果缺失，Loop 在 Step 结束前补写错误结果：尚未记录开始使用 `TOOL_NOT_STARTED`，已记录开始但结果未知使用 `TOOL_OUTCOME_UNKNOWN`。已有结果不重复补写；服务返回的调用 ID 不匹配时拒绝结果并补写原调用的未知结果。此恢复只处理进程内执行，Session 不支持进程重启后恢复。
+
+工具结果的模型可见内容写入 Session；失败时附带结构化错误名称和错误码。工具调用写入后如结果缺失，Loop 在 Step 结束前补写错误结果：尚未记录开始使用 `TOOL_NOT_STARTED`，已记录开始但结果未知使用 `TOOL_OUTCOME_UNKNOWN`。已有结果不重复补写；服务返回的调用 ID 不匹配时拒绝结果并补写原调用的未知结果。此恢复只处理进程内执行，Session 不支持进程重启后恢复。
+
 ## Harness Preset 装配
 
 角色和导演 Preset 均装配 `agent-loop-runtime`、`session`、`system-prompt` 和 `llm`。创建 Agent 时，`pluginConfigs['agent-loop-runtime']` 指定模型路由，例如 `{ provider: 'deepseek', model: 'deepseek-chat' }`；`pluginConfigs.llm` 提供该 provider 对应的适配器。需要工具时在 Preset 添加 `tools`，注册工具，并为 Loop 配置可信的 `workingDirectory`；工具失败结果也记录到 Session 并交给下一次模型请求。

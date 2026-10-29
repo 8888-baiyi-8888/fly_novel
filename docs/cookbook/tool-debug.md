@@ -2,12 +2,16 @@
 
 本指南通过固定文件测试直接调用工具，不需要模型配置或凭据。在仓库根目录执行：
 
+调试工具调用中断与 Session 恢复时，在 VS Code 选择“调试工具结果恢复”，并在[恢复测试](../../src/agents/tests/agent-loop-tool-recovery.test.ts)、[Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的工具调用分支和[恢复逻辑](../../src/agents/plugins/loop/tool-call-recovery.ts)设置断点。观察 `tool/call`、`tool/result` 的调用 ID 和错误码，以及下一次请求的消息历史。测试使用固定模型响应，不发起网络请求。
+
 ```powershell
 pnpm run build:tests
 node --test .test-dist/tools/tests/read-file.test.js
 ```
 
 测试检查 UTF-8 内容、路径边界、文件类型、大小限制和无效编码。Windows 若缺少创建符号链接的权限，符号链接测试会报告跳过。
+
+调试工具调用中断与 Session 恢复时，在 VS Code 选择“调试工具结果恢复”，并在[恢复测试](../../src/agents/tests/agent-loop-tool-recovery.test.ts)、[Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的工具调用分支和[恢复逻辑](../../src/agents/plugins/loop/tool-call-recovery.ts)设置断点。观察 `tool/call`、`tool/result` 的调用 ID 和错误码，以及下一次请求的消息历史。测试使用固定模型响应，不发起网络请求。
 
 在 VS Code 中打开“运行和调试”，选择本机配置“调试 read_file 测试”并按 F5；启动前会自动执行“编译调试测试”。如果本机没有该配置，可在 `.vscode/launch.json` 的 `configurations` 数组添加：
 

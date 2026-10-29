@@ -9,6 +9,7 @@ import { createAssistantMessage, createSystemMessage, createToolResultMessage, c
 import type { ContentBlock, GenerateOptions } from '@fly-novel/llm'
 import { renderPrompt } from '@fly-novel/system-prompt'
 import type {} from '@fly-novel/tools'
+import { recoverToolCall } from './tool-call-recovery.js'
 
 export interface AgentLoopRuntimeConfig {
   readonly provider: string
@@ -191,13 +192,26 @@ export class AgentLoopRuntime implements AgentLoop {
                   ...(chunk.replayState === undefined ? {} : { replayState: chunk.replayState }) },
               })
               this.session.append('assistant/message', { turn, step, message })
-              this.session.append('tool/call', { turn, step, callId: call.id, name: call.name, arguments: call.arguments })
-              const result = await tools.execute({ calls, signal: abort.signal, workingDirectory: this.config.workingDirectory })
-              const outcome = result.results[0]!
-              const toolMessage = createToolResultMessage({ callId: outcome.callId, content: outcome.result.content, isError: outcome.result.isError })
-              this.session.append('tool/result', { turn, step, message: toolMessage })
-              if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
-              return undefined
+              try {
+                this.session.append('tool/call', { turn, step, callId: call.id, name: call.name, arguments: call.arguments })
+                const result = await tools.execute({ calls, signal: abort.signal, workingDirectory: this.config.workingDirectory })
+                const outcome = result.results[0]
+                if (result.results.length !== 1 || !outcome || outcome.callId !== call.id) {
+                  throw new Error('工具结果与调用 ID 不匹配')
+                }
+                const toolMessage = createToolResultMessage({ callId: call.id, content: outcome.result.content, isError: outcome.result.isError })
+                this.session.append('tool/result', { turn, step, message: toolMessage,
+                  ...(outcome.result.isError ? { error: outcome.result.error.info } : {}) })
+                if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
+                return undefined
+              } catch (error) {
+                try {
+                  recoverToolCall(this.session, turn, step, call)
+                } catch (recoveryError) {
+                  throw new AggregateError([error, recoveryError], '工具调用失败且无法记录恢复结果')
+                }
+                throw error
+              }
             }
             case 'max-tokens':
               throw new LlmError('模型响应达到最大 token 数，未完成本次请求', 'MAX_TOKENS')

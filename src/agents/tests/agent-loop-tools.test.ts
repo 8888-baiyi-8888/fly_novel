@@ -122,6 +122,9 @@ test('未知工具的错误结果关联调用并传给下一次模型请求', as
   assert.ok(block?.type === 'tool-result')
   assert.equal(block.toolCallId, 'call-1')
   assert.equal(block.isError, true)
+  const session = agent.context.sessions.list()[0]
+  const result = session?.read().find(event => event.type === 'tool/result')
+  assert.equal(result?.data.error?.code, 'UNKNOWN_TOOL')
 })
 
 test('单个 Step 拒绝多个工具调用', async (t) => {

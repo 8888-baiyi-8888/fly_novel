@@ -80,6 +80,7 @@ export class Session {
           return []
       }
     })
+    assertToolCallMessages(messages)
     return systemMessage?.content.length ? [systemMessage, ...messages] : messages
   }
 
@@ -99,6 +100,30 @@ export class Session {
   private assertOpen(): void {
     if (this.closed) throw new Error(`Session "${this.id}" 已关闭`)
   }
+}
+
+/** 模型历史中每个工具调用都必须紧接着收到一次同 ID 的结果。 */
+function assertToolCallMessages(messages: readonly Message[]): void {
+  const pending = new Set<string>()
+  for (const message of messages) {
+    if (message.source.kind === 'tool') {
+      const block = message.content[0]
+      if (message.content.length !== 1 || block?.type !== 'tool-result' ||
+          block.toolCallId !== message.source.callId || !pending.delete(message.source.callId)) {
+        throw new Error('Session 工具结果与调用 ID 不匹配或重复')
+      }
+      continue
+    }
+    if (pending.size > 0) throw new Error('Session 工具调用缺少关联结果')
+    if (message.role === 'assistant') {
+      for (const block of message.content) {
+        if (block.type !== 'tool-call') continue
+        if (pending.has(block.id)) throw new Error('Session 工具调用 ID 重复')
+        pending.add(block.id)
+      }
+    }
+  }
+  if (pending.size > 0) throw new Error('Session 工具调用缺少关联结果')
 }
 
 function isMessageEvent(type: SessionEventType): type is SessionMessageEventType {

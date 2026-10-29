@@ -98,15 +98,16 @@ describe('Session 事件与消息类型', () => {
     const session = new Session({ id: 'session-context' })
     const system = systemMessage('系统提示')
     const user = userMessage('用户问题')
-    const assistant = assistantMessage('助手回复')
+    const assistant = { ...assistantMessage('助手回复'), content: [{ type: 'tool-call' as const,
+      id: 'call-1' as ToolCallId, name: 'lookup', arguments: '{}' }] }
     const toolResult = toolResultMessage()
 
     session.append('turn/start', { turn: 0 })
     session.append('system/message', { turn: 0, step: 0, message: system })
     session.append('user/message', user)
-    session.append('tool/call', { turn: 0, step: 0, callId: 'call-1' as ToolCallId, name: 'lookup', arguments: '{}' })
     session.append('assistant/message', { turn: 0, step: 0, message: assistant })
-    session.append('tool/result', { turn: 0, step: 1, message: toolResult })
+    session.append('tool/call', { turn: 0, step: 0, callId: 'call-1' as ToolCallId, name: 'lookup', arguments: '{}' })
+    session.append('tool/result', { turn: 0, step: 0, message: toolResult })
     session.append('turn/end', { turn: 0, reason: { kind: 'completed' } })
 
     const firstProjection = session.deriveMessages()
@@ -117,6 +118,32 @@ describe('Session 事件与消息类型', () => {
     session.append('user/message', userMessage('下一轮问题'))
     assert.equal(firstProjection.length, 4)
     assert.equal(session.deriveMessages().length, 5)
+  })
+
+  it('派生历史时拒绝未配对、重复或错配的工具结果', () => {
+    const callId = 'call-1' as ToolCallId
+    const assistant = { ...assistantMessage(''), content: [{ type: 'tool-call' as const, id: callId, name: 'lookup', arguments: '{}' }] }
+    const session = new Session({ id: 'tool-matching' })
+    session.append('assistant/message', { turn: 1, step: 1, message: assistant })
+    assert.throws(() => session.deriveMessages(), /缺少关联结果/)
+    const result = toolResultMessage()
+    const wrong = { ...result, source: { kind: 'tool' as const, callId: 'wrong' as ToolCallId } }
+    session.append('tool/result', { turn: 1, step: 1, message: wrong })
+    assert.throws(() => session.deriveMessages(), /不匹配或重复/)
+
+    const orphan = new Session({ id: 'tool-orphan' })
+    orphan.append('assistant/message', { turn: 1, step: 1, message: assistant })
+    orphan.append('tool/result', { turn: 1, step: 1, message: { ...result,
+      source: { kind: 'tool', callId: 'wrong' as ToolCallId },
+      content: [{ ...result.content[0], toolCallId: 'wrong' as ToolCallId }],
+    } })
+    assert.throws(() => orphan.deriveMessages(), /不匹配或重复/)
+
+    const duplicate = new Session({ id: 'tool-duplicate' })
+    duplicate.append('assistant/message', { turn: 1, step: 1, message: assistant })
+    duplicate.append('tool/result', { turn: 1, step: 1, message: result })
+    duplicate.append('tool/result', { turn: 1, step: 1, message: result })
+    assert.throws(() => duplicate.deriveMessages(), /不匹配或重复/)
   })
 
   it('派生消息只保留最新的系统提示快照并将其放在历史开头', () => {
