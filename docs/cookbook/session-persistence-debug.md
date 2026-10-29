@@ -1,5 +1,32 @@
 # 调试 Session 持久化契约
 
+## 调试持久化端到端验收
+
+在 VS Code 选择“调试 Session 持久化验收”并按 F5。在[验收测试](../../src/agents/tests/session-persistence-acceptance.test.ts)的模型请求、`flush`、重建 Agent 和恢复后的消息断言处设置断点；也可在 [read_file](../../src/tools/filesystem/read-file.ts) 和 [JSONL 后端](../../src/agents/plugins/session-persistence-jsonl/index.ts)设置断点。测试使用固定模型响应、真实文件工具和临时 JSONL 文件，无需网络和密钥；删除原文件后仍能恢复工具结果及其调用 ID。测试结束清理临时目录。
+
+```powershell
+pnpm run build:tests
+node --test .test-dist/agents/tests/session-persistence-acceptance.test.js
+```
+
+若本机没有该启动配置，可在 `.vscode/launch.json` 的 `configurations` 中添加：
+
+```json
+{
+  "name": "调试 Session 持久化验收",
+  "type": "node",
+  "request": "launch",
+  "program": "${workspaceFolder}/.test-dist/agents/tests/session-persistence-acceptance.test.js",
+  "runtimeArgs": ["--test", "--test-isolation=none"],
+  "cwd": "${workspaceFolder}",
+  "preLaunchTask": "编译调试测试",
+  "outFiles": ["${workspaceFolder}/.test-dist/**/*.js", "${workspaceFolder}/src/agents/dist/**/*.js", "${workspaceFolder}/src/agents/plugins/*/dist/**/*.js"],
+  "sourceMaps": true,
+  "console": "integratedTerminal",
+  "skipFiles": ["<node_internals>/**"]
+}
+```
+
 ## 调试中断恢复和格式迁移
 
 在 VS Code 选择“调试 Session 中断恢复”并按 F5。在[中断测试](../../src/agents/tests/agent-loop-interrupted.test.ts)、[恢复逻辑](../../src/agents/plugins/loop/interrupted-turn.ts)、[Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的恢复和刷新位置及 [JSONL 后端](../../src/agents/plugins/session-persistence-jsonl/index.ts)的 `prepareWrite` 设置断点。测试使用临时文件，观察已开始与未开始的工具结果、`interrupted` Turn、v1 原文件保留及尾部修复。
