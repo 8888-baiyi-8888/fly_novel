@@ -17,7 +17,7 @@
 
 ## Cordis Harness
 
-`await bootstrapAgents()` 创建 Cordis 根 Context、插件注册表、Preset 注册表、工厂和 Manager，遍历 `plugins/index.ts` 汇总的内置定义注册插件，并注册角色与导演 Preset。新增内置插件时在所属模块导出注册定义，再加入汇总列表；各 Agent 的 Preset 通过插件 ID 选择所需插件。`manager.create({ id, presetId })` 创建 Agent handle，并要求 Preset 装配提供 `agentLoop` 的插件。插件按 Preset 顺序装配，Cordis 按插件的 `inject` 声明安排启动。工厂依据插件的 `provide` 元数据在每个 Agent 的 Context 中隔离服务。每个 Agent 持有一个 Cordis 父插件作用域；`agent.run()` 将输入交给该实例的 `agentLoop` 服务，memory 可通过 `agent.context.get('memory')` 单独访问。`manager.dispose(id)` 和 `manager.disposeAll()` 会等待作用域销毁；失败的初始化不会进入 Manager。
+`await bootstrapAgents()` 创建 Cordis 根 Context、插件注册表、Preset 注册表、工厂和 Manager，遍历 `plugins/index.ts` 汇总的内置定义注册插件，并注册角色、导演与写作 Preset。新增内置插件时在所属模块导出注册定义，再加入汇总列表；各 Agent 的 Preset 通过插件 ID 选择所需插件。`manager.create({ id, presetId })` 创建 Agent handle，并要求 Preset 装配提供 `agentLoop` 的插件。插件按 Preset 顺序装配，Cordis 按插件的 `inject` 声明安排启动。工厂依据插件的 `provide` 元数据在每个 Agent 的 Context 中隔离服务。每个 Agent 持有一个 Cordis 父插件作用域；`agent.run()` 将输入交给该实例的 `agentLoop` 服务，memory 可通过 `agent.context.get('memory')` 单独访问。`manager.dispose(id)` 和 `manager.disposeAll()` 会等待作用域销毁；失败的初始化不会进入 Manager。
 
 Agent 初始化先激活父作用域，再等待所选插件及其依赖链启动；插件启动失败或依赖无法就绪时清理作用域并拒绝创建。
 
@@ -28,6 +28,8 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 角色 Preset 同时装配 `character-system-prompt`，在角色实例中注册角色扮演职责提示词；具体角色信息和场景由调用输入提供。插件随 Agent 作用域注销，不读取角色档案。调试步骤见[角色提示词调试](../../docs/cookbook/character-system-prompt-debug.md)。
 
 导演 Preset 装配 `director-system-prompt`，在导演实例中注册导演职责提示词；创作目标、世界规则和人物状态由调用输入提供。插件随 Agent 作用域注销。调试步骤见[导演提示词调试](../../docs/cookbook/director-system-prompt-debug.md)。
+
+写作 Preset 装配 `writer-system-prompt`，复用旧写作 Agent 的完整系统提示词；写作材料由调用输入提供。插件随 Agent 作用域注销。调试步骤见[写作提示词调试](../../docs/cookbook/writer-system-prompt-debug.md)。
 
 Preset 声明 `{ pluginId: 'tools' }` 后，Agent Context 获得独立的 `tools` 服务。`register(definition)` 返回注销函数；`get(name)`、`definitions()` 和 `schemas()` 查询定义与模型可见 schema，重复名称被拒绝，Agent 销毁时清理注册表。服务不自动注册具体工具；`execute` 串行处理工具调用批次，返回按调用 ID 关联的规范值、模型内容或错误。
 

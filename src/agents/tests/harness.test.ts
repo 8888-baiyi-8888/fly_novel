@@ -27,8 +27,8 @@ describe('Cordis Agent Harness', () => {
 
   it('通过外部注册的 Preset 装配角色和导演 Agent', async () => {
     framework = await bootstrapAgents()
-    assert.deepEqual(framework.plugins.list().map((plugin) => plugin.id), ['agent-loop-runtime', 'mock-memory', 'llm', 'session', 'system-prompt', 'tools', 'character-example-memory', 'character-system-prompt', 'director-system-prompt'])
-    assert.deepEqual(framework.presets.list().map((preset) => preset.id), ['character-agent', 'director-agent'])
+    assert.deepEqual(framework.plugins.list().map((plugin) => plugin.id), ['agent-loop-runtime', 'mock-memory', 'llm', 'session', 'system-prompt', 'tools', 'character-example-memory', 'character-system-prompt', 'director-system-prompt', 'writer-system-prompt'])
+    assert.deepEqual(framework.presets.list().map((preset) => preset.id), ['character-agent', 'director-agent', 'writer-agent'])
 
     const character = await createTestAgent(framework, {
       id: 'character-001',

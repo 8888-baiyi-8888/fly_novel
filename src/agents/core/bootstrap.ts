@@ -5,6 +5,7 @@ import { AgentManager } from '../runtime/agent-manager.js'
 import { builtInPlugins } from '../plugins/index.js'
 import { characterAgentPreset } from '../character/preset.js'
 import { directorAgentPreset } from '../director/preset.js'
+import { writerAgentPreset } from '../writer/preset.js'
 
 export interface AgentFramework {
   context: Context
@@ -25,6 +26,7 @@ export async function bootstrapAgents(): Promise<AgentFramework> {
 
   presets.register(characterAgentPreset)
   presets.register(directorAgentPreset)
+  presets.register(writerAgentPreset)
 
   // 验证 Preset 中的插件绑定是否存在于 PluginRegistry 中
   for (const preset of presets.list()) {

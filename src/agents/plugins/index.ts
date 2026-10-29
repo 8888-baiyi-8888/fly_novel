@@ -1,6 +1,7 @@
 import type { AgentPluginDefinition } from '../core/contracts/agent.js'
 import { characterPluginDefinitions } from '../character/plugins.js'
 import { directorSystemPromptPluginDefinition } from '../director/system-prompt-plugin.js'
+import { writerSystemPromptPluginDefinition } from '../writer/system-prompt-plugin.js'
 import { agentLoopRuntimePluginDefinition } from '@fly-novel/agent-loop'
 import { mockMemoryPluginDefinition } from './memory/index.js'
 import { llmPluginDefinition } from './llm/index.js'
@@ -18,4 +19,5 @@ export const builtInPlugins: AgentPluginDefinition[] = [
   toolsPluginDefinition,
   ...characterPluginDefinitions,
   directorSystemPromptPluginDefinition,
+  writerSystemPromptPluginDefinition,
 ]
