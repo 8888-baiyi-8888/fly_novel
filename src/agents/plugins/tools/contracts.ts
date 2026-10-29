@@ -2,8 +2,21 @@ import type { ContentBlock, ToolCallBlock, ToolCallId, ToolSchema } from '@fly-n
 import type { JsonValue } from '@fly-novel/util'
 import type { JsonSchemaNode } from './json-schema.js'
 
-/** 调用方提供的授权目录和取消信号。 */
-export interface ToolRunContext { readonly workingDirectory: string; readonly signal: AbortSignal }
+/** 由 Harness 提供的 Agent 身份；独立服务调用时不存在。 */
+export interface ToolAgentIdentity {
+  readonly id: string
+  readonly name: string
+  readonly role: string
+}
+
+/** 工具实际调用的身份、授权目录和取消信号。 */
+export interface ToolRunContext {
+  readonly callId: ToolCallId
+  readonly name: string
+  readonly agent?: ToolAgentIdentity
+  readonly workingDirectory: string
+  readonly signal: AbortSignal
+}
 
 /** 规范输出 schema 及模型内容投影；调用方传入已校验的参数和输出。 */
 export interface ToolOutputDefinition {

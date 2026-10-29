@@ -1,19 +1,20 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { test } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import { bootstrapAgents } from '@fly-novel/agents'
+import type { ToolDefinition, ToolRunContext } from '@fly-novel/tools'
 import { readFileTool } from '../../tools/filesystem/read-file.js'
 
 class ToolCallAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
-  constructor(private readonly name = 'read_file', private readonly count = 1) { super() }
+  constructor(private readonly name = 'read_file', private readonly count = 1, private readonly callId = 'call-1') { super() }
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
     if (this.requests.length === 1) {
-      const block = { type: 'tool-call' as const, id: 'call-1' as ToolCallId, name: this.name, arguments: '{"path":"outline.txt"}' }
+      const block = { type: 'tool-call' as const, id: this.callId as ToolCallId, name: this.name, arguments: '{"path":"outline.txt"}' }
       yield { type: 'block-end', index: 0, block }
       if (this.count === 2) yield { type: 'block-end', index: 1, block: { ...block, id: 'call-2' as ToolCallId } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
@@ -53,6 +54,57 @@ test('Agent Loop 使用真实 read_file 完成两次模型请求', async (t) => 
     'turn/start', 'step/start', 'user/message', 'assistant/message', 'tool/call', 'tool/result', 'step/end',
     'step/start', 'assistant/message', 'step/end', 'turn/end',
   ])
+})
+
+test('不同 Agent 共用工具定义时保留身份、调用 ID 和授权目录隔离', async (t) => {
+  const rootA = await mkdtemp(join(tmpdir(), 'fly-novel-agent-a-'))
+  const rootB = await mkdtemp(join(tmpdir(), 'fly-novel-agent-b-'))
+  t.after(async () => { await rm(rootA, { recursive: true, force: true }); await rm(rootB, { recursive: true, force: true }) })
+  await writeFile(join(rootA, 'outline.txt'), 'Agent A', 'utf8')
+  await writeFile(join(rootB, 'outline.txt'), 'Agent B', 'utf8')
+  const framework = await bootstrapAgents()
+  t.after(() => framework.manager.disposeAll())
+  framework.presets.register({ id: 'tool-isolation', version: '1', role: 'character', plugins: [
+    { pluginId: 'agent-loop-runtime' }, { pluginId: 'session' }, { pluginId: 'system-prompt' },
+    { pluginId: 'llm' }, { pluginId: 'tools' },
+  ] })
+  const observed: ToolRunContext[] = []
+  const shared: ToolDefinition = {
+    ...readFileTool,
+    execute(args, exec) { observed.push(exec); return readFileTool.execute(args, exec) },
+  }
+  const adapterA = new ToolCallAdapter('read_file', 1, 'call-a')
+  const adapterB = new ToolCallAdapter('read_file', 1, 'call-b')
+  const agentA = await framework.manager.create({ id: 'agent-a', presetId: 'tool-isolation', pluginConfigs: {
+    'agent-loop-runtime': { provider: 'test', model: 'test', workingDirectory: rootA },
+    llm: { adapters: [{ providers: ['test'], adapter: adapterA }] },
+  } })
+  const agentB = await framework.manager.create({ id: 'agent-b', presetId: 'tool-isolation', pluginConfigs: {
+    'agent-loop-runtime': { provider: 'test', model: 'test', workingDirectory: rootB },
+    llm: { adapters: [{ providers: ['test'], adapter: adapterB }] },
+  } })
+  agentA.context.tools.register(shared)
+  agentB.context.tools.register(shared)
+  await Promise.all([agentA.run({ prompt: '读取' }), agentB.run({ prompt: '读取' })])
+  assert.deepEqual(observed.map(exec => ({ id: exec.agent?.id, callId: exec.callId, name: exec.name, root: exec.workingDirectory }))
+    .sort((a, b) => a.id!.localeCompare(b.id!)), [
+    { id: 'agent-a', callId: 'call-a', name: 'read_file', root: rootA },
+    { id: 'agent-b', callId: 'call-b', name: 'read_file', root: rootB },
+  ])
+  assert.ok(observed.every(exec => exec.signal instanceof AbortSignal))
+  const contentA = adapterA.requests[1]?.messages.at(-1)?.content[0]
+  const contentB = adapterB.requests[1]?.messages.at(-1)?.content[0]
+  assert.ok(contentA?.type === 'tool-result' && contentB?.type === 'tool-result')
+  assert.deepEqual(contentA.content, [{ type: 'text', text: 'Agent A' }])
+  assert.deepEqual(contentB.content, [{ type: 'text', text: 'Agent B' }])
+  const outside = relative(rootA, join(rootB, 'outline.txt'))
+  const attempt = await agentA.context.tools.execute({
+    calls: [{ type: 'tool-call', id: 'escape-a' as ToolCallId, name: 'read_file', arguments: JSON.stringify({ path: outside }) }],
+    signal: new AbortController().signal, workingDirectory: rootA,
+  })
+  const denied = attempt.results[0]?.result
+  assert.ok(denied?.isError)
+  assert.match(denied.error.message, /超出授权工作目录/)
 })
 
 test('未知工具的错误结果关联调用并传给下一次模型请求', async (t) => {

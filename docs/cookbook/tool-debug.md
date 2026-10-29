@@ -39,7 +39,7 @@ node --test .test-dist/tools/tests/read-file.test.js
 
 ## 调试 Agent Loop 工具调用
 
-选择“调试 Agent Loop 工具调用”并按 F5，启动前自动编译测试。在[闭环测试](../../src/agents/tests/agent-loop-tools.test.ts)、[Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的 `step`、[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `execute` 和[文件工具](../../src/tools/filesystem/read-file.ts)设置断点。固定适配器第一次返回 `read_file` 调用，第二次返回最终文本；观察两次请求、Session 的 `tool/call` 和 `tool/result` 以及相同的调用 ID。测试使用临时目录和固定模型响应，不发起真实模型请求。
+选择“调试 Agent Loop 工具调用”并按 F5，启动前自动编译测试。在[闭环测试](../../src/agents/tests/agent-loop-tools.test.ts)、[Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)的 `step`、[工具服务](../../src/agents/plugins/tools/tools-service.ts)的 `execute` 和[文件工具](../../src/tools/filesystem/read-file.ts)设置断点。固定适配器第一次返回 `read_file` 调用，第二次返回最终文本；观察两次请求、Session 的 `tool/call` 和 `tool/result` 以及相同的调用 ID。在两个 Agent 共用工具定义的用例中，观察 `exec.agent`、`exec.callId`、`exec.name`、`exec.signal` 和 `exec.workingDirectory`；两个实例读取不同临时目录，越界请求被拒绝。测试使用固定模型响应，不发起真实模型请求。
 
 ## 调试 Agent Loop 工具调用
 

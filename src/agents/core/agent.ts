@@ -37,6 +37,7 @@ export class AgentInstance implements AgentHandle {
   async initialize(): Promise<void> {
     try {
       const scope = this.context.plugin(async (ctx) => {
+        ctx.provide('agent', Object.freeze({ ...this.info.identity }))
         const children = this.plugins.map((item) =>
           ctx.plugin(item.definition.plugin, item.config),
         )

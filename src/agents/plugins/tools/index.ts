@@ -1,4 +1,4 @@
-export type { ToolDefinition, ToolOutputDefinition, ToolRunContext, ToolExecutionResult, ToolBatchInput, ToolBatchResult } from './contracts.js'
+export type { ToolAgentIdentity, ToolDefinition, ToolOutputDefinition, ToolRunContext, ToolExecutionResult, ToolBatchInput, ToolBatchResult } from './contracts.js'
 export { defineTool, ToolArgsError } from './schema.js'
 export type { ParameterSchemaSpec, ValueSchemaSpec, StringValueSchemaSpec, DefineToolOptions } from './schema.js'
 export { ToolsService } from './tools-service.js'

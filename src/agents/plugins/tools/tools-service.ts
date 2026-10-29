@@ -1,12 +1,18 @@
 import type { ToolSchema } from '@fly-novel/llm'
 import { snapshotJsonValue } from '@fly-novel/util'
 import { validateJsonSchemaValue, assertSupportedJsonSchema, isJsonValue } from './json-schema.js'
-import type { ToolDefinition, ToolBatchInput, ToolBatchResult, ToolExecutionResult } from './contracts.js'
+import type { ToolAgentIdentity, ToolDefinition, ToolBatchInput, ToolBatchResult, ToolExecutionResult } from './contracts.js'
 
 /** 当前 Agent 的工具注册表；服务销毁后不可再使用。 */
 export class ToolsService {
   private readonly tools = new Map<string, ToolDefinition>()
   private closed = false
+
+  private readonly agent: ToolAgentIdentity | undefined
+
+  constructor(agent?: ToolAgentIdentity) {
+    this.agent = agent === undefined ? undefined : Object.freeze({ ...agent })
+  }
 
   /** 注册工具并返回仅注销本次注册的函数；同名工具不能重复注册。 */
   register(definition: ToolDefinition): () => void {
@@ -66,7 +72,10 @@ export class ToolsService {
         try { args = JSON.parse(call.arguments) } catch { throw new ToolCallError('INVALID_ARGS', '工具参数不是有效 JSON') }
         const snapshot = snapshotJsonValue(args)
         if (snapshot === undefined) throw new ToolCallError('INVALID_ARGS', '工具参数必须是无损 JSON')
-        const value = await tool.execute(snapshot, { workingDirectory: input.workingDirectory, signal: input.signal })
+        const value = await tool.execute(snapshot, {
+          callId: call.id, name: call.name, ...(this.agent === undefined ? {} : { agent: this.agent }),
+          workingDirectory: input.workingDirectory, signal: input.signal,
+        })
         if (input.signal.aborted) throw new ToolCallError('ABORTED', 'tool call aborted')
         const canonical = snapshotJsonValue(value)
         if (!isJsonValue(canonical) || validateJsonSchemaValue(tool.output.schema, canonical, '').length > 0) {

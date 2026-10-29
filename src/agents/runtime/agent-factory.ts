@@ -56,7 +56,7 @@ export class AgentFactory {
 
     // 继承 bootstrap 根 Context 中的通用服务，
     // 同时为此 Agent 的插件服务建立独立隔离范围。
-    let agentContext = this.rootContext
+    let agentContext = this.rootContext.isolate('agent')
     const serviceNames = new Set(resolvedPlugins.flatMap(({ definition }) => {
       const provided = definition.plugin.provide
       return provided === undefined ? [] : Array.isArray(provided) ? provided : [provided]

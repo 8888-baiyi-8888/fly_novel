@@ -14,6 +14,9 @@ test('Tools 服务注册、投影和注销在 Agent 之间隔离，随 Agent 清
     const toolsA = first.context.get('tools')
     const toolsB = second.context.get('tools')
     assert.ok(toolsA && toolsB)
+    assert.equal(framework.context.get('agent'), undefined)
+    assert.equal(first.context.get('agent')?.id, 'tools-a')
+    assert.equal(second.context.get('agent')?.id, 'tools-b')
     const tool = defineTool({ name: 'lookup', description: '查询',
       parameters: { path: { type: 'string', required: true } },
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
@@ -34,6 +37,7 @@ test('Tools 服务注册、投影和注销在 Agent 之间隔离，随 Agent 清
     assert.equal(toolsA.get('lookup'), tool)
     toolsB.register(tool)
     await framework.manager.dispose('tools-a')
+    assert.equal(first.context.get('agent'), undefined)
     assert.equal(first.context.get('tools'), undefined)
     assert.throws(() => toolsA.schemas(), /已销毁/)
     unregisterNew()

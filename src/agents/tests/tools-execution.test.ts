@@ -76,6 +76,9 @@ test('工具执行中的取消信号传给工具并等待其结束', async () =>
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
     async execute(_args, exec) {
       assert.equal(exec.signal, controller.signal)
+      assert.equal(exec.callId, id)
+      assert.equal(exec.name, 'wait')
+      assert.equal(exec.agent, undefined)
       await new Promise<void>((resolve) => exec.signal.addEventListener('abort', () => { observed = true; resolve() }, { once: true }))
       return 'finished'
     },
