@@ -15,10 +15,9 @@ pnpm run audit-censor-agent-example [provider]
 
 | 子目录 | 作用 |
 | --- | --- |
-| [novel-workflow/](novel-workflow/workflow.ts) | 建书命令行入口：解析参数、创建真实或内存 Agent，并调用小说级 LangGraph；单步命令复用工作流节点。 |
 | tests/ | 应用入口与命令行交互测试。 |
 
-`character-agent-example.ts` 是角色 Agent 的手动调试入口。它通过 `chat-openai-model.ts` 读取本机 DeepSeek 配置和已加密凭据，创建关闭思考模式的 OpenAI 兼容 LangChain 模型，并调用角色 Agent。章节驱动入口 `run-chapters.ts` 使用同一模型工厂和凭据读取逻辑，将导演、写作、审计和内容审查 Agent 直接注入对应节点；只有 `merge` 和 `settle` 使用通用工作流 `AgentPort`。运行前按[配置模块说明](../config/README.md)准备 `settings.json`、`.credentials.json` 和 `.encryption-key`，再在仓库根目录执行：
+`character-agent-example.ts` 是角色 Agent 的手动调试入口。它通过 `chat-openai-model.ts` 读取本机 DeepSeek 配置和已加密凭据，创建关闭思考模式的 OpenAI 兼容 LangChain 模型，并调用角色 Agent。运行前按[配置模块说明](../config/README.md)准备 `settings.json`、`.credentials.json` 和 `.encryption-key`，再在仓库根目录执行：
 
 ```bash
 pnpm run character-agent-example

@@ -21,7 +21,7 @@
 .fly-novel/        模型配置样例与本机配置，仅样例提交 Git（见 src/config/README.md）
 docs/              开发文档目录，存放架构、模块设计、开发流程、决策背景、接口约定和排障记录（见 docs/AGENTS.md）
 docs/cookbook/     可重复执行的本地调试与验证步骤
-src/               源码目录，包含应用组装、LLM 调用、Agent 运行框架、工作流引擎和小说业务（见 src/README.md）
+src/               源码目录，包含应用组装、LLM 调用、Agent 运行框架及工具（见 src/README.md）
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/tools/         具体工具实现，测试放在 src/tools/tests/
@@ -34,14 +34,6 @@ src/agents/plugins/session-persistence/ `@fly-novel/session-persistence` 独立�
 src/agents/plugins/session-persistence-jsonl/ Session JSONL 文件持久化后端
 src/agents/plugins/loop/ `@fly-novel/agent-loop` 独立工作区包，提供 AgentLoop 契约、Runtime 与 Cordis 插件
 src/agents/plugins/system-prompt/ `@fly-novel/system-prompt` 独立工作区包，提供通用提示词核心与 Cordis 服务插件；Harness 注册定义由 src/agents/plugins/system-prompt-plugin.ts 提供
-src/novel/types/    小说领域共享数据模型（文档 §3：BookConfig/Beat/Fact/HookRecord/Thread/角色卡/ChapterState）与章节级运行时结构（Dispatch/HookContext/SceneSheet/RuntimeDelta 等），公共入口 types/index.ts；测试在 src/novel/tests/
-src/novel/gates/    小说领域确定性校验闸门（纯函数，先于落盘执行；已实现 §5.3 Dispatch 校验闸门 dispatch-gate.ts、§11.2 六步校验链 apply-delta-gate.ts），测试在 src/novel/tests/
-src/novel/services/ 小说领域确定性服务（章节级文档 §16.1 组件接口：HookLedger 的 lifecycle/准入/六步校验与不可变合并已实现；TimelineManager/TruthOracle 接口契约含 insertAll 收 FactDelta），测试在 src/novel/tests/
-src/novel/runtime/  Book Runtime 模拟层（小说流交付给章节流的确定性状态面）：BookRuntime 接口、buildFakeBookRuntime 内存实现（settleChapter 原子回写）、§7.7 fixtures；小说流就绪后以真实服务替换，节点与引擎零改动，测试在 src/novel/tests/
-src/workflow/       工作流编排：章节图 chapter_workflow/ 和小说级 LangGraph 图 novel_workflow/、节点/存储/事件契约 types.ts、agent 端口 agent-port.ts（真实 agent 接入面）与 StubAgent、HttpAgent（自定 `/generate` 协议）、OpenAICompatibleAgent（阿里云 MaaS 等 `/chat/completions` 直连）、JsonFileStore（断点续跑落地）、章节节点 chapter_workflow/nodes/（deps={runtime}，settle 回写 BookRuntime）、stub 测试 tests/；章节级正式驱动入口在 src/app/run-chapters.ts（自动定位 N7 书目录 + 复用小说级配置）
-src/workflow/chapter_workflow/ 章节级 LangGraph 状态 state.ts、建图与恢复入口 workflow.ts、公共导出 index.ts、七个章节业务节点 nodes/；共享 Agent、数据契约、存储留在 src/workflow/ 根目录
-src/workflow/novel_workflow/ 小说级 LangGraph 建书图：唯一状态 schema、建书节点、按 novelId/节点名分目录的产物读写与 Agent 注入接口
-src/app/novel-workflow/ 建书命令行入口与 Agent 组装；整图和单步执行调用 src/workflow/novel_workflow/
 .gitignore         Git 忽略规则
 AGENTS.md          开发协作与工程约束
 pnpm-lock.yaml     pnpm 依赖锁文件
@@ -51,7 +43,6 @@ README.md          项目介绍
 tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物
 tsconfig.build.json 正式构建配置，排除测试，产物输出到 dist/
 tsconfig.test.json 测试编译配置，产物输出到 .test-dist/
-tsconfig.chapters.json 章节域（novel+workflow）测试编译配置，产物输出到 .test-dist/；日常单测入口（避开 harness 基线诊断），全量测试仍走 tsconfig.test.json
 ```
 
 新增源码、测试、脚本和第三方源码目录时，应在本节同步登记职责。目录划分应体现本项目的模块职责，不创建无用途的空目录。`docs/` 下新增开发文档时，同时遵循 [docs/AGENTS.md](docs/AGENTS.md)。
@@ -75,7 +66,6 @@ tsconfig.chapters.json 章节域（novel+workflow）测试编译配置，产物�
 
 引入外部 API 后，记录必需与可选环境变量。真实 API 测试缺少凭据时应明确报告跳过原因，不能伪装成通过；常规测试应能使用固定测试数据或替身在无密钥环境下运行。日志和异常信息不得泄露凭据。
 
-**真实 agent 接入**：章节级正式驱动入口为 `src/app/run-chapters.ts`（`node dist/app/run-chapters.js`）——通过 `src/app/chat-openai-model.ts` 读取 `.fly-novel/settings.json` 中的 provider/model/baseURL 并解密凭据，创建 OpenAI 兼容 LangChain 模型，自动定位最近修改的 `{artifactRoot}/{novelId}/workspace_node/` 书目录，不读取 `FLY_NOVEL_*` 环境变量、不传 `--base-url/--model/--api-key`；可选参数为 `--novel-id/--chapter/--to/--store-dir`。`openai-compatible-agent.ts` 的测试用注入 `fetchImpl` 替身，不在无密钥环境下发起真实调用。
 
 ## 工程约定
 

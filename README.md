@@ -1,203 +1,23 @@
-# fly_novel —— 小说级多 Agent 写作工作流
+# fly_novel
 
-`fly_novel` 是一套「从一句话想法到完整小说正文」的自动写作系统。它分两个阶段：
+`fly_novel` 是以持续演化的虚拟世界为基础的小说创作项目。项目使用 TypeScript、Node.js 和插件化 Agent Harness；世界初始化与故事创作流程的开发方向见[长期开发计划](docs/development-plan.md)。
 
-- **阶段一 · 建书流**：把你的原始想法，一步步整理成一部完整小说的"蓝图"（人物、世界观、分卷、伏笔、节拍板、书目录）。
-- **阶段二 · 章节流**：读取阶段一的成果，逐章写出正文，并自动结算每一章的伏笔推进。
+## 环境与检查
 
-下面从零开始教你怎么跑起来。
-
----
-
-## 一、环境要求
-
-- Node.js `v24.20.0`（或兼容版本）
-- pnpm（`12.4.1` 及以上）
-
-安装依赖（第一次）：
+使用 Node.js 24 和 pnpm 12.4.1 或兼容版本。在仓库根目录执行：
 
 ```bash
 pnpm install
+pnpm run build
+pnpm run typecheck
+pnpm test
 ```
 
----
+构建和测试编译分别清理 `dist/` 和 `.test-dist/` 后生成产物。真实模型调用需要配置供应商与凭据，见[配置模块说明](src/config/README.md)。
 
-## 二、配置 API Key（重要，先做这一步）
+## 文档入口
 
-系统调用大模型（当前用 **qwen/阿里云百炼**），你的 API Key 会**加密保存**，不会明文出现在文件或终端历史里。按顺序做：
-
-### 第 1 步：生成加密密钥
-
-```bash
-pnpm run init-encryption-key
-```
-
-这会在 `.fly-novel/` 下生成 `.encryption-key`（本机专用，别删、别提交到仓库）。
-
-### 第 2 步：加密你的 API Key
-
-```bash
-pnpm run credentials -- encrypt
-```
-
-- 运行后终端会提示"请输入 API Key"，粘贴你的百炼 API Key（输入时显示为圆点，回车确认）。
-- 屏幕会输出一段**密文**（形如 `gcm2:...`）。它不会自动保存，**请复制**。
-
-### 第 3 步：填两个配置文件
-
-参照 `.fly-novel/settings.example.json`，打开并编辑：
-
-**`.fly-novel/settings.json`** —— 供应商配置（把占位端点换成你的真实百炼兼容端点）：
-
-```json
-{
-  "qwen": {
-    "baseURL": "https://<你的百炼兼容端点>/compatible-mode/v1",
-    "model": "qwen3.7-plus",
-    "credentialRef": "QWEN_API_KEY",
-    "responseFormat": "json_object"
-  }
-}
-```
-
-- `baseURL`：填你自己的阿里云百炼「兼容模式」端点。
-- `credentialRef`：凭据名，必须和下面 `.credentials.json` 里的键一致。
-- 如果你的模型名不同，把 `model` 换成实际模型名。
-
-**`.fly-novel/.credentials.json`** —— 凭据密文（粘贴第 2 步复制的密文）：
-
-```json
-{
-  "refs": {
-    "QWEN_API_KEY": "这里粘贴第 2 步得到的密文"
-  }
-}
-```
-
-> 说明：系统**不读取 `.env` 明文**，只认这两个加密配置文件。设置好之后，下面所有命令都直接用，不需要再传 key。
-
----
-
-## 三、构建 & 检查
-
-```bash
-pnpm run build        # 编译全部源码到 dist/（跑任何真实命令前先执行一次）
-pnpm run typecheck    # 只做类型检查，不产构建产物
-pnpm test             # 编译并运行全部测试（286 个）
-```
-
-> 你也可以用 `npx tsx src/app/novel-workflow/workflow.ts ...` 免编译直接跑源码（首次会下载 tsx），效果相同。下面示例统一用编译后的 `node dist/...`。
-
----
-
-## 四、阶段一：建书流（跑出整本书的蓝图）
-
-### 最常用 —— 全链路一条命令跑完
-
-运行源码中预设的都市悬疑示例（自动构建并调用真实模型）：
-
-```bash
-pnpm run novel-workflow
-```
-
-传入自己的构想：
-
-```bash
-pnpm run novel-workflow --model real --input "你的原始想法"
-```
-
-不传参数时使用 `workflow.ts` 中预设的都市悬疑示例输入和真实模型；传入命令行参数时按参数运行。
-
-例如：
-
-```bash
-node dist/app/novel-workflow/workflow.js --model real --input "题材是霸道女上司爱上初入职场的小白妹妹。不要太狗血，内容励志"
-```
-
-这会依次执行 **整理输入 → 草案（同时生成书籍配置）→（故事基础设定 ‖ 长期控制）→ 静态架构 → 初始状态 → 书目录 → 交接**，产物存到 `.fly-novel-store/<novelId>/`。全程会调用真实模型多次，**耗时较长**，请耐心等待。
-
-### 用文本文件作为输入
-
-```bash
-node dist/app/novel-workflow/workflow.js --model real --file 想法.txt
-```
-
-### 加澄清交互（推荐第一次用）
-
-加 `--clarify` 后，N1 会**反问你最多 3 轮问题**（书名、分卷、配角等），你回答后它再生成完整草案；回答到一半输入 `够了/停止/就这样` 可提前结束：
-
-```bash
-node dist/app/novel-workflow/workflow.js --model real --input "你的想法" --clarify
-```
-
-### 只跑某个节点（断点续跑 / 单独看产物）
-
-```bash
-node dist/app/novel-workflow/workflow.js --model real --step ni   # 只跑原始输入整理
-node dist/app/novel-workflow/workflow.js --model real --step dra --novel-id <novelId>  # 读取整理输入并生成草案及书籍配置
-node dist/app/novel-workflow/workflow.js --model real --step sf --novel-id <novelId>   # 故事圣经+书籍规则
-node dist/app/novel-workflow/workflow.js --model real --step con --novel-id <novelId>  # 长期创作控制
-node dist/app/novel-workflow/workflow.js --model real --step arc --novel-id <novelId>  # 节拍板
-node dist/app/novel-workflow/workflow.js --model real --step sta --novel-id <novelId>  # 初始运行状态
-node dist/app/novel-workflow/workflow.js --step wor --novel-id <novelId>               # 生成书目录
-node dist/app/novel-workflow/workflow.js --step rea --novel-id <novelId>               # 验收与交接
-```
-
-> 全链路和 `--step ni` 会打印小说 ID。除 `ni` 外，单步运行都必须传 `--novel-id <novelId>`，只读取该 ID 下的前序产物。同一 ID 已有整理输入时会跳过整理节点。旧版全局 `n0-raw-input` 至 `n6-state0` 目录不会自动迁移或被新流程读取，原文件保留。
-
-全链路自动生成的 ID 使用“本地时间戳-书名拼音-序号”，例如 `20261014-105910-yinlong-1`；序号按产物目录冲突递增。`--step ni` 尚无书名，使用“本地时间戳-序号”。显式传入 `--novel-id` 时沿用该值。
-
-### 帮助
-
-```bash
-node dist/app/novel-workflow/workflow.js --help
-```
-
----
-
-## 五、阶段二：章节流（写正文）
-
-建书流跑完（`.fly-novel-store/<novelId>/workspace_node/` 生成了书目录）之后，开始逐章写正文：
-
-```bash
-node dist/app/run-chapters.js                # 自动找最新书目录，写第 1 章
-node dist/app/run-chapters.js --chapter 2    # 写第 2 章（自动延续上一章的伏笔状态）
-node dist/app/run-chapters.js --novel-id <novelId>  # 指定小说
-node dist/app/run-chapters.js --chapter 1 --to 5   # 连续写第 1~5 章
-node dist/app/run-chapters.js --store-dir <dir>    # 正文/断点存放目录（默认 .fly-novel-store）
-```
-
-要点：
-
-- **不传 `--to` 时只写 `--chapter` 指定的那 1 章**（默认第 1 章）。要写多章就加 `--to`。
-- 不指定 `--novel-id` 时选最近修改的小说工作区；
-- 每章结束自动把伏笔账本 / 支线调度 / 真相库 / 角色状态写进 `runtime-state.json`，下一章自动恢复——**跨章世界真实延续**。
-- 某章失败或挂起时会停下来等你处理，处理好后重跑 `--chapter 该章` 即可，不污染后续。
-
----
-
-## 六、产物都在哪
-
-| 阶段 | 位置 | 内容 |
-|---|---|---|
-| 整理输入 | `.fly-novel-store/<novelId>/normalized_input/` | 整理输入文本 |
-| 建书产物 | `.fly-novel-store/<novelId>/{draft_node,book_config,story_foundation,controls_node,architecture_node,state0_node}/` | 草案至初始状态的产物；`draft_node` 同时生成 `book_config` |
-| 书目录 | `.fly-novel-store/<novelId>/workspace_node/` | 章节流输入；角色卡按 `characters/<拼音角色ID>.json` 单独保存，并生成 `characters/index.json` 和供批量读取的 `characters/all.json` |
-| 交接凭据 | `.fly-novel-store/<novelId>/ready_node/`，书目录内 `story/runtime/ready.json` | 验收结果与红线消毒记录 |
-| 章节正文与断点 | `.fly-novel-store/<novelId>/chapter_workflow/` | 正文草稿、每章断点和 `runtime-state.json` |
-| 角色会话 | `.fly-novel-store/<novelId>/character_agent/main/session.sqlite` | 角色 Agent 的 SQLite 会话断点 |
-
----
-
-## 七、常见问题
-
-- **提示"没有找到 N1 草案 / N7 书目录"**：说明对应的前序节点还没跑成功。先跑全链路或补跑对应 `--step`。
-- **`--model real` 报缺供应商配置**：检查 `.fly-novel/settings.json` 是否填了 `qwen` 块，且 `credentialRef` 与 `.credentials.json` 的键一致。
-- **`--credentials encrypt` 报"Encryption key is missing"**：先执行 `pnpm run init-encryption-key`。
-- **建书流中途超时**：最常发生在 N5 节拍板（章节很多时）。会自动分块 + 自动修复；实在超时可以加大单块规模或用 `--step arc` 单独重跑。
-
----
-
-## 本地工作区包（开发者）
-
-相对导入支持 `.ts` 后缀，例如 `import { value } from './types.ts'`；编译时通过 `rewriteRelativeImportExtensions` 改写为 `.js`。公共包通过 `@fly-novel/llm`、`@fly-novel/util` 和 `@fly-novel/agents` 导入。编辑器与类型检查走源码映射；运行应用前执行 `pnpm run build`。
+- [Agent Harness 和使用方式](src/agents/README.md)
+- [应用入口与 Agent 调试](src/app/README.md)
+- [世界初始化工作流方案](docs/workflows/word-initialization/world-initialization.md)
+- [项目目录架构](docs/architecture.md)

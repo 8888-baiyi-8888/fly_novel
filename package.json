@@ -6,8 +6,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "build": "pnpm run build:packages && tsc -p tsconfig.build.json",
-    "novel-workflow": "pnpm run build && node dist/app/novel-workflow/workflow.js",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && pnpm run build:packages && tsc -p tsconfig.build.json",
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
     "character-agent-example": "pnpm run build && node dist/app/character-agent-example.js",
     "agent-harness-debug": "pnpm run build && node dist/app/agent_harness.js",
@@ -19,7 +18,7 @@
     "test": "pnpm run build:tests && node --test .test-dist/*/tests/**/*.test.js",
     "test:deepseek": "pnpm run build:tests && node .test-dist/llm/tests/deepseek.manual.js",
     "build:packages": "pnpm -r run build",
-    "build:tests": "pnpm run build:packages && tsc -p tsconfig.test.json"
+    "build:tests": "node -e \"require('node:fs').rmSync('.test-dist', { recursive: true, force: true })\" && pnpm run build:packages && tsc -p tsconfig.test.json"
   },
   "repository": {
     "type": "git",
@@ -47,7 +46,6 @@
     "@fly-novel/util": "workspace:*",
     "@langchain/langgraph": "^1.4.18",
     "@langchain/openai": "^1.5.13",
-    "pinyin-pro": "^3.29.4",
     "zod": "^4.6.5"
   },
   "private": true

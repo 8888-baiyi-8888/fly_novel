@@ -41,9 +41,6 @@ importers:
       '@langchain/openai':
         specifier: ^1.5.13
         version: 1.6.2(@langchain/core@1.2.14(openai@7.27.0(zod@4.6.5)))
-      pinyin-pro:
-        specifier: ^3.29.4
-        version: 3.29.4
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -185,12 +182,6 @@ importers:
       '@fly-novel/util':
         specifier: workspace:*
         version: link:../util
-
-  src/novel-flow:
-    dependencies:
-      pinyin-pro:
-        specifier: ^3.29.4
-        version: 3.29.4
 
   src/util: {}
 
@@ -900,9 +891,6 @@ packages:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
 
-  pinyin-pro@3.29.4:
-    resolution: {integrity: sha512-SPXpDT2cHEy+d26V1RXYMlVzXN42hotFAak1fzyWPi4o2dKXb61UqD4pzxDJHwk6gbv8vQ6EfErd+hYX0Qhzug==}
-
   postcss@8.5.30:
     resolution: {integrity: sha512-zkd+e9S1AQHhmaBKye9zlFHWjOwVgqXl1q3ECYy8561K7qxR2cREf/STLskulBFd78k6AOFeA+ff1TtEzk9bAA==}
     engines: {node: ^10 || ^12 || >=14}
@@ -1599,8 +1587,6 @@ snapshots:
   picomatch@2.3.2: {}
 
   picomatch@4.0.7: {}
-
-  pinyin-pro@3.29.4: {}
 
   postcss@8.5.30:
     dependencies:

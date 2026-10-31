@@ -1,6 +1,6 @@
 # 世界初始化工作流（整体方案）
 
-本文是世界初始化的技术架构讨论稿。开发顺序和待确认问题见[开发计划](world-initialization-development-plan.md)；现有工作流行为见[工作流模块说明](../../../src/workflow/README.md)。
+本文是世界初始化的技术架构讨论稿。开发顺序和待确认问题见[开发计划](world-initialization-development-plan.md)。
 
 ## 作用
 

@@ -7,7 +7,6 @@ packages:
   - 'src/agents/plugins/tools'
   - 'src/agents/plugins/system-prompt'
   - 'src/util'
-  - 'src/novel-flow'
   - src/agents
 allowBuilds:
   better-sqlite3: true
