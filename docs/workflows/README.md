@@ -2,6 +2,8 @@
 
 本目录存放 `fly_novel` 的核心业务工作流。每个工作流使用独立的 Markdown 文件，文件名采用具体工作流名称的英文小写短横线形式，例如 `chapter-writing.md`。
 
+- [世界初始化工作流](word-initialization/world-initialization.md)：世界方案从用户构想到审阅、优化与交付的整体流程。
+
 每篇工作流文档按以下顺序编写：
 
 1. `## 作用`：说明该工作流解决的问题、适用范围和产生的结果。
