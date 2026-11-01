@@ -56,6 +56,54 @@ test('查询期间注销来源不会返回过时结果', async () => {
   service.dispose()
 })
 
+test('发现只解析元信息，正文错误只在加载对应 Skill 时报告', async (t) => {
+  const base = await mkdtemp(join(tmpdir(), 'fly-skill-summary-'))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const root = join(base, 'skills')
+  await mkdir(join(root, 'good'), { recursive: true })
+  await mkdir(join(root, 'bad'))
+  await writeFile(join(root, 'good', 'SKILL.md'), '---\nname: good\ndescription: 正常\n---\n有效正文')
+  await writeFile(join(root, 'bad', 'SKILL.md'), Buffer.concat([
+    Buffer.from('---\r\nname: bad\r\ndescription: 未加载\r\n---\r\n'), Buffer.from([0xff]),
+  ]))
+  const service = new SkillService()
+  service.registerProvider(new FilesystemSkillProvider(root))
+  t.after(() => service.dispose())
+  assert.deepEqual((await service.list(base, signal)).map(item => item.name), ['bad', 'good'])
+  assert.equal((await service.get('good', base, signal))?.content, '有效正文')
+  await assert.rejects(service.get('bad', base, signal), /encoded data|encoding/i)
+  await writeFile(join(root, 'bad', 'SKILL.md'), '---\nname: bad\ndescription: 空正文\n---\n')
+  assert.equal((await service.list(base, signal)).length, 2)
+  await assert.rejects(service.get('bad', base, signal), /正文不能为空/)
+  await writeFile(join(root, 'bad', 'SKILL.md'), Buffer.concat([
+    Buffer.from('\uFEFF---\r\nname: bad\r\ndescription: 大正文\r\n---\r\n'), Buffer.alloc(1024 * 1024, 65),
+  ]))
+  assert.equal((await service.list(base, signal))[0]?.description, '大正文')
+  assert.equal((await service.get('good', base, signal))?.content, '有效正文')
+  await assert.rejects(service.get('bad', base, signal), /超过 1 MiB/)
+})
+
+test('Skill 文件符号链接不能指向自身目录外', async (t) => {
+  const base = await mkdtemp(join(tmpdir(), 'fly-skill-file-link-'))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const root = join(base, 'skills')
+  await mkdir(join(root, 'linked'), { recursive: true })
+  const outside = join(base, 'outside.md')
+  await writeFile(outside, '---\nname: linked\ndescription: test\n---\n正文')
+  try {
+    await symlink(outside, join(root, 'linked', 'SKILL.md'), 'file')
+  } catch (error) {
+    if (process.platform === 'win32' && error instanceof Error && 'code' in error && error.code === 'EPERM') {
+      t.skip('Windows 当前用户没有创建文件符号链接的权限')
+      return
+    }
+    throw error
+  }
+  const filesystem = new FilesystemSkillProvider(root)
+  await assert.rejects(filesystem.list(base, signal), /Skill 文件超出授权范围/)
+  await assert.rejects(filesystem.get('linked', base, signal), /Skill 文件超出授权范围/)
+})
+
 test('文件系统发现摘要、按需加载及检查文件和目录边界', async (t) => {
   const base = await mkdtemp(join(tmpdir(), 'fly-skill-list-'))
   t.after(() => rm(base, { recursive: true, force: true }))

@@ -1,4 +1,5 @@
 import { open, realpath, readdir } from 'node:fs/promises'
+import type { FileHandle } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseDocument } from 'yaml'
 import type { SkillDefinition, SkillProvider, SkillSummary } from '@fly-novel/skill'
@@ -29,8 +30,8 @@ export class FilesystemSkillProvider implements SkillProvider {
       signal.throwIfAborted()
       if ((!entry.isDirectory() && !entry.isSymbolicLink()) || !SKILL_NAME.test(entry.name)) continue
       try {
-        const skill = await this.get(entry.name, workingDirectory, signal)
-        summaries.push({ name: skill.name, description: skill.description, invocation: skill.invocation, provider: skill.provider })
+        const skill = await this.read(entry.name, workingDirectory, signal, true)
+        summaries.push({ name: entry.name, description: skill.description, invocation: skill.invocation, provider: this.name })
       } catch (error) {
         if (error instanceof Error && error.message === `Skill "${entry.name}" 不存在或不可用`) continue
         throw error
@@ -47,6 +48,14 @@ export class FilesystemSkillProvider implements SkillProvider {
    * @throws 名称、授权范围、元信息或文件内容无效，或读取失败时抛错。
    */
   async get(name: string, workingDirectory: string, signal: AbortSignal): Promise<SkillDefinition> {
+    const skill = await this.read(name, workingDirectory, signal, false)
+    if (skill.content === undefined) throw new Error('Skill 正文未加载')
+    return { name, description: skill.description, invocation: skill.invocation, provider: this.name, resourceBase: { kind: 'directory', path: skill.directory }, content: skill.content }
+  }
+
+  private async read(name: string, workingDirectory: string, signal: AbortSignal, summaryOnly: boolean): Promise<{
+    directory: string; description: string; invocation: SkillSummary['invocation']; content?: string
+  }> {
     signal.throwIfAborted()
     if (!SKILL_NAME.test(name)) throw new Error('Skill 名称必须使用小写字母、数字和连字符')
     const workspace = await realpath(workingDirectory)
@@ -69,6 +78,10 @@ export class FilesystemSkillProvider implements SkillProvider {
     try {
       const stat = await file.stat()
       if (!stat.isFile()) throw new Error('Skill 文件必须是普通文件')
+      if (summaryOnly) {
+        const frontmatter = await readFrontmatter(file, signal)
+        return { directory, ...parseMetadata(name, frontmatter) }
+      }
       if (stat.size > MAX_SKILL_BYTES) throw new Error('Skill 文件超过 1 MiB 限制')
       const buffer = Buffer.alloc(MAX_SKILL_BYTES + 1)
       let length = 0
@@ -81,18 +94,42 @@ export class FilesystemSkillProvider implements SkillProvider {
       if (length > MAX_SKILL_BYTES) throw new Error('Skill 文件超过 1 MiB 限制')
       signal.throwIfAborted()
       const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, length))
-      const { content, description, invocation } = parseSkill(name, text)
-      return { name, description, invocation, provider: 'filesystem', resourceBase: { kind: 'directory', path: directory }, content }
+      const frontmatter = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text)
+      if (!frontmatter) throw new Error('Skill 必须包含 YAML frontmatter')
+      const content = text.slice(frontmatter[0].length).trim()
+      if (!content) throw new Error('Skill 正文不能为空')
+      return { directory, ...parseMetadata(name, frontmatter[1]!), content }
     } finally {
       await file.close()
     }
   }
 }
 
-function parseSkill(name: string, text: string): { content: string; description: string; invocation: SkillSummary['invocation'] } {
-  const frontmatter = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text)
-  if (!frontmatter) throw new Error('Skill 必须包含 YAML frontmatter')
-  const document = parseDocument(frontmatter[1]!, { uniqueKeys: true })
+/** 分块读取至元信息结束行；最多预读当前块中少量正文，不解析正文。 */
+async function readFrontmatter(file: FileHandle, signal: AbortSignal): Promise<string> {
+  const buffer = Buffer.alloc(MAX_SKILL_BYTES + 1)
+  let length = 0
+  while (length < buffer.length) {
+    signal.throwIfAborted()
+    const { bytesRead } = await file.read(buffer, length, Math.min(4096, buffer.length - length), length)
+    length += bytesRead
+    const prefix = buffer.subarray(0, length).toString('latin1')
+    const match = /^(?:\xef\xbb\xbf)?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(prefix)
+    // 块末尾的 --- 可能只是更长的一行，必须读到下一字节或文件结尾。
+    if (match && (match[0].length < length || bytesRead === 0 || match[0].endsWith('\n'))) {
+      const end = match[0].length
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, end))
+      const frontmatter = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(decoded)
+      if (!frontmatter) throw new Error('Skill 必须包含 YAML frontmatter')
+      return frontmatter[1]!
+    }
+    if (bytesRead === 0) throw new Error('Skill 必须包含 YAML frontmatter')
+  }
+  throw new Error('Skill 元信息超过 1 MiB 限制')
+}
+
+function parseMetadata(name: string, frontmatter: string): { description: string; invocation: SkillSummary['invocation'] } {
+  const document = parseDocument(frontmatter, { uniqueKeys: true })
   if (document.errors.length > 0) throw new Error('Skill YAML frontmatter 无效')
   let metadata: unknown
   try {
@@ -109,9 +146,7 @@ function parseSkill(name: string, text: string): { content: string; description:
   }
   const modelInvocable = fields['disable-model-invocation'] === undefined || !parseBoolean(fields['disable-model-invocation'])
   const userInvocable = fields['user-invocable'] === undefined || parseBoolean(fields['user-invocable'])
-  const content = text.slice(frontmatter[0].length).trim()
-  if (!content) throw new Error('Skill 正文不能为空')
-  return { content, description: fields.description, invocation: { modelInvocable, userInvocable } }
+  return { description: fields.description, invocation: { modelInvocable, userInvocable } }
 }
 
 function parseBoolean(value: unknown): boolean {

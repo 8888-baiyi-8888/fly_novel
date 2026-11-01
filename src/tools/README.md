@@ -4,7 +4,7 @@
 
 `skill/skill.ts` 提供 `createSkillTool(root)`，将可信调用方指定的绝对 Skill 根目录绑定到 `skill` 工具。模型只传入名称；工具通过 Skill 服务查找并加载 `名称/SKILL.md`，检查名称、描述、模型调用权限、大小和 UTF-8，并要求根目录位于授权工作目录内。Skill 目录或文件的符号链接解析后必须留在各自授权范围内；路径检查不防御其他进程在检查与打开之间替换目录或符号链接，调用方需保证目录不被不可信进程并发修改。加载结果包含 Skill 名称、文件系统来源、资源目录和正文，渲染为模型可见的 Skill 内容。读取正文中引用的其他资源仍由对应工具独立授权。
 
-Skill 来源注册和查询由 [`@fly-novel/skill`](../agents/plugins/skill/README.md) 提供，文件系统来源由 [`@fly-novel/skill-filesystem`](../agents/plugins/skill-filesystem/README.md) 提供。模型工具会拒绝调用被禁止模型调用的 Skill。
+Skill 来源注册和查询由 [`@fly-novel/skill`](../agents/plugins/skill/README.md) 提供，文件系统来源由 [`@fly-novel/skill-filesystem`](../agents/plugins/skill-filesystem/README.md) 提供。模型工具会拒绝调用被禁止模型调用的 Skill。`read_file` 的授权范围由其工作目录决定；Skill 返回的资源目录不会自动收紧该范围。
 
 Skill 服务、文件系统提供方和工具分别参考 [DeepSeek Harness Skill 服务](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/skill/README.md)、[文件系统提供方](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/skill-filesystem/README.md)和[工具](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/tool-skill/src/index.ts)。与上游不同，目前不实现来源优先级、不完整目录、缓存、文件监听、扁平 Markdown、默认搜索目录、Agent 自动绑定或会话目录发布。YAML 元信息使用 `yaml` 解析，该依赖采用 ISC 许可证。
 

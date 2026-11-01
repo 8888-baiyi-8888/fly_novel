@@ -6,6 +6,8 @@ import { test } from 'node:test'
 import type { ToolCallId } from '@fly-novel/llm'
 import { ToolsService } from '@fly-novel/tools'
 import { createSkillTool } from '../skill/skill.js'
+import { readFileTool } from '../filesystem/read-file.js'
+import { FilesystemSkillProvider } from '@fly-novel/skill-filesystem'
 
 test('通过 Tools 服务按名称加载世界初始化 Skill 并注销工具', async () => {
   const workspace = process.cwd()
@@ -99,4 +101,24 @@ test('Skill 工具调用在取消时不加载内容', async () => {
   } finally {
     tools.dispose()
   }
+})
+
+test('Skill 资源由读取工具的工作目录独立授权', async (t) => {
+  const base = await mkdtemp(join(tmpdir(), 'fly-skill-resources-'))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const workspace = join(base, 'workspace')
+  const root = join(workspace, 'skills')
+  const directory = join(root, 'example')
+  await mkdir(join(directory, 'references'), { recursive: true })
+  await writeFile(join(directory, 'SKILL.md'), '---\nname: example\ndescription: 示例\n---\n参考 references/guide.md')
+  await writeFile(join(directory, 'references', 'guide.md'), '授权的指导')
+  await writeFile(join(workspace, 'other.txt'), '工作目录内的其他文件')
+  await writeFile(join(base, 'outside.txt'), '工作目录外')
+  const skill = await new FilesystemSkillProvider(root).get('example', workspace, new AbortController().signal)
+  const context = { callId: 'resource' as ToolCallId, name: 'read_file', workingDirectory: skill.resourceBase.path, signal: new AbortController().signal }
+  assert.equal(await readFileTool.execute({ path: 'references/guide.md' }, context), '授权的指导')
+  await assert.rejects(readFileTool.execute({ path: '../../other.txt' }, context), /超出授权工作目录/)
+  await assert.rejects(readFileTool.execute({ path: '../../../outside.txt' }, context), /超出授权工作目录/)
+  const workspaceContext = { ...context, workingDirectory: workspace }
+  assert.equal(await readFileTool.execute({ path: 'other.txt' }, workspaceContext), '工作目录内的其他文件')
 })
