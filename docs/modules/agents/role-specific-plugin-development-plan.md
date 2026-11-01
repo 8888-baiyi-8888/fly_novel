@@ -6,7 +6,7 @@
 
 复用现有 SystemPrompt 服务，逐个开发各 Agent 的系统提示词插件，通过现有 Preset 选择对应插件，并检查旧入口与新调用方式的衔接。提示词注册归当前 Agent 作用域，销毁时清理。
 
-`character-agent` 和 `director-agent` Preset 已装配基础服务、专有提示词及示例 memory 插件。`DirectorAgent` 仍使用独立的 Deep Agents 执行路径，其能力不能视作已接入 Harness。旧小说数据及其读取和存储方式不作为本计划的可靠前提；工具计划中的[第 9 步](tool-plugin-development-plan.md)暂缓，待具体数据和应用场景确定后再设计。
+`character-agent` 和 `director-agent` Preset 已装配基础服务、专有提示词及示例 memory 插件。旧小说数据及其读取和存储方式不作为本计划的可靠前提；工具计划中的[第 9 步](tool-plugin-development-plan.md)暂缓，待具体数据和应用场景确定后再设计。
 
 ## 官方参考与项目边界
 

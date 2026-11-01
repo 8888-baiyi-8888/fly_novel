@@ -2,9 +2,7 @@
 
 `agent_harness.ts` 提供 Cordis Harness 的独立调试函数 `debugAgentHarness(prompt)`，按角色 Preset 创建 Agent、读取本机 DeepSeek 配置并调用真实 Agent Loop，最后销毁实例。在仓库根目录运行 `pnpm run agent-harness-debug -- "你明天会回来吗？"`，或在 VS Code“运行和调试”中选择“调试 Cordis Agent Harness（DeepSeek）”并按 F5。该调试配置先构建 Agent 包和应用，可在函数、`AgentInstance.run()` 和 `AgentLoopRuntime` 中设置断点。
 
-`director-agent-example.ts` 从本地配置读取所选模型提供商、API 地址和加密凭据，创建模型后调用 `DirectorAgent`。默认提供商为 `deepseek`，也可将 settings.json 中的提供商名作为命令行参数传入。运行前按[配置模块说明](../config/README.md)准备 `settings.json`、`.credentials.json` 和 `.encryption-key`，再在仓库根目录执行 `pnpm run director-agent-example` 或 `pnpm run director-agent-example <provider>`。
-
-`writer-agent-example.ts` 和 `audit-censor-agent-example.ts` 使用相同的本地模型及凭据配置，分别调用写作、审计和内容审查 Agent；也可用命令行参数选择 `settings.json` 中的其他提供商：
+`writer-agent-example.ts` 和 `audit-censor-agent-example.ts` 使用本地模型及凭据配置，分别调用写作、审计和内容审查 Agent；运行前按[配置模块说明](../config/README.md)准备配置和凭据，也可用命令行参数选择 `settings.json` 中的提供商：
 
 ```bash
 pnpm run writer-agent-example [provider]

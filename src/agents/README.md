@@ -80,14 +80,13 @@ void main()
 
 ## 构建与引用
 
-公共入口导出抽象基类 `BaseAgent`，以及 `DirectorAgent`、`WriterAgent`、`AuditAgent`、`CensorAgent`。这些 Agent 接收应用创建的模型实例，并通过 `generate(content)` 调用 Deep Agents。角色 Agent 的创建方式见上方 Cordis Harness 说明。基础使用方式：
+公共入口导出抽象基类 `BaseAgent`，以及 `WriterAgent`、`AuditAgent`、`CensorAgent`。这些 Agent 接收应用创建的模型实例，并通过 `generate(content)` 调用 Deep Agents。角色和导演 Agent 的创建方式见上方 Cordis Harness 说明。基础使用方式：
 
 ```ts
-import { DirectorAgent, WriterAgent, AuditAgent, CensorAgent } from "@fly-novel/agents";
+import { WriterAgent, AuditAgent, CensorAgent } from "@fly-novel/agents";
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 
 declare const model: BaseLanguageModel; // 由应用配置模型与 API 凭据后创建
-const director = new DirectorAgent({ model });
 const writer = new WriterAgent({ model });
 const audit = new AuditAgent({ model });
 const censor = new CensorAgent({ model });
