@@ -10,4 +10,8 @@ Skill 来源注册和查询由 [`@fly-novel/skill`](../agents/plugins/skill/READ
 
 Skill 服务、文件系统提供方和工具分别参考 [DeepSeek Harness Skill 服务](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/skill/README.md)、[文件系统提供方](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/skill-filesystem/README.md)和[工具](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/tool-skill/src/index.ts)。上游使用独立的持久化用户消息和目录变更事件；本项目使用现有系统消息，每个 Step 重新生成。当前不实现来源优先级、不完整目录、缓存、文件监听、扁平 Markdown、默认搜索目录或用户显式调用 Skill。YAML 元信息使用 `yaml` 解析，该依赖采用 ISC 许可证。
 
+组合验证使用世界初始化主 Agent 的玄幻规划样例与另一个 Agent 的独立 Skill，固定模型替身先接收各自摘要，再调用 `skill` 工具；测试检查正文进入下一 Step、Session 中的调用和结果、猜测其他实例的名称以及实例销毁。固定替身不证明真实模型能够正确选择 Skill。
+
+当前构建不会复制 `src/agents/world-initialization-main-agent/skills/` 的样例到 `dist/`，也没有正式主 Agent 入口自动定位它。构建产物需要可信应用提供已经部署的 Skill 根目录，并将其置于授权工作目录内；不能假定部署环境存在源码目录。正式主 Agent 若需要随应用分发该样例，应在实现入口时同时确定资源复制、部署位置和定位方式，并验证干净构建后的加载。
+
 `defineTool` 将参数声明转换为模型可见的 JSON Schema，执行前校验参数，并声明规范输出与模型内容投影。服务执行工具后校验输出 schema，返回规范值与模型可见内容。schema 编译和校验的来源及许可证见[工具插件说明](../agents/plugins/tools/README.md)；模型可见 schema 不包含 `output` 和 `execute`。工具可直接调用，也可显式注册到 Agent 的 `tools` 服务。逐步调试见[工具调试指南](../../docs/cookbook/tool-debug.md)。
