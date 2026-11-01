@@ -5,6 +5,8 @@ packages:
   - 'src/agents/plugins/session-persistence'
   - 'src/agents/plugins/loop'
   - 'src/agents/plugins/tools'
+  - 'src/agents/plugins/skill'
+  - 'src/agents/plugins/skill-filesystem'
   - 'src/agents/plugins/system-prompt'
   - 'src/agents/character/plugins/system-prompt'
   - 'src/agents/director/plugins/system-prompt'

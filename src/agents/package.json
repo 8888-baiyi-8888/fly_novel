@@ -27,6 +27,8 @@
     "@fly-novel/llm": "workspace:*",
     "@fly-novel/session": "workspace:*",
     "@fly-novel/session-persistence": "workspace:*",
+    "@fly-novel/skill": "workspace:*",
+    "@fly-novel/skill-filesystem": "workspace:*",
     "@fly-novel/system-prompt": "workspace:*",
     "@fly-novel/tools": "workspace:*",
     "@fly-novel/util": "workspace:*",

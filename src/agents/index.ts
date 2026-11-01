@@ -29,4 +29,7 @@ export {
   type SystemPromptPluginConfig,
 } from '@fly-novel/system-prompt'
 export { systemPromptPluginDefinition } from '@fly-novel/system-prompt'
+export { skillPlugin, skillPluginDefinition } from '@fly-novel/skill'
+export { filesystemSkillPlugin, filesystemSkillPluginDefinition } from '@fly-novel/skill-filesystem'
+export type { FilesystemSkillPluginConfig } from '@fly-novel/skill-filesystem'
 export type { AgentMemory, MockMemoryConfig } from './plugins/memory/index.js'

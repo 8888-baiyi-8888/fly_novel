@@ -32,6 +32,12 @@ importers:
       '@fly-novel/session-persistence':
         specifier: workspace:*
         version: link:src/agents/plugins/session-persistence
+      '@fly-novel/skill':
+        specifier: workspace:*
+        version: link:src/agents/plugins/skill
+      '@fly-novel/skill-filesystem':
+        specifier: workspace:*
+        version: link:src/agents/plugins/skill-filesystem
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:src/agents/plugins/system-prompt
@@ -50,9 +56,6 @@ importers:
       '@langchain/openai':
         specifier: ^1.5.13
         version: 1.6.2(@langchain/core@1.2.14(openai@7.27.0(zod@4.6.5)))
-      yaml:
-        specifier: ^2.9.1
-        version: 2.9.1
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -87,6 +90,12 @@ importers:
       '@fly-novel/session-persistence':
         specifier: workspace:*
         version: link:plugins/session-persistence
+      '@fly-novel/skill':
+        specifier: workspace:*
+        version: link:plugins/skill
+      '@fly-novel/skill-filesystem':
+        specifier: workspace:*
+        version: link:plugins/skill-filesystem
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:plugins/system-prompt
@@ -188,6 +197,24 @@ importers:
       '@fly-novel/session':
         specifier: workspace:*
         version: link:../session
+
+  src/agents/plugins/skill:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+
+  src/agents/plugins/skill-filesystem:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/skill':
+        specifier: workspace:*
+        version: link:../skill
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
 
   src/agents/plugins/system-prompt:
     dependencies:
