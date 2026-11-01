@@ -49,6 +49,8 @@
 
 ## 3. 创建 Skill 的相关工具
 
+详细实现顺序见 [Agent Skill 相关工具开发计划](../../modules/agents/skill-development-plan.md)。
+
 ### 要解决的问题
 
 让主 Agent 知道有哪些可用 Skill，并能在任务需要时读取相应指导内容。Skill 承载可按需使用的指导；它和工具注册执行能力、主 Agent 的专有系统提示词是不同职责。
