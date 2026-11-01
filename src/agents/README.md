@@ -13,6 +13,7 @@
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `character/plugins/system-prompt/`、`director/plugins/system-prompt/`：角色和导演的专有提示词插件独立工作区包，包含各自的 Harness 注册定义。
 - `world-initialization-main-agent/plugins/system-prompt/`：世界初始化主 Agent 的专有提示词插件独立工作区包，包含 Harness 注册定义；主 Agent 的 Preset 尚未建立。
+- `world-initialization-main-agent/skills/`：世界初始化主 Agent 的专属 Skill 内容；Skill 加载工具尚未接入。
 - `tests/`：按包运行的自动化测试。
 
 模板之间不跨目录引用业务实现；它们通过 `core/` 共享 Agent 创建与文本调用，通过 `runtime/` 共享应用模型解析和结构化输出执行能力。`index.ts` 是唯一公共导出入口。
