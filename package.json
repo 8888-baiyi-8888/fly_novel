@@ -46,7 +46,8 @@
     "@fly-novel/world-initialization-system-prompt": "workspace:*",
     "@langchain/langgraph": "^1.4.18",
     "@langchain/openai": "^1.5.13",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "yaml": "^2.9.1"
   },
   "private": true
 }

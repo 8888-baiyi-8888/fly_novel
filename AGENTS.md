@@ -25,6 +25,7 @@ src/               源码目录，包含应用组装、LLM 调用、Agent 运行
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/tools/         具体工具实现，测试放在 src/tools/tests/
+src/tools/skill/   Skill 加载工具及其文件系统提供方
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
 src/agents/        写作 Agent 工作区包；core/ 定义 Cordis Harness 实例与注册契约，runtime/ 管理装配和生命周期，plugins/ 提供 Harness 插件适配；Session、SystemPrompt 与 Agent Loop 分别位于独立工作区包；保留各业务 Agent 实现
 src/agents/world-initialization-main-agent/plugins/system-prompt/ 世界初始化主 Agent 的专有提示词插件独立工作区包
