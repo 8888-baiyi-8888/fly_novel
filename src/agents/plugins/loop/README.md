@@ -8,6 +8,8 @@
 
 Runtime 从当前 Context 的 `sessions` 创建并持有 Session。`run({ prompt })` 对应一个 Turn，`step()` 负责模型请求。配置需要 `provider` 和 `model`；有可见工具时还需由调用方提供 `workingDirectory` 作为授权工作目录。Loop 从 `systemPrompt` 和 Session 组装请求，将可见工具 schema 传给 LLM；模型返回工具调用时，Tools 服务按模型顺序串行执行并记录各调用和结果，再从 Session 派生历史进入下一 Step。单个工具失败不阻止后续调用；取消时等待已启动工具结束，并为尚未启动的调用记录取消结果。
 
+可选的 `modelStepContext` 服务在每个模型 Step 前接收当前授权工作目录和取消信号，异步返回附加的系统上下文；异常会终止本次 Turn，模型请求不会发送。Loop 将返回文本附加到当前系统提示词并使用既有 `system/message` 事件记录；空文本不会保留上次的附加内容。此服务由需要它的插件提供，Agent 不继承根 Context 的同名服务。Session 事件格式和持久化版本不变。
+
 Loop 配置可指定 `sessionId` 新建持久化会话，或指定 `resumeSessionId` 恢复已有会话；两个字段互斥，必须通过应用装配 `sessionPersistence` 后端。新建遇到已存在的 ID、恢复遇到不存在的 ID 时拒绝创建 Agent。不指定这两个字段时使用原有内存会话。恢复时为未结束的 Turn 补齐缺失工具结果、Step 和 `interrupted` Turn 结束事件，再重建 Session；已记录开始而无结果的工具标为结果未知，不自动重试。未记录开始的调用只有在会话声明工具检查点时才标为未开始，否则保守标为结果未知。可通过 `agent.context.sessions.list()` 获取当前 Session ID。Agent 销毁时等待 Session 关闭和写句柄释放。调试步骤见[持久化调试](../../../../docs/cookbook/session-persistence-debug.md)。
 
 

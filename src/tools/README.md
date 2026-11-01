@@ -6,6 +6,8 @@
 
 Skill 来源注册和查询由 [`@fly-novel/skill`](../agents/plugins/skill/README.md) 提供，文件系统来源由 [`@fly-novel/skill-filesystem`](../agents/plugins/skill-filesystem/README.md) 提供。模型工具会拒绝调用被禁止模型调用的 Skill。`read_file` 的授权范围由其工作目录决定；Skill 返回的资源目录不会自动收紧该范围。
 
-Skill 服务、文件系统提供方和工具分别参考 [DeepSeek Harness Skill 服务](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/skill/README.md)、[文件系统提供方](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/skill-filesystem/README.md)和[工具](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/tool-skill/src/index.ts)。与上游不同，目前不实现来源优先级、不完整目录、缓存、文件监听、扁平 Markdown、默认搜索目录或会话目录发布。YAML 元信息使用 `yaml` 解析，该依赖采用 ISC 许可证。
+装配 `skill-tool` 后，每个模型 Step 前查询本实例的 Skill 来源，将允许模型调用的名称和用途作为 `<available_skills>` 摘要附加到系统消息，不提前发送正文；当工具不再可见或没有可用 Skill 时不展示目录。来源查询失败会终止本次请求，不把失败当作空目录。目录每次查询，不缓存；目录变化和空目录会替换后续请求中的旧内容。摘要随既有系统消息记录，恢复会话后在下次请求前重新查询，文件内容不会自动随构建产物分发。
+
+Skill 服务、文件系统提供方和工具分别参考 [DeepSeek Harness Skill 服务](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/skill/README.md)、[文件系统提供方](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/skill-filesystem/README.md)和[工具](https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/packages/skill/tool-skill/src/index.ts)。上游使用独立的持久化用户消息和目录变更事件；本项目使用现有系统消息，每个 Step 重新生成。当前不实现来源优先级、不完整目录、缓存、文件监听、扁平 Markdown、默认搜索目录或用户显式调用 Skill。YAML 元信息使用 `yaml` 解析，该依赖采用 ISC 许可证。
 
 `defineTool` 将参数声明转换为模型可见的 JSON Schema，执行前校验参数，并声明规范输出与模型内容投影。服务执行工具后校验输出 schema，返回规范值与模型可见内容。schema 编译和校验的来源及许可证见[工具插件说明](../agents/plugins/tools/README.md)；模型可见 schema 不包含 `output` 和 `execute`。工具可直接调用，也可显式注册到 Agent 的 `tools` 服务。逐步调试见[工具调试指南](../../docs/cookbook/tool-debug.md)。

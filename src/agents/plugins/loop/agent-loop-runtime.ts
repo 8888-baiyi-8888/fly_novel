@@ -166,7 +166,10 @@ export class AgentLoopRuntime implements AgentLoop {
     this.session.append('step/start', { turn, step })
     try {
       if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
-      const systemPrompt = renderPrompt(this.context.systemPrompt.assemble())
+      const prompt = renderPrompt(this.context.systemPrompt.assemble())
+      const extra = await this.context.get('modelStepContext')?.prepare({ workingDirectory: this.config.workingDirectory, signal: abort.signal })
+      if (abort.signal.aborted) throw new LlmError('Agent Loop 已取消', 'ABORTED')
+      const systemPrompt = [prompt, extra].filter((part): part is string => !!part).join('\n\n')
       const previousSystemPrompt = this.session.deriveMessages().some(({ role }) => role === 'system')
       if (systemPrompt.length > 0 || previousSystemPrompt) {
         this.session.append('system/message', {

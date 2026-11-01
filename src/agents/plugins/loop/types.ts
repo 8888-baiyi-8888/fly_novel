@@ -19,8 +19,14 @@ export interface AgentLoop {
   dispose(): Promise<void>
 }
 
+/** 每个模型 Step 前提供额外上下文；失败时阻止发送请求。 */
+export interface ModelStepContext {
+  prepare(options: { readonly workingDirectory: string | undefined; readonly signal: AbortSignal }): Promise<string>
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     agentLoop: AgentLoop
+    modelStepContext: ModelStepContext
   }
 }
