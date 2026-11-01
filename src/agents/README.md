@@ -2,7 +2,7 @@
 
 小说创作 Agent 的私有 pnpm 工作区包，设计契约见[写作 Agent 模块设计](../../docs/modules/agents/agents.md)。公共入口为 `index.ts`，导入不创建 Agent 或发起网络请求。
 
-各模板的输入、处理逻辑与外部调用草案见[角色](../../docs/modules/agents/character-agent.md)、[导演](../../docs/modules/agents/director-agent.md)、[写作](../../docs/modules/agents/writer-agent.md)、[审计](../../docs/modules/agents/audit-agent.md)和[内容审查](../../docs/modules/agents/censor-agent.md)详细设计；文档示例不是当前可运行接口。
+各模板的输入、处理逻辑与外部调用草案见[角色](../../docs/modules/agents/character-agent.md)、[导演](../../docs/modules/agents/director-agent.md)和[写作](../../docs/modules/agents/writer-agent.md)详细设计；文档示例不是当前可运行接口。
 
 ## 源码布局
 
@@ -10,7 +10,7 @@
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
 - `plugins/`：Harness 的 memory、LLM 服务与插件注册；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中。
 - `plugins/tools/`：独立工作区包 `@fly-novel/tools`，提供工具定义与注册执行服务；具体工具见[工具目录](../tools/README.md)。
-- `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
+- `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `character/plugins/system-prompt/`、`director/plugins/system-prompt/`：角色和导演的专有提示词插件独立工作区包，包含各自的 Harness 注册定义。
 - `world-initialization-main-agent/plugins/system-prompt/`：世界初始化主 Agent 的专有提示词插件独立工作区包，包含 Harness 注册定义；主 Agent 的 Preset 尚未建立。
 - `tests/`：按包运行的自动化测试。
@@ -80,16 +80,14 @@ void main()
 
 ## 构建与引用
 
-公共入口导出抽象基类 `BaseAgent`，以及 `WriterAgent`、`AuditAgent`、`CensorAgent`。这些 Agent 接收应用创建的模型实例，并通过 `generate(content)` 调用 Deep Agents。角色和导演 Agent 的创建方式见上方 Cordis Harness 说明。基础使用方式：
+公共入口导出抽象基类 `BaseAgent` 和 `WriterAgent`。写作 Agent 接收应用创建的模型实例，并通过 `generate(content)` 调用 Deep Agents。角色和导演 Agent 的创建方式见上方 Cordis Harness 说明。基础使用方式：
 
 ```ts
-import { WriterAgent, AuditAgent, CensorAgent } from "@fly-novel/agents";
+import { WriterAgent } from "@fly-novel/agents";
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 
 declare const model: BaseLanguageModel; // 由应用配置模型与 API 凭据后创建
 const writer = new WriterAgent({ model });
-const audit = new AuditAgent({ model });
-const censor = new CensorAgent({ model });
 ```
 
 在仓库根目录执行：

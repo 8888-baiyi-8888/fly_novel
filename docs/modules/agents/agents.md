@@ -26,7 +26,7 @@
 
 角色“林舟”和“苏晴”使用同一角色模板，差异来自各自的资料和状态。角色的长期身份不依赖一个长期驻留的 JavaScript 对象或无限累积的消息历史。角色状态有变化时，通过下一次运行输入体现。
 
-Deep Agents 模板入口为 `WriterAgent`、`AuditAgent` 和 `CensorAgent`，由应用创建模型并注入。角色和导演 Agent 使用 Cordis Harness 的 Preset 创建实例，其边界和用法见[Agent 包说明](../../../src/agents/README.md#cordis-harness)。
+Deep Agents 模板入口为 `WriterAgent`，由应用创建模型并注入。角色和导演 Agent 使用 Cordis Harness 的 Preset 创建实例，其边界和用法见[Agent 包说明](../../../src/agents/README.md#cordis-harness)。
 
 ## 五类模板契约
 
@@ -71,20 +71,6 @@ Deep Agents 模板入口为 `WriterAgent`、`AuditAgent` 和 `CensorAgent`，由
 输入包括写作或改稿任务、场景计划、人物表现、相关前文、叙述视角、文风、篇幅要求和必须保留的内容。改稿任务必须提供待改正文与修改范围。
 
 输出包括正文草稿，以及影响采用结果的待确认问题；正文和说明分开。写作 Agent 可以进行符合材料的语言表达和衔接，不擅自改变明确约束；需要新增关键设定或改变剧情事实时列出待确认项。采用限制视角时，不把不可见的其他人物内心直接写为视角人物的认知。
-
-### 审计 Agent
-
-作用：根据 Dispatch、角色模拟、场景表和正文，检查伏笔落实、角色限制与事实一致性，不直接改写正文。
-
-具体检查规则与调用方式见[审计 Agent 详细设计](audit-agent.md)。
-
-输入包括正文、Dispatch 拍摄单、场景表、角色模拟和事实材料。报告以 `PASS` 或 `FAIL` 开头；问题必须给出文本依据、关联约束或事实、影响和修订方向，证据不足时标为无法判断。
-
-### 内容审查 Agent
-
-作用：按调用方提供的平台规范审查正文，不直接改写待审内容。
-
-具体审查规则与调用方式见[内容审查 Agent 详细设计](censor-agent.md)。审查范围限于提供的规范，不自行扩展规则；报告以 `PASS` 或 `FAIL` 开头，违规项包含可定位依据和修改建议。
 
 ## 信息输入与提示词组装
 
@@ -159,7 +145,7 @@ Agent 输出携带或关联本次输入依据的版本，版本标识由调用�
 
 代码归属为独立工作区包 `@fly-novel/agents`，包边界与构建方式见[包说明](../../../src/agents/README.md)。测试归属为 `src/agents/tests/`。Deep Agents 模板与 Cordis Harness 分别通过各自入口创建，Harness 的 mock 插件不承担真实业务执行。
 
-基础代码通过抽象 `BaseAgent` 和直接继承它的 `WriterAgent`、`AuditAgent`、`CensorAgent` 表达模板关系，由包公共入口导出。`BaseAgent` 负责创建 Deep Agent，并提供把文本作为 user message 提交的受保护调用方法；模板类传入模型、系统提示词及必要的框架配置。各模板分别拥有自己的提示词和职责边界。
+基础代码通过抽象 `BaseAgent` 和直接继承它的 `WriterAgent` 表达模板关系，由包公共入口导出。`BaseAgent` 负责创建 Deep Agent，并提供把文本作为 user message 提交的受保护调用方法；写作 Agent 传入模型、系统提示词及必要的框架配置。
 
 新增模板的要求：说明独立职责，定义必要输入和可验证输出，声明工具范围，实现独立调用，补充拒绝路径及验收用例，更新文档索引。修改现有模板契约时同步调用方；未知模板标识明确拒绝，不回退到其他类型。
 
