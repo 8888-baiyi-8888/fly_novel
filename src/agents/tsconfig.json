@@ -5,9 +5,10 @@
     "paths": {
       "@fly-novel/agents": ["./index.ts"],
       "@fly-novel/agent-loop": ["./plugins/loop/index.ts"],
-      "@fly-novel/system-prompt": ["./plugins/system-prompt/index.ts"]
+      "@fly-novel/system-prompt": ["./plugins/system-prompt/index.ts"],
+      "@fly-novel/world-initialization-system-prompt": ["./world-initialization-main-agent/plugins/system-prompt/index.ts"]
     }
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "plugins/session", "plugins/session-persistence", "plugins/system-prompt", "plugins/tools"]
+  "exclude": ["node_modules", "dist", "plugins/session", "plugins/session-persistence", "plugins/system-prompt", "plugins/tools", "world-initialization-main-agent/plugins/system-prompt"]
 }

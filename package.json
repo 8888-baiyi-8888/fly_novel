@@ -44,6 +44,7 @@
     "@fly-novel/system-prompt": "workspace:*",
     "@fly-novel/tools": "workspace:*",
     "@fly-novel/util": "workspace:*",
+    "@fly-novel/world-initialization-system-prompt": "workspace:*",
     "@langchain/langgraph": "^1.4.18",
     "@langchain/openai": "^1.5.13",
     "zod": "^4.6.5"

@@ -28,6 +28,7 @@
     "@fly-novel/system-prompt": "workspace:*",
     "@fly-novel/tools": "workspace:*",
     "@fly-novel/util": "workspace:*",
+    "@fly-novel/world-initialization-system-prompt": "workspace:*",
     "@langchain/core": "^1.2.12",
     "@langchain/langgraph": "^1.4.18",
     "@langchain/langgraph-checkpoint": "^1.1.5",

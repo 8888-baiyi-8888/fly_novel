@@ -6,6 +6,7 @@ packages:
   - 'src/agents/plugins/loop'
   - 'src/agents/plugins/tools'
   - 'src/agents/plugins/system-prompt'
+  - 'src/agents/world-initialization-main-agent/plugins/system-prompt'
   - 'src/util'
   - src/agents
 allowBuilds:
