@@ -2,7 +2,7 @@
 
 在 VS Code 的“运行和调试”中选择“调试角色系统提示词”并按 F5。启动配置先编译测试，使用固定 LLM Adapter，不需要模型配置或网络。
 
-在[测试](../../src/agents/tests/character-system-prompt.test.ts)创建角色和导演实例的位置、[角色提示词插件](../../src/agents/character/system-prompt-plugin.ts)的 `section` 注册，以及 [Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)组装提示词的位置设置断点。观察两个角色各自的 `systemPrompt`、发送给模型的 `messages`、导演实例的提示词段和角色实例销毁后的服务状态。
+在[测试](../../src/agents/tests/character-system-prompt.test.ts)创建角色和导演实例的位置、[角色提示词插件](../../src/agents/character/plugins/system-prompt/plugin.ts)的 `section` 注册，以及 [Agent Loop](../../src/agents/plugins/loop/agent-loop-runtime.ts)组装提示词的位置设置断点。观察两个角色各自的 `systemPrompt`、发送给模型的 `messages`、导演实例的提示词段和角色实例销毁后的服务状态。
 
 在仓库根目录也可运行：
 

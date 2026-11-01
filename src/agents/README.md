@@ -8,10 +8,11 @@
 
 - `core/`：Deep Agent 基类、Cordis Harness 的实例 handle、注册表、契约和 bootstrap。
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
-- `plugins/`：Harness 的 memory、LLM 服务与插件注册适配；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中，Harness 注册定义由本包适配。
+- `plugins/`：Harness 的 memory、LLM 服务与插件注册；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中。
 - `plugins/tools/`：独立工作区包 `@fly-novel/tools`，提供工具定义与注册执行服务；具体工具见[工具目录](../tools/README.md)。
 - `character/`、`director/`、`writer/`、`audit/`、`censor/`：各模板的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
-- `world-initialization-main-agent/plugins/system-prompt/`：世界初始化主 Agent 的专有提示词插件独立工作区包；Harness 注册定义位于其父目录，主 Agent 的 Preset 尚未建立。
+- `character/plugins/system-prompt/`、`director/plugins/system-prompt/`：角色和导演的专有提示词插件独立工作区包，包含各自的 Harness 注册定义。
+- `world-initialization-main-agent/plugins/system-prompt/`：世界初始化主 Agent 的专有提示词插件独立工作区包，包含 Harness 注册定义；主 Agent 的 Preset 尚未建立。
 - `tests/`：按包运行的自动化测试。
 
 模板之间不跨目录引用业务实现；它们通过 `core/` 共享 Agent 创建与文本调用，通过 `runtime/` 共享应用模型解析和结构化输出执行能力。`index.ts` 是唯一公共导出入口。
@@ -24,7 +25,7 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 角色和导演 Preset 均装配真实 `agent-loop-runtime`、`system-prompt`、`llm` 与 `session`。创建 Agent 时，应用须通过 `pluginConfigs['agent-loop-runtime']` 提供 `provider`、`model`，并通过 `pluginConfigs.llm` 提供 `{ adapters: [{ providers: [provider], adapter }] }`。`llmPluginDefinition` 在该 Agent 的 Context 中提供独立 LLM 服务，并随插件作用域注销路由。配置和凭据由应用入口读取，插件只接收已创建的适配器。
 
-`systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供；Harness 注册定义保留在本包。
+`systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件、注册定义与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供。
 
 `@fly-novel/session-persistence` 定义 `sessionPersistence` 服务及会话句柄契约；`JsonlSessionPersistence` 提供 JSONL 文件后端。后端须显式指定绝对 `root`，按编码后的 Session ID 分目录保存项目格式 `session.v2.jsonl`；读取旧 v1 文件，写打开时保留 v1 并建立 v2。读取不完整尾部时只返回完整记录，写打开时截断尾部；完整记录无效或版本不支持时拒绝读取。写句柄创建后，后端接收同 ID 的 Session 事件并顺序写入，`sessions.flush(session)` 等待写入并报告失败。Agent Loop 可通过 `sessionId` 新建或 `resumeSessionId` 恢复持久化会话，应用负责装配后端；文件格式与官方格式不兼容。接口和调试方式见[会话持久化调试](../../docs/cookbook/session-persistence-debug.md)。
 

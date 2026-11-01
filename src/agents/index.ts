@@ -34,5 +34,5 @@ export {
   type PromptVariableProvider,
   type SystemPromptPluginConfig,
 } from '@fly-novel/system-prompt'
-export { systemPromptPluginDefinition } from './plugins/system-prompt-plugin.js'
+export { systemPromptPluginDefinition } from '@fly-novel/system-prompt'
 export type { AgentMemory, MockMemoryConfig } from './plugins/memory/index.js'

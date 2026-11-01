@@ -29,6 +29,12 @@
       "@fly-novel/system-prompt": [
         "./src/agents/plugins/system-prompt/index.ts"
       ],
+      "@fly-novel/character-system-prompt": [
+        "./src/agents/character/plugins/system-prompt/index.ts"
+      ],
+      "@fly-novel/director-system-prompt": [
+        "./src/agents/director/plugins/system-prompt/index.ts"
+      ],
       "@fly-novel/world-initialization-system-prompt": [
         "./src/agents/world-initialization-main-agent/plugins/system-prompt/index.ts"
       ],

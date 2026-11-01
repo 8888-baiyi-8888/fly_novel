@@ -1,1 +1,1 @@
-export { worldInitializationSystemPromptPlugin } from './plugin.js'
+export { worldInitializationSystemPromptPlugin, worldInitializationSystemPromptPluginDefinition } from './plugin.js'

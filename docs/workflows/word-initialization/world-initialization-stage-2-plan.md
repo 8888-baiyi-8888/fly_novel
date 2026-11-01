@@ -39,7 +39,7 @@
 
 ### 开发内容
 
-- 参考现有[导演 Agent 提示词插件](../../../src/agents/director/system-prompt-plugin.ts)，通过项目的 SystemPrompt 服务注册主 Agent 专有提示词。
+- 参考现有[导演 Agent 提示词插件](../../../src/agents/director/plugins/system-prompt/plugin.ts)，通过项目的 SystemPrompt 服务注册主 Agent 专有提示词。
 - 明确插件依赖、注册定义以及加入现有插件注册表的方式；插件作用域结束时清理其注册内容。
 - 保持提示词插件与后续 Skill 工具的职责清晰；Skill 工具的创建与装配在后续步骤处理。
 

@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { AgentPluginDefinition } from '../core/contracts/agent.js'
+import type {} from '@fly-novel/system-prompt'
 
 /** 为角色 Agent 注册角色职责提示词，随插件作用域注销。 */
 export const characterSystemPromptPlugin = Object.assign(function characterSystemPromptPlugin(ctx: Context): void {
@@ -10,7 +10,8 @@ export const characterSystemPromptPlugin = Object.assign(function characterSyste
   }))
 }, { inject: ['systemPrompt'] })
 
-export const characterSystemPromptPluginDefinition: AgentPluginDefinition = {
+/** 角色提示词插件的 Harness 注册定义。 */
+export const characterSystemPromptPluginDefinition = {
   id: 'character-system-prompt',
   version: '1.0.0',
   description: '注册角色 Agent 的系统提示词',

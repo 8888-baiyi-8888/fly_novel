@@ -27,3 +27,11 @@ export const worldInitializationSystemPromptPlugin = Object.assign(function worl
   }))
 }, { inject: ['systemPrompt'] })
 
+/** 世界初始化主 Agent 提示词插件的 Harness 注册定义。 */
+export const worldInitializationSystemPromptPluginDefinition = {
+  id: 'world-initialization-system-prompt',
+  version: '1.0.0',
+  description: '注册世界初始化主 Agent 的系统提示词',
+  plugin: worldInitializationSystemPromptPlugin,
+}
+

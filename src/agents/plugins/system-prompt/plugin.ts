@@ -18,3 +18,12 @@ export const systemPromptPlugin = Object.assign(function systemPromptPlugin(
   ctx.provide('systemPrompt', systemPrompt)
   ctx.effect(() => () => systemPrompt.dispose())
 }, { provide: 'systemPrompt' })
+
+/** SystemPrompt 插件的 Harness 注册定义。 */
+export const systemPromptPluginDefinition = {
+  id: 'system-prompt',
+  version: '1.0.0',
+  description: '为 Agent 实例提供系统提示词注册与组装服务',
+  plugin: systemPromptPlugin,
+  defaultConfig: {},
+}

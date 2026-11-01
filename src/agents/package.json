@@ -22,6 +22,8 @@
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
     "@fly-novel/agent-loop": "workspace:*",
+    "@fly-novel/character-system-prompt": "workspace:*",
+    "@fly-novel/director-system-prompt": "workspace:*",
     "@fly-novel/llm": "workspace:*",
     "@fly-novel/session": "workspace:*",
     "@fly-novel/session-persistence": "workspace:*",

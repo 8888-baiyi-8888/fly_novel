@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { AgentPluginDefinition } from '../core/contracts/agent.js'
+import type {} from '@fly-novel/system-prompt'
 
 /** 为导演 Agent 注册导演职责提示词，随插件作用域注销。 */
 export const directorSystemPromptPlugin = Object.assign(function directorSystemPromptPlugin(ctx: Context): void {
@@ -10,7 +10,8 @@ export const directorSystemPromptPlugin = Object.assign(function directorSystemP
   }))
 }, { inject: ['systemPrompt'] })
 
-export const directorSystemPromptPluginDefinition: AgentPluginDefinition = {
+/** 导演提示词插件的 Harness 注册定义。 */
+export const directorSystemPromptPluginDefinition = {
   id: 'director-system-prompt',
   version: '1.0.0',
   description: '注册导演 Agent 的系统提示词',

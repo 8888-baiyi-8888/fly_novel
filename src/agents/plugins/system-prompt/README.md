@@ -1,6 +1,6 @@
 # @fly-novel/system-prompt
 
-通用 SystemPrompt 对象和 Cordis 服务插件。该包负责提示词 Section、变量、组装与渲染，不依赖 `@fly-novel/agents`；Harness 插件注册定义由 Agents 包提供。
+通用 SystemPrompt 对象和 Cordis 服务插件。该包负责提示词 Section、变量、组装与渲染，并提供 Harness 插件注册定义，不依赖 `@fly-novel/agents`。
 
 ## 独立使用
 
@@ -14,7 +14,7 @@ const text = renderPrompt(prompt.assemble())
 
 ## Cordis 服务
 
-`systemPromptPlugin` 为当前 Cordis Context 提供 `systemPrompt` 服务，并在插件销毁时释放提示词注册。Harness 消费方使用 `@fly-novel/agents` 提供的 `systemPromptPluginDefinition` 注册插件并由 Preset 选择。
+`systemPromptPlugin` 为当前 Cordis Context 提供 `systemPrompt` 服务，并在插件销毁时释放提示词注册。Harness 消费方使用本包提供的 `systemPromptPluginDefinition` 注册插件并由 Preset 选择。
 
 ## 构建
 

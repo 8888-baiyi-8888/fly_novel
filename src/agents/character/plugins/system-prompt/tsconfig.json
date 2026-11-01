@@ -1,0 +1,11 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@fly-novel/character-system-prompt": ["./index.ts"],
+      "@fly-novel/system-prompt": ["../../../plugins/system-prompt/index.ts"]
+    }
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

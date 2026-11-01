@@ -1,9 +1,9 @@
 {
   "extends": "../../../../../tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
     "paths": {
-      "@fly-novel/world-initialization-system-prompt": ["./index.ts"]
+      "@fly-novel/world-initialization-system-prompt": ["./index.ts"],
+      "@fly-novel/system-prompt": ["../../../plugins/system-prompt/index.ts"]
     }
   },
   "include": ["**/*.ts"],

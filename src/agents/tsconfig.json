@@ -6,9 +6,11 @@
       "@fly-novel/agents": ["./index.ts"],
       "@fly-novel/agent-loop": ["./plugins/loop/index.ts"],
       "@fly-novel/system-prompt": ["./plugins/system-prompt/index.ts"],
+      "@fly-novel/character-system-prompt": ["./character/plugins/system-prompt/index.ts"],
+      "@fly-novel/director-system-prompt": ["./director/plugins/system-prompt/index.ts"],
       "@fly-novel/world-initialization-system-prompt": ["./world-initialization-main-agent/plugins/system-prompt/index.ts"]
     }
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "plugins/session", "plugins/session-persistence", "plugins/system-prompt", "plugins/tools", "world-initialization-main-agent/plugins/system-prompt"]
+  "exclude": ["node_modules", "dist", "plugins/session", "plugins/session-persistence", "plugins/system-prompt", "plugins/tools", "character/plugins/system-prompt", "director/plugins/system-prompt", "world-initialization-main-agent/plugins/system-prompt"]
 }
