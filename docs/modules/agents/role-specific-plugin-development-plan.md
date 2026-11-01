@@ -6,7 +6,7 @@
 
 复用现有 SystemPrompt 服务，逐个开发各 Agent 的系统提示词插件，通过现有 Preset 选择对应插件，并检查旧入口与新调用方式的衔接。提示词注册归当前 Agent 作用域，销毁时清理。
 
-当前 `character-agent` 和 `director-agent` Preset 已装配基础服务，并含示例 memory 插件；它们尚未装配角色或导演专有提示词。现有 `CharacterAgent`、`DirectorAgent` 仍使用独立的旧执行路径，不能把它们的能力视作已接入 Harness。旧小说数据及其读取和存储方式不作为本计划的可靠前提；工具计划中的[第 9 步](tool-plugin-development-plan.md)暂缓，待具体数据和应用场景确定后再设计。
+`character-agent` 和 `director-agent` Preset 已装配基础服务、专有提示词及示例 memory 插件。`DirectorAgent` 仍使用独立的 Deep Agents 执行路径，其能力不能视作已接入 Harness。旧小说数据及其读取和存储方式不作为本计划的可靠前提；工具计划中的[第 9 步](tool-plugin-development-plan.md)暂缓，待具体数据和应用场景确定后再设计。
 
 ## 官方参考与项目边界
 
@@ -34,7 +34,7 @@
 
 **4. 检查旧入口与新调用方式的衔接**
 
-对照现有旧 Agent 的实际调用方和 Harness 的调用方式，列出入口、输入输出、生命周期及尚未覆盖的业务能力差异，重点检查 Character Agent。说明后续调用方如何衔接及尚需确定的问题；本步只做检查，不实施迁移。未经确认不删除或替换旧入口，不把示例 memory 当作正式角色记忆。
+对照现有 Deep Agents 模板的实际调用方和 Harness 的调用方式，列出入口、输入输出、生命周期及尚未覆盖的业务能力差异。说明后续调用方如何衔接及尚需确定的问题；本步只做检查，不实施迁移。未经确认不删除或替换旧入口，不把示例 memory 当作正式角色记忆。
 
 ## 不在本计划中提前实现
 

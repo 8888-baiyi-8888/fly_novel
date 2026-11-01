@@ -45,7 +45,7 @@ Preset 声明 `{ pluginId: 'tools' }` 后，Agent Context 获得独立的 `tools
 
 逐步检查注册、装配、路由隔离和清理时，使用[LLM 插件调试步骤](../../docs/cookbook/llm-plugin-debug.md)。
 
-角色插件样例定义在 `character/example-memory-plugin.ts`，由 `character/plugins.ts` 导出、`plugins/index.ts` 汇总注册，再由 `character/preset.ts` 按 ID 装配。它提供仅在当前 Harness Agent 实例中保存字符串的 `characterExampleMemory` 服务，不接入独立的 `CharacterAgent` 业务类，也不持久化数据。
+角色插件样例定义在 `character/example-memory-plugin.ts`，由 `character/plugins.ts` 导出、`plugins/index.ts` 汇总注册，再由 `character/preset.ts` 按 ID 装配。它提供仅在当前 Harness Agent 实例中保存字符串的 `characterExampleMemory` 服务，不持久化数据。
 
 ```ts
 import { bootstrapAgents } from '@fly-novel/agents'
@@ -80,32 +80,18 @@ void main()
 
 ## 构建与引用
 
-公共入口导出抽象基类 `BaseAgent`，以及 `CharacterAgent`、`CharacterAgentManager`、`DirectorAgent`、`WriterAgent`、`AuditAgent`、`CensorAgent`。`CharacterAgentManager` 按小说内的角色 ID 缓存实例，达到容量上限时淘汰最久未使用的实例；章节驱动在一次运行结束后调用 `clear()`。章节模拟把角色档案和当前状态作为 `characterInfos` 提供给对应角色 Agent，不要求复制到旧版 `novel_data` 目录。`CharacterAgent` 通过应用启动时注册的模型解析器调用 Deep Agents；导演、写作、审计和内容审查 Agent 接收应用创建的模型实例，并通过 `generate(content)` 调用 Deep Agents。它们不读取应用配置或凭据，也不读写文件。基础使用方式：
+公共入口导出抽象基类 `BaseAgent`，以及 `DirectorAgent`、`WriterAgent`、`AuditAgent`、`CensorAgent`。这些 Agent 接收应用创建的模型实例，并通过 `generate(content)` 调用 Deep Agents。角色 Agent 的创建方式见上方 Cordis Harness 说明。基础使用方式：
 
 ```ts
-import { CharacterAgent, DirectorAgent, WriterAgent, AuditAgent, CensorAgent } from "@fly-novel/agents";
+import { DirectorAgent, WriterAgent, AuditAgent, CensorAgent } from "@fly-novel/agents";
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 
-const character = new CharacterAgent({
-  modelId: "default",
-  storyId: "novel-river",
-  branchId: "main",
-  characterId: "character-lin-zhou",
-});
 declare const model: BaseLanguageModel; // 由应用配置模型与 API 凭据后创建
 const director = new DirectorAgent({ model });
 const writer = new WriterAgent({ model });
 const audit = new AuditAgent({ model });
 const censor = new CensorAgent({ model });
 ```
-
-应用启动时调用 `configureAgentRuntime({ resolveModel, characterDataDirectory, characterMemoryDirectory })` 注册模型解析器、小说数据根目录和记忆根目录。`CharacterAgent` 初始化时加载一次该角色的全部记忆，并在后续运行中复用及更新内存副本。`sceneId` 只用于将本轮经历归档到 `<根目录>/<storyId>/character_agent/<branchId>/<characterId>/memory/<sceneId>.json`，同一场景多轮记录追加到同一文件。通过 `CharacterMemory.getAllMemories({ storyId, branchId, characterId })` 查询持久化的全部记忆。框架创建和调用函数位于 `runtime/`，不从包入口导出，不读取应用配置或凭据。会话边界见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。
-
-创建 `CharacterAgent` 时只提供小说与角色 ID。应用启动时通过 `configureAgentRuntime` 注册小说数据根目录，系统提示词模块按固定目录结构读取 `<数据根目录>/<storyId>/world-background.md` 和 `<数据根目录>/<storyId>/character_agent/<branchId>/<characterId>/profile.md`，并在构造阶段初始化 `system_prompts`。
-
-调用方通过 `run({ sceneId, scene, responseFormat: schema })` 提供稳定场景 ID、当前场景和 Zod 对象 Schema，自行定义输出字段；Agent 没有内置字段枚举或预设输出结构。模型调用中间件支持每轮不同 Schema。使用 `result.structuredResponse` 读取通过结构校验的结果，返回类型从外部 Schema 推导。调用样例及错误语义见[角色对外入口](../../docs/modules/agents/character-agent.md#31-对外入口)。业务一致性校验与结构校验分开。
-
-可使用根项目的 `pnpm run character-agent-example` 手动调试同一实例的连续两轮模型调用。该入口负责读取本机 DeepSeek 配置与凭据，模型创建不属于 Agent 包。
 
 在仓库根目录执行：
 

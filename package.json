@@ -8,7 +8,6 @@
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && pnpm run build:packages && tsc -p tsconfig.build.json",
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
-    "character-agent-example": "pnpm run build && node dist/app/character-agent-example.js",
     "agent-harness-debug": "pnpm run build && node dist/app/agent_harness.js",
     "director-agent-example": "pnpm run build && node dist/app/director-agent-example.js",
     "writer-agent-example": "pnpm run build && node dist/app/writer-agent-example.js",

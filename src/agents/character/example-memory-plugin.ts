@@ -17,7 +17,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** 演示角色模块如何提供独立服务；不接入现有 CharacterAgent 业务类。 */
+/** 演示角色模块如何提供独立服务。 */
 export const characterExampleMemoryPlugin = Object.assign(function characterExampleMemoryPlugin(
   ctx: Context,
   config: CharacterExampleMemoryConfig = {},
