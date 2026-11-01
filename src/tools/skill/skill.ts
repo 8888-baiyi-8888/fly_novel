@@ -1,16 +1,13 @@
 import { defineTool } from '@fly-novel/tools'
-import { FilesystemSkillProvider } from '@fly-novel/skill-filesystem'
-import { SkillService } from '@fly-novel/skill'
+import type { SkillService } from '@fly-novel/skill'
 
 /**
  * 创建按名称加载 Skill 的工具。
- * @param root 可信调用方提供的绝对 Skill 根目录，运行时须位于授权工作目录中。
+ * @param skills 可信调用方提供的 Skill 服务；其来源由调用方装配并管理。
  * @returns 可注册到 ToolsService 的 `skill` 工具。
- * @throws 根目录不是绝对路径时抛错；加载失败以工具执行错误返回。
+ * @throws 加载失败以工具执行错误返回。
  */
-export function createSkillTool(root: string) {
-  const skills = new SkillService()
-  skills.registerProvider(new FilesystemSkillProvider(root))
+export function createSkillTool(skills: SkillService) {
   return defineTool({
     name: 'skill',
     description: '按名称加载可用 Skill 的完整指导内容',

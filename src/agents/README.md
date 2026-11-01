@@ -29,7 +29,7 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件、注册定义与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供。
 
-`skills` 和 `skill-filesystem` 插件定义已加入内置注册表，但没有加入现有 Agent 的 Preset。显式装配时，`skills` 提供独立的 Skill 服务，`skill-filesystem` 需要可信调用方配置绝对 `root` 并向服务注册来源；作用域销毁时分别关闭服务和注销来源。正式世界初始化主 Agent 的来源绑定及模型目录发布尚未完成。
+`skills` 和 `skill-filesystem` 插件定义已加入内置注册表，但没有加入现有 Agent 的 Preset。显式装配时，`skills` 提供独立的 Skill 服务，`skill-filesystem` 需要可信调用方配置绝对 `root` 并向服务注册来源；作用域销毁时分别关闭服务和注销来源。Skill 和工具服务不会从根 Context 继承注册。应用可将[具体 Skill 工具插件](../tools/skill/plugin.ts)注册到 Harness，再由 Preset 选择 `tools`、`skills`、`skill-filesystem` 和 `skill-tool`；后者使用同一实例的 Skill 服务，并在销毁时注销工具。正式世界初始化主 Agent 的 Preset 和模型目录发布尚未完成。
 
 `@fly-novel/session-persistence` 定义 `sessionPersistence` 服务及会话句柄契约；`JsonlSessionPersistence` 提供 JSONL 文件后端。后端须显式指定绝对 `root`，按编码后的 Session ID 分目录保存项目格式 `session.v2.jsonl`；读取旧 v1 文件，写打开时保留 v1 并建立 v2。读取不完整尾部时只返回完整记录，写打开时截断尾部；完整记录无效或版本不支持时拒绝读取。写句柄创建后，后端接收同 ID 的 Session 事件并顺序写入，`sessions.flush(session)` 等待写入并报告失败。Agent Loop 可通过 `sessionId` 新建或 `resumeSessionId` 恢复持久化会话，应用负责装配后端；文件格式与官方格式不兼容。接口和调试方式见[会话持久化调试](../../docs/cookbook/session-persistence-debug.md)。
 

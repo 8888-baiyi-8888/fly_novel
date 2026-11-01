@@ -8,12 +8,19 @@ import { ToolsService } from '@fly-novel/tools'
 import { createSkillTool } from '../skill/skill.js'
 import { readFileTool } from '../filesystem/read-file.js'
 import { FilesystemSkillProvider } from '@fly-novel/skill-filesystem'
+import { SkillService } from '@fly-novel/skill'
+
+function createSkillToolForRoot(root: string) {
+  const skills = new SkillService()
+  skills.registerProvider(new FilesystemSkillProvider(root))
+  return createSkillTool(skills)
+}
 
 test('通过 Tools 服务按名称加载世界初始化 Skill 并注销工具', async () => {
   const workspace = process.cwd()
   const root = resolve(workspace, 'src/agents/world-initialization-main-agent/skills')
   const tools = new ToolsService()
-  const unregister = tools.register(createSkillTool(root))
+  const unregister = tools.register(createSkillToolForRoot(root))
   try {
     const [result] = (await tools.execute({
       calls: [{ type: 'tool-call', id: 'skill-1' as ToolCallId, name: 'skill', arguments: '{"name":"fantasy-world-planning"}' }],
@@ -44,7 +51,7 @@ test('Skill 加载拒绝缺失、无效元信息、禁用模型调用和目录�
   await mkdir(outside)
   const tools = new ToolsService()
   t.after(() => tools.dispose())
-  tools.register(createSkillTool(root))
+  tools.register(createSkillToolForRoot(root))
   async function call(name: string) {
     const result = await tools.execute({
       calls: [{ type: 'tool-call', id: 'call' as ToolCallId, name: 'skill', arguments: JSON.stringify({ name }) }],
@@ -75,7 +82,7 @@ test('Skill 加载拒绝缺失、无效元信息、禁用模型调用和目录�
   assert.match(await call('escape'), /超出授权范围/)
   const unauthorized = new ToolsService()
   t.after(() => unauthorized.dispose())
-  unauthorized.register(createSkillTool(outside))
+  unauthorized.register(createSkillToolForRoot(outside))
   const result = await unauthorized.execute({
     calls: [{ type: 'tool-call', id: 'out' as ToolCallId, name: 'skill', arguments: '{"name":"invalid"}' }],
     signal: new AbortController().signal,
@@ -87,7 +94,7 @@ test('Skill 加载拒绝缺失、无效元信息、禁用模型调用和目录�
 
 test('Skill 工具调用在取消时不加载内容', async () => {
   const tools = new ToolsService()
-  tools.register(createSkillTool(resolve('src/agents/world-initialization-main-agent/skills')))
+  tools.register(createSkillToolForRoot(resolve('src/agents/world-initialization-main-agent/skills')))
   const controller = new AbortController()
   controller.abort()
   try {
