@@ -71,6 +71,18 @@ export class AgentInstance implements AgentHandle {
     } catch (error) {
       errors.push(error)
     }
+    // Cordis 的作用域清理会等待 effect，但不会向调用方传播 effect 的清理错误。
+    // 只关闭本 Agent 显式装配的服务，避免关闭从根 Context 继承的服务。
+    if (this.plugins.some(({ definition }) => {
+      const provided = definition.plugin.provide
+      return provided === 'subagents' || (Array.isArray(provided) && provided.includes('subagents'))
+    })) {
+      try {
+        await this.context.get('subagents')?.dispose()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
     try {
       await this.scope?.dispose()
     } catch (error) {

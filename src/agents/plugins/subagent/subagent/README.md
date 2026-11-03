@@ -10,4 +10,4 @@ Provider 在启动成功并发布运行后返回 `SubagentRun`，调用方负责
 
 `dispose()` 清空注册、取消并等待尚未交付的启动；重复调用等待同一次关闭。若 Provider 在取消后仍返回句柄，服务处理其结果拒绝并释放句柄；释放失败会报告给启动调用方和关闭调用方。Provider 在发布前必须响应取消并清理资源，否则关闭须等待其启动结算。注册注销和服务关闭不会释放已交付的运行，句柄仍由调用方负责。服务关闭后的注册、查询和启动会报错。旧注销函数不会移除后续同名注册。
 
-Cordis 插件和实际子 Agent 执行不属于本包当前入口。开发顺序见[核心服务开发计划](../../../../../docs/modules/agents/subagent-core-development-plan.md)。
+`subagentPlugin` 在当前 Cordis 作用域提供 `subagents` 服务；插件销毁时等待服务关闭。Harness 注册定义的 ID 是 `subagent`，由 Preset 显式选择。Provider 插件可通过 `inject: ['subagents']` 取得同一服务，并用 Cordis Effect 管理注册。不同 Agent 的服务与注册表相互隔离；插件不自动注册 Provider。实际子 Agent 执行见后续[核心服务开发计划](../../../../../docs/modules/agents/subagent-core-development-plan.md)。
