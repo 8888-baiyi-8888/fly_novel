@@ -13,6 +13,7 @@
     "src/llm",
     "src/harness",
     "src/util",
-    "src/agents"
+    "src/agents",
+    "src/tools/skill"
   ]
 }

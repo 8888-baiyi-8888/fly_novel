@@ -5,7 +5,6 @@ import { join, resolve } from 'node:path'
 import { test } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import { bootstrapAgents } from '../../agents/core/bootstrap.js'
-import { skillToolPluginDefinition } from '../skill/plugin.js'
 
 class SkillCallingAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
@@ -34,7 +33,6 @@ test('Skill 从实例来源发布摘要、按需加载正文并记录 Session，
   await copyFile(resolve('src/agents/world-initialization-main-agent/skills/fantasy-world-planning/SKILL.md'), join(world, 'fantasy-world-planning', 'SKILL.md'))
   await writeFile(join(character, 'character-planning', 'SKILL.md'), '---\nname: character-planning\ndescription: 规划角色\n---\n角色专属指导')
   const framework = await bootstrapAgents()
-  framework.plugins.register(skillToolPluginDefinition)
   framework.presets.register({ id: 'skill-integration', version: '1', role: 'character', plugins: [
     { pluginId: 'agent-loop-runtime' }, { pluginId: 'session' }, { pluginId: 'system-prompt' },
     { pluginId: 'llm' }, { pluginId: 'tools' }, { pluginId: 'skills' },

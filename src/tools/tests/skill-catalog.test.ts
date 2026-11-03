@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 import { bootstrapAgents } from '../../agents/core/bootstrap.js'
-import { skillToolPluginDefinition } from '../skill/plugin.js'
 
 class CaptureAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
@@ -33,7 +32,6 @@ test('模型只看到本实例的可调用摘要，目录变化和空目录会�
   await writeFile(join(rootB, 'beta', 'SKILL.md'), '---\nname: beta\ndescription: 规划角色\n---\n机密正文乙')
   const framework = await bootstrapAgents()
   t.after(() => framework.manager.disposeAll())
-  framework.plugins.register(skillToolPluginDefinition)
   framework.presets.register({ id: 'catalog-test', version: '1', role: 'character', plugins: [
     { pluginId: 'agent-loop-runtime' }, { pluginId: 'session' }, { pluginId: 'system-prompt' },
     { pluginId: 'llm' }, { pluginId: 'tools' }, { pluginId: 'skills' },
@@ -74,7 +72,6 @@ test('来源发现失败时不发送模型请求，修复后可重试', async (t
   await writeFile(join(root, 'invalid', 'SKILL.md'), '无效内容')
   const framework = await bootstrapAgents()
   t.after(() => framework.manager.disposeAll())
-  framework.plugins.register(skillToolPluginDefinition)
   framework.presets.register({ id: 'catalog-error', version: '1', role: 'character', plugins: [
     { pluginId: 'agent-loop-runtime' }, { pluginId: 'session' }, { pluginId: 'system-prompt' },
     { pluginId: 'llm' }, { pluginId: 'tools' }, { pluginId: 'skills' },

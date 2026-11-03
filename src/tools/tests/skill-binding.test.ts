@@ -9,7 +9,6 @@ import { ToolsService } from '@fly-novel/tools'
 import { FilesystemSkillProvider } from '@fly-novel/skill-filesystem'
 import { bootstrapAgents } from '../../agents/core/bootstrap.js'
 import { createTestAgent, withAgentLoop } from '../../agents/tests/agent-loop-fixtures.js'
-import { skillToolPluginDefinition } from '../skill/plugin.js'
 
 test('可信装配为不同 Agent 实例隔离来源与加载工具', async (t) => {
   const base = await mkdtemp(join(tmpdir(), 'fly-skill-binding-'))
@@ -24,7 +23,6 @@ test('可信装配为不同 Agent 实例隔离来源与加载工具', async (t) 
   await mkdir(join(roots[2]!, 'character-only'))
   await writeFile(join(roots[2]!, 'character-only', 'SKILL.md'), '---\nname: character-only\ndescription: 角色专属\n---\n角色指导')
   const framework = await bootstrapAgents()
-  framework.plugins.register(skillToolPluginDefinition)
   const bindings = withAgentLoop([{ pluginId: 'tools' }, { pluginId: 'skills' }, { pluginId: 'skill-filesystem' }, { pluginId: 'skill-tool' }])
   framework.presets.register({ id: 'world-test', version: '1', role: 'character', plugins: bindings })
   framework.presets.register({ id: 'character-test', version: '1', role: 'character', plugins: bindings })

@@ -3,7 +3,7 @@ import type { AgentLoop, AgentLoopInput, AgentLoopResult } from '@fly-novel/agen
 
 export type { AgentLoop, AgentLoopInput, AgentLoopResult } from '@fly-novel/agent-loop'
 
-export type AgentRole = 'character' | 'director' | 'writer'
+export type AgentRole = 'character' | 'director' | 'writer' | 'world-initialization-main'
 export type AgentParameters = Record<string, unknown>
 
 export interface AgentIdentity {

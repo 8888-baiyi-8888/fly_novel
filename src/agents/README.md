@@ -13,15 +13,16 @@
 - `plugins/skill/`、`plugins/skill-filesystem/`：独立工作区包，分别提供 Skill 注册查询服务和文件系统来源；各自包含 Cordis 插件及 Harness 注册定义。
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `character/plugins/system-prompt/`、`director/plugins/system-prompt/`：角色和导演的专有提示词插件独立工作区包，包含各自的 Harness 注册定义。
-- `world-initialization-main-agent/plugins/system-prompt/`：世界初始化主 Agent 的专有提示词插件独立工作区包，包含 Harness 注册定义；主 Agent 的 Preset 尚未建立。
-- `world-initialization-main-agent/skills/`：世界初始化主 Agent 的专属 Skill 内容；尚未装配到正式主 Agent。
+- `world-initialization-main-agent/preset.ts`：世界初始化主 Agent 的内置 Preset，组合提示词、Skill 及基础服务。
+- `world-initialization-main-agent/plugins/system-prompt/`：世界初始化主 Agent 的专有提示词插件独立工作区包，包含 Harness 注册定义。
+- `world-initialization-main-agent/skills/`：世界初始化主 Agent 的 Skill 样例；运行时来源由可信应用提供。
 - `tests/`：按包运行的自动化测试。
 
 模板之间不跨目录引用业务实现；它们通过 `core/` 共享 Agent 创建与文本调用，通过 `runtime/` 共享应用模型解析和结构化输出执行能力。`index.ts` 是唯一公共导出入口。
 
 ## Cordis Harness
 
-`await bootstrapAgents()` 创建 Cordis 根 Context、插件注册表、Preset 注册表、工厂和 Manager，遍历 `plugins/index.ts` 汇总的内置定义注册插件，并注册角色、导演与写作 Preset。新增内置插件时在所属模块导出注册定义，再加入汇总列表；各 Agent 的 Preset 通过插件 ID 选择所需插件。`manager.create({ id, presetId })` 创建 Agent handle，并要求 Preset 装配提供 `agentLoop` 的插件。插件按 Preset 顺序装配，Cordis 按插件的 `inject` 声明安排启动。工厂依据插件的 `provide` 元数据在每个 Agent 的 Context 中隔离服务。每个 Agent 持有一个 Cordis 父插件作用域；`agent.run()` 将输入交给该实例的 `agentLoop` 服务，memory 可通过 `agent.context.get('memory')` 单独访问。`manager.dispose(id)` 和 `manager.disposeAll()` 会等待作用域销毁；失败的初始化不会进入 Manager。
+`await bootstrapAgents()` 创建 Cordis 根 Context、插件注册表、Preset 注册表、工厂和 Manager，遍历 `plugins/index.ts` 汇总的内置定义注册插件，并注册角色、导演、写作和世界初始化主 Agent 的 Preset。新增内置插件时在所属模块导出注册定义，再加入汇总列表；各 Agent 的 Preset 通过插件 ID 选择所需插件。`manager.create({ id, presetId })` 创建 Agent handle，并要求 Preset 装配提供 `agentLoop` 的插件。插件按 Preset 顺序装配，Cordis 按插件的 `inject` 声明安排启动。工厂依据插件的 `provide` 元数据在每个 Agent 的 Context 中隔离服务。每个 Agent 持有一个 Cordis 父插件作用域；`agent.run()` 将输入交给该实例的 `agentLoop` 服务，memory 可通过 `agent.context.get('memory')` 单独访问。`manager.dispose(id)` 和 `manager.disposeAll()` 会等待作用域销毁；失败的初始化不会进入 Manager。
 
 Agent 初始化先激活父作用域，再等待所选插件及其依赖链启动；插件启动失败或依赖无法就绪时清理作用域并拒绝创建。
 
@@ -29,7 +30,39 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件、注册定义与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供。
 
-`skills` 和 `skill-filesystem` 插件定义已加入内置注册表，但没有加入现有 Agent 的 Preset。显式装配时，`skills` 提供独立的 Skill 服务，`skill-filesystem` 需要可信调用方配置绝对 `root` 并向服务注册来源；作用域销毁时分别关闭服务和注销来源。Skill 和工具服务不会从根 Context 继承注册。应用可将[具体 Skill 工具插件](../tools/skill/plugin.ts)注册到 Harness，再由 Preset 选择 `tools`、`skills`、`skill-filesystem` 和 `skill-tool`；后者使用同一实例的 Skill 服务，每个模型 Step 前提供可调用的 Skill 摘要，并在销毁时注销工具。正式世界初始化主 Agent 的 Preset 尚未完成。
+`skills`、`skill-filesystem` 和 `skill-tool` 插件定义已加入内置注册表，世界初始化主 Agent 的 Preset 装配这些插件和 `tools`。`skills` 提供独立的 Skill 服务，`skill-filesystem` 需要可信调用方配置绝对 `root` 并向服务注册来源，`skill-tool` 使用同一实例的服务并在每个模型 Step 前提供可调用的 Skill 摘要。Skill 和工具服务不会从根 Context 继承注册；作用域销毁时注销工具和来源并关闭服务。其他 Agent 可在自己的 Preset 中选择这些插件。
+
+### 创建世界初始化主 Agent
+
+可信应用使用已有 Manager 创建并销毁实例。模型适配器、Skill 根目录和授权工作目录均由应用提供；Skill 根目录必须位于授权工作目录内。
+
+```ts
+import { bootstrapAgents } from '@fly-novel/agents'
+import type { LlmAdapter } from '@fly-novel/llm'
+
+declare const adapter: LlmAdapter // 应用创建的适配器
+declare const skillRoot: string // 已部署的 Skill 根目录，绝对路径
+declare const workingDirectory: string // 包含 skillRoot 的授权目录
+
+const { manager } = await bootstrapAgents()
+try {
+  const agent = await manager.create({
+    id: 'world-main',
+    presetId: 'world-initialization-main-agent',
+    pluginConfigs: {
+      'agent-loop-runtime': { provider: 'example', model: 'example-model', workingDirectory },
+      llm: { adapters: [{ providers: ['example'], adapter }] },
+      'skill-filesystem': { root: skillRoot },
+    },
+  })
+  const result = await agent.run({ prompt: '我想写一个玄幻世界。' })
+  console.log(result.content)
+} finally {
+  await manager.disposeAll()
+}
+```
+
+本入口提供基础对话和工具能力；理解结果的程序确认、超时处理和世界规划业务尚未实现。仓库内玄幻 Skill 样例不会随构建产物自动复制，部署应用需要显式准备 Skill 目录，见[工具说明](../tools/README.md)。
 
 `@fly-novel/session-persistence` 定义 `sessionPersistence` 服务及会话句柄契约；`JsonlSessionPersistence` 提供 JSONL 文件后端。后端须显式指定绝对 `root`，按编码后的 Session ID 分目录保存项目格式 `session.v2.jsonl`；读取旧 v1 文件，写打开时保留 v1 并建立 v2。读取不完整尾部时只返回完整记录，写打开时截断尾部；完整记录无效或版本不支持时拒绝读取。写句柄创建后，后端接收同 ID 的 Session 事件并顺序写入，`sessions.flush(session)` 等待写入并报告失败。Agent Loop 可通过 `sessionId` 新建或 `resumeSessionId` 恢复持久化会话，应用负责装配后端；文件格式与官方格式不兼容。接口和调试方式见[会话持久化调试](../../docs/cookbook/session-persistence-debug.md)。
 
