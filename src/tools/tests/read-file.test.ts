@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
 import type { ToolCallId } from '@fly-novel/llm'
-import { readFileTool } from '../filesystem/read-file.js'
+import { readFileTool } from '../index.js'
 
 test('read_file 读取 UTF-8 文件并拒绝越界和无效文件', async (t) => {
   const base = await mkdtemp(join(tmpdir(), 'fly-novel-tool-'))

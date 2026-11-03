@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import type { ToolCallId } from '@fly-novel/llm'
 import { ToolsService } from '@fly-novel/tools'
 import { createSkillTool } from '@fly-novel/skill-tool-core'
-import { readFileTool } from '../filesystem/read-file.js'
+import { readFileTool } from '../index.js'
 import { FilesystemSkillProvider } from '@fly-novel/skill-filesystem'
 import { SkillService } from '@fly-novel/skill'
 

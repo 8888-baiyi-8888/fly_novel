@@ -4,7 +4,7 @@ import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } f
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { SessionEventMap, SessionEventType } from '@fly-novel/session'
 import type { ToolBatchInput } from '@fly-novel/tools'
-import { readFileTool } from '../../tools/filesystem/read-file.js'
+import { readFileTool } from '../../tools/index.js'
 
 class RecoveryAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []

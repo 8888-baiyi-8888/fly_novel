@@ -7,7 +7,14 @@ import { createSkillTool } from '@fly-novel/skill-tool-core'
 /** 将当前作用域的 Skill 服务绑定到工具，并在作用域销毁时注销工具。 */
 export const toolSkillPlugin = Object.assign(function toolSkillPlugin(ctx: Context): void {
   const tool = createSkillTool(ctx.skills)
-  ctx.effect(() => ctx.tools.register(tool))
+  ctx.effect(() => {
+    try {
+      return ctx.tools.register(tool)
+    } catch (error) {
+      console.error(`工具 "${tool.name}" 注册失败：`, error)
+      return () => {}
+    }
+  })
   const context: ModelStepContext = {
     async prepare({ workingDirectory, signal }) {
       if (ctx.tools.get('skill') !== tool) return ''

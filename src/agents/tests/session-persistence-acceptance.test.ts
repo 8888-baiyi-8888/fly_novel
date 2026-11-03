@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import { bootstrapAgents, jsonlSessionPersistencePlugin } from '@fly-novel/agents'
-import { readFileTool } from '../../tools/filesystem/read-file.js'
+import { readFileTool } from '../../tools/index.js'
 
 class FixedAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []

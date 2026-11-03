@@ -6,7 +6,7 @@ import { test, type TestContext } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { SessionEventMap, SessionEventType } from '@fly-novel/session'
-import { readFileTool } from '../../tools/filesystem/read-file.js'
+import { readFileTool } from '../../tools/index.js'
 
 class BatchAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []

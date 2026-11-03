@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import type { ToolCallId } from '@fly-novel/llm'
 import { defineTool, ToolsService } from '@fly-novel/tools'
-import { readFileTool } from '../../tools/filesystem/read-file.js'
+import { readFileTool } from '../../tools/index.js'
 
 const id = 'call-1' as ToolCallId
 const signal = new AbortController().signal

@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { ToolDefinition, ToolRunContext } from '@fly-novel/tools'
-import { readFileTool } from '../../tools/filesystem/read-file.js'
+import { readFileTool } from '../../tools/index.js'
 import { loadConfiguredAdapter } from '../../app/call-llm.js'
 
 class ToolCallAdapter extends LlmAdapter {

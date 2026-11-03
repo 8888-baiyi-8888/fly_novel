@@ -1,4 +1,5 @@
 export { deepFreeze } from './deep-freeze'
+export { registerAll } from './register-all'
 export type { Branded,BrandedNumber } from './brand'
 export {brandNumber} from './brand'
 /** 可以通过 JSON 进行无损序列化与反序列化（round-trip）的值。 */
