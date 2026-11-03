@@ -6,7 +6,7 @@
 
 `startInProcessRun(request, create)` 创建子 Agent，并将任务原文提交给 `agent.run()`；它返回 `SubagentRun`，调用方通过 `result` 等待任务完成，通过 `dispose()` 释放句柄。正常返回的 `content` 作为 `completed` 的 `output`，空内容仍为成功。
 
-`LlmError` 的 `ABORTED` 映射为 `aborted`；其他 `LlmError` 映射为 `error`，只保留稳定的 `errorCode`，不将异常消息放入结果。其他异常（包括包含持久化失败的 `AggregateError`）通过 `result` 原样拒绝，由调用方处理；清理失败由 `dispose()` 报告。运行中的取消信号传给 Agent 的 `cancel()`，已完成结果不因后续取消改变；取消和资源清理的完整竞态验证见后续开发步骤。
+`LlmError` 的 `ABORTED` 映射为 `aborted`；其他 `LlmError` 映射为 `error`，只保留稳定的 `errorCode`，不将异常消息放入结果。其他异常（包括包含持久化失败的 `AggregateError`）通过 `result` 原样拒绝，由调用方处理；清理失败由 `dispose()` 报告。运行中的取消信号传给 Agent 的 `cancel()`，已完成结果不因后续取消改变。`dispose()` 的并发调用共享结果，等待任务和创建方的释放操作结束；取消入口与释放同时失败时以聚合错误报告。真实 Factory / Manager 的完整创建集成见后续开发步骤。
 
 `createInProcessAgent(request, create)` 在调用创建方前检查取消。创建期间取消时，函数等待创建结算；创建方返回句柄后，函数等待句柄释放再以取消原因拒绝。清理失败以 `SubagentStartupCleanupError` 同时保留取消原因和清理错误；创建方自身回滚失败时也使用该错误类型。创建成功返回句柄后，由调用方持有并负责释放；该函数不执行任务，也不在交付后监听取消。
 

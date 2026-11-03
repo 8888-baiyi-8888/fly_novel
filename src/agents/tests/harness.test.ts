@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
+import { subagentRunId, type SubagentRun } from '@fly-novel/subagent'
+import { startInProcessRun } from '@fly-novel/subagent-in-process-driver'
 import { LlmAdapter, type GenerateOptions, type MessageId, type StreamChunk } from '@fly-novel/llm'
 import { loadConfiguredAdapter } from '../../app/call-llm.js'
 import { bootstrapAgents } from '../core/bootstrap.js'
@@ -293,5 +295,80 @@ describe('Cordis Agent Harness', () => {
     await disposing
     assert.equal(agent.state, 'disposed')
     assert.equal(framework.manager.list().length, 0)
+  })
+
+  it('整体关闭期间父 Agent 的清理可以等待同一 Manager 释放子 Agent', { timeout: 1500 }, async () => {
+    framework = await bootstrapAgents()
+    const manager = framework.manager
+    let childReleased = false
+    const releaseChild = (ctx: Context) => {
+      ctx.effect(() => async () => {
+        await manager.dispose('nested-child')
+        childReleased = true
+      })
+    }
+    framework.plugins.register({ id: 'release-nested-child', version: '1', plugin: releaseChild })
+    framework.presets.register({ id: 'parent-with-cleanup', version: '1', role: 'character',
+      plugins: withAgentLoop([{ pluginId: 'release-nested-child' }]) })
+    const child = await createTestAgent(framework, { id: 'nested-child', presetId: 'character-agent' })
+    const parent = await createTestAgent(framework, { id: 'nested-parent', presetId: 'parent-with-cleanup' })
+    await manager.disposeAll()
+    assert.equal(childReleased, true)
+    assert.equal(child.state, 'disposed')
+    assert.equal(parent.state, 'disposed')
+    assert.equal(manager.list().length, 0)
+  })
+
+  it('整体关闭期间父 Agent 可等待 Driver 通过同一 Manager 释放子 Agent', { timeout: 1500 }, async () => {
+    framework = await bootstrapAgents()
+    const manager = framework.manager
+    let run!: SubagentRun
+    let released = false
+    framework.plugins.register({ id: 'release-driver-run', version: '1', plugin: (ctx: Context) => {
+      ctx.effect(() => async () => { await run.dispose(); released = true })
+    } })
+    framework.presets.register({ id: 'driver-parent', version: '1', role: 'character',
+      plugins: withAgentLoop([{ pluginId: 'release-driver-run' }]) })
+    const child = await createTestAgent(framework, { id: 'driver-child', presetId: 'character-agent' })
+    const parent = await createTestAgent(framework, { id: 'driver-parent', presetId: 'driver-parent' })
+    run = await startInProcessRun({ parent, prompt: '任务原文', signal: new AbortController().signal }, async () => ({
+      id: subagentRunId('driver-run'), agent: child, dispose: () => manager.dispose('driver-child'),
+    }))
+    assert.equal((await run.result).output, '任务原文')
+    await manager.disposeAll()
+    assert.equal(released, true)
+    assert.equal(child.state, 'disposed')
+    assert.equal(parent.state, 'disposed')
+    assert.equal(manager.list().length, 0)
+  })
+
+  it('同一 Agent 的并发清理共享结果，清理期间不能复用 ID', async () => {
+    framework = await bootstrapAgents()
+    let enter!: () => void
+    let release!: () => void
+    const entered = new Promise<void>(resolve => { enter = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let count = 0
+    framework.plugins.register({ id: 'delayed-disposal', version: '1', plugin: (ctx: Context) => {
+      ctx.effect(() => async () => { count++; enter(); await gate })
+    } })
+    framework.presets.register({ id: 'delayed-disposal', version: '1', role: 'character',
+      plugins: withAgentLoop([{ pluginId: 'delayed-disposal' }]) })
+    await createTestAgent(framework, { id: 'disposing', presetId: 'delayed-disposal' })
+    const first = framework.manager.dispose('disposing')
+    const second = framework.manager.dispose('disposing')
+    assert.equal(first, second)
+    await entered
+    await assert.rejects(createTestAgent(framework, { id: 'disposing', presetId: 'delayed-disposal' }), /已存在/)
+    const all = framework.manager.disposeAll()
+    let finished = false
+    void all.then(() => { finished = true })
+    await Promise.resolve()
+    assert.equal(finished, false)
+    release()
+    await first
+    await all
+    assert.equal(count, 1)
+    await createTestAgent(framework, { id: 'disposing', presetId: 'character-agent' })
   })
 })

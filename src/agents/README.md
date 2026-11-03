@@ -27,6 +27,8 @@
 
 `await bootstrapAgents()` 创建 Cordis 根 Context、插件注册表、Preset 注册表、工厂和 Manager，遍历 `plugins/index.ts` 汇总的内置定义注册插件，并注册角色、导演、写作和世界初始化主 Agent 的 Preset。新增内置插件时在所属模块导出注册定义，再加入汇总列表；各 Agent 的 Preset 通过插件 ID 选择所需插件。`manager.create({ id, presetId })` 创建 Agent handle，并要求 Preset 装配提供 `agentLoop` 的插件。插件按 Preset 顺序装配，Cordis 按插件的 `inject` 声明安排启动。工厂依据插件的 `provide` 元数据在每个 Agent 的 Context 中隔离服务。每个 Agent 持有一个 Cordis 父插件作用域；`agent.run()` 将输入交给该实例的 `agentLoop` 服务，memory 可通过 `agent.context.get('memory')` 单独访问。`manager.dispose(id)` 和 `manager.disposeAll()` 会等待作用域销毁；失败的初始化不会进入 Manager。
 
+Manager 对同一 Agent 的并发清理共享结果，清理完成前不能复用该 ID。整体关闭按逆登记顺序清理，期间单实例清理仍可进行，以便父 Agent 等待子 Agent 释放；已经开始的清理也会被整体关闭等待。
+
 Agent 初始化先激活父作用域，再等待所选插件及其依赖链启动；插件启动失败或依赖无法就绪时清理作用域并拒绝创建。
 
 角色和导演 Preset 均装配真实 `agent-loop-runtime`、`system-prompt`、`llm` 与 `session`。创建 Agent 时，应用须通过 `pluginConfigs['agent-loop-runtime']` 提供 `provider`、`model`，并通过 `pluginConfigs.llm` 提供 `{ adapters: [{ providers: [provider], adapter }] }`。`llmPluginDefinition` 在该 Agent 的 Context 中提供独立 LLM 服务，并随插件作用域注销路由。配置和凭据由应用入口读取，插件只接收已创建的适配器。

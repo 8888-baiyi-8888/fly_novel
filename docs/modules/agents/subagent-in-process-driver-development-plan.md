@@ -35,7 +35,7 @@
 | Session 与 Fork | [Agent Loop](../../../src/agents/plugins/loop/README.md) 持有 Session；持久化恢复和普通 Session seed 存在，但公开 Agent 创建入口没有官方式的 Fork 历史参数。 | 不将内部 Session seed 等同于可用的 Fork 接口；历史边界及持久化兼容留到 Fork 设计时确认。 |
 | 关闭边界 | 核心服务关闭会取消并等待尚未交付的启动；已交付句柄由调用方释放。 | Driver 的发布、监听器交接与清理必须和核心服务一致，避免重复释放或产生无人持有的运行。 |
 
-还需核实两个现有实现的交错边界：[AgentManager.dispose(id)](../../../src/agents/runtime/agent-manager.ts) 在 `disposeAll()` 进行中等待整体关闭；如果整体关闭正在等待父 Agent，而父 Agent 的清理又等待同一 Manager 释放子 Agent，可能出现循环等待。该场景尚未证明实际发生，必须通过确定性集成测试验证。[SubagentRuntime](../../../src/agents/plugins/subagent/subagent/runtime.ts) 目前等待未交付启动结算，但关闭路径只收集自身释放迟到句柄的错误；Provider 在取消后自行回滚失败并拒绝启动时，需验证关闭调用方能否获知失败，必要时调整核心服务的错误传播契约。
+Manager 的单实例清理和整体关闭必须允许父 Agent 等待子 Agent 释放，具体行为见 [Agent 包说明](../../../src/agents/README.md)。启动回滚失败由核心服务按[核心包说明](../../../src/agents/plugins/subagent/subagent/README.md)报告。
 
 ## 三、详细开发步骤
 
@@ -72,7 +72,7 @@ SubagentRuntime.start(name, request)
 #### Fly Novel 的对应路径与验证
 
 1. `AgentManager.create(options)` 先检查 ID 冲突并记录正在初始化的创建 Promise，调用 `AgentFactory.create()`；Factory 解析 Preset、隔离服务并等待 `AgentInstance.initialize()`。初始化成功后 Manager 才把 Agent 放入实例表；失败时 `initialize()` 尝试清理作用域，Manager 清除待创建记录。Factory 和 Manager 创建入口目前没有取消信号。
-2. `AgentManager.dispose(id)` 若存在待初始化项则等待其结算，再从实例表移除并调用该 Agent 的 `dispose()`；不存在时返回。`disposeAll()` 等待已登记的初始化，按实例登记的相反顺序销毁，并汇总清理错误。它与单实例清理相互等待的潜在交错尚需第 5 步的针对性测试，不能把现有测试通过当作已排除死锁。
+2. `AgentManager.dispose(id)` 若存在待初始化项则等待其结算，再从实例表移除并调用该 Agent 的 `dispose()`；不存在时返回。`disposeAll()` 等待已登记的初始化，按实例登记的相反顺序销毁，并汇总清理错误。单实例清理和整体关闭的协调及测试见第 5 步。
 3. `AgentInstance.run({ prompt })` 将输入交给当前作用域的 `agentLoop`；项目 Loop 成功时直接返回 `{ content }`，失败以 Promise 拒绝。Loop 将 Turn 终止信息写入 Session，取消使用 `Agent.cancel()`，而不是接收外部信号。任务与结束记录或刷新同时失败时，Loop 可能抛出 `AggregateError`。
 4. Agent 销毁先等待 Loop，再关闭自身显式装配的 SubAgent 服务，最后释放插件作用域；SubAgent 服务取消并等待未交付的启动，已交付句柄由持有方负责。服务与 Manager 的跨对象回滚错误如何同时报告，仍须按第 3 步验证。
 
@@ -128,6 +128,8 @@ SubagentRuntime.start(name, request)
 6. 使用真实 Agent Manager 验证 `disposeAll()` 与父 Agent 关闭、子 Agent 创建或移除交错时不会循环等待。尤其覆盖父 Agent 清理等待 Driver，而 Driver 通过同一个 Manager 释放子 Agent 的情况；测试应使用受控门闩与可明确判定的完成条件。若暴露现有 Manager 生命周期缺陷，先修正并覆盖，不通过跳过 Manager 的登记清理掩盖问题。
 
 **完成条件：** 所有测试路径都能说明 Agent、运行句柄和监听器的最终归属；清理可重复且不会提前返回。
+
+Driver 的并发释放、取消监听器清理及错误传播见 [Driver 包说明](../../../src/agents/plugins/subagent/subagent-in-process-driver/README.md)。Manager 允许整体关闭期间按 ID 释放其他 Agent，并为同一 Agent 的并发释放共享结果；真实 Manager 测试覆盖父 Agent 清理等待 Driver，再由 Driver 通过同一 Manager 释放子 Agent。测试也验证清理期间不能复用 Agent ID。该验证使用固定模型替身，完整的 Provider 创建链路仍留待第 6 步。
 
 ### 6. 组合验证、文档与检查
 

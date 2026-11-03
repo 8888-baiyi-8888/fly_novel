@@ -6,6 +6,7 @@ import { AgentFactory } from './agent-factory.js'
 export class AgentManager {
   private readonly items = new Map<string, Agent>()
   private readonly pending = new Map<string, Promise<Agent>>()
+  private readonly disposals = new Map<string, Promise<void>>()
   private disposeAllPromise?: Promise<void>
 
   constructor(private readonly factory: AgentFactory) {}
@@ -18,7 +19,7 @@ export class AgentManager {
    */
   async create(options: CreateAgentOptions): Promise<Agent> {
     if (this.disposeAllPromise) throw new Error('Agent Manager 正在清理')
-    if (this.items.has(options.id) || this.pending.has(options.id)) {
+    if (this.items.has(options.id) || this.pending.has(options.id) || this.disposals.has(options.id)) {
       throw new Error(`Agent "${options.id}" 已存在`)
     }
 
@@ -45,33 +46,39 @@ export class AgentManager {
     return [...this.items.values()]
   }
 
-  /** 等待指定 ID 的初始化结束，再销毁并移除实例；不存在时直接返回。 */
-  async dispose(id: string): Promise<void> {
-    if (this.disposeAllPromise) return this.disposeAllPromise
-    const pending = this.pending.get(id)
-    if (pending) await pending.catch(() => undefined)
-    const agent = this.items.get(id)
-    if (!agent) return
-    this.items.delete(id)
-    await agent.dispose()
+  /** 等待指定 ID 的初始化及清理；并发调用共享同一清理结果。 */
+  dispose(id: string): Promise<void> {
+    const existing = this.disposals.get(id)
+    if (existing) return existing
+    const disposal = Promise.resolve().then(async () => {
+      const pending = this.pending.get(id)
+      if (pending) await pending.catch(() => undefined)
+      const agent = this.items.get(id)
+      if (!agent) return
+      this.items.delete(id)
+      await agent.dispose()
+    }).finally(() => {
+      this.disposals.delete(id)
+    })
+    this.disposals.set(id, disposal)
+    return disposal
   }
 
   /** 等待所有初始化结束，逆登记顺序销毁实例；汇总清理错误。 */
   disposeAll(): Promise<void> {
     if (this.disposeAllPromise) return this.disposeAllPromise
-    this.disposeAllPromise = this.disposeAllItems()
+    this.disposeAllPromise = Promise.resolve().then(() => this.disposeAllItems())
     return this.disposeAllPromise
   }
 
   private async disposeAllItems(): Promise<void> {
     try {
       await Promise.allSettled(this.pending.values())
-      const agents = [...this.items.values()].reverse()
-      this.items.clear()
+      const ids = [...new Set([...this.items.keys()].reverse().concat([...this.disposals.keys()]))]
       const errors: unknown[] = []
-      for (const agent of agents) {
+      for (const id of ids) {
         try {
-          await agent.dispose()
+          await this.dispose(id)
         } catch (error) {
           errors.push(error)
         }

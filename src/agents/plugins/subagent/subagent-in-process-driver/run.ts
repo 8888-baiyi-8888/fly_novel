@@ -15,15 +15,25 @@ export async function startInProcessRun(request: SubagentStartRequest, create: I
   const { signal, prompt } = request
   let settled = false
   let cancelRequested = false
+  let cancelFailed = false
+  let cancelError: unknown
+  let rejectCancellation!: (error: unknown) => void
+  const cancellationFailure = new Promise<never>((_, reject) => { rejectCancellation = reject })
 
   const onAbort = () => {
     if (settled || cancelRequested) return
     cancelRequested = true
-    handle.agent.cancel()
+    try {
+      handle.agent.cancel()
+    } catch (error) {
+      cancelFailed = true
+      cancelError = error
+      rejectCancellation(error)
+    }
   }
   signal.addEventListener('abort', onAbort, { once: true })
 
-  const result: Promise<SubagentResult> = (async () => {
+  const task: Promise<SubagentResult> = (async () => {
     try {
       if (signal.aborted) return { output: '', stopReason: 'aborted' }
       const answer = await handle.agent.run({ prompt })
@@ -32,11 +42,12 @@ export async function startInProcessRun(request: SubagentStartRequest, create: I
       if (!(error instanceof LlmError)) throw error
       if (error.code === 'ABORTED') return { output: '', stopReason: 'aborted' }
       return { output: '', stopReason: 'error', errorCode: error.code }
-    } finally {
-      settled = true
-      signal.removeEventListener('abort', onAbort)
     }
   })()
+  const result = Promise.race([task, cancellationFailure]).finally(() => {
+    settled = true
+    signal.removeEventListener('abort', onAbort)
+  })
   // 调用方可能先释放句柄再等待结果；保留原 Promise 的拒绝供调用方处理。
   void result.catch(() => undefined)
 
@@ -46,12 +57,16 @@ export async function startInProcessRun(request: SubagentStartRequest, create: I
     result,
     dispose() {
       if (disposePromise) return disposePromise
-      disposePromise = (async () => {
+      disposePromise = Promise.resolve().then(async () => {
         signal.removeEventListener('abort', onAbort)
         onAbort()
-        const [disposal] = await Promise.allSettled([handle.dispose(), result])
-        if (disposal.status === 'rejected') throw disposal.reason
-      })()
+        const [disposal] = await Promise.allSettled([Promise.resolve().then(() => handle.dispose()), task, result])
+        const failures: unknown[] = []
+        if (cancelFailed) failures.push(cancelError)
+        if (disposal.status === 'rejected') failures.push(disposal.reason)
+        if (failures.length === 1) throw failures[0]
+        if (failures.length > 1) throw new AggregateError(failures, 'Subagent 取消和清理失败')
+      })
       return disposePromise
     },
   }
