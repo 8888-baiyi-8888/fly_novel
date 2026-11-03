@@ -24,6 +24,8 @@ export interface SubagentStartRequest {
 export interface SubagentResult {
   readonly output: string
   readonly stopReason: 'completed' | 'error' | 'aborted'
+  /** 任务失败时的稳定错误码；不包含异常消息或输入内容。 */
+  readonly errorCode?: string
 }
 
 /** 已发布的一次运行；调用方负责处理 result 并最终调用 dispose。 */

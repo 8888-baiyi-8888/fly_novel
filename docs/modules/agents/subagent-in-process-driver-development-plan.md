@@ -116,6 +116,8 @@ SubagentRuntime.start(name, request)
 
 **完成条件：** 一个模拟 Agent 接收原始任务并返回可区分的终态；不同错误与取消路径可由测试验证。
 
+`startInProcessRun()` 的输入、结果和错误映射见 [Driver 包说明](../../../src/agents/plugins/subagent/subagent-in-process-driver/README.md)。模拟测试验证任务原文、空输出、LLM 错误码、取消、未知异常和聚合错误，以及结果失败与清理失败分别可观察。该步骤已实现基本取消转发和释放入口；并发释放、Manager 关闭交错及真实 Factory / Manager 的集成验证仍按后续步骤完成。
+
 ### 5. 实现取消与资源清理
 
 1. 发布后将请求信号传递到子 Agent 的取消入口，并在结果结算或运行释放后移除监听器；取消一个运行不影响其他运行。

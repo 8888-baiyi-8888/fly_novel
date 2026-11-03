@@ -4,7 +4,7 @@
 
 Provider 在启动成功并发布运行后返回 `SubagentRun`，调用方负责处理 `result` 并最终调用 `dispose()`。发布前的失败清理由 Provider 负责；发布后取消信号作用于该运行的剩余工作。运行标识由 Provider 在父 Agent 范围内分配，调用 `subagentRunId()` 创建，不能与 Agent 标识混用。
 
-任务成功、失败或取消通过结果的 `stopReason` 表达；无法表达为任务终态的基础设施故障可以使 `result` 拒绝。`dispose()` 可重复调用，等待剩余任务停止和资源释放。
+任务成功、失败或取消通过结果的 `stopReason` 表达；失败可附带稳定的 `errorCode`，不包含异常消息。无法表达为任务终态的基础设施故障可以使 `result` 拒绝。`dispose()` 可重复调用，等待剩余任务停止和资源释放。
 
 `SubagentRuntime` 提供具名 Provider 注册、查询和启动。`registerProvider()` 拒绝空名称和重复名称，返回可重复调用的注销函数；`getProvider()` 在未注册时返回 `undefined`，`list()` 按注册顺序返回名称。`start(name, request)` 按名称调用 Provider，返回已启动运行的句柄；Provider 不存在或启动失败时拒绝。运行标识的唯一性由 Provider 在父 Agent 范围内保证，服务不维护已交付运行的登记表。
 

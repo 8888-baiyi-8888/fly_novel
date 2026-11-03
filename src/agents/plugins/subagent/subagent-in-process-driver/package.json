@@ -8,5 +8,5 @@
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
   "files": ["dist", "README.md"],
   "scripts": { "typecheck": "tsc -p tsconfig.json", "build": "tsc -p tsconfig.build.json" },
-  "dependencies": { "@fly-novel/subagent": "workspace:*" }
+  "dependencies": { "@fly-novel/llm": "workspace:*", "@fly-novel/subagent": "workspace:*" }
 }

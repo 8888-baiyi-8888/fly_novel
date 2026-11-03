@@ -242,6 +242,9 @@ importers:
 
   src/agents/plugins/subagent/subagent-in-process-driver:
     dependencies:
+      '@fly-novel/llm':
+        specifier: workspace:*
+        version: link:../../../../llm
       '@fly-novel/subagent':
         specifier: workspace:*
         version: link:../subagent
