@@ -48,6 +48,38 @@
 
 **完成条件：** 能画出一条官方一次性调用链，并说明项目对应入口、创建发布边界及主要差异；不实现后续 Provider。
 
+#### 固定版本的官方一次性调用链
+
+以下是官方 commit `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` 的源码行为，不代表本项目已有同样实现：
+
+```text
+SubagentRuntime.start(name, request)
+  → Provider.start(resolvedRequest)
+    → startInProcessRun(request, options)
+      → parent.ctx.agents.create(创建参数、signal、setup)
+      → drivePublishedRun(handle, signal, prompt, ...)
+        → child.followup(用户消息) → child.whenIdle()
+        → 从子 Session 的运行边界之后读取结果
+        → 返回 { id, localAgent, result, dispose }
+```
+
+1. Spawn 的 `start()` 不传 Session seed；Fork 先截取父 Session 中最后一个已完成 `turn/end` 为止的事件前缀，再把非空 seed 交给 Driver。当前未完成轮次不作为 Fork 历史。
+2. Driver 在创建前检查信号、计算深度和子 Session 标识，准备按请求定制子作用域的 `setup`，再调用官方 Agent 创建服务。官方创建服务在未发布阶段持有创建事务，负责失败回滚；返回 handle 后子 Agent 已在其 Agent 注册表发布。
+3. `drivePublishedRun()` 为已发布的子 Agent 安装取消监听器，并在安装后再检查一次信号，覆盖创建事务与运行监听器之间的交接。随后它提交子任务，启动异步结果收集并返回运行句柄；**子 Agent 在 Agent 注册表发布**与**运行句柄交给 SubAgent 服务的调用方**是两个不同的交接点。
+4. `result` 等待子 Agent 空闲，从 seed 边界之后的 Session 事件选择子 Agent 的最终输出和终止原因；结束时移除取消监听器。`dispose()` 等待官方 Agent handle 的释放和结果结算，释放错误由清理通道报告。Provider 卸载不撤销已交付的运行。
+5. 官方还处理深度、策略继承、结构化输出和 Session 描述符。本步只确认它们存在；它们不是本项目当前 Driver 的既有能力，也不因为对照官方而自动纳入本步骤。
+
+#### Fly Novel 的对应路径与验证
+
+1. `AgentManager.create(options)` 先检查 ID 冲突并记录正在初始化的创建 Promise，调用 `AgentFactory.create()`；Factory 解析 Preset、隔离服务并等待 `AgentInstance.initialize()`。初始化成功后 Manager 才把 Agent 放入实例表；失败时 `initialize()` 尝试清理作用域，Manager 清除待创建记录。Factory 和 Manager 创建入口目前没有取消信号。
+2. `AgentManager.dispose(id)` 若存在待初始化项则等待其结算，再从实例表移除并调用该 Agent 的 `dispose()`；不存在时返回。`disposeAll()` 等待已登记的初始化，按实例登记的相反顺序销毁，并汇总清理错误。它与单实例清理相互等待的潜在交错尚需第 5 步的针对性测试，不能把现有测试通过当作已排除死锁。
+3. `AgentInstance.run({ prompt })` 将输入交给当前作用域的 `agentLoop`；项目 Loop 成功时直接返回 `{ content }`，失败以 Promise 拒绝。Loop 将 Turn 终止信息写入 Session，取消使用 `Agent.cancel()`，而不是接收外部信号。任务与结束记录或刷新同时失败时，Loop 可能抛出 `AggregateError`。
+4. Agent 销毁先等待 Loop，再关闭自身显式装配的 SubAgent 服务，最后释放插件作用域；SubAgent 服务取消并等待未交付的启动，已交付句柄由持有方负责。服务与 Manager 的跨对象回滚错误如何同时报告，仍须按第 3 步验证。
+
+实际执行了 `node --test --test-name-pattern '初始化失败时清理|拒绝缺少 loop|清理 Manager 会等待|销毁 Agent 等待|清理失败会报告' .test-dist/agents/tests/harness.test.js .test-dist/agents/tests/subagent-plugin.test.js`，此前显式构建了 SubAgent 包、Agent 包并编译测试；5 项测试通过。它们验证了初始化失败清理、ID 冲突、Manager 等待初始化、Agent 关闭等待未交付启动和迟到句柄清理失败的报告；这些测试未运行 Driver，也未验证 Manager 整体关闭与 Driver 回滚之间的潜在循环等待。
+
+当前可复用的是 Agent 的单轮运行、取消和释放，以及 Manager 的创建与登记能力。Driver 仍需确定如何以无环方式获得实际创建能力、在不能中断初始化时如何等待并回滚，以及如何映射任务和持久化错误；Fork 历史导入、真实 Provider 与父子通知尚未实现。
+
 ### 2. 确定创建依赖、类型与包组织
 
 1. 在 `src/agents/plugins/subagent/` 下按官方包组建立独立 Driver 工作区包，登记公开入口、构建与测试配置；包名、依赖和最终目录以仓库规范及官方职责为依据。
