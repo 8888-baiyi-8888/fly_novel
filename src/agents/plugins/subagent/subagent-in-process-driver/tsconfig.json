@@ -1,0 +1,6 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "compilerOptions": { "rootDir": ".", "paths": { "@fly-novel/subagent-in-process-driver": ["./index.ts"] } },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

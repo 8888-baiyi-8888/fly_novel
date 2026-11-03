@@ -91,6 +91,8 @@ SubagentRuntime.start(name, request)
 
 **完成条件：** 可以通过包公开入口定义一个模拟创建方和模拟 Agent，类型检查通过，依赖图无循环；契约没有假装支持 Fork、真实 Session 创建或模型路由继承。
 
+本步的类型和所有权说明见 [Driver 包说明](../../../src/agents/plugins/subagent/subagent-in-process-driver/README.md)。调用方提供创建函数，成功后返回包含运行标识、Agent 能力及创建方释放入口的句柄；可通过闭包携带创建配置，Driver 包只依赖 SubAgent 核心包。类型检查验证项目 Agent 可以满足运行接口，并可由调用方将 Manager 的创建和按 ID 移除适配为创建函数；该适配仅用于类型验证，尚未实现或验证实际 Driver。创建方分配的运行标识需遵守核心契约的唯一性要求，不能假定它必然等于 Agent ID 或 Session ID。具体任务错误映射和取消交接留待第 3 至第 5 步按真实运行行为实现和验证。
+
 ### 3. 实现创建与发布边界
 
 1. 创建前检查取消信号；已取消时不调用创建方。

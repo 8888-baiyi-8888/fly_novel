@@ -69,6 +69,9 @@ importers:
       '@fly-novel/subagent':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent
+      '@fly-novel/subagent-in-process-driver':
+        specifier: workspace:*
+        version: link:src/agents/plugins/subagent/subagent-in-process-driver
       '@types/node':
         specifier: ^22.20.2
         version: 22.20.2
@@ -236,6 +239,12 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
         version: 4.0.2
+
+  src/agents/plugins/subagent/subagent-in-process-driver:
+    dependencies:
+      '@fly-novel/subagent':
+        specifier: workspace:*
+        version: link:../subagent
 
   src/agents/plugins/system-prompt:
     dependencies:

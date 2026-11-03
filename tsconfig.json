@@ -64,6 +64,9 @@
       ],
       "@fly-novel/subagent": [
         "./src/agents/plugins/subagent/subagent/index.ts"
+      ],
+      "@fly-novel/subagent-in-process-driver": [
+        "./src/agents/plugins/subagent/subagent-in-process-driver/index.ts"
       ]
     }
   },
