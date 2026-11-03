@@ -10,6 +10,7 @@
 - `runtime/`：应用模型解析与结构化输出辅助函数，以及 Harness 的 Agent 工厂和管理器。
 - `plugins/`：Harness 的 memory、LLM 服务与插件注册；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中。
 - `plugins/tools/`：独立工作区包 `@fly-novel/tools`，提供工具定义与注册执行服务；具体工具见[工具目录](../tools/README.md)。
+- `plugins/subagent/subagent/`：独立工作区包 [`@fly-novel/subagent`](plugins/subagent/subagent/README.md)，定义一次性子 Agent 委派契约。
 - `plugins/skill/`、`plugins/skill-filesystem/`：独立工作区包，分别提供 Skill 注册查询服务和文件系统来源；各自包含 Cordis 插件及 Harness 注册定义。
 - `plugins/tool-skill/`：独立工作区包，注册 Skill 加载工具并发布模型可见目录。
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。

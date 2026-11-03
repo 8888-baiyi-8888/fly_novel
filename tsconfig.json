@@ -61,6 +61,9 @@
       ],
       "@fly-novel/tools": [
         "./src/agents/plugins/tools/index.ts"
+      ],
+      "@fly-novel/subagent": [
+        "./src/agents/plugins/subagent/subagent/index.ts"
       ]
     }
   },

@@ -29,6 +29,7 @@
   },
   "homepage": "https://github.com/8888-baiyi-8888/fly_novel#readme",
   "devDependencies": {
+    "@fly-novel/subagent": "workspace:*",
     "@types/node": "^22.20.2",
     "typescript": "^7.0.2"
   },

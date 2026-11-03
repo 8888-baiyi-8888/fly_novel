@@ -60,6 +60,8 @@
 
 **完成条件：** 类型检查能验证模拟 Provider 与调用方通过公开契约协作，包的依赖方向不要求真实 Spawn Provider 或工具包。
 
+本步的公开契约见 [SubAgent 包说明](../../../src/agents/plugins/subagent/subagent/README.md)。核心包以父 Agent 的最小身份视图避免依赖 `@fly-novel/agents`；根类型检查包含现有 Agent 可赋值的检查。Provider 在父 Agent 范围内分配运行标识，句柄持有方处理结果和释放。该契约只定义取消与清理责任，不代表已有可执行的服务或真实 Provider；后续驱动如果需要父 Agent 的其他能力，应重新评估无环接口。
+
 ### 3. 实现 Provider 注册与查询
 
 1. 实现按名称注册和查找；同一服务中重复名称明确拒绝，未知名称启动明确报错。

@@ -11,7 +11,8 @@
       "@fly-novel/skill-filesystem": ["./src/agents/plugins/skill-filesystem/index.ts"],
       "@fly-novel/tool-skill": ["./src/agents/plugins/tool-skill/index.ts"],
       "@fly-novel/skill-tool-core": ["./src/tools/skill/index.ts"],
-      "@fly-novel/tools": ["./src/agents/plugins/tools/index.ts"]
+      "@fly-novel/tools": ["./src/agents/plugins/tools/index.ts"],
+      "@fly-novel/subagent": ["./src/agents/plugins/subagent/subagent/index.ts"]
     }
   }
 }

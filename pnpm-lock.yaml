@@ -66,6 +66,9 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
+      '@fly-novel/subagent':
+        specifier: workspace:*
+        version: link:src/agents/plugins/subagent/subagent
       '@types/node':
         specifier: ^22.20.2
         version: 22.20.2
@@ -224,6 +227,8 @@ importers:
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
+
+  src/agents/plugins/subagent/subagent: {}
 
   src/agents/plugins/system-prompt:
     dependencies:

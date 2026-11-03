@@ -5,6 +5,7 @@ packages:
   - 'src/agents/plugins/session-persistence'
   - 'src/agents/plugins/loop'
   - 'src/agents/plugins/tools'
+  - 'src/agents/plugins/subagent/subagent'
   - 'src/agents/plugins/skill'
   - 'src/agents/plugins/skill-filesystem'
   - 'src/agents/plugins/tool-skill'
