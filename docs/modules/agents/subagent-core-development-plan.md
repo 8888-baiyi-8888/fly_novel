@@ -27,6 +27,29 @@
 
 **完成条件：** 能说明从调用方到 Provider 的输入输出、启动发布边界和服务作用域，并列出本步骤不实现的官方能力。
 
+#### 官方一次性启动链路
+
+以下是本计划固定 commit 的源码行为，不代表 Fly Novel 已实现对应接口。入口见官方 [SubagentRuntime](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent/subagent/src/index.ts)，运行观察见 [lifecycle.ts](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent/subagent/src/lifecycle.ts)。
+
+1. `registerProvider(provider)` 以 Provider 自身的名称注册，通过 Cordis Effect 绑定注册生命周期；重复名称报错。`getProvider(name)` 在找不到时返回 `undefined`；注销阻止后续按名称启动，不撤销已返回的运行。
+2. 调用方执行 `start(name, request)`。服务查找 Provider，检查请求中可选能力是否受支持，校验深度和输出 Schema 等，并创建一次性子级描述符；不存在的 Provider 或不支持的能力会被拒绝。
+3. 服务调用 `provider.start(resolvedRequest)`。Provider 负责具体运行的准备；其启动 Promise 兑现之前，Provider 负责清理尚未发布的资源。启动失败不会返回运行句柄。
+4. Provider 返回 `SubagentRun` 后，对于带本地 Session 的子级，服务向父 Session 建立子级目录记录。若记录失败，服务处理结果 Promise 的拒绝并释放该运行，再向调用方报告错误；此时调用方尚未取得句柄。
+5. 服务为运行安装观察并发出启动事件，返回原运行句柄；观察器在结果结算时发出结束事件。观察事件使用独立的运行事件标识，与句柄中的子级 Session 标识不同；监听器异常按官方实现隔离和记录。
+6. 调用方通过 `run.result` 等待终态，通过 `run.dispose()` 取消剩余工作并等待资源释放。子任务的模型或传输失败以 `stopReason: 'error'` 结算；不能表示为子任务终态的基础设施故障可使结果 Promise 拒绝。调用方要处理结果拒绝，并在完成后释放句柄。
+
+启动返回与任务完成是两个时间点。官方注册表注销和调用方释放运行也是两个不同操作；官方的描述符、父 Session 目录和生命周期事件依赖其自身的 Session 与事件体系，不应直接认定本项目已有这些能力。持续会话及其 Activation 管理不属于本次一次性启动链路。
+
+#### 项目装配验证与建议
+
+项目 [Agent Factory](../../../src/agents/runtime/agent-factory.ts) 从根 Context 派生每个 Agent 的 Context，并隔离 Preset 中插件声明提供的服务；[AgentInstance](../../../src/agents/core/agent.ts) 在该 Agent 的作用域中装配插件。现有 [Provider 插件](../../../src/agents/plugins/skill-filesystem/plugin.ts)展示了通过 `inject` 获取同作用域服务、通过 Effect 注销注册的方式。
+
+使用现有构建产物和临时模拟插件进行了实际装配：根 Context 中的模拟服务可被两个 Agent 继承；两个 Agent 通过 Preset 分别装配的模拟服务是不同实例；同一 Agent 内的 Provider 插件访问该 Agent 的服务；销毁其中一个 Agent 后，其 Provider 注册被移除，另一 Agent 的注册仍在。验证命令为 `node tmp/subagent-scope-study.cjs`，输出 `PASS: root service inherited; sibling provider shares local service; Agents isolated; provider cleanup scoped`。该脚本是被 Git 忽略的临时验证文件，依赖当时已有的构建产物，并非项目维护的测试入口；实验只验证现有 Cordis 装配，不验证 SubAgent 实现。
+
+**建议：** 核心服务先作为 Agent 作用域内的插件服务装配，让该 Agent 的 Provider 与调用方访问同一注册表，并保持不同 Agent 间隔离。实际核心包装配后仍需在第 5 步验证；若后续需要根级共享 Provider，须另行确定注册所有权和授权边界。
+
+**待第 2 步解决：** 独立核心包需要表达父 Agent，但 `@fly-novel/agents` 已负责汇总内置插件；若它依赖核心包，而核心包反向依赖 `@fly-novel/agents` 获取类型，就会形成工作区依赖环。先核对公开契约和依赖图，确定最小无环方案，不跨包引用内部源码。运行标识的生成者与唯一范围、启动中服务关闭的行为，以及是否需要活动运行登记，均须在实现前结合调用方需求确定；不能把官方事件标识误认为任务句柄标识。
+
 ### 2. 建立核心包与最小契约
 
 1. 在 `src/agents/plugins/subagent/` 下按官方包组组织建立核心服务包；其余 Provider、Driver 和工具留在后续步骤，不预建空包。具体子目录和包名在核对项目工作区和官方命名后确定。
