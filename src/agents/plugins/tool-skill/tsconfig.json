@@ -1,0 +1,6 @@
+{
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": { "rootDir": ".", "paths": { "@fly-novel/tool-skill": ["./index.ts"] } },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

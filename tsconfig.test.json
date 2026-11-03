@@ -9,7 +9,8 @@
       "@fly-novel/system-prompt": ["./src/agents/plugins/system-prompt/index.ts"],
       "@fly-novel/skill": ["./src/agents/plugins/skill/index.ts"],
       "@fly-novel/skill-filesystem": ["./src/agents/plugins/skill-filesystem/index.ts"],
-      "@fly-novel/tool-skill": ["./src/tools/skill/index.ts"],
+      "@fly-novel/tool-skill": ["./src/agents/plugins/tool-skill/index.ts"],
+      "@fly-novel/skill-tool-core": ["./src/tools/skill/index.ts"],
       "@fly-novel/tools": ["./src/agents/plugins/tools/index.ts"]
     }
   }

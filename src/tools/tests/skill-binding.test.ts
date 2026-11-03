@@ -23,7 +23,7 @@ test('可信装配为不同 Agent 实例隔离来源与加载工具', async (t) 
   await mkdir(join(roots[2]!, 'character-only'))
   await writeFile(join(roots[2]!, 'character-only', 'SKILL.md'), '---\nname: character-only\ndescription: 角色专属\n---\n角色指导')
   const framework = await bootstrapAgents()
-  const bindings = withAgentLoop([{ pluginId: 'tools' }, { pluginId: 'skills' }, { pluginId: 'skill-filesystem' }, { pluginId: 'skill-tool' }])
+  const bindings = withAgentLoop([{ pluginId: 'tools' }, { pluginId: 'skills' }, { pluginId: 'skill-filesystem' }, { pluginId: 'tool-skill' }])
   framework.presets.register({ id: 'world-test', version: '1', role: 'character', plugins: bindings })
   framework.presets.register({ id: 'character-test', version: '1', role: 'character', plugins: bindings })
   try {

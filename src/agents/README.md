@@ -11,6 +11,7 @@
 - `plugins/`：Harness 的 memory、LLM 服务与插件注册；真实 Agent Loop Runtime 属于独立工作区包 `@fly-novel/agent-loop`。`plugins/index.ts` 汇总各包及模块提供的注册定义。通用 Session 和 SystemPrompt 位于各自独立工作区包中。
 - `plugins/tools/`：独立工作区包 `@fly-novel/tools`，提供工具定义与注册执行服务；具体工具见[工具目录](../tools/README.md)。
 - `plugins/skill/`、`plugins/skill-filesystem/`：独立工作区包，分别提供 Skill 注册查询服务和文件系统来源；各自包含 Cordis 插件及 Harness 注册定义。
+- `plugins/tool-skill/`：独立工作区包，注册 Skill 加载工具并发布模型可见目录。
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `character/plugins/system-prompt/`、`director/plugins/system-prompt/`：角色和导演的专有提示词插件独立工作区包，包含各自的 Harness 注册定义。
 - `world-initialization-main-agent/preset.ts`：世界初始化主 Agent 的内置 Preset，组合提示词、Skill 及基础服务。
@@ -30,7 +31,7 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件、注册定义与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供。
 
-`skills`、`skill-filesystem` 和 `skill-tool` 插件定义已加入内置注册表，世界初始化主 Agent 的 Preset 装配这些插件和 `tools`。`skills` 提供独立的 Skill 服务，`skill-filesystem` 需要可信调用方配置绝对 `root` 并向服务注册来源，`skill-tool` 使用同一实例的服务并在每个模型 Step 前提供可调用的 Skill 摘要。Skill 和工具服务不会从根 Context 继承注册；作用域销毁时注销工具和来源并关闭服务。其他 Agent 可在自己的 Preset 中选择这些插件。
+`skills`、`skill-filesystem` 和 `tool-skill` 插件定义已加入内置注册表，世界初始化主 Agent 的 Preset 装配这些插件和 `tools`。`skills` 提供独立的 Skill 服务，`skill-filesystem` 需要可信调用方配置绝对 `root` 并向服务注册来源，`tool-skill` 使用同一实例的服务并在每个模型 Step 前提供可调用的 Skill 摘要。Skill 和工具服务不会从根 Context 继承注册；作用域销毁时注销工具和来源并关闭服务。其他 Agent 可在自己的 Preset 中选择这些插件。
 
 ### 创建世界初始化主 Agent
 

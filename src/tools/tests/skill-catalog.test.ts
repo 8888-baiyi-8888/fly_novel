@@ -35,7 +35,7 @@ test('模型只看到本实例的可调用摘要，目录变化和空目录会�
   framework.presets.register({ id: 'catalog-test', version: '1', role: 'character', plugins: [
     { pluginId: 'agent-loop-runtime' }, { pluginId: 'session' }, { pluginId: 'system-prompt' },
     { pluginId: 'llm' }, { pluginId: 'tools' }, { pluginId: 'skills' },
-    { pluginId: 'skill-filesystem' }, { pluginId: 'skill-tool' },
+    { pluginId: 'skill-filesystem' }, { pluginId: 'tool-skill' },
   ] })
   const create = async (id: string, root: string, adapter: CaptureAdapter) => framework.manager.create({
     id, presetId: 'catalog-test', pluginConfigs: {
@@ -75,7 +75,7 @@ test('来源发现失败时不发送模型请求，修复后可重试', async (t
   framework.presets.register({ id: 'catalog-error', version: '1', role: 'character', plugins: [
     { pluginId: 'agent-loop-runtime' }, { pluginId: 'session' }, { pluginId: 'system-prompt' },
     { pluginId: 'llm' }, { pluginId: 'tools' }, { pluginId: 'skills' },
-    { pluginId: 'skill-filesystem' }, { pluginId: 'skill-tool' },
+    { pluginId: 'skill-filesystem' }, { pluginId: 'tool-skill' },
   ] })
   const adapter = new CaptureAdapter()
   const agent = await framework.manager.create({ id: 'error', presetId: 'catalog-error', pluginConfigs: {

@@ -36,6 +36,9 @@
         "./src/agents/plugins/skill-filesystem/index.ts"
       ],
       "@fly-novel/tool-skill": [
+        "./src/agents/plugins/tool-skill/index.ts"
+      ],
+      "@fly-novel/skill-tool-core": [
         "./src/tools/skill/index.ts"
       ],
       "@fly-novel/character-system-prompt": [

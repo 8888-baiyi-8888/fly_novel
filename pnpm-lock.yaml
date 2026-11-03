@@ -38,12 +38,15 @@ importers:
       '@fly-novel/skill-filesystem':
         specifier: workspace:*
         version: link:src/agents/plugins/skill-filesystem
+      '@fly-novel/skill-tool-core':
+        specifier: workspace:*
+        version: link:src/tools/skill
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:src/agents/plugins/system-prompt
       '@fly-novel/tool-skill':
         specifier: workspace:*
-        version: link:src/tools/skill
+        version: link:src/agents/plugins/tool-skill
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:src/agents/plugins/tools
@@ -104,7 +107,7 @@ importers:
         version: link:plugins/system-prompt
       '@fly-novel/tool-skill':
         specifier: workspace:*
-        version: link:../tools/skill
+        version: link:plugins/tool-skill
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:plugins/tools
@@ -228,6 +231,24 @@ importers:
         specifier: ^4.0.2
         version: 4.0.2
 
+  src/agents/plugins/tool-skill:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/agent-loop':
+        specifier: workspace:*
+        version: link:../loop
+      '@fly-novel/skill':
+        specifier: workspace:*
+        version: link:../skill
+      '@fly-novel/skill-tool-core':
+        specifier: workspace:*
+        version: link:../../../tools/skill
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:../tools
+
   src/agents/plugins/tools:
     dependencies:
       '@deepseek-ai/cordis':
@@ -263,12 +284,6 @@ importers:
 
   src/tools/skill:
     dependencies:
-      '@deepseek-ai/cordis':
-        specifier: ^4.0.2
-        version: 4.0.2
-      '@fly-novel/agent-loop':
-        specifier: workspace:*
-        version: link:../../agents/plugins/loop
       '@fly-novel/skill':
         specifier: workspace:*
         version: link:../../agents/plugins/skill

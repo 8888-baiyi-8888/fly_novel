@@ -7,6 +7,7 @@ packages:
   - 'src/agents/plugins/tools'
   - 'src/agents/plugins/skill'
   - 'src/agents/plugins/skill-filesystem'
+  - 'src/agents/plugins/tool-skill'
   - 'src/tools/skill'
   - 'src/agents/plugins/system-prompt'
   - 'src/agents/character/plugins/system-prompt'

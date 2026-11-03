@@ -15,6 +15,6 @@ export const worldInitializationMainAgentPreset: AgentPreset = {
     { pluginId: 'tools' },
     { pluginId: 'skills' },
     { pluginId: 'skill-filesystem' },
-    { pluginId: 'skill-tool' },
+    { pluginId: 'tool-skill' },
   ],
 }

@@ -36,7 +36,7 @@ test('Skill 从实例来源发布摘要、按需加载正文并记录 Session，
   framework.presets.register({ id: 'skill-integration', version: '1', role: 'character', plugins: [
     { pluginId: 'agent-loop-runtime' }, { pluginId: 'session' }, { pluginId: 'system-prompt' },
     { pluginId: 'llm' }, { pluginId: 'tools' }, { pluginId: 'skills' },
-    { pluginId: 'skill-filesystem' }, { pluginId: 'skill-tool' },
+    { pluginId: 'skill-filesystem' }, { pluginId: 'tool-skill' },
   ] })
   const worldAdapter = new SkillCallingAdapter('fantasy-world-planning')
   const otherAdapter = new SkillCallingAdapter('fantasy-world-planning')

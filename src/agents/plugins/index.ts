@@ -11,7 +11,7 @@ import { systemPromptPluginDefinition } from '@fly-novel/system-prompt'
 import { toolsPluginDefinition } from '@fly-novel/tools'
 import { skillPluginDefinition } from '@fly-novel/skill'
 import { filesystemSkillPluginDefinition } from '@fly-novel/skill-filesystem'
-import { skillToolPluginDefinition } from '@fly-novel/tool-skill'
+import { toolSkillPluginDefinition } from '@fly-novel/tool-skill'
 
 /** 启动时可用的内置插件定义；具体 Agent 由各自 Preset 选择。 */
 export const builtInPlugins: AgentPluginDefinition[] = [
@@ -23,7 +23,7 @@ export const builtInPlugins: AgentPluginDefinition[] = [
   toolsPluginDefinition,
   skillPluginDefinition,
   filesystemSkillPluginDefinition,
-  skillToolPluginDefinition,
+  toolSkillPluginDefinition,
   ...characterPluginDefinitions,
   directorSystemPromptPluginDefinition,
   writerSystemPromptPluginDefinition,
