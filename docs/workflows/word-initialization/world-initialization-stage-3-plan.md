@@ -58,6 +58,8 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 
 ### 2. 进程内共享运行驱动
 
+详细步骤见[进程内共享运行驱动开发计划](../../modules/agents/subagent-in-process-driver-development-plan.md)。
+
 **官方参考：** `packages/subagent/subagent-in-process-driver`
 
 **开发目标：**
