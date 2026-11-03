@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline'
 import { createWorldInitializationAgent } from './agents/index.js'
 
-/** 使用本地模型配置与仓库示例 Skill，在同一实例内进行终端调试。 */
+/** 使用同一个主 Agent，在终端中直接输入构想并显示回复。 */
 export async function debugWorldInitialization(): Promise<void> {
   const agent = await createWorldInitializationAgent()
   try {
@@ -11,9 +11,8 @@ export async function debugWorldInitialization(): Promise<void> {
       input.setPrompt('你> ')
       input.prompt()
       for await (const line of input) {
-        const prompt = line.trim()
-        if (prompt === '/exit') break
-        if (prompt) console.log('Agent>', (await agent.run({ prompt })).content)
+        if (line.trim() === '/exit') break
+        if (line.trim()) console.log('Agent>', (await agent.run({ prompt: line })).content)
         input.prompt()
       }
     } finally {
