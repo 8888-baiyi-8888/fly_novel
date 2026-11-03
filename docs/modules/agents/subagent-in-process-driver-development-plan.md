@@ -142,6 +142,8 @@ Driver 的并发释放、取消监听器清理及错误传播见 [Driver 包说�
 
 **完成条件：** 模拟委派链路以及真实 Factory / Manager 与固定模型替身的集成验证均可复现；公开文档说明输入输出、所有权和限制。真实 Spawn / Fork Provider、其 Session 隔离和模型自主委派仍须在各自步骤验证。
 
+项目集成测试位于 [subagent-driver-integration.test.ts](../../../src/agents/tests/subagent-driver-integration.test.ts)：通过测试用 Provider 和真实 Cordis、Factory、Manager、Agent Loop 验证成功结果、模型适配器错误、运行取消、创建失败及父 Agent 关闭期间的延迟创建回滚。成功案例还验证注销 Provider 不撤销已交付句柄，释放后子 Agent 从 Manager 移除。模型适配器均为固定测试替身，不发起外部模型请求。测试用 Provider 不注册到生产 Preset，也不等同于 Spawn 实现。
+
 ## 四、交付与暂停点
 
 交付独立 Driver 包、模拟 Agent / 创建方测试、与核心服务及真实 Factory / Manager 的聚焦集成测试，以及必要的接口说明与决策记录。完成后整理已验证的调用链、实际运行的检查和遗留问题，等待用户指示；不自动进入 Spawn Provider 的开发。
