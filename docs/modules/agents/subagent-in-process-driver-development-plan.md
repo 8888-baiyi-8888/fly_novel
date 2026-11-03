@@ -104,6 +104,8 @@ SubagentRuntime.start(name, request)
 
 **完成条件：** 启动失败不交付句柄；成功交付后的运行有明确持有者；取消或关闭交错时没有未释放的模拟实例。
 
+本步提供 `createInProcessAgent()` 作为创建交接入口，行为与资源归属见 [Driver 包说明](../../../src/agents/plugins/subagent/subagent-in-process-driver/README.md)。它不执行任务，也不负责句柄交付后的取消监听；后者留待后续步骤。创建方回滚失败使用核心包的 `SubagentStartupCleanupError`，服务关闭期间该错误同时报告给启动调用方和关闭调用方；普通启动失败不被误报为关闭失败。模拟测试覆盖创建前取消、创建失败、创建中取消、异步回滚及回滚失败；真实 Factory / Manager 与 Driver 的组合仍须在第 6 步验证。
+
 ### 4. 执行任务与收集结果
 
 1. 对取得的子 Agent 调用一次 `run({ prompt })`，保持输入原文；将成功返回的 `content` 映射为 `SubagentResult` 的 `output` 和 `completed`。

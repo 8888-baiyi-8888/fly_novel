@@ -2,3 +2,4 @@ export type { SubagentParent, SubagentProvider, SubagentResult, SubagentRun, Sub
 export { subagentRunId } from './types.js'
 export { SubagentRuntime } from './runtime.js'
 export { subagentPlugin, subagentPluginDefinition } from './plugin.js'
+export { SubagentStartupCleanupError } from './errors.js'

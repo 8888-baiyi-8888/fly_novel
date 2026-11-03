@@ -19,7 +19,8 @@ export interface InProcessAgentHandle {
 
 /**
  * 建立一个可独立运行的 Agent。创建方决定创建参数与初始上下文；
- * 如果创建失败，创建方在拒绝前负责回滚未交付的资源。
+ * 如果创建失败，创建方在拒绝前负责回滚未交付的资源；回滚失败时使用
+ * SubagentStartupCleanupError 同时报告启动原因和清理错误。
  * 返回句柄后，Driver 负责其释放。
  */
 export type InProcessAgentCreator = (request: SubagentStartRequest) => Promise<InProcessAgentHandle>

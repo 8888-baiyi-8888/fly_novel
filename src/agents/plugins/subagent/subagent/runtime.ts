@@ -1,4 +1,5 @@
 import type { SubagentProvider, SubagentRun, SubagentStartRequest } from './types.js'
+import { SubagentStartupCleanupError } from './errors.js'
 
 interface PendingStart {
   readonly controller: AbortController
@@ -75,6 +76,10 @@ export class SubagentRuntime {
         signal.throwIfAborted()
       }
       return run
+    } catch (error) {
+      // 关闭期间 Provider 报告未交付资源的回滚失败，关闭方也必须知情。
+      if (controller.signal.aborted && error instanceof SubagentStartupCleanupError) pending.cleanupErrors.push(error)
+      throw error
     } finally {
       this.pending.delete(pending)
       finish()
