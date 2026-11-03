@@ -28,7 +28,7 @@ export interface SubagentResult {
 
 /** 已发布的一次运行；调用方负责处理 result 并最终调用 dispose。 */
 export interface SubagentRun {
-  /** Provider 在父 Agent 范围内分配的运行标识。 */
+  /** Provider 分配的运行标识；须在父 Agent 范围内与其他 Provider 的运行标识也不重复。 */
   readonly id: SubagentRunId
   /** 任务失败作为结果返回；无法表达为任务终态的基础设施故障可拒绝。 */
   readonly result: Promise<SubagentResult>
