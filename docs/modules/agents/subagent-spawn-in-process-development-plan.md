@@ -214,6 +214,10 @@ subagents.start('spawn', {
 
 **完成条件：** 可信程序可通过正式 Spawn Provider 创建并完成一次独立子 Agent 任务；文档能说明配置来源、调用方式、结果与清理。完成后等待用户指示，不自动开发 Tool SubAgent。
 
+#### 第 6 步的验证
+
+[公开入口集成测试](../../../src/agents/tests/subagent-spawn-public-integration.test.ts)使用构建后的 Agent 包、正式 Provider 和固定模型适配器，验证子任务完成前已返回运行句柄，随后结果与清理正确。结合第 4、5 步的真实 Harness 测试覆盖 Preset 选择、Session 与工具隔离、失败、取消和关闭；[Agent 包说明](../../../src/agents/README.md)提供可信代码的装配与调用示例。本步未调用真实模型，未验证真实模型委派；模型工具、自动结果通知及 Fork 不属于本步。
+
 ## 四、交付及限制
 
 交付独立 Spawn 包与 Cordis 注册、可信创建装配、真实 Harness 加固定模型替身的集成测试、必要的文档和决策记录。此时仍不能据此声称模型会自主选择委派、父 Agent 会自动收到异步完成通知，或 Fork / 持续会话已经可用。

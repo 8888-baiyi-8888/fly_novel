@@ -42,6 +42,45 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `createSpawnAgentCreator(framework, presets)` 为 Spawn Provider 提供可信创建函数。`presets` 以可委派的 Preset ID 为键，值为该子 Agent 的插件配置；应用须显式提供标准 `agent-loop-runtime` 和 LLM 配置。创建函数复用同一框架的 Preset 注册表和 Manager，拒绝未注册或未配置的 Preset，以及持久化 Session ID；Agent 创建成功后由运行句柄通过同一 Manager 释放。应用须确认选用的自定义插件不会恢复或共享 Session。该函数不自动将 Spawn 装配到父 Agent；父 Preset 须选择 `subagent` 和 `subagent-spawn-in-process`，并在后者配置中提供创建函数。
 
+以下示例展示可信代码直接委派；`adapter`、`provider` 和 `model` 由应用提供。父 Agent 与子 Agent 使用同一配置仅为演示，应用可以分别配置。
+
+```ts
+import { bootstrapAgents, characterAgentPreset, createSpawnAgentCreator } from '@fly-novel/agents'
+import type { LlmAdapter } from '@fly-novel/llm'
+
+async function delegate(adapter: LlmAdapter, provider: string, model: string) {
+  const framework = await bootstrapAgents()
+  const pluginConfigs = {
+    'agent-loop-runtime': { provider, model },
+    llm: { adapters: [{ providers: [provider], adapter }] },
+  }
+  const create = createSpawnAgentCreator(framework, { 'character-agent': pluginConfigs })
+  framework.presets.register({
+    ...characterAgentPreset,
+    id: 'spawn-example-parent',
+    plugins: [...characterAgentPreset.plugins, { pluginId: 'subagent' }, { pluginId: 'subagent-spawn-in-process' }],
+  })
+  try {
+    const parent = await framework.manager.create({
+      id: 'parent', presetId: 'spawn-example-parent',
+      pluginConfigs: { ...pluginConfigs, 'subagent-spawn-in-process': { create } },
+    })
+    const run = await parent.context.subagents.start('spawn', {
+      parent, presetId: 'character-agent', prompt: '分析角色动机', signal: new AbortController().signal,
+    })
+    try {
+      return await run.result
+    } finally {
+      await run.dispose()
+    }
+  } finally {
+    await framework.manager.disposeAll()
+  }
+}
+```
+
+`start()` 返回的是运行句柄，`result` 才是最终任务结果；`result.stopReason` 区分成功、失败和取消。示例中的父 Agent 由可信代码选择子 Preset 并发起请求，不代表模型已经能够自主委派。完整的固定模型验证见[公开入口集成测试](tests/subagent-spawn-public-integration.test.ts)。
+
 ### 创建世界初始化主 Agent
 
 可信应用使用已有 Manager 创建并销毁实例。模型适配器、Skill 根目录和授权工作目录均由应用提供；Skill 根目录必须位于授权工作目录内。
