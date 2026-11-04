@@ -126,6 +126,8 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 
 这两类工具可以由父 Agent 根据职责选择装配，不预设固定数量的子 Agent。通用工具没有特定业务参数，但仍需任务说明；是否提供其他通用控制参数以实际工具设计为准。
 
+通用委派工具放在 SubAgent 的 `tool-subagent` 包；角色专用工具放在 `src/tools/` 的具体工具目录。两者共用底层委派服务，分别由可信装配注册到需要它们的父 Agent。
+
 **开发内容：**
 
 1. 阅读官方委派工具的定义与执行过程。

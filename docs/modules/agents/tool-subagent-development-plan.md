@@ -13,6 +13,8 @@
 
 工具名称、字段名和输出结构在设计步骤确定。角色 ID 是业务对象标识，与 Agent 实例 ID、运行 ID 及 Preset ID 不同。工具按父 Agent 职责装配，一类工具可以服务多个角色，每次调用按需创建实例；不为具体角色预建工具或 Agent。
 
+工具按职责分开：`src/agents/plugins/subagent/tool-subagent/` 只提供通用委派工具与确需共用的委派能力；角色专用工具属于 [`src/tools/`](../../../src/tools/README.md) 下的具体业务工具，通过可信应用或适当的作用域装配机制注册。两者都复用 SubAgent 服务、Spawn 和 Driver；不在通用包中注册或实现角色专用工具。具体文件路径、必要的共享接口和依赖方向在实现时核实，避免 Agent 包反向依赖应用层工具。
+
 ## 二、官方参考与项目现状
 
 固定参考 DeepSeek Harness commit [`0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`](https://github.com/deepseek-ai/deepseek-harness/tree/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent)。从官方 [Tool SubAgent 说明](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent/tool-subagent/README.zh.md)及[实现](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent/tool-subagent/src/index.ts)追踪工具注册、一次性启动、结果与释放。该版本前台模式等待 `run.result` 并释放运行；也有依赖其他组件的后台和可继续模式。本项目不能据此声称已经具备后台任务、持续会话或完成通知。
@@ -117,6 +119,31 @@ Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父
 
 **完成条件：** 记录两类工具输入输出、通用 Preset 方案、角色 ID 实际消费路径、依赖和资源归属、失败与取消行为、验证用例；方案明确后再实施，不在本步开发 Fork、角色档案或后台通知。
 
+#### 第 2 步设计结果
+
+以下是接下来实施的设计，字段、服务和工具尚未实现。两个工具都由可信装配选择并注册，模型不传内部 `presetId`、Provider 或插件配置。
+
+| 工具名称 | 模型输入 | 内部 Preset | 成功结果 |
+| --- | --- | --- | --- |
+| `delegate` | 必填 `task`：非空任务文字 | `generic-subagent` | 等待子任务完成后，返回其文本输出。 |
+| `delegate_character` | 必填 `task` 和 `characterId`：均为非空字符串；角色 ID 不允许首尾空白 | `character-agent` | 在角色子实例接收该 ID 后执行任务，等待完成并返回文本输出。 |
+
+两者的工具描述说明子 Agent 不继承父会话，调用方要在 `task` 中提供必要背景。任务文字仅检查非空，保留原文，不追加提示词；角色 ID 是独立数据，不通过修改任务文字传递。缺少字段、类型不符、空白角色 ID、首尾空白角色 ID 或多余字段按工具 Schema / 入口校验拒绝，不创建子实例。当前没有可用于确认角色存在或授权的角色资料服务：合法格式的 ID 不代表真实角色存在、已获授权或已加载资料。角色 ID 不自动作为世界事实写入。
+
+**通用子 Agent：** 新增独立 `generic-subagent` Preset，并给 `AgentRole` 增加表示通用子 Agent 的 `subagent` 值；不把角色或导演 Agent 当作通用 Agent。该 Preset 最小装配标准 `agent-loop-runtime`、`system-prompt`、`llm` 和 `session`，提供简洁的通用任务职责提示词，不装配角色专用插件；子 Agent 的 provider、model 和适配器由可信应用显式提供。新 role 的所有使用点和持久化影响在实现前核对；如发现现有持久化协议使用该值，先明确版本和读取策略，不静默改写数据。
+
+**角色 ID 的具体链路：** 建议为 `SubagentStartRequest` 增加可选的普通 JSON 对象 `input`，角色工具传入 `{ characterId }`，通用工具不传；核心服务和 Driver 只传递数据，不定义角色字段。可信创建装配按 Preset 注册对应的输入解析与校验能力：`character-agent` 的角色委派要求且只接收合法的 `characterId`，通用 Preset 不接收专属输入；不支持输入的 Provider 必须明确拒绝，不能静默丢弃。创建方在调用 Manager 前完成校验和独立数据快照，并通过 Agent 创建输入将结果提供给子实例作用域；该输入与可信 `pluginConfigs` 分开，不能用于覆盖模型、插件或目录配置。
+
+**谁消费 ID：** 在 Agent 创建契约中增加供实例插件读取的只读创建输入，Factory / AgentInstance 在插件初始化前将其作为该 Agent 作用域内独立的输入服务提供。角色作用域增加一个最小的角色绑定组件，读取并保存本次 `characterId`，提供只读查询；运行结束时随子 Agent 作用域释放。该组件只表达“本次实例携带哪个 ID”，不读取档案、不验证角色存在、不自动把 ID 或资料注入模型。已有不带该输入的普通 `character-agent` 创建路径继续可用；通过角色委派工具创建时由可信创建方要求 ID。第 3 步分别验证不同 ID 的绑定组件读取结果，不能只断言请求中有字段。Agent 输入在外部边界校验为普通 JSON 并快照，避免调用方修改或并发任务共享可变对象；普通 `Agent.info.parameters` 保持已有用途，不把它当作插件已能读取的证据。
+
+**父作用域与注册：** 在 `src/agents/plugins/subagent/tool-subagent/` 建立工作区包，提供通用委派工具及其作用域注册；角色专用工具在 `src/tools/` 下定义，由可信应用或单独的作用域装配入口注册，不由通用包直接依赖或注册。两类工具可以分别装配；共享执行能力以公开接口复用，具体依赖和构建边界在第 4 步核实。装配时从同一可信作用域取得 `tools`、`subagents` 服务和 `agent` 身份，构造核心请求需要的最小父身份视图；不根据模型输入的 ID 查找或冒充父 Agent。模型输入不含父身份。工具的 Provider 固定为可信装配选定的 `spawn`，对应 Preset 与模型配置由可信应用负责；实例作用域之外不能使用该身份值推断授权。
+
+当前核心没有 Provider 变更事件：安装时明确检查 `spawn` 存在，缺失则初始化失败；执行时再次通过当前作用域的服务启动，若 Provider 已注销则返回启动失败，不能声称工具会自动随 Provider 动态注销。工具注册者负责作用域注销：插件使用 Cordis Effect，应用装配使用对应的注册清理函数及 Agent 生命周期；同一个父 Agent 的同名注册冲突必须明确报错。检查缺失依赖与激活顺序时，以实际装配测试为准。
+
+**输出、取消与所有权：** 工具只在 `stopReason: 'completed'` 时把输出作为成功文本交给 ToolsService；`error`、`aborted` 和基础设施异常转为可区分的失败，不把部分输出当成成功。启动拒绝时没有已交付 Run；一旦 `start()` 返回 Run，工具等待 `result`，无论成功或异常均等待 `dispose()`，最后才结束调用。执行 signal 原样交给服务，由核心组合服务关闭信号；工具注销不私自丢弃进行中的已交付句柄。结果和清理同时失败时内部保留两个原因，并返回不泄露敏感数据的错误说明。现有 ToolsService 会将异常投影成模型可见的错误文本与代码，不会自动展示 `AggregateError.errors`；第 5 步既检查内部错误保留，也验证对模型投影不会掩盖清理失败。取消时 ToolsService 还会按现有逻辑将已中止调用归为取消，需验证实际可观察结果。
+
+**实现影响与验证：** 第 3 步实现通用 Preset、请求 `input`、可信输入解析和实例作用域消费，更新受影响的创建接口、依赖和公开说明；核心与 Driver 只为保留 / 拒绝输入做必要修改。第 4 步分别新增通用工具包和 `src/tools/` 下的角色工具，不提前修改世界初始化主 Agent 的业务装配。第 5、6 步用真实服务和固定模型替身验证两种工具、两个角色 ID、缺省与非法输入、同一父作用域、Provider 缺失 / 注销、任务失败、取消、双重失败和清理。直接调用 Spawn 的现有不带 `input` 路径保持可用；其他 Provider 对 `input` 的支持和拒绝规则必须有明确测试。类型检查和构建在实现步骤执行；本步仅根据源码形成设计，未修改代码或验证新增接口。
+
 ### 3. 建立必要的子 Agent 创建输入
 
 1. 根据第 2 步确定的最小契约，补齐通用子 Agent 的 Preset 和可信创建配置；确保通过真实 Factory、Manager、Loop 和独立内存 Session 创建，不假设业务 Preset 等价于通用类型。
@@ -128,7 +155,7 @@ Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父
 
 ### 4. 实现并注册两类委派工具
 
-1. 沿现有 `defineTool`、Tools 服务和 Cordis 扩展点建立工具定义与注册方式；包和目录组织参考官方 `tool-subagent` 职责，具体文件与依赖按项目公开接口确定，更新工作区与结构说明。
+1. 沿现有 `defineTool`、Tools 服务和 Cordis 扩展点建立工具定义与注册方式；通用工具位于 `tool-subagent` 包，角色工具位于 `src/tools/`，分别核实注册、清理、公开入口和构建依赖，更新工作区与结构说明。
 2. 通用工具内部选择已确定的通用 Preset；角色工具内部选择 `character-agent` 并提交校验后的角色 ID。将工具 signal 传给 SubAgent 服务，不将业务参数合并进可信插件配置。
 3. 实现前台等待结果和释放，按第 2 步处理启动失败、运行终态、异常、取消与清理错误；任务内容保持原文。
 4. 将两类工具按父 Agent 作用域显式装配，验证可单独或共同装配；注册时依赖缺失、重名、无效配置要明确失败，卸载时注销工具。确认一个 Agent 的卸载不影响另一个 Agent。
@@ -156,4 +183,4 @@ Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父
 
 ## 五、交付边界
 
-本计划只交付通用和角色两类工具及其必要的创建输入。后台任务、自动异步通知、可继续子 Agent、模型自行配置适配器、角色档案或世界资料存取、用户确认流程及 Fork 不属于本计划；是否支持和如何实现由后续任务确定。
+本计划交付通用和角色两类工具及其必要的创建输入，通用包不承载角色专用工具。后台任务、自动异步通知、可继续子 Agent、模型自行配置适配器、角色档案或世界资料存取、用户确认流程及 Fork 不属于本计划；是否支持和如何实现由后续任务确定。
