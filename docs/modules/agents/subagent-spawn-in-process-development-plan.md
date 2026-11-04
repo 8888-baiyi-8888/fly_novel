@@ -4,7 +4,7 @@
 
 ## 一、解决什么问题
 
-当前核心服务能选择 Provider，共享 Driver 能运行调用方创建的 Agent，但生产环境还没有真正的 Spawn Provider。需要一个可由 Cordis 装配的 Provider：收到一次委派后，使用项目的 Agent 创建能力建立新的进程内子 Agent，启动任务，并把运行句柄交给调用方。
+核心服务选择 Provider，共享 Driver 运行调用方创建的 Agent，Spawn Provider 使用可信创建函数启动新的进程内子 Agent 并交付运行句柄。
 
 本阶段验证的使用方式是**可信程序代码**通过父 Agent 作用域中的 SubAgent 服务直接发起请求：
 
@@ -14,7 +14,7 @@
   → 新的子 Agent 和 Session → 执行任务 → Run.result → Run.dispose()
 ```
 
-输入是父 Agent 身份、任务原文、取消信号、所需子 Agent 类型，以及可信装配提供的创建依赖和允许的配置。类型选择的具体请求字段和省略行为需要先按第 2A 步确定；当前请求尚不包含该选择。输出是已启动运行的句柄；任务完成后通过 `result` 获得结果，通过 `dispose()` 释放。父 Agent 由程序发起服务调用，不在本阶段验证模型自行决定委派；模型工具和结果通知属于后续步骤。
+输入是父 Agent 身份、任务原文、取消信号、所需子 Agent 的 `presetId`，以及可信装配提供的创建依赖和允许的配置。输出是已启动运行的句柄；任务完成后通过 `result` 获得结果，通过 `dispose()` 释放。父 Agent 由程序发起服务调用，不在本阶段验证模型自行决定委派；模型工具和结果通知属于后续步骤。
 
 本阶段只建立**全新会话、一次性任务**的 Spawn，任务说明必须携带子 Agent 需要的上下文。它不会自动带入父会话历史，也不会把子 Agent 的建议自动写成用户确认的世界事实。不实现 Fork、持续会话、外部 Provider、模型自主选择或预设固定业务子 Agent 数量。
 
@@ -183,6 +183,12 @@ subagents.start('spawn', {
 6. 使用至少两种可委派的 Preset 配置验证逐次选择会创建对应类型，其中包括现有 `character-agent`；检查实际 Preset 与角色系统提示词装配。重复选择同一类型仍得到独立 Agent 和 Session。验证未提供、未知、配置不可用及配置了限制时被排除的选择符合第 2A 步确定的行为：可在创建前判断的错误不调用 Manager 创建；初始化时才能发现的错误须回滚，Manager 不保留实例。
 
 **完成条件：** 真实 Harness 在固定模型替身下由正式 Spawn Provider 按请求选择 Preset、创建独立 Agent，执行给定任务并通过 `Run.result` 得到结果；验证不依赖真实网络或密钥。完成本步后等待用户指示。
+
+#### 第 4 步的实现与验证
+
+[可信创建函数](../../../src/agents/runtime/subagent-in-process-creator.ts)通过同一框架的 Preset 注册表和 Manager 创建子 Agent，可信应用以 Preset ID 配置可委派范围及插件配置。标准 Loop 必须显式提供模型路由并拒绝持久化 Session ID；可信应用仍需确认自定义插件不会恢复或共享 Session。创建句柄通过同一 Manager 释放实例。
+
+[真实 Harness 测试](../../../src/agents/tests/subagent-spawn-real.test.ts)使用固定模型适配器，通过正式 Spawn Provider 分别创建两个角色 Agent 和一个导演 Agent，验证 Preset、系统提示词、任务原文、独立 Session、父历史隔离及释放。测试还覆盖未知 Preset、未配置委派能力、持久化 Session ID、插件初始化失败和 Agent ID 冲突。测试未调用真实模型；取消和关闭的完整竞争验证属于第 5 步。
 
 ### 5. 取消、关闭与资源释放
 

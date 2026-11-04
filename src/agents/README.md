@@ -40,6 +40,8 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `subagent` 插件定义已加入内置注册表；Preset 显式选择后，每个 Agent 获得独立的 `subagents` 服务。Agent 销毁时等待自身装配的服务关闭并向调用方报告清理失败；不会关闭仅从根 Context 继承的服务。该服务不自动装配 Provider，注册、启动和资源归属见 [SubAgent 包说明](plugins/subagent/subagent/README.md)。
 
+`createSpawnAgentCreator(framework, presets)` 为 Spawn Provider 提供可信创建函数。`presets` 以可委派的 Preset ID 为键，值为该子 Agent 的插件配置；应用须显式提供标准 `agent-loop-runtime` 和 LLM 配置。创建函数复用同一框架的 Preset 注册表和 Manager，拒绝未注册或未配置的 Preset，以及持久化 Session ID；Agent 创建成功后由运行句柄通过同一 Manager 释放。应用须确认选用的自定义插件不会恢复或共享 Session。该函数不自动将 Spawn 装配到父 Agent；父 Preset 须选择 `subagent` 和 `subagent-spawn-in-process`，并在后者配置中提供创建函数。
+
 ### 创建世界初始化主 Agent
 
 可信应用使用已有 Manager 创建并销毁实例。模型适配器、Skill 根目录和授权工作目录均由应用提供；Skill 根目录必须位于授权工作目录内。
