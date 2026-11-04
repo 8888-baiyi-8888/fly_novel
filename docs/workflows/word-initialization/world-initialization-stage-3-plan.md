@@ -80,6 +80,8 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 
 ### 3. Spawn In Process
 
+详细步骤见 [Spawn In Process 开发计划](../../modules/agents/subagent-spawn-in-process-development-plan.md)。
+
 **官方参考：** `packages/subagent/subagent-spawn-in-process`
 
 **开发目标：**
