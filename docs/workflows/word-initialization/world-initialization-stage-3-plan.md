@@ -27,6 +27,8 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 6. 每个开发步骤都需要独立测试，确保模块可以正常工作。
 7. 官方实现仅作为技术参考，不直接复制整个实现。
 
+子 Agent 的创建方式与类型是两个维度：Spawn / Fork 决定会话如何初始化，可信装配决定允许选择哪些 Agent Preset 及其配置。主 Agent 可以根据任务选择允许的类型，不预建固定数量的子 Agent；具体选择契约和 Spawn 实施步骤见 [Spawn 开发计划](../../modules/agents/subagent-spawn-in-process-development-plan.md)。
+
 ## 三、开发顺序
 
 ### 1. SubAgent 核心服务
@@ -51,6 +53,7 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 4. 实现 SubAgent Service。
 5. 实现基础任务管理与标识管理。
 6. 接入 Cordis 注册机制。
+7. 在 Spawn 类型选择设计确定后，检查启动请求是否需要携带选择标识，并同步调整受影响的 Provider 与测试；保留现有启动、取消和清理契约。
 
 **验证目标：**
 
@@ -98,6 +101,7 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 6. 将任务说明和必要上下文传递给子 Agent。
 7. 通过共享 Driver 执行子 Agent。
 8. 管理子 Agent 实例的生命周期。
+9. 支持可信调用方从允许的类型中为每次任务选择子 Agent，例如选择角色 Agent；相同类型的多次委派仍创建相互独立的实例。
 
 **验证目标：**
 
@@ -120,6 +124,7 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 5. 工具调用 SubAgent Service。
 6. 处理启动回执与启动失败。
 7. 配置允许使用的 Provider 和委派限制。
+8. 设计可供模型选择的 Agent 类型及其授权范围，将选择传入统一启动请求；模型不能直接提供可信的插件配置或模型适配器。
 
 **验证目标：**
 
@@ -135,8 +140,8 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 
 **开发内容：**
 
-1. 阅读官方 Fork Provider。
-2. 分析 Fork 与 Spawn 的上下文差异。
+1. 阅读官方 Fork Provider，分析 Fork 与 Spawn 的上下文差异。
+2. 结合官方实现和项目实际契约，设计 Fork 的类型选择、历史继承及所选 Preset 的工具与历史兼容性；明确允许范围及失败行为。
 3. 实现父会话历史的获取与传递。
 4. 实现独立子 Agent 的会话初始化。
 5. 通过共享 Driver 执行任务。
@@ -200,6 +205,7 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 
 - 父 Agent 能自主决定是否委派。
 - 可以同时启动多个子 Agent。
+- 可按任务选择允许的子 Agent 类型，并验证无效或未授权选择会被拒绝。
 - 每个子 Agent 有独立会话。
 - 可以区分启动成功与任务完成。
 - 父 Agent 能正确接收子 Agent 结果。
