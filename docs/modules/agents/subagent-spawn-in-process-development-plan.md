@@ -45,6 +45,51 @@
 
 **完成条件：** 能解释官方 Provider 为什么很薄、本项目需要哪些额外装配，以及每个阶段由谁持有资源；记录源码事实、实测结果与待设计事项。
 
+#### 官方调用链与责任
+
+以下为固定 commit `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` 的源码行为：
+
+```text
+Spawn 插件 apply(ctx, config)
+  → 注册 SpawnInProcessProvider（默认名称 spawn）
+可信调用方 → ctx.subagents.start('spawn', request)
+  → 服务查找 Provider 并校验请求
+  → Provider.start(resolvedRequest)
+  → startInProcessRun(resolvedRequest, {})
+  → 官方 Agent 创建服务发布子 Agent
+  → Driver 提交任务并返回 Run → 调用方等待 result、负责 dispose
+```
+
+官方 Spawn Provider 的一次性 `start()` 只选择“没有历史 seed”并调用共享 Driver。子 Agent 创建、执行、结果读取和取消释放由 Driver 与 Agent 创建服务完成，因此 Provider 自身代码较少。Spawn 插件的注册生命周期属于 Cordis 作用域；注销不撤销已经交付的运行。官方 Provider 还声明能力并参与持续子会话创建，本阶段不直接照搬未实现的能力。
+
+所有权有三个不同交接点：官方创建服务发布子 Agent 并把 Agent handle 交给 Driver；Provider / Driver 返回 Run 后，核心服务完成自身的交付检查并把 Run 交给调用方；`Run.result` 之后才结算最终结果。运行可以在句柄交付前已经开始，具体任务也可能很快结束，因此不能把这些交接点假定为严格的墙钟时间间隔。启动未交付时由创建方及中间持有者负责回滚；句柄交付后由调用方处理结果并释放。官方还维护本地子级 Session 目录等机制，本项目不能据此假定已有相同能力。
+
+#### 项目已有调用链与验证
+
+现有 [集成测试](../../../src/agents/tests/subagent-driver-integration.test.ts)中的调用顺序是：
+
+```text
+测试代码 → 父 Agent 的 subagents.start('test-provider', request)
+  → 测试 Provider.start(request)
+  → startInProcessRun(request, create)
+  → createTestAgent() → AgentManager.create() → AgentFactory.create()
+  → Agent 初始化完成并登记到 Manager
+  → Driver 调用子 Agent.run({ prompt })，返回 Run
+  → 测试代码等待 result，再调用 Run.dispose()
+  → 创建句柄通过同一 Manager.dispose(childId) 移除子 Agent
+```
+
+测试 Provider 是在测试中定义并通过 Cordis Effect 注册的对象，不是生产 Spawn 插件。它通过闭包取得测试框架的 Manager、固定的子 Agent ID、Preset 和模型替身；[Driver](../../../src/agents/plugins/subagent/subagent-in-process-driver/run.ts)接收该创建函数，不自行从父 Agent 查找 Manager 或配置。[bootstrapAgents()](../../../src/agents/core/bootstrap.ts)将 Manager 作为返回值交给应用，当前没有注册官方式的 `ctx.agents` 创建服务。正式 Spawn 因而仍需解决可信装配如何提供创建、移除、子 Preset 和模型适配器，以及如何避免包循环依赖。
+
+测试已显式构建 LLM、SubAgent 核心包、Driver、Agent 包并编译测试，随后运行 `node --test .test-dist/agents/tests/subagent-driver-integration.test.js`，5 项通过：固定模型成功响应、固定模型错误、运行中取消、创建失败，以及父 Agent 关闭期间延迟创建后的回滚。成功测试还检查 Provider 注销后已交付 Run 仍可取得结果，并在释放后从 Manager 移除子 Agent。这些结果来自固定测试适配器；未验证正式 Spawn 插件、模型自主委派、真实模型、父子 Session 历史隔离或工具授权继承。
+
+#### 下一步需要确定的边界
+
+- **创建与配置从哪里来：** 正式 Provider 必须由可信装配取得 Manager 等创建能力，以及子 Agent 所需 Preset、模型适配器和插件配置；当前父 Agent 的最小身份视图不能提供这些信息。
+- **Session 如何保持全新：** 子 Agent 不能恢复或复制父会话。需在正式 Provider 实现后，检查模型实际收到的历史，并按 Session 持久化契约处理显式会话配置。
+- **已交付运行由谁释放：** 现有核心服务仅在关闭时处理尚未交付的启动；已交付 Run 由调用方释放。不能假设 Provider 注销或父 Agent 退出会自动清理这些运行。
+- **本阶段如何调用：** 先由可信代码直接调用父 Agent 的 `subagents.start()`；模型工具、自主决定委派以及子结果自动通知父 Agent 留待后续步骤。
+
 ### 2. 设计可信创建依赖与子 Agent 配置
 
 1. 对照项目包依赖图，确定 Spawn 包如何获得 Manager 的创建和按 ID 释放能力。优先使用已有公开扩展点或可信装配传入的最小能力；避免 Spawn 包反向依赖一个又将其作为内置插件依赖的 Agent 包，不能跨包引用内部源码。
