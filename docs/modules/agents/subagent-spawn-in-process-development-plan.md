@@ -134,6 +134,29 @@ Provider 注册与创建能力属于父 Agent 的插件作用域；注销阻止�
 
 **交付检查：** 给出一次可信调用的输入示例与预期调用链，区分已注册 Preset、实际可用配置和按需设置的委派限制；列出缺省、未知标识及配置缺失分别在哪里失败。示例只用于解释设计，不写成已经可运行的生产接口。完成本步后等待用户指示。
 
+#### 本步设计结果
+
+**选择标识与请求：** 建议在核心 `SubagentStartRequest` 增加可选 `presetId?: string`，值直接使用已有 Preset ID，不增加第二套类型名。字段在通用请求中可选，是因为核心服务还允许其他 Provider，而它们不一定使用项目的 Preset；Spawn Provider 则要求该字段为非空且与注册 ID 精确匹配。Spawn 不设置隐式默认值，缺省、空白或带首尾空白的标识均作为启动错误拒绝。是否以及如何支持其他 Provider 的类型选择，在其自身设计中确定。
+
+下列是设计示意，`presetId` 和生产 Spawn Provider 尚未实现，不能直接运行：
+
+```text
+subagents.start('spawn', {
+  parent: 父 Agent,
+  presetId: 'character-agent',
+  prompt: '分析任务',
+  signal: 取消信号
+})
+```
+
+**预期调用链：** 核心服务合并取消信号并向 Provider 传递请求；Spawn Provider 校验必填标识后调用 Driver；Driver 把请求交给可信创建函数；创建函数使用同一个框架的 `PresetRegistry` 查询该 ID、解析可信创建配置，再通过对应 `AgentManager` 创建实例。创建函数按同一 Manager 释放实例。Provider / Driver 返回运行句柄，调用方等待 `result` 并在结束后调用 `dispose()`。目前核心服务通过复制请求并替换 signal 来传递字段，现有 Driver 已将请求传给创建函数；字段传递与取消语义仍须在第 3 步通过测试确认。
+
+**配置和可选范围：** 注册表回答 Preset 是否存在，可信应用负责为可用的 Preset 提供模型路由、适配器和插件所需配置；不要求每个已注册 Preset 都能作为子 Agent 成功创建。是否限制父 Agent 可以委派的 Preset 由应用决定；如需限制，创建函数使用该父 Agent 作用域的可信配置校验，而不依据请求自报的父 ID 授权。模型或调用方不能通过 `presetId` 直接指定插件配置、适配器或工作目录。后续 Tool 应基于同一注册表和可信配置得到可展示的选择并在执行时再次校验；目录接口和动态变更处理留待 Tool 设计，不在本步新增服务。
+
+**失败边界：** 缺少或格式错误的 `presetId` 由 Spawn Provider 在调用 Driver 前拒绝；未注册 Preset、明确配置的委派限制、创建前可发现的缺失配置由可信创建函数在 `Manager.create()` 前拒绝。只有初始化期间才能发现的插件或配置错误，由 Factory / Manager 的创建失败路径处理并释放已创建资源。以上均使 `start()` 拒绝且不交付 Run；句柄交付之后的执行错误仍按 Driver 的现有 `result` 契约处理。错误应标明类别和安全的 Preset ID，不输出适配器、凭据或完整插件配置；本步不预先定义新的错误码体系。
+
+**后续实现与验证：** 第 3 步调整核心类型、公开接口说明与相关测试，使用受控创建函数断言 `presetId` 经服务、Provider 和 Driver 原样传递，同时验证未选择类型的其他 Provider 仍可按原契约使用；缺省与非法标识由正式 Spawn Provider 拒绝。第 4 步用现有 `character-agent` 和另一已注册 Preset 验证实际选择，检查角色系统提示词、独立 Session 和重复创建；覆盖未知 Preset、已配置限制和配置缺失，并区分创建前拒绝与初始化失败后的回滚。保留现有取消、关闭和资源释放测试。第 5 阶段设计 Fork 时，再核实历史与不同 Preset 的兼容性，不将此方案描述为固定版本官方 Fork 的已有功能。
+
 ### 3. 建立 Spawn 包并注册 Provider
 
 1. 在 `src/agents/plugins/subagent/` 下建立独立 Spawn 工作区包，参考官方包职责，配置公共入口、构建、类型检查和依赖；更新工作区和实际使用该包的依赖关系。
