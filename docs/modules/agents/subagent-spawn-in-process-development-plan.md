@@ -200,6 +200,10 @@ subagents.start('spawn', {
 
 **完成条件：** 成功、失败、取消和关闭交错都有可观察结果，测试能证明创建方、Driver 与调用方的资源归属；不存在未完成初始化后遗留实例。完成本步后等待用户指示。
 
+#### 第 5 步的验证
+
+[Spawn 生命周期测试](../../../src/agents/tests/subagent-spawn-lifecycle.test.ts)通过正式 Provider 和真实 Manager 验证创建前取消、创建中取消后等待并回滚、运行中取消、完成后取消、并发释放和不同运行互不干扰。测试验证父 Agent 关闭后已交付运行仍由调用方释放，以及父 Agent 关闭、延迟创建和 `disposeAll()` 交错时能够结束。通过受控 Manager 清理故障验证启动和关闭方均收到错误，启动错误保留取消原因及清理失败。模型使用固定替身；未验证跨进程隔离或子 Session 持久化。
+
 ### 6. 集成验证与交付
 
 1. 通过真实 Cordis 装配、正式 Spawn 插件、核心服务、Driver、Manager / Factory 和真实 Agent Loop，以固定模型适配器执行完整链路。验证 Provider 不是由测试代码冒充、任务原文和输出正确、启动回执与最终结果可区分。
