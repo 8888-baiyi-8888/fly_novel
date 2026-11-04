@@ -47,6 +47,64 @@
 
 **完成条件：** 文档记录官方固定版本调用链、项目现状、拟复用组件与缺口；完成学习与必要只读验证，不提前实现工具。
 
+#### 官方调用链：固定版本源码
+
+本步核对的官方仓库 commit 是 `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`。以下是[官方工具实现](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent/tool-subagent/src/index.ts)的源码行为，不是本项目的真实模型运行日志。
+
+```text
+工具插件安装 → 按配置查找指定 Provider → defineTool → ctx.tools.register
+  → 模型工具调用：description、prompt 等 → 工具执行，取得 exec.agent 与 exec.signal
+  → ctx.subagents.start(provider, request) → 返回 Run
+  → 前台等待 Run.result → 处理终态 → 等待 Run.dispose()
+  → 工具结果返回父 Agent
+```
+
+工具实例对应配置的 Provider 和工具名，官方实现监听 Provider 增加、移除事件；Provider 出现时注册，移除时注销工具。前台执行从 `exec.agent` 获取父 Agent，并把 `exec.signal` 传入启动请求。结果为非完成终态时映射为工具错误；如果收集结果和释放均失败，保留两个错误。`description` 用于展示标签，`prompt` 作为子 Agent 任务内容；官方根据 Provider 的上下文继承语义调整工具描述。
+
+官方另有一次性后台模式和可继续模式：一次性后台交给 jobs，返回 job ID；可继续模式调用 `startContinuable()`，在接受任务后返回子 Agent ID，由对应服务处理后续运行与通知。这些依赖与返回值不同于前台等待结果，不能仅凭现有 Run 推断本项目已经支持。官方允许按配置和 Provider 能力提供额外选项；本项目用户要求的通用和角色专用工具及角色 ID 参数是本项目方案，不能当成官方现成的对应功能。
+
+#### 本项目的现有调用链
+
+当前已有的**模型工具链**，以 [Agent Loop](../../../src/agents/plugins/loop/agent-loop-runtime.ts) 和 [ToolsService](../../../src/agents/plugins/tools/tools-service.ts)为依据：
+
+```text
+父 Agent.run({ prompt }) → Agent Loop 将已注册工具 Schema 提供给模型
+  → 模型返回工具调用 → ToolsService 解析 JSON、校验并执行工具
+  → 工具接收 callId、身份快照、workingDirectory 和 signal
+  → 工具结果关联 callId，记录进父 Session → Agent Loop 继续模型请求
+```
+
+Tools 服务逐项串行执行同一批次，普通工具异常转换为错误结果。Loop 有可见工具时要求可信配置 `workingDirectory`；这个目录不是由模型作为工具参数指定。输入和输出经过工具服务的 JSON 快照和 Schema 处理，工具执行后的中止也会被检查。
+
+当前已有的**可信代码 Spawn 链**，以[公开入口集成测试](../../../src/agents/tests/subagent-spawn-public-integration.test.ts)为依据：
+
+```text
+可信代码 → 父 Agent Context 中的 subagents.start('spawn', request)
+  → SubagentRuntime 查找 Provider，合并请求取消与服务关闭信号
+  → Spawn 检查 presetId → Driver 调用可信创建函数
+  → Manager / Factory 创建子 Agent → Driver 提交原始任务并返回 Run
+  → 调用方等待 result → 调用方 dispose → 同一 Manager 清理子 Agent
+```
+
+这两条链尚未由正式 Tool SubAgent 连接。可信代码能在启动后立即获得 Run，`result` 可能尚未完成；该句柄交付后的释放由接收方负责。SubAgent 服务关闭会处理尚未交付的启动，不会自动释放已经交付给调用方的 Run。
+
+#### 父身份、作用域与取消
+
+[工具上下文](../../../src/agents/plugins/tools/contracts.ts)的 `agent` 是可选的 `id`、`name`、`role` 身份快照；Harness [工具插件](../../../src/agents/plugins/tools/plugin.ts)从当前 Agent 作用域获取身份。它不是完整 Agent handle，也不提供其 Session、模型适配器或所有配置。独立创建 ToolsService 时身份可以不存在。[SubagentParent](../../../src/agents/plugins/subagent/subagent/types.ts)目前仅要求 `info.identity.id` 的结构视图，不能因此推断这个值已被认证或授权。
+
+Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父 Agent 装配 `tools`、`subagent` 和 Spawn 后，两个服务属于该实例的作用域。项目 SubAgent 注册表目前提供注册、查找和注销，**没有官方工具使用的 Provider 增删事件机制**；工具如何取得同一作用域的服务、验证依赖以及在 Provider 移除时如何表现，留给第 2 步设计，不假设自动镜像官方生命周期。
+
+现有 Loop 将执行信号交给 ToolsService，再传给工具执行上下文；现有 SubAgent 服务会将传入 signal 与自身关闭信号组合，Driver 在创建和运行阶段处理取消。未来委派工具仍需将工具执行 signal 显式传给 `subagents.start()`，并对已交付 Run 负责；这条**跨工具与 SubAgent 的组合链尚未实现或验证**。
+
+#### 当前能力边界与实测
+
+- 当前 `SubagentStartRequest` 没有角色 ID 字段；角色 Preset 和提示词插件也不会因为选择 `character-agent` 而自动读取角色资料。普通 Agent Factory 的 `parameters` 会合并到 `Agent.info.parameters`，但现有 Spawn 创建函数未传入每次业务参数；能否供插件初始化读取仍需设计。
+- [bootstrap](../../../src/agents/core/bootstrap.ts)注册角色、导演、写作和世界初始化主 Agent 等现有 Preset；[AgentRole](../../../src/agents/core/contracts/agent.ts)也是现有角色联合类型。当前没有核实到独立通用子 Agent Preset，第 2 步须确定其合理的类型与装配，不冒用业务 Preset。
+- 当前没有正式的通用 / 角色委派工具、Tool SubAgent 的后台任务或子任务自动完成通知；也没有仅由角色 ID 自动完成资料绑定的调用链。本步未执行真实模型或官方工具调用。
+- 已运行 `pnpm run build:tests`，再运行 `node --test .test-dist/agents/tests/agent-loop-tools.test.js .test-dist/agents/tests/subagent-spawn-public-integration.test.js`：6 项通过，1 项真实 DeepSeek 模型测试跳过。前者验证固定替身驱动的工具调用与结果回到父 Loop 等行为；后者验证可信代码调用正式 Spawn 的句柄、结果和清理。这是**两条分别测试的链路**，不表示父模型调用委派工具的完整链已经跑通。
+
+下一步需要确定通用 Preset、角色 ID 的跨层消费、工具依赖和前台结果映射；本步不实现这些方案。
+
 ### 2. 确定两类工具的契约与装配方案
 
 1. 为通用工具与角色工具分别确定名称、描述、必填任务和角色 ID 的 Schema、输出及错误；验证同一类型工具可对不同业务对象调用。明确通用工具不需要角色 ID，角色工具不让模型填写内部 `presetId`。
