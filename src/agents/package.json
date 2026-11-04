@@ -30,6 +30,7 @@
     "@fly-novel/skill": "workspace:*",
     "@fly-novel/skill-filesystem": "workspace:*",
     "@fly-novel/subagent": "workspace:*",
+    "@fly-novel/subagent-spawn-in-process": "workspace:*",
     "@fly-novel/tool-skill": "workspace:*",
     "@fly-novel/system-prompt": "workspace:*",
     "@fly-novel/tools": "workspace:*",

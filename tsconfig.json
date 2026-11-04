@@ -67,6 +67,9 @@
       ],
       "@fly-novel/subagent-in-process-driver": [
         "./src/agents/plugins/subagent/subagent-in-process-driver/index.ts"
+      ],
+      "@fly-novel/subagent-spawn-in-process": [
+        "./src/agents/plugins/subagent/subagent-spawn-in-process/index.ts"
       ]
     }
   },

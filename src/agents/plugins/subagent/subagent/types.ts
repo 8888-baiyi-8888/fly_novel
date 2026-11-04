@@ -16,6 +16,8 @@ export interface SubagentParent {
 export interface SubagentStartRequest {
   readonly parent: SubagentParent
   readonly prompt: string
+  /** 项目 Preset ID；是否必填取决于 Provider。 */
+  readonly presetId?: string
   /** 发布前取消启动并回滚；发布后取消该运行的剩余工作。 */
   readonly signal: AbortSignal
 }

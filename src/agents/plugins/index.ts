@@ -13,6 +13,7 @@ import { skillPluginDefinition } from '@fly-novel/skill'
 import { filesystemSkillPluginDefinition } from '@fly-novel/skill-filesystem'
 import { toolSkillPluginDefinition } from '@fly-novel/tool-skill'
 import { subagentPluginDefinition } from '@fly-novel/subagent'
+import { spawnInProcessPluginDefinition } from '@fly-novel/subagent-spawn-in-process'
 
 /** 启动时可用的内置插件定义；具体 Agent 由各自 Preset 选择。 */
 export const builtInPlugins: AgentPluginDefinition[] = [
@@ -26,6 +27,7 @@ export const builtInPlugins: AgentPluginDefinition[] = [
   filesystemSkillPluginDefinition,
   toolSkillPluginDefinition,
   subagentPluginDefinition,
+  spawnInProcessPluginDefinition,
   ...characterPluginDefinitions,
   directorSystemPromptPluginDefinition,
   writerSystemPromptPluginDefinition,

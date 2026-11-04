@@ -12,6 +12,7 @@
 - `plugins/tools/`：独立工作区包 `@fly-novel/tools`，提供工具定义与注册执行服务；具体工具见[工具目录](../tools/README.md)。
 - `plugins/subagent/subagent/`：独立工作区包 [`@fly-novel/subagent`](plugins/subagent/subagent/README.md)，提供一次性子 Agent 委派服务及 Cordis 插件。
 - `plugins/subagent/subagent-in-process-driver/`：独立工作区包 [进程内运行驱动](plugins/subagent/subagent-in-process-driver/README.md)，提供一次性子 Agent 的创建交接与任务执行。
+- `plugins/subagent/subagent-spawn-in-process/`：独立工作区包 [Spawn Provider](plugins/subagent/subagent-spawn-in-process/README.md)，注册进程内 Spawn 并接收可信创建函数。
 - `plugins/skill/`、`plugins/skill-filesystem/`：独立工作区包，分别提供 Skill 注册查询服务和文件系统来源；各自包含 Cordis 插件及 Harness 注册定义。
 - `plugins/tool-skill/`：独立工作区包，注册 Skill 加载工具并发布模型可见目录。
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。

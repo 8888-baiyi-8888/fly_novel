@@ -169,6 +169,10 @@ subagents.start('spawn', {
 
 **完成条件：** 不调用真实模型时，实际 Cordis 装配能看到正式 Spawn Provider，注册与注销行为满足核心服务契约；必要的请求契约已贯通，受控创建函数能观察到所选类型。完成本步后等待用户指示。
 
+#### 第 3 步的实现与验证
+
+正式 [Spawn 包](../../../src/agents/plugins/subagent/subagent-spawn-in-process/README.md)通过 Cordis 插件注册 `spawn`，接收可信创建函数，并在调用 Driver 前拒绝缺失、空白或带首尾空白的 Preset ID。核心请求增加可选 `presetId`，其他 Provider 仍可不使用该字段。测试以受控创建函数验证请求传递、Agent 作用域隔离、非法请求、缺少创建配置及已交付句柄的释放；实际 Preset 校验、Manager 创建与独立 Session 仍属于第 4 步。
+
 ### 4. 创建全新子 Agent 并接入 Driver
 
 1. 按第 2、2A 步确定的可信创建依赖与选择契约构造 Driver 的 `InProcessAgentCreator`：解析已注册 Preset 与可信配置，通过 Manager 创建子 Agent，返回可执行的 Agent、运行标识及通过同一 Manager 释放该实例的句柄。明确在 Provider 或创建方执行选择校验，并确保拒绝发生在创建实例之前。
