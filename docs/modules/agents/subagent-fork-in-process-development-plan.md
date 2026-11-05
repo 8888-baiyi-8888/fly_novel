@@ -179,6 +179,14 @@ Spawn 适合任务说明本身包含所需上下文的子任务；Fork 面向需
 
 **完成条件：** 使用正式 Provider 和真实 Harness 证明设计范围内 Fork 与 Spawn 的差异、类型选择和独立性；未验证的供应商兼容性明确记录。
 
+#### 第 5 步验证结果
+
+[Spawn / Fork 对照测试](../../../src/agents/tests/subagent-fork-comparison.test.ts)使用真实 Factory、Manager、Loop、Session 和正式 Provider，模型请求由固定替身接收。父 Agent 完成两轮后，在第三轮进行中分别启动 Spawn、通用 Fork 和角色 Fork：两个 Fork 的模型请求包含前两轮，Spawn 不包含父历史，三个请求均不包含进行中的第三轮。各自收到原始任务与所选 Preset 的系统提示，角色 ID 到达角色子实例创建参数；子 Session 与父 Session 的标识不同，子任务内容不写入父 Session。
+
+测试还验证三个运行标识和 Agent 标识各不相同，取消角色运行不影响其他运行；父第三轮结束后再次 Fork，新的快照包含该轮，而先前子会话不随父会话变化。子 Agent 空输出返回空结果，没有借用父回复；所有运行释放后 Manager 只保留父实例。[Fork Provider 测试](../../../src/agents/tests/subagent-fork-plugin.test.ts)验证工具事件历史与未配置类型被拒绝，对照测试验证模型私有重放状态被拒绝。
+
+测试检查了固定替身接收的子模型路由及系统消息，没有调用真实模型，不能证明其他供应商或模型支持这些历史。首版仍拒绝工具历史和私有重放状态，角色 Agent 也没有根据 ID 检索资料。
+
 ### 6. 验证取消、失败与资源清理
 
 **问题与使用方式：** 用可控门闩覆盖历史捕获、创建、运行和释放期间的交错，不通过任意延时推断完成。
