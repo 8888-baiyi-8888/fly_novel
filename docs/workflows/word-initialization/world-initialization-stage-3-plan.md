@@ -145,6 +145,8 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 
 ### 5. Fork In Process
 
+详细步骤见 [Fork In Process 开发计划](../../modules/agents/subagent-fork-in-process-development-plan.md)。
+
 **官方参考：** `packages/subagent/subagent-fork-in-process`
 
 **开发目标：**
