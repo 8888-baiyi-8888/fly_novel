@@ -14,6 +14,7 @@ packages:
   - 'src/agents/plugins/skill-filesystem'
   - 'src/agents/plugins/tool-skill'
   - 'src/tools/skill'
+  - 'src/agents/plugins/fs/fs-patch'
   - 'src/agents/plugins/system-prompt'
   - 'src/agents/character/plugins/system-prompt'
   - 'src/agents/director/plugins/system-prompt'

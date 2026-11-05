@@ -27,6 +27,7 @@ src/*/tests/       按 src 一级模块归属的自动化测试，不在更深�
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/tools/         具体工具实现，测试放在 src/tools/tests/
 src/tools/character/ 角色专用工具实现
+src/agents/plugins/fs/fs-patch/ `@fly-novel/fs-patch` 独立工作区包，提供补丁解析和文本修改
 src/tools/skill/   `@fly-novel/skill-tool-core` 独立工作区包，提供 Skill 加载工具定义
 src/tools/skill/   Skill 加载工具及其文件系统提供方
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约

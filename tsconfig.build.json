@@ -14,6 +14,7 @@
     "src/harness",
     "src/util",
     "src/agents",
-    "src/tools/skill"
+    "src/tools/skill",
+    "src/agents/plugins/fs/fs-patch"
   ]
 }

@@ -372,6 +372,8 @@ importers:
         specifier: workspace:*
         version: link:../util
 
+  src/agents/plugins/fs/fs-patch: {}
+
   src/tools/skill:
     dependencies:
       '@fly-novel/skill':
