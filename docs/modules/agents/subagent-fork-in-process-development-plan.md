@@ -50,6 +50,37 @@ Spawn 适合任务说明本身包含所需上下文的子任务；Fork 面向需
 
 **完成条件：** 文档给出官方与项目的实际调用链、数据边界和缺口，指出尚需设计的事项；不实现 Provider 或修改会话数据。
 
+#### 第 1 步：官方调用链与观察
+
+固定参考 commit 已在本地官方仓库核对为 `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`。以下是对该版本源码和测试的阅读结论，不是本项目已实现的 Fork 行为。
+
+1. 官方一次性 Fork 的调用链是 `subagents.start('fork', request)` → Fork Provider 读取 `request.parent.session` 的事件快照 → 查找最后一个 `turn/end` 并截取包含该事件的前缀 → 把非空 seed 交给 [共享 Driver](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent/subagent-in-process-driver/src/index.ts) → Driver 调用父上下文的 Agent 创建服务，建立带独立 Session ID 的子实例并提交新任务 → 返回 Run → 调用方等待 `result` 并调用 `dispose()`。没有已结束轮次时，Fork 不传 seed；[官方 Spawn](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent/subagent-spawn-in-process/src/index.ts)始终不传 seed。
+2. 官方 Fork 查找的是最后一个 `turn/end`，代码不按结束原因筛选；当前未结束轮次整体排除。官方实现依赖其事件 `seq` 与数组下标一致。前缀在启动时获取一次，父会话之后新增的事件不属于这次子会话初始内容。[官方 Fork 测试](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/subagent/subagent-fork-in-process/tests/subagent-fork-in-process.spec.ts)覆盖空历史、多个已结束轮次、进行中的轮次及子任务空输出。
+3. 官方 Driver 在创建子 Agent 时记录 seed 长度作为读取边界；它从该边界之后的子会话事件提取结果，避免子 Agent 未产生回复时误返回父历史中的助手回复。取消信号交给子 Agent，`dispose()` 等待子实例销毁和结果结算。官方 Provider 另有 `prepareContinuable` 提供创建时快照；可继续运行由另一条管理路径处理，并不经过此一次性 Driver。
+4. 不要将官方 Provider 与官方的通用 [SessionStore.fork 测试](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/packages/core/session/tests/fork.spec.ts)混为同一入口：后者还有显式边界及已结束轮次后稳定日志事件的测试；本步对一次性委派边界的结论来自 Fork Provider 本身。
+
+例如父会话第一轮是“世界有浮空岛”，第二轮用户要求“分析这座岛”，父 Agent 正在第二轮调用 Fork 工具：官方 Fork 的初始历史只包括第一轮，不包括第二轮用户输入或当前工具调用。如果子任务需要“这座岛”所指的具体信息，当前任务说明仍须携带它；第一轮尚未结束时，初始历史为空。
+
+#### 本项目：从 Agent 到 Session 和模型请求
+
+1. [AgentInstance.run](../../../src/agents/core/agent.ts)将输入交给本实例 Context 中的 Agent Loop。标准 [AgentLoopRuntime](../../../src/agents/plugins/loop/agent-loop-runtime.ts)持有一个私有 `session`：普通初始化时通过当前 Agent 的 `ctx.sessions.create()` 新建；它把请求排队执行，为每轮追加 `turn/start`，结束时追加 `turn/end`，成功、取消、错误和达到 Step 上限均有不同结束原因。Session Manager 可以管理多个 Session，`list()` 返回实例列表；仅凭列表顺序不能作为通用的活动 Loop Session 契约。
+2. [Session.append / read](../../../src/agents/plugins/session/session.ts)以当前事件数量生成从零开始的连续 `seq`，写入时深复制并冻结事件；`read()` 返回新的数组，但数组中的事件是冻结的既有快照。`Session` 初始化 seed 时检查从零连续的序号，深复制并冻结，再调用 `deriveMessages()`。这证明了序号和消息配对检查的具体行为，不能据此声称 seed 已完整验证所有轮次不变量。
+3. `deriveMessages()` 从事件构造模型消息：只保留最新系统消息并放在最前，其余用户、助手及工具结果消息按顺序保留；工具执行记录等非消息事件不直接进入模型消息。它拒绝缺少结果、错配或重复的工具调用结果。Loop 每个 Step 重新组装自身系统提示并追加系统消息，再把 `deriveMessages()` 的结果送入模型。因此种入父历史后子提示词如何影响最终模型上下文，需要结合实际初始化和运行验证，不能简单认为父系统消息永远生效。
+4. Loop 将模型完成块中的 `replayState` 写入助手消息来源；[LLM Runtime](../../../src/llm/runtime.ts)向适配器分发前，若历史消息来源 Provider 对应的适配器实例与当前适配器不同，会移除该消息的私有 `replayState`。这是现有路由处理，不代表不同供应商、模型或工具历史在 Fork 中已经过兼容性验证。
+5. 持久化恢复路径读取同一 Session 的存储事件，对中断轮次补充必要的收尾记录后，以 seed 建立 Session，并由 Loop 根据 `turn/start` 的最大轮次继续编号；这不同于从父会话复制历史创建另一个独立子会话。[恢复测试](../../../src/agents/tests/agent-loop-persistence.test.ts)和[中断恢复测试](../../../src/agents/tests/agent-loop-interrupted.test.ts)覆盖这条恢复路径，不能把它当作 Fork 已可用的证据。
+
+#### 本项目：委派调用链与缺口
+
+当前通用工具与角色工具分别构造 `generic-subagent` 和 `character-agent` 的 Spawn 请求，传入的 `parent` 都是只包含 ID 的身份视图；角色工具额外携带 `parameters.characterId`。`SubagentRuntime.start()` 路由至已注册 Provider；Spawn Provider 调用共享 Driver 和可信创建函数；创建函数用 Preset 注册表及显式配置创建独立 Agent，发布后的 Run 由工具等待并释放。参见[核心请求契约](../../../src/agents/plugins/subagent/subagent/types.ts)、[Spawn 创建方](../../../src/agents/runtime/subagent-in-process-creator.ts)和[进程内 Driver](../../../src/agents/plugins/subagent/subagent-in-process-driver/run.ts)。
+
+实际 Agent 对象有自身 `context`，且 SubAgent 与 Session 服务按作用域装配，但上述工具传入的最小 `parent` 不提供 Context 或 Session。现有核心请求也没有历史字段，标准 Loop 插件的公开配置没有普通 Fork seed 注入项；[Session Manager](../../../src/agents/plugins/session/session-manager.ts)支持 seed，并不意味着新建 Agent 时已接通此能力。需要第 2 步确定可信父会话取得方式、活动 Session 选择、历史注入入口和其所有权；不能仅按请求中的 ID 信任任意会话。
+
+`createSpawnAgentCreator` 根据可信配置允许的 `presetId` 创建实例，校验并复制每次创建参数，同时拒绝在 Spawn Loop 配置中指定持久化 Session ID。角色工具携带的 ID 目前只到创建参数，角色 Agent 尚未使用它检索资料。Fork 如何支持类型和参数、对历史工具调用或供应商重放状态采用何种兼容策略，均留到第 2 步决定；不意味着所有 Preset 可以直接继承所有父历史。
+
+#### 本步验证范围
+
+已执行 `pnpm run build:tests`，以及 Session、持久化恢复、中断恢复和公开 Spawn 集成的聚焦测试，17 项通过。这些是本项目现有能力的验证；本步未运行官方测试、真实模型或 Fork，也未新增 Provider、修改会话数据或实现历史导入。
+
 ### 2. 确定 Fork 契约与兼容范围
 
 **问题与使用方式：** 先确定由谁选择父会话、子类型和初始历史，再实现。输入是可信父实例、任务、取消信号，以及确需的类型和参数；输出是启动句柄或可理解的拒绝原因。
