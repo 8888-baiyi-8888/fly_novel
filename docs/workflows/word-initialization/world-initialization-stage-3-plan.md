@@ -165,6 +165,8 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 
 验证 Spawn 和 Fork 在上下文、会话历史和任务执行方面的区别。
 
+模型通过通用 / 角色委派工具选择 Fork 及工具历史兼容性仍待完善，记录见 [Fork 计划的后续事项](../../modules/agents/subagent-fork-in-process-development-plan.md#六待完善模型通过委派工具使用-fork)。
+
 ### 6. Tool SubAgent Control
 
 详细步骤见 [Tool SubAgent Control 开发计划](../../modules/agents/tool-subagent-control-development-plan.md)；先核实并建立控制工具所依赖的可继续运行与管理能力。
