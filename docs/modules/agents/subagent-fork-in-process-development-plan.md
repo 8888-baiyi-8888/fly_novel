@@ -217,6 +217,12 @@ Spawn 适合任务说明本身包含所需上下文的子任务；Fork 面向需
 
 **完成条件：** 可信调用能通过正式 Fork 创建独立子 Agent、继承已确认范围的父历史、完成一次任务并清理；支持和拒绝的类型 / 历史组合有证据，文档说明限制。完成后等待用户指示。
 
+#### 第 7 步交付与验证结果
+
+[公开入口集成测试](../../../src/agents/tests/subagent-fork-public-integration.test.ts)使用构建后的 `@fly-novel/agents` 入口、正式 Fork Provider、真实 Agent 和固定模型替身：父 Agent 完成一轮，可信代码启动角色 Fork，确认 Run 先于任务结果交付、历史与任务进入子模型请求、角色 ID 进入创建参数，并在结果完成后释放子实例。[Fork 包说明](../../../src/agents/plugins/subagent/subagent-fork-in-process/README.md)提供同一装配方式的示例、持有者责任和兼容边界。
+
+结合第 5、6 步的对照与生命周期测试，已验证允许的通用和角色 Preset、纯文本历史、拒绝不支持历史、取消和清理；本次未执行真实模型调用。当前 Fork 仅供可信代码调用，`delegate` 和 `delegate_character` 仍使用 Spawn，不能声称模型可以选择 Fork。角色 ID 不会触发资料检索；子 Agent 的输出是建议，不自动成为用户确认的世界事实。
+
 ## 五、交付与非目标
 
 本计划关注一次性进程内 Fork。后台任务、持续会话、自动结果通知、父子实时共享状态、世界资料或角色档案读取、将建议自动确认为世界事实，均不因 Fork 自动获得；如需开发，应单独确定范围。模型可见 Fork 工具不属于本计划，现有 `delegate` 与 `delegate_character` 仍使用 Spawn。

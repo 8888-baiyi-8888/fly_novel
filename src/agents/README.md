@@ -47,7 +47,7 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `createSpawnAgentCreator(framework, presets)` 为 Spawn Provider 提供可信创建函数。`presets` 以可委派的 Preset ID 为键，值为该子 Agent 的插件配置；应用须显式提供标准 `agent-loop-runtime` 和 LLM 配置。创建函数复用同一框架的 Preset 注册表和 Manager，拒绝未注册或未配置的 Preset，以及持久化 Session ID；Agent 创建成功后由运行句柄通过同一 Manager 释放。应用须确认选用的自定义插件不会恢复或共享 Session。该函数不自动将 Spawn 装配到父 Agent；父 Preset 须选择 `subagent` 和 `subagent-spawn-in-process`，并在后者配置中提供创建函数。
 
-`createForkAgentCreator(framework, presets)` 为 Fork Provider 提供可信创建函数；父 Preset 显式选择 `subagent` 和 `subagent-fork-in-process`，并为后者提供该函数。Fork 继承已结束轮次的受限历史，具体归属、兼容和释放规则见 [Fork 包说明](plugins/subagent/subagent-fork-in-process/README.md)。
+`createForkAgentCreator(framework, presets)` 为 Fork Provider 提供可信创建函数；父 Preset 显式选择 `subagent` 和 `subagent-fork-in-process`，并为后者提供该函数。Fork 继承已结束轮次的受限历史，装配示例、兼容和释放规则见 [Fork 包说明](plugins/subagent/subagent-fork-in-process/README.md)。
 
 `generic-subagent` 是执行通用任务的内置 Preset，使用 `general` 职责、独立通用提示词和标准 Loop / Session / LLM；它不装配业务角色或工具。可信调用方提供模型配置后可通过 Spawn 选择它；调用方负责提供任务需要的上下文，并在完成后释放运行。`general` 表示 Agent 职责，不表示父子关系。
 
