@@ -154,6 +154,12 @@ Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父
 
 **完成条件：** 通用子 Agent 在现有 Spawn 链路中可创建、执行和清理；清楚说明其职责、配置和尚不具备的能力。完成后等待用户指示。
 
+#### 第 3 步实现与验证
+
+[通用 Preset](../../../src/agents/generic-subagent/preset.ts)使用 `general` 职责，装配标准 Loop、Session、LLM 和[通用提示词插件](../../../src/agents/generic-subagent/system-prompt.ts)；模型配置由可信调用方提供。当前 Session 持久化记录消息角色和会话信息，未发现 `AgentRole` 字段；本步不改变持久化格式。
+
+[通用子 Agent 测试](../../../src/agents/tests/generic-subagent.test.ts)使用固定模型替身，通过正式 Spawn 创建两个实例，检查任务原文、提示词、独立 Session、父历史隔离、结果和释放；同时检查缺少模型配置和提前取消时无子实例遗留。未调用真实模型，模型委派工具和角色 ID 不属于本步。
+
 ### 4. 建立通用 SubAgent 委派工具
 
 **问题与使用方式：** 让父 Agent 的模型通过工具委派一个通用任务。模型输入任务说明；可信装配确定 Provider、通用 Preset 和运行配置；首版等待最终结果再返回。

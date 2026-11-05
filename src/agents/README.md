@@ -13,6 +13,7 @@
 - `plugins/subagent/subagent/`：独立工作区包 [`@fly-novel/subagent`](plugins/subagent/subagent/README.md)，提供一次性子 Agent 委派服务及 Cordis 插件。
 - `plugins/subagent/subagent-in-process-driver/`：独立工作区包 [进程内运行驱动](plugins/subagent/subagent-in-process-driver/README.md)，提供一次性子 Agent 的创建交接与任务执行。
 - `plugins/subagent/subagent-spawn-in-process/`：独立工作区包 [Spawn Provider](plugins/subagent/subagent-spawn-in-process/README.md)，注册进程内 Spawn 并接收可信创建函数。
+- `generic-subagent/`：通用子 Agent 的 Preset 与职责提示词插件。
 - `plugins/skill/`、`plugins/skill-filesystem/`：独立工作区包，分别提供 Skill 注册查询服务和文件系统来源；各自包含 Cordis 插件及 Harness 注册定义。
 - `plugins/tool-skill/`：独立工作区包，注册 Skill 加载工具并发布模型可见目录。
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
@@ -41,6 +42,8 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 `subagent` 插件定义已加入内置注册表；Preset 显式选择后，每个 Agent 获得独立的 `subagents` 服务。Agent 销毁时等待自身装配的服务关闭并向调用方报告清理失败；不会关闭仅从根 Context 继承的服务。该服务不自动装配 Provider，注册、启动和资源归属见 [SubAgent 包说明](plugins/subagent/subagent/README.md)。
 
 `createSpawnAgentCreator(framework, presets)` 为 Spawn Provider 提供可信创建函数。`presets` 以可委派的 Preset ID 为键，值为该子 Agent 的插件配置；应用须显式提供标准 `agent-loop-runtime` 和 LLM 配置。创建函数复用同一框架的 Preset 注册表和 Manager，拒绝未注册或未配置的 Preset，以及持久化 Session ID；Agent 创建成功后由运行句柄通过同一 Manager 释放。应用须确认选用的自定义插件不会恢复或共享 Session。该函数不自动将 Spawn 装配到父 Agent；父 Preset 须选择 `subagent` 和 `subagent-spawn-in-process`，并在后者配置中提供创建函数。
+
+`generic-subagent` 是执行通用任务的内置 Preset，使用 `general` 职责、独立通用提示词和标准 Loop / Session / LLM；它不装配业务角色或工具。可信调用方提供模型配置后可通过 Spawn 选择它；调用方负责提供任务需要的上下文，并在完成后释放运行。`general` 表示 Agent 职责，不表示父子关系。
 
 以下示例展示可信代码直接委派；`adapter`、`provider` 和 `model` 由应用提供。父 Agent 与子 Agent 使用同一配置仅为演示，应用可以分别配置。
 
