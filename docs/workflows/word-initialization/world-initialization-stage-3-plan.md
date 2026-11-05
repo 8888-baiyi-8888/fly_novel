@@ -167,6 +167,8 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/subagent
 
 ### 6. Tool SubAgent Control
 
+详细步骤见 [Tool SubAgent Control 开发计划](../../modules/agents/tool-subagent-control-development-plan.md)；先核实并建立控制工具所依赖的可继续运行与管理能力。
+
 **官方参考：** `packages/subagent/tool-subagent-control`
 
 **开发目标：**
