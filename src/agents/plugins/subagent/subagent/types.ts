@@ -18,6 +18,8 @@ export interface SubagentStartRequest {
   readonly prompt: string
   /** 项目 Preset ID；是否必填取决于 Provider。 */
   readonly presetId?: string
+  /** 每次创建的业务参数，由支持该能力的 Provider 处理。 */
+  readonly parameters?: Readonly<Record<string, unknown>>
   /** 发布前取消启动并回滚；发布后取消该运行的剩余工作。 */
   readonly signal: AbortSignal
 }
@@ -43,6 +45,8 @@ export interface SubagentRun {
 /** 实现具体启动；同一个 Provider 的不同运行必须相互独立。 */
 export interface SubagentProvider {
   readonly name: string
+  /** 是否支持处理每次创建参数。 */
+  readonly supportsParameters?: boolean
   /**
    * 建立一次运行并在发布后返回句柄，不等待任务完成。
    * @param request 父 Agent、任务及取消信号。

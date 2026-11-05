@@ -56,6 +56,7 @@ export class SubagentRuntime {
     const provider = this.providers.get(name)?.provider
     if (!provider) throw new Error(`Subagent Provider "${name}" 未注册`)
     request.signal.throwIfAborted()
+    if (request.parameters !== undefined && !provider.supportsParameters) throw new Error(`Subagent Provider "${name}" 不支持创建参数`)
 
     const controller = new AbortController()
     const signal = AbortSignal.any([request.signal, controller.signal])

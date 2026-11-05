@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { subagentRunId } from '@fly-novel/subagent'
 import type { InProcessAgentCreator } from '@fly-novel/subagent-in-process-driver'
 import type { AgentFramework } from '../core/bootstrap.js'
+import { deepFreeze, snapshotJsonValue } from '@fly-novel/util'
 
 /** 可信应用为允许委派的 Preset 提供的插件配置。 */
 export type SpawnPresetConfigs = Readonly<Record<string, Readonly<Record<string, unknown>>>>
@@ -31,9 +32,15 @@ export function createSpawnAgentCreator(framework: AgentFramework, presets: Spaw
       throw new Error('Spawn 不允许指定持久化 Session ID')
     }
     if (!Object.hasOwn(pluginConfigs, 'llm') || !pluginConfigs.llm) throw new Error(`Preset "${presetId}" 缺少 LLM 配置`)
+    let parameters = request.parameters
+    if (parameters !== undefined) {
+      const snapshot = snapshotJsonValue(parameters)
+      if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new Error('子 Agent 创建参数必须是无损 JSON 对象')
+      parameters = deepFreeze(snapshot)
+    }
     const id = `subagent-${randomUUID()}`
     const runId = subagentRunId(randomUUID())
-    const agent = await framework.manager.create({ id, presetId, pluginConfigs: { ...pluginConfigs } })
+    const agent = await framework.manager.create({ id, presetId, ...(parameters === undefined ? {} : { parameters }), pluginConfigs: { ...pluginConfigs } })
     return { id: runId, agent, dispose: () => framework.manager.dispose(id) }
   }
 }

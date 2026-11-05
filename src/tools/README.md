@@ -1,5 +1,7 @@
 # 具体工具
 
+`character/delegate-character.ts` 提供角色专用工具 `createCharacterDelegationTool`。可信调用方使用同一父 Agent 的 SubAgent 服务和身份创建工具，并负责将其注册到该 Agent 的 Tools 服务；它直接使用 SubAgent 底层，不依赖通用委派工具包。模型提供任务和角色 ID，工具选择 `character-agent`，把 ID 作为创建参数交给子 Agent，前台等待结果并释放运行。角色 Agent 当前不会根据 ID 检索资料，模型所需的角色资料仍由调用方在任务中提供。
+
 `index.ts` 是普通具体工具的统一导出入口，应用可以从该入口导入 `readFileTool`。Skill 工具使用其独立工作区包入口。
 
 `filesystem/read-file.ts` 定义 `read_file`，通过 `execute({ path }, { callId, name, workingDirectory, signal })` 直接读取授权目录内不超过 1 MiB 的 UTF-8 普通文件。绝对路径、越界路径和解析后指向目录外的符号链接被拒绝；无效 UTF-8 和文件系统错误会使调用失败。授权目录必须由可信调用方提供，路径检查不保证抵御其他进程在检查与打开之间恶意替换目录或符号链接，调用方应确保授权目录不被不可信进程并发修改。

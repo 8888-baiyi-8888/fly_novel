@@ -1,5 +1,7 @@
 # @fly-novel/agents
 
+Spawn 请求的可选 `parameters` 由可信创建函数校验并复制，作为 Agent Factory 创建参数合并到子实例的 `info.parameters`。角色委派工具使用其中的 `characterId`，但当前角色 Agent 不会根据该 ID 检索或加载资料。
+
 小说创作 Agent 的私有 pnpm 工作区包，设计契约见[写作 Agent 模块设计](../../docs/modules/agents/agents.md)。公共入口为 `index.ts`，导入不创建 Agent 或发起网络请求。
 
 各模板的输入、处理逻辑与外部调用草案见[角色](../../docs/modules/agents/character-agent.md)、[导演](../../docs/modules/agents/director-agent.md)和[写作](../../docs/modules/agents/writer-agent.md)详细设计；文档示例不是当前可运行接口。

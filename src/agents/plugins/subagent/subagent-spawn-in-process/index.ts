@@ -12,6 +12,7 @@ export const spawnInProcessPlugin = Object.assign(function spawnInProcessPlugin(
   if (typeof config?.create !== 'function') throw new Error('Spawn Provider 需要可信的创建函数')
   const provider: SubagentProvider = {
     name: 'spawn',
+    supportsParameters: true,
     start(request: SubagentStartRequest) {
       const id = request.presetId
       if (typeof id !== 'string' || !id || id.trim() !== id) {
