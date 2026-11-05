@@ -12,4 +12,4 @@
 
 创建方可以通过自己的闭包准备创建配置和未来的初始上下文，Driver 不固定这些配置的结构。此契约不提供 Fork 历史导入、Session 装配、模型继承或真实 Provider。开发顺序见[共享运行驱动开发计划](../../../../../docs/modules/agents/subagent-in-process-driver-development-plan.md)。
 
-项目集成测试通过测试用 Provider、真实 Agent Factory / Manager 和固定模型适配器验证启动、结果、取消与释放；该测试 Provider 不属于生产装配。真实 Spawn 和 Fork Provider 需要在各自步骤完成。
+项目集成测试通过真实 Agent Factory / Manager 和固定模型适配器验证启动、结果、取消与释放。正式 [Spawn](../subagent-spawn-in-process/README.md) 和 [Fork](../subagent-fork-in-process/README.md) Provider 均使用本驱动。

@@ -8,6 +8,7 @@ packages:
   - 'src/agents/plugins/subagent/subagent'
   - 'src/agents/plugins/subagent/subagent-in-process-driver'
   - 'src/agents/plugins/subagent/subagent-spawn-in-process'
+  - 'src/agents/plugins/subagent/subagent-fork-in-process'
   - 'src/agents/plugins/subagent/tool-subagent'
   - 'src/agents/plugins/skill'
   - 'src/agents/plugins/skill-filesystem'

@@ -84,6 +84,11 @@ export class AgentLoopRuntime implements AgentLoop {
     return validateForkHistory(end < 0 ? [] : events.slice(0, end + 1))
   }
 
+  /** 检查快照能力是否属于指定 Agent 的作用域身份。 */
+  ownsForkHistory(identity: unknown): boolean {
+    return !this.disposed && identity !== undefined && this.context.get('agent') === identity
+  }
+
   /** 取消当前 Turn，并拒绝尚未开始的排队调用。 */
   cancel(): void {
     this.abort({ kind: 'user' })

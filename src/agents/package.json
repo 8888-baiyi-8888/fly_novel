@@ -31,6 +31,7 @@
     "@fly-novel/skill-filesystem": "workspace:*",
     "@fly-novel/subagent": "workspace:*",
     "@fly-novel/subagent-in-process-driver": "workspace:*",
+    "@fly-novel/subagent-fork-in-process": "workspace:*",
     "@fly-novel/subagent-spawn-in-process": "workspace:*",
     "@fly-novel/tool-subagent": "workspace:*",
     "@fly-novel/tool-skill": "workspace:*",

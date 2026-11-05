@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { subagentRunId } from '@fly-novel/subagent'
 import type { InProcessAgentCreator } from '@fly-novel/subagent-in-process-driver'
+import type { ForkInProcessCreator } from '@fly-novel/subagent-fork-in-process'
 import type { AgentFramework } from '../core/bootstrap.js'
 import { deepFreeze, snapshotJsonValue } from '@fly-novel/util'
 
@@ -42,5 +43,19 @@ export function createSpawnAgentCreator(framework: AgentFramework, presets: Spaw
     const runId = subagentRunId(randomUUID())
     const agent = await framework.manager.create({ id, presetId, ...(parameters === undefined ? {} : { parameters }), pluginConfigs: { ...pluginConfigs } })
     return { id: runId, agent, dispose: () => framework.manager.dispose(id) }
+  }
+}
+
+/** 为可信 Fork 创建方提供允许的 Preset 配置和独立会话历史。 */
+export function createForkAgentCreator(framework: AgentFramework, presets: SpawnPresetConfigs): ForkInProcessCreator {
+  return (request, history) => {
+    const presetId = request.presetId
+    if (!presetId || presetId.trim() !== presetId || !Object.hasOwn(presets, presetId)) throw new Error('Fork Preset 未配置委派能力')
+    const config = presets[presetId]
+    const loop = config?.['agent-loop-runtime']
+    if (!loop || typeof loop !== 'object' || Array.isArray(loop)) throw new Error('Fork Preset 缺少 Agent Loop 配置')
+    if ('initialSessionEvents' in loop) throw new Error('Fork 配置不能预先指定初始历史')
+    const create = createSpawnAgentCreator(framework, { [presetId]: { ...config, 'agent-loop-runtime': { ...loop, initialSessionEvents: history } } })
+    return create(request)
   }
 }

@@ -161,6 +161,12 @@ Spawn 适合任务说明本身包含所需上下文的子任务；Fork 面向需
 
 **完成条件：** 可信代码可通过正式 Fork Provider 启动任务并取得结果、释放运行；Provider 的注册、创建和历史初始化均有独立验证，不依赖模型调用工具。
 
+#### 第 4 步实现与验证
+
+[Fork Provider 包](../../../src/agents/plugins/subagent/subagent-fork-in-process/README.md)在父 Agent 作用域注册 `fork`，核对父身份、SubAgent 服务和标准 Loop 归属，捕获已结束轮次的受限历史，再通过 Driver 与 `createForkAgentCreator` 创建指定 Preset 的独立子 Agent。Agent 完成初始化时为自身 SubAgent 服务绑定身份，避免 Fork 使用继承的根服务。创建方复用 Spawn 的 Preset、模型配置与参数校验；模型工具仍固定选择 Spawn。
+
+[Fork 集成测试](../../../src/agents/tests/subagent-fork-plugin.test.ts)使用正式 Provider、真实 Agent 和固定模型替身，检查角色参数、历史快照、启动与结果分离、运行释放，以及父身份、类型配置和继承根服务的拒绝。更完整的 Spawn / Fork 行为比较与生命周期交错验证属于后续步骤；本步未执行真实模型调用。
+
 ### 5. 验证真实 Agent 的上下文与类型
 
 **问题与使用方式：** 使用真实 Factory、Manager、Loop、Session 和正式 Spawn / Fork Provider，固定模型替身只负责产生可检查的输入输出；对照相同父历史下两种方式的区别。

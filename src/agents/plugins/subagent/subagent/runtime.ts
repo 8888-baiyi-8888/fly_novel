@@ -14,6 +14,19 @@ export class SubagentRuntime {
   private readonly pending = new Set<PendingStart>()
   private disposePromise?: Promise<void>
 
+  private owner?: unknown
+
+  /** 由拥有本服务的 Agent 完成装配后绑定身份。 */
+  bindAgent(identity: unknown): void {
+    if (identity === undefined || (this.owner !== undefined && this.owner !== identity)) throw new Error('Subagent 服务所属 Agent 无效')
+    this.owner = identity
+  }
+
+  /** 判断服务是否由指定 Agent 身份的作用域创建。 */
+  belongsToAgent(identity: unknown): boolean {
+    return identity !== undefined && this.owner === identity
+  }
+
   /**
    * 注册一个名称唯一的 Provider。
    * @param provider 要注册的 Provider；名称在注册期间不得改变。

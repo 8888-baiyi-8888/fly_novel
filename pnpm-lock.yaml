@@ -69,6 +69,9 @@ importers:
       '@fly-novel/subagent':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent
+      '@fly-novel/subagent-fork-in-process':
+        specifier: workspace:*
+        version: link:src/agents/plugins/subagent/subagent-fork-in-process
       '@fly-novel/subagent-in-process-driver':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent-in-process-driver
@@ -117,6 +120,9 @@ importers:
       '@fly-novel/subagent':
         specifier: workspace:*
         version: link:plugins/subagent/subagent
+      '@fly-novel/subagent-fork-in-process':
+        specifier: workspace:*
+        version: link:plugins/subagent/subagent-fork-in-process
       '@fly-novel/subagent-in-process-driver':
         specifier: workspace:*
         version: link:plugins/subagent/subagent-in-process-driver
@@ -254,6 +260,27 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
         version: 4.0.2
+
+  src/agents/plugins/subagent/subagent-fork-in-process:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/agent-loop':
+        specifier: workspace:*
+        version: link:../../loop
+      '@fly-novel/session':
+        specifier: workspace:*
+        version: link:../../session
+      '@fly-novel/subagent':
+        specifier: workspace:*
+        version: link:../subagent
+      '@fly-novel/subagent-in-process-driver':
+        specifier: workspace:*
+        version: link:../subagent-in-process-driver
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:../../tools
 
   src/agents/plugins/subagent/subagent-in-process-driver:
     dependencies:

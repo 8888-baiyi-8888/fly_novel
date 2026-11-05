@@ -54,6 +54,10 @@ export class AgentInstance implements AgentHandle {
         if (active <= previousActive) throw new Error(`插件依赖未就绪：${waiting.join('、')}`)
         previousActive = active
       }
+      if (this.plugins.some(({ definition }) => {
+        const provided = definition.plugin.provide
+        return provided === 'subagents' || (Array.isArray(provided) && provided.includes('subagents'))
+      })) this.context.subagents.bindAgent(this.context.get('agent'))
     } catch (error) {
       try {
         await this.scope?.dispose()

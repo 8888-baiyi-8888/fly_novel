@@ -8,7 +8,7 @@
 
 Runtime 从当前 Context 的 `sessions` 创建并持有 Session。`run({ prompt })` 对应一个 Turn，`step()` 负责模型请求。配置需要 `provider` 和 `model`；有可见工具时还需由调用方提供 `workingDirectory` 作为授权工作目录。Loop 从 `systemPrompt` 和 Session 组装请求，将可见工具 schema 传给 LLM；模型返回工具调用时，Tools 服务按模型顺序串行执行并记录各调用和结果，再从 Session 派生历史进入下一 Step。单个工具失败不阻止后续调用；取消时等待已启动工具结束，并为尚未启动的调用记录取消结果。
 
-标准 Runtime 提供 `snapshotForkHistory()`，同步读取自身 Session 并返回截至最后一个 `turn/end` 的独立快照；未结束轮次不包含在内。它只接受已闭合的纯文本历史，包含工具事件、非文本内容、模型私有重放状态或未知事件时拒绝。可信装配可通过 `initialSessionEvents` 初始化新的内存 Session，不能与 `sessionId` 或 `resumeSessionId` 同时使用；初始化历史不会作为新事件发布。此能力尚未接入 Fork Provider。
+标准 Runtime 提供 `snapshotForkHistory()`，同步读取自身 Session 并返回截至最后一个 `turn/end` 的独立快照；未结束轮次不包含在内。它只接受已闭合的纯文本历史，包含工具事件、非文本内容、模型私有重放状态或未知事件时拒绝。可信装配可通过 `initialSessionEvents` 初始化新的内存 Session，不能与 `sessionId` 或 `resumeSessionId` 同时使用；初始化历史不会作为新事件发布。[Fork Provider](../subagent/subagent-fork-in-process/README.md)使用这些能力。
 
 可选的 `modelStepContext` 服务在每个模型 Step 前接收当前授权工作目录和取消信号，异步返回附加的系统上下文；异常会终止本次 Turn，模型请求不会发送。Loop 将返回文本附加到当前系统提示词并使用既有 `system/message` 事件记录；空文本不会保留上次的附加内容。此服务由需要它的插件提供，Agent 不继承根 Context 的同名服务。Session 事件格式和持久化版本不变。
 
