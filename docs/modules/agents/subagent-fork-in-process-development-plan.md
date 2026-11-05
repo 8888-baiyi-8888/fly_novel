@@ -198,6 +198,14 @@ Spawn 适合任务说明本身包含所需上下文的子任务；Fork 面向需
 
 **完成条件：** 各时机的结果和资源所有权可观察；失败与取消不污染父 Session，不遗留无持有者管理的子运行。
 
+#### 第 6 步验证结果
+
+[Fork 生命周期测试](../../../src/agents/tests/subagent-fork-lifecycle.test.ts)使用正式 Fork Provider、真实 Manager 和受控创建门闩：启动前取消不调用创建方；创建中取消等待迟到实例完成初始化并回滚，父历史保持不变；父 Agent 关闭时，未交付启动被取消并由服务等待清理，与 `disposeAll` 并发时也不遗留实例。若回滚失败，启动方和关闭方都能观察到失败。
+
+运行句柄交付后，父 Agent 关闭不会自动释放它；测试由持有者取消并并发重复调用 `dispose()`，最终移除子实例。Session 已关闭时快照失败且创建方不执行；初始历史注入失败会回滚创建。Fork 子 Session 配置持久化 ID 时明确拒绝，测试环境没有创建持久化后端或存储文件。
+
+模型任务失败以 `result` 的 `error` 终态和稳定错误码交付；基础设施异常使 `result` 拒绝。释放失败通过 `dispose()` 单独报告，测试同时制造任务或基础设施错误与释放错误，确认两个通道各自可观察；这里没有模型委派工具将它们合并为 `AggregateError`。同时参考[快照兼容性测试](../../../src/agents/tests/subagent-fork-comparison.test.ts)与[Driver 生命周期测试](../../../src/agents/tests/subagent-driver-lifecycle.test.ts)。
+
 ### 7. 交付验证与使用说明
 
 **问题与使用方式：** 从公开包入口以可信程序完成装配、Fork、等待结果和释放；让后续开发者知道实际支持什么，以及如何配置和验证。
