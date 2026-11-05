@@ -205,6 +205,14 @@ Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父
 
 **完成条件：** 成功、失败、取消和清理均有确定的可观察结果；没有未持有者管理的 Run 或已交付句柄泄漏。
 
+#### 第 6 步验证结果
+
+`start()` 返回前，SubAgent 服务负责处理尚未交付的启动：启动前取消不创建子 Agent，创建期间取消或服务关闭会等待创建结束并回滚迟到实例。回滚失败时，启动方能观察到失败；服务关闭触发的回滚失败也会报告给关闭方。验证见 [Spawn 生命周期测试](../../../src/agents/tests/subagent-spawn-lifecycle.test.ts)和[启动路由测试](../../../src/agents/tests/subagent-start.test.ts)。
+
+`start()` 返回 Run 后，由持有者负责释放；前台委派工具等待结果并调用 `dispose()`。父 Agent 关闭不会自动释放已交付的 Run，持有者仍需完成释放。运行中取消传递到子 Agent，错误和取消不会作为成功输出返回；结果处理与清理同时失败时保留两个错误。重复并发释放共享清理，独立运行的取消互不影响。有关底层生命周期与错误传播，见 [Driver 生命周期测试](../../../src/agents/tests/subagent-driver-lifecycle.test.ts)、[Driver 运行测试](../../../src/agents/tests/subagent-driver-run.test.ts)和 [Spawn 生命周期测试](../../../src/agents/tests/subagent-spawn-lifecycle.test.ts)。
+
+[角色工具测试](../../../src/tools/tests/character-delegation.test.ts)使用受控门闩确认：任务执行期间注销工具只移除后续可见的注册，不中断已开始的调用；调用完成后工具释放子 Agent。该测试使用真实 Manager 和 Spawn，模型响应由固定替身提供。[通用工具测试](../../../src/agents/tests/tool-subagent.test.ts)覆盖模型错误与运行中取消；两个角色调用的创建参数、Agent 和 Session 隔离由角色工具测试验证。同一 Tools 批次仍按顺序执行，独立调用可以并发。
+
 ### 7. 父 Agent 模型调用与交付验证
 
 1. 使用固定模型适配器驱动真实父 Agent Loop：模型在工具调用中分别选择通用工具和角色工具；验证 Schema 对应、角色 ID 到达子 Agent 创建参数、任务原文不变，工具结果进入父会话并可被后续模型步骤使用。

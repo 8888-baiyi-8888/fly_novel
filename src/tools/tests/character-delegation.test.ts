@@ -151,6 +151,43 @@ test('角色工具同时保留执行和释放失败', async () => {
   } finally { await service.dispose() }
 })
 
+test('执行期间注销角色工具不影响已启动任务，结束后释放子 Agent', { timeout: 3000 }, async () => {
+  const entered = deferred()
+  const finish = deferred()
+  class WaitingAdapter extends LlmAdapter {
+    override async *stream(): AsyncIterable<StreamChunk> {
+      entered.resolve()
+      await finish.promise
+      yield { type: 'block-start', index: 0, block: 'text' }
+      yield { type: 'text-delta', index: 0, text: '任务完成' }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '任务完成' } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+  const framework = await bootstrapAgents()
+  const create = createSpawnAgentCreator(framework, { 'character-agent': {
+    'agent-loop-runtime': { provider: 'child', model: 'model' }, llm: { adapters: [{ providers: ['child'], adapter: new WaitingAdapter() }] },
+  } })
+  framework.presets.register({ id: 'character-unregister-parent', version: '1', role: 'general', plugins: withAgentLoop([
+    { pluginId: 'tools' }, { pluginId: 'subagent' }, { pluginId: 'subagent-spawn-in-process' },
+  ]) })
+  try {
+    const parent = await createTestAgent(framework, { id: 'parent', presetId: 'character-unregister-parent', pluginConfigs: { 'subagent-spawn-in-process': { create } } })
+    const unregister = parent.context.tools.register(createCharacterDelegationTool(parent.context.subagents, parent.info.identity.id))
+    const running = parent.context.tools.execute({ calls: [{ type: 'tool-call', id: 'running' as ToolCallId, name: 'delegate_character', arguments: '{"task":"任务","characterId":"character-a"}' }], signal: new AbortController().signal, workingDirectory: process.cwd() })
+    await entered.promise
+    assert.equal(framework.manager.list().length, 2)
+    unregister()
+    assert.equal(parent.context.tools.get('delegate_character'), undefined)
+    assert.equal(framework.manager.list().length, 2)
+    finish.resolve()
+    const result = (await running).results[0]!.result
+    assert.equal(result.isError, false)
+    if (!result.isError) assert.equal(result.value, '任务完成')
+    assert.deepEqual(framework.manager.list().map(agent => agent.info.identity.id), ['parent'])
+  } finally { finish.resolve(); await framework.manager.disposeAll() }
+})
+
 test('取消角色委派会取消子任务并释放实例', { timeout: 3000 }, async () => {
   const entered = deferred()
   class WaitingAdapter extends LlmAdapter {
