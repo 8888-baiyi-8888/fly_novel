@@ -143,6 +143,12 @@ Spawn 适合任务说明本身包含所需上下文的子任务；Fork 面向需
 
 **完成条件：** 可信创建链可产生独立且可继续追加的子 Session，其历史与设计边界一致，失败不遗留资源；尚不声称 Fork Provider 或模型工具已可用。
 
+#### 第 3 步实现与验证
+
+标准 Agent Loop 提供可选的 `ForkHistorySource` 能力：`snapshotForkHistory()` 从自身持有的 Session 截取最后一个 `turn/end` 前缀，并验证其纯文本事件和轮次结构。可信装配可以通过 `initialSessionEvents` 为标准 Loop 创建独立内存 Session；历史与持久化 Session ID 互斥，内容不符合首版约束时拒绝创建。具体接口见 [Agent Loop 说明](../../../src/agents/plugins/loop/README.md)。
+
+[聚焦测试](../../../src/agents/tests/agent-loop-fork-history.test.ts)通过真实 Agent 和固定模型替身验证空历史、进行中轮次截断、独立 Session、子任务使用自己的系统提示和轮次续写，以及未闭合历史、工具事件、私有重放状态和持久化配置的拒绝。Fork Provider、可信父作用域校验和基于 Preset 的 Fork 创建方仍属于后续步骤，本步没有运行 Fork 或真实模型。
+
 ### 4. 建立 Fork Provider 并复用 Driver
 
 **问题与使用方式：** 为现有 SubAgent 服务提供进程内 Fork 启动方式。可信调用方提供第 2 步确定的请求，Provider 获取快照并交由创建方建立子实例，Driver 提交任务原文。

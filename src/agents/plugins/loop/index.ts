@@ -1,4 +1,4 @@
-export type { AgentLoop, AgentLoopInput, AgentLoopResult, ModelStepContext } from './types.js'
+export type { AgentLoop, AgentLoopInput, AgentLoopResult, ForkHistorySource, ModelStepContext } from './types.js'
 export {
   AgentLoopRuntime,
   agentLoopRuntimePlugin,

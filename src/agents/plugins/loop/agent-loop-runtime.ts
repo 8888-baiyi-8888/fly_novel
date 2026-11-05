@@ -12,6 +12,8 @@ import type {} from '@fly-novel/tools'
 import type { SessionPersistence } from '@fly-novel/session-persistence'
 import { recoverToolCall } from './tool-call-recovery.js'
 import { interruptedTurnClosers } from './interrupted-turn.js'
+import { validateForkHistory } from './fork-history.js'
+import type { SessionEvent } from '@fly-novel/session'
 
 export interface AgentLoopRuntimeConfig {
   readonly provider: string
@@ -24,6 +26,8 @@ export interface AgentLoopRuntimeConfig {
   readonly sessionId?: string
   /** 要恢复的持久化 Session ID。 */
   readonly resumeSessionId?: string
+  /** 可信调用方提供的新内存 Session 初始历史，不可与持久化 ID 同时使用。 */
+  readonly initialSessionEvents?: readonly SessionEvent[]
 }
 
 interface PendingTurn {
@@ -68,6 +72,16 @@ export class AgentLoopRuntime implements AgentLoop {
       this.pendingTurns.push({ prompt: input.prompt, resolve, reject })
       this.startDriver()
     })
+  }
+
+  /** 只读取本 Loop 持有的 Session，并截取最后一个已结束轮次。 */
+  snapshotForkHistory(): readonly SessionEvent[] {
+    if (this.disposed) throw new Error('Agent Loop 已销毁')
+    if (this.context.sessions.get(this.session.id) !== this.session) throw new Error('Fork Session 不属于当前 Agent')
+    const events = this.session.read()
+    let end = events.length - 1
+    while (end >= 0 && events[end]?.type !== 'turn/end') end--
+    return validateForkHistory(end < 0 ? [] : events.slice(0, end + 1))
   }
 
   /** 取消当前 Turn，并拒绝尚未开始的排队调用。 */
@@ -297,9 +311,13 @@ export const agentLoopRuntimePlugin = Object.assign(async function agentLoopRunt
   if (config.sessionId !== undefined && (typeof config.sessionId !== 'string' || !config.sessionId.trim() || config.sessionId !== config.sessionId.trim())) throw new Error('sessionId 必须非空且不能包含首尾空白')
   if (config.resumeSessionId !== undefined && (typeof config.resumeSessionId !== 'string' || !config.resumeSessionId.trim() || config.resumeSessionId !== config.resumeSessionId.trim())) throw new Error('resumeSessionId 必须非空且不能包含首尾空白')
   if (config.sessionId !== undefined && config.resumeSessionId !== undefined) throw new Error('sessionId 与 resumeSessionId 不能同时指定')
+  if (config.initialSessionEvents !== undefined && (config.sessionId !== undefined || config.resumeSessionId !== undefined)) throw new Error('Fork 初始历史不能与持久化 Session ID 同时指定')
   if (config.maxSteps !== undefined && (!Number.isSafeInteger(config.maxSteps) || config.maxSteps < 1)) throw new Error('maxSteps 必须是正整数')
   let session: Session | undefined
   let persistence: SessionPersistence | undefined
+  if (config.initialSessionEvents !== undefined) {
+    session = ctx.sessions.create(undefined, { seed: validateForkHistory(config.initialSessionEvents) })
+  }
   if (config.sessionId !== undefined || config.resumeSessionId !== undefined) {
     persistence = ctx.get('sessionPersistence')
     if (!persistence) throw new Error('未配置 Session 持久化后端')
