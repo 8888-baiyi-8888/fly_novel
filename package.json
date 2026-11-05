@@ -32,6 +32,7 @@
     "@fly-novel/subagent": "workspace:*",
     "@fly-novel/subagent-in-process-driver": "workspace:*",
     "@fly-novel/subagent-spawn-in-process": "workspace:*",
+    "@fly-novel/tool-subagent": "workspace:*",
     "@types/node": "^22.20.2",
     "typescript": "^7.0.2"
   },

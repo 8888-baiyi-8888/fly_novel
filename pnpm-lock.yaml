@@ -75,6 +75,9 @@ importers:
       '@fly-novel/subagent-spawn-in-process':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent-spawn-in-process
+      '@fly-novel/tool-subagent':
+        specifier: workspace:*
+        version: link:src/agents/plugins/subagent/tool-subagent
       '@types/node':
         specifier: ^22.20.2
         version: 22.20.2
@@ -126,6 +129,9 @@ importers:
       '@fly-novel/tool-skill':
         specifier: workspace:*
         version: link:plugins/tool-skill
+      '@fly-novel/tool-subagent':
+        specifier: workspace:*
+        version: link:plugins/subagent/tool-subagent
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:plugins/tools
@@ -269,6 +275,18 @@ importers:
       '@fly-novel/subagent-in-process-driver':
         specifier: workspace:*
         version: link:../subagent-in-process-driver
+
+  src/agents/plugins/subagent/tool-subagent:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/subagent':
+        specifier: workspace:*
+        version: link:../subagent
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:../../tools
 
   src/agents/plugins/system-prompt:
     dependencies:

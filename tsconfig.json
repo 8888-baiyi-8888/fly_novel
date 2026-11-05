@@ -70,6 +70,9 @@
       ],
       "@fly-novel/subagent-spawn-in-process": [
         "./src/agents/plugins/subagent/subagent-spawn-in-process/index.ts"
+      ],
+      "@fly-novel/tool-subagent": [
+        "./src/agents/plugins/subagent/tool-subagent/index.ts"
       ]
     }
   },

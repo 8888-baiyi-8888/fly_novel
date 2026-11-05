@@ -42,6 +42,7 @@ src/agents/plugins/skill/ `@fly-novel/skill` 独立工作区包，提供 Skill �
 src/agents/plugins/skill-filesystem/ `@fly-novel/skill-filesystem` 独立工作区包，提供文件系统 Skill 来源及插件
 src/agents/plugins/tool-skill/ `@fly-novel/tool-skill` 独立工作区包，装配 Skill 工具和模型目录
 src/agents/plugins/subagent/ SubAgent 核心服务、进程内运行驱动和 Spawn Provider 工作区包
+src/agents/plugins/subagent/tool-subagent/ 通用子 Agent 委派工具工作区包
 src/agents/plugins/session/ `@fly-novel/session` 独立工作区包；当前只有包骨架与开发说明，尚未实现或注册插件
 src/agents/plugins/session-persistence/ `@fly-novel/session-persistence` 独立工作区包，提供 Session 持久化服务与句柄契约；具体存储由后端提供
 src/agents/plugins/session-persistence-jsonl/ Session JSONL 文件持久化后端

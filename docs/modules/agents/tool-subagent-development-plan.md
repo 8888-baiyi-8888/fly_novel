@@ -172,6 +172,12 @@ Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父
 
 **完成条件：** 模型可以通过正式通用工具委派任务给第 3 步的通用子 Agent，结果返回父 Agent 并完成清理。完成后等待用户指示。
 
+#### 第 4 步实现与验证
+
+[通用工具包](../../../src/agents/plugins/subagent/tool-subagent/README.md)在父 Agent 作用域注册 `delegate`，模型只提供任务文字；工具内部使用 `spawn` 和 `generic-subagent`，等待结果并释放运行。父 Agent 须显式装配相关服务、Provider 和工具，并由可信应用提供子 Agent 模型配置；现有世界初始化 Preset 未自动装配该工具。
+
+[工具集成测试](../../../src/agents/tests/tool-subagent.test.ts)使用固定模型替身，通过真实父 Agent Loop、工具、Spawn 和通用子 Agent 验证任务与结果；测试覆盖作用域隔离、空任务、Provider 缺失、重名、子模型错误和取消。测试不证明真实模型会自主选择该工具，角色专用工具尚未实现。
+
 ### 5. 设计并建立角色专用委派工具
 
 **问题与使用方式：** 角色工具需要任务说明和角色 ID，并使用现有 `character-agent`。在实现前先确定 ID 怎样被角色任务实际使用；角色工具属于 `src/tools/`，共用已有 SubAgent 底层。
