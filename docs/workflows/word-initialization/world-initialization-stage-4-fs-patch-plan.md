@@ -13,9 +13,20 @@
 1. 从 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness)选择并记录完整提交号，读取该提交的 `packages/fs/fs-patch` 源码、包清单、构建配置、测试和许可证；确认目录与包名在该提交存在。
 2. 列出源码文件、公共导出、直接依赖与 peer dependencies，并递归核查运行时依赖；测试及构建依赖单独列出。核对 `dsh-fs`、`dsh-fs-local` 和 `dsh-tool-fs` 在同一提交中具体使用哪些导出，不凭当前分支文档推测接口。
 3. 检查官方发布包可用性、Node.js、模块格式及本项目 CommonJS 构建兼容性。比较直接依赖发布包与同步源码的可行性，优先选择能保留官方实现且维护量较小的方式；不能直接使用时说明具体原因。
-4. 记录实际补丁格式、解析与应用的行为、错误类型、换行和文件末尾处理，以及上游测试覆盖。当前未完成固定提交源码核对，这些细节在该步骤确认，不预先当作既定契约。
+4. 记录实际补丁格式、解析与应用的行为、错误类型、换行和文件末尾处理，以及上游测试覆盖。具体结论见下方上游核对结果。
 
 **完成条件**：得到固定提交、接口与依赖清单，以及引入方式的明确结论；若必需依赖不能取得或无法兼容，先解决或报告阻塞，不凭猜测实现替代品。
+
+### 上游核对结果
+
+- **固定版本**：上游提交 [`fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159`](https://github.com/deepseek-ai/deepseek-harness/tree/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/packages/fs/fs-patch)，包版本 `0.2.2-rc.1`。后续相关包以此提交为共同基线，更新时重新核对。
+- **内容和接口**：源码为 `src/index.ts`、`parse.ts`、`apply.ts`、`types.ts`；公开值为 `parsePatch`、`PatchParseError`、`applyHunks`，公开类型为 `ApplyHunksResult`、`HunkApplyFailure`、`PatchHunk`、`PatchOperation`。上游测试为 `tests/parse.spec.ts` 和 `tests/apply.spec.ts`，使用 Vitest。
+- **依赖**：包清单没有 `dependencies`，声明 `@deepseek-ai/cordis` 为 peer 和开发依赖；本包源码只导入自身类型，未发现外部运行时导入。测试使用 Vitest；上游根项目使用 TypeScript 和 Vitest，Node.js 要求 `>=24.9.0`。依赖清单不等于整个仓库的构建依赖闭包。
+- **下游调用**：`dsh-fs` 使用 `PatchHunk` 类型；`dsh-fs-local` 使用 `applyHunks` 和 `PatchHunk`；`dsh-tool-fs` 的补丁规划、预检和展示使用 `parsePatch`、`PatchParseError`、`applyHunks` 和 `PatchHunk`。
+- **格式与行为**：`parsePatch` 解析 Codex 格式的新增、删除、更新和更新附带移动，保留操作顺序；语法错误抛出包含原始输入行号及原因的 `PatchParseError`。`applyHunks` 处理调用方提供的 LF 文本，返回新文本或结构化匹配失败；匹配按精确、末尾空白、两端空白和部分 Unicode 标点归一化依次尝试。CRLF 转换及恢复由调用方负责，路径不在本包解析或授权。
+- **许可证**：包内 `LICENSE` 同时载明 DeepSeek 的 MIT 条款和移植自 OpenAI Codex 的 Apache-2.0 条款及归属；同步源码和测试时保留完整文件及相关声明，不能只记录 MIT。
+- **发布与兼容性**：npm 已发布 `@deepseek-ai/dsh-fs-patch@0.2.2-rc.1`，官方包为 ESM。本机 Node.js `v24.20.0` 下，从 CommonJS 使用 `require` 加载下载的包并完成一次解析与应用成功；这只是运行时冒烟，项目 TypeScript 构建和实际工作区消费尚未验证。
+- **引入决定**：根据本阶段优先同步官方源码、逐包接入的目标，下一步以固定提交源码建立本地包，尽量原样保留实现与测试；发布包作为行为及兼容性对照。构建和测试适配时重新验证，不能因本次冒烟通过而断言全部兼容。
 
 ## 2. 建立包与来源记录
 
