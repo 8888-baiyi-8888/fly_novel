@@ -223,6 +223,12 @@ Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父
 
 **完成条件：** 父 Agent 的模型可以在已装配工具范围内发起通用或角色委派，并在前台获得可区分终态的结果；角色 ID 到达子 Agent 创建参数，所有运行可正确清理。角色 Agent 实际读取 ID 并检索资料属于后续优化。完成后等待用户指示，再考虑 Fork 或其他能力。
 
+#### 第 7 步验证结果
+
+[组合交付测试](../../../src/tools/tests/subagent-delivery.test.ts)从 Agent 包公开入口装配正式 Spawn 和两个工具，使用固定模型替身驱动同一个父 Agent 依次发起通用和角色委派。测试检查模型可见 Schema、不同 Preset、角色 ID 创建参数、原始任务、不同运行标识和父子 Session 隔离；两个工具结果进入父 Session 和后续模型请求，最后父模型替身根据结果组合回复。未装配工具的另一个父 Agent 看不到这些工具；缺失或格式无效的角色 ID 不会创建子 Agent。两次子运行结束后真实 Manager 中只保留父实例。
+
+[公开 Spawn 集成测试](../../../src/agents/tests/subagent-spawn-public-integration.test.ts)区分启动句柄与完成结果；[通用工具测试](../../../src/agents/tests/tool-subagent.test.ts)、[角色工具测试](../../../src/tools/tests/character-delegation.test.ts)及[启动路由测试](../../../src/agents/tests/subagent-start.test.ts)覆盖缺失 Provider、任务错误、取消和释放。固定替身不能证明真实模型会正确选择工具，本步未调用真实模型。角色 Agent 尚不根据 ID 检索资料；子 Agent 的建议不代表用户已确认世界事实。
+
 ## 五、交付边界
 
 本计划交付通用和角色两类工具及其必要的创建输入，通用包不承载角色专用工具。后台任务、自动异步通知、可继续子 Agent、模型自行配置适配器、角色档案或世界资料存取、用户确认流程及 Fork 不属于本计划；是否支持和如何实现由后续任务确定。
