@@ -10,6 +10,23 @@
 
 下列包名和职责参照官方[文件工具说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/fs/tool-fs/README.md)、[文件系统接口](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/fs/fs/README.md)和[工具目录](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/tool-catalog.md)。实施时以固定提交核实，不把当前 `master` 当成固定版本。
 
+## 包的目录安排
+
+文件系统能力统一放在 `src/agents/plugins/fs/`，按上游能力拆成并列的独立工作区包；该目录既包含基础库和服务，也包含向 Agent 注册工具的插件，不表示每个子包都是模型工具。现有补丁包见 [`fs-patch`](../../../src/agents/plugins/fs/fs-patch/README.md)。
+
+```text
+src/agents/plugins/fs/
+├── fs-patch/                补丁解析和文本修改
+├── fs/                      文件系统服务契约
+├── fs-local/                本地文件系统后端
+├── fs-observation-policy/   文件观察策略
+├── fs-sandbox/              文件修改范围限制
+├── tool-fs/                 Agent 文件操作工具
+└── tool-fs-search/          Agent 文件搜索工具
+```
+
+除 `fs-patch/` 外，上图是本阶段计划的目录，按各包实际引入时创建。辅助包按各自职责确定位置，不因依赖文件系统工具而自动放入 `fs/`。测试放在所属一级模块的 `src/agents/tests/`，不在各包下另建 `tests/`；引入时同步工作区清单、构建配置及相关目录说明。
+
 ## 依赖关系与实施顺序
 
 已核对的关系是：`dsh-fs-patch` → `dsh-fs` → `dsh-fs-local` → `dsh-fs-sandbox`；`dsh-fs-local` 也直接依赖补丁库。观察策略依赖文件契约和事件，不依赖本地后端；文件工具依赖文件系统服务，观察策略和沙箱是可选组合，不是工具的必需依赖。搜索工具通过子进程执行 ripgrep，不依赖文件系统工具；本计划先完成文件工具再做搜索，是为了验证搜索结果能在同一授权视图中读取。箭头仅表示本段所列依赖，完整包依赖须对固定提交展开。`dsh-fs-sandbox` 扩展本地后端，运行时作为 `ctx.fs` 后端使用，而非同时注册两个后端。
