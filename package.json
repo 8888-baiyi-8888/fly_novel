@@ -29,6 +29,7 @@
   },
   "homepage": "https://github.com/8888-baiyi-8888/fly_novel#readme",
   "devDependencies": {
+    "@fly-novel/fs-local": "workspace:*",
     "@fly-novel/subagent": "workspace:*",
     "@fly-novel/subagent-in-process-driver": "workspace:*",
     "@fly-novel/subagent-fork-in-process": "workspace:*",

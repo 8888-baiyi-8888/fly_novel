@@ -30,6 +30,7 @@ src/tools/character/ 角色专用工具实现
 src/agents/plugins/fs/ 文件系统能力工作区包目录，包含基础库、服务、后端与工具插件
 src/agents/plugins/fs/fs/ `@fly-novel/fs` 独立工作区包，定义文件系统服务契约和事件
 src/agents/plugins/fs/fs-patch/ `@fly-novel/fs-patch` 独立工作区包，提供补丁解析和文本修改
+src/agents/plugins/fs/fs-local/ `@fly-novel/fs-local` 独立工作区包，提供显式装配的本机文件后端
 src/tools/skill/   `@fly-novel/skill-tool-core` 独立工作区包，提供 Skill 加载工具定义
 src/tools/skill/   Skill 加载工具及其文件系统提供方
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约

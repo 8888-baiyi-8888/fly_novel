@@ -17,6 +17,9 @@
     "declaration": true,
     "moduleResolution": "NodeNext",
     "paths": {
+      "@fly-novel/fs-local": [
+        "./src/agents/plugins/fs/fs-local/index.ts"
+      ],
       "@fly-novel/fs-patch": [
         "./src/agents/plugins/fs/fs-patch/index.ts"
       ],
