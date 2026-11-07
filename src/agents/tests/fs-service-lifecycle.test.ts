@@ -27,6 +27,24 @@ class TestFileSystem extends FileSystem {
 
 const target = { targetKey: FsTargetKey('test'), displayPath: 'test' }
 
+test('同一作用域不能重复注册文件服务，释放后可以重新注册', async () => {
+  const framework = await bootstrapAgents()
+  const first = framework.context.plugin(ctx => { new TestFileSystem(ctx) })
+  await first
+  try {
+    const duplicate = framework.context.plugin(ctx => { new TestFileSystem(ctx) })
+    await assert.rejects(duplicate.await())
+    await duplicate.dispose()
+    assert.ok(framework.context.get('fs'))
+  } finally { await first.dispose() }
+  assert.equal(framework.context.get('fs'), undefined)
+  const replacement = framework.context.plugin(ctx => { new TestFileSystem(ctx) })
+  try {
+    await replacement
+    assert.ok(framework.context.get('fs'))
+  } finally { await replacement.dispose() }
+})
+
 test('未装配文件后端的 Agent 不继承根文件服务', async () => {
   const framework = await bootstrapAgents()
   const root = framework.context.plugin(ctx => { new TestFileSystem(ctx) })
