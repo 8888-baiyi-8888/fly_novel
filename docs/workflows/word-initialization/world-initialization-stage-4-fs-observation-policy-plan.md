@@ -22,6 +22,30 @@
 
 **验收**：形成来源、依赖、事件和所有者映射及可验证的隔离方案；必需的跨包前置变更有明确处理方式，不进入实现时留下无法识别真实调用方的问题。
 
+### 第 1 步核对结论
+
+**来源与选择。** 以用户提供的 DeepSeek Harness 官方下载快照 `packages/fs/fs-observation-policy` 为依据，不归属于任何已固定提交。版本为 `0.2.2-rc.1`；仓库根许可证为 MIT，版权为 Copyright (c) 2026 DeepSeek，包内源码和测试未见单独许可证声明。后续移植须保留许可证及版权声明、记录本地改动；更新时重新取得官方源码并核对哈希、许可证和契约，逐项重放适配并运行测试。SHA-256：
+
+| 快照文件 | SHA-256 |
+| --- | --- |
+| `package.json` | `c8d7cf9c4906c2ad934a974ab2e3518bc8c86a52c20eac679c9ef303e6d1363f` |
+| `src/index.ts` | `25d95687f89b4f32398d626e7901ac0a6bd5be9234aeCADE86d22433a6e8c7d3` |
+| `src/types.ts` | `f9089d0a9c8d759c141a1d624e05ae87dff87e5d50c0fc10e1425088f6ce3e01` |
+| `tests/policy.spec.ts` | `8c3e0ef14275de09db26fdf444422346d882a87eb780ae7b0803ff6087dc8568` |
+| 仓库根 `LICENSE` | `ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be` |
+
+快照入口导出 `name`、`apply` 和类型 `FsObservationActor`；运行代码只导入 Cordis 类型及 `dsh-fs` 的 `FsError` 和类型，不注入服务。清单把 Cordis 和 `dsh-fs` 列为 peer，开发依赖另含 `dsh-llm`；构建使用仓库 TypeScript 配置和项目引用，测试使用 Vitest。npm 官方注册表的同版本清单将 peer 固定为 `@deepseek-ai/cordis ~4.1.0` 和 `@deepseek-ai/dsh-fs 0.2.2-rc.1`，开发依赖另含同版本 `dsh-llm`，无普通运行依赖；发布入口为 ESM `lib/index.js` 和声明文件。项目使用 CommonJS、Cordis 锁定 `4.0.2` 和本地 `@fly-novel/fs`；直接使用发布包有 peer 不匹配及独立 `FsError` 类身份问题，不能直接复用本地契约。因此选择移植快照源码并改用项目公共入口；已比较发布清单，但未下载比对发布产物，不能推断内容相同。
+
+**事件和策略行为。** 本地四个事件参数与上游策略使用的形状一致：`observed(target, observation, actor)` 同步广播，返回值不等待，监听器同步异常向调用方传播；三个 intent 接收 `(target, actor, next)`，返回 Promise，异常以拒绝传递，不调用 `next()` 的监听器短路后续监听器。`FsTarget.targetKey` 与 `FsVersion` 为项目品牌字符串，使用项目导出的类型；`FsError` 从 `@fly-novel/fs` 导入以保持类身份，`FS_NOT_OBSERVED` 和 `FS_NOT_FOUND` 已存在。已观察存在的写入返回 `replaceIfVersion`，未观察或确认不存在返回 `createIfAbsent`；编辑及删除对未观察拒绝、对确认不存在返回 `FS_NOT_FOUND`、对存在返回版本。无所有者时观察不记录、写入只允许受后端检查的创建，编辑和删除拒绝。观察只在调用方发送事件时更新；事件异常可能发生在修改已提交之后。
+
+**所有者与路由方案。** Loop 持有一个 Session 对象并将其放入每个工具批次的 `log`；Tools 当前只用该对象记日志，每次新建 `ToolRunContext`，其中 `agent` 是 ToolsService 构造时复制并冻结、跨该服务调用稳定的身份对象，但不含 Session。SessionManager 创建并持有对象，关闭时发出 `session/disposed`、移除并关闭；恢复和 Fork 创建新 Session 对象，即使恢复复用字符串 ID 也不继承观察。Loop 销毁先取消并等待执行，Session 由管理器关闭。后续跨包前置变更应在 `ToolBatchInput` 中提供独立于日志的可选 Session 上下文，Loop 显式传入自身 Session，Tools 原样传到 `ToolRunContext`；日志与执行上下文同时提供时验证是同一对象，不能从可选日志静默推导。独立调用不提供 Session 时保持上述无所有者语义；不能以调用对象或字符串 ID 代替 Session。
+
+策略实例按所属 ToolsService 的稳定 `agent` 对象身份匹配事件，不能使用同值的 Agent ID；受信任装配须提供与工具执行上下文相同的身份对象，不能直接使用 `ctx.agent`，因为 ToolsService 复制了它。后续 Tools 应公开受控的稳定身份访问方式，或在装配时显式共享同一个不可变对象，并测试身份相同。事件由未来文件工具使用其注册作用域的 Cordis Context 和原始执行上下文发出；测试阶段由可信事件驱动适配器模拟。每个实例仅记录匹配身份的观察；intent 不匹配时调用 `next()`，匹配且 Session 有效时才决定。匹配 Agent 但无 Session 时按上游无所有者规则决定；无策略 Agent 或未知身份由所有实例委派给原有默认处理，不能称其受策略保护。已注销、关闭或不属于该 Agent 的 Session 不得复用观察或静默降级为无保护：受信任执行入口须验证归属和活动状态并明确失败；Session 关闭及策略释放时清理状态，待决事件不得在释放后写回。按实例和 Session 双重隔离；同一 Agent 重复装配策略时拒绝。其他 intent 决策者仍遵循 waterfall 顺序，策略须在预期的决策者之前，不能声称排除外部监听器截获。
+
+这些 Tools、Loop 和生命周期校验是第 2 步的明确跨包前置工作，涉及公开类型和调用方，须同步文档及测试；现有事件参数无需修改。验证须覆盖真实 Tools 到 Loop 的跨批次同 Session、不同 Session、恢复和 Fork、无 Session、错误或失效归属；在真实共享总线上覆盖两 Agent、一个无策略 Agent、反转注册顺序、销毁及重新装配，并证明不匹配调用 `next()`。现有测试只证明共享总线与 waterfall 语义，尚未证明拟议方案。后端集成用显式事件驱动验证：读取存在或确认缺失后发送观察；写、编辑、补丁、删除和移动前分别取对应意图并传给后端，成功后按实际结果更新观察。移动源用 edit、目标用 write，分别处理部分成功；直接调用后端不受此策略约束。
+
+**本步验证与限制。** `pnpm run build:tests` 成功，`node --test .test-dist/agents/tests/fs-service-lifecycle.test.js` 11 项通过，验证观察广播、同步异常、监听器释放及意图委派和短路；多策略路由、所有者传播和关闭竞争仍是后续实现验收项。官方发布包清单通过 npm 注册表查询，未比较压缩包内容。当前未建立策略包或生产装配。
+
 ## 2. 建立包和受控装配
 
 1. 按第 1 步选择引入上游源码或官方包，建立独立包、公开入口、类型声明及 CommonJS 构建；只做必要的导入、所有者识别和事件路由适配，记录每处改动和适用许可证。更新工作区清单、锁文件、源码路径映射和构建边界。
