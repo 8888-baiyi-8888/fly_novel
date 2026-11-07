@@ -194,6 +194,23 @@ importers:
         specifier: workspace:*
         version: link:../../../plugins/system-prompt
 
+  src/agents/plugins/fs/fs:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/fs-patch':
+        specifier: workspace:*
+        version: link:../fs-patch
+      '@fly-novel/llm':
+        specifier: workspace:*
+        version: link:../../../../llm
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../../../../util
+
+  src/agents/plugins/fs/fs-patch: {}
+
   src/agents/plugins/loop:
     dependencies:
       '@deepseek-ai/cordis':
@@ -371,8 +388,6 @@ importers:
       '@fly-novel/util':
         specifier: workspace:*
         version: link:../util
-
-  src/agents/plugins/fs/fs-patch: {}
 
   src/tools/skill:
     dependencies:

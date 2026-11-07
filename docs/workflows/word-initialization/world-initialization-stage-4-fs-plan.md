@@ -4,7 +4,7 @@
 
 ## 范围和边界
 
-本包计划放在 `src/agents/plugins/fs/fs/`，作为独立工作区包；测试放在 `src/agents/tests/`。前置补丁库见 [`fs-patch`](../../../src/agents/plugins/fs/fs-patch/README.md)，整体目录和逐包顺序见[第四阶段计划](world-initialization-stage-4-file-tools-plan.md#包的目录安排)。
+本包放在 `src/agents/plugins/fs/fs/`，作为独立工作区包；测试放在 `src/agents/tests/`。前置补丁库见 [`fs-patch`](../../../src/agents/plugins/fs/fs-patch/README.md)，整体目录和逐包顺序见[第四阶段计划](world-initialization-stage-4-file-tools-plan.md#包的目录安排)。
 
 本阶段只提供契约、类型、错误和事件，不实现本地磁盘访问、路径授权、文件观察策略、沙箱或 Agent 文件工具。不因注册契约就声称已有可用文件系统；实际后端负责资源、取消、原子性和真实文件行为。
 
@@ -33,7 +33,7 @@
 | `dsh-fs-patch` | 仅类型导入 `PatchHunk`；包清单列为直接依赖 | 将导入及工作区依赖指向已有 `@fly-novel/fs-patch`，保持同一类型来源。 |
 | `dsh-brand` | 仅类型导入 `Branded`，定义目标和版本品牌 | 使用项目 `@fly-novel/util` 的 `Branded`；两者定义结构相同，但各自 `unique symbol` 不同，不能混用两套品牌类型。后续同步的消费者统一引用本项目的 `dsh-fs` 导出类型。 |
 | `dsh-llm` | 运行时使用 `HarnessError` 作为 `FsError` 基类 | 使用项目 `@fly-novel/llm` 的 `LlmBaseError`；两者构造函数均接收 `message`、`code`、`ErrorOptions`，设置 `code`、子类 `name` 和 `cause`。类身份不同，后续消费者须统一使用项目基类；以测试验证错误行为。 |
-| `dsh-sandbox` | 仅类型导入 `SandboxMode` 和 `SandboxExecutionPolicy`，后者包含模式、工作区、可选额外可写根和带品牌的 Session ID | 沙箱契约有独立归属，不能在 `fs` 内复制一个简化替代类型。先单独确定并接入同一上游提交的沙箱契约及其 Session ID 映射，再引入 `fs`；本步骤尚未证明可直接使用项目会话标识。 |
+| `dsh-sandbox` | 仅类型导入 `SandboxMode` 和 `SandboxExecutionPolicy`，后者包含模式、工作区、可选额外可写根和带品牌的 Session ID | 本阶段不引入沙箱契约；移除沙箱相关类型和参数，接入 `dsh-fs-sandbox` 时恢复并验证兼容性。 |
 
 上游 `fs-local` 使用 `FileSystem`、`FsError`、`FsTargetKey`、`FsVersion` 和文件操作类型；观察策略使用 `FsError`、观察和版本类型，并监听四种 `fs/*` 事件；`tool-fs` 消费相同的错误、目标及版本类型，通过意图事件决定保护条件并发出观察事件。事件中的 `next()`、短路和同步通知语义必须保留。
 
@@ -41,9 +41,9 @@
 
 **引入方式**：按既定逐包同步方式复用固定提交源码，调整已确认的项目导入和构建配置并保留许可证；无需为补丁、品牌或错误基类另复制一份上游包。官方 `@deepseek-ai/dsh-fs@0.2.2-rc.1` 已发布，但它要求 Cordis `~4.1.0` 和官方 LLM、品牌、沙箱 peer 依赖，与当前项目服务和类型身份尚未验证兼容，不能直接作为已验证的替代方案。
 
-**前置事项**：`dsh-sandbox` 契约和 Session ID 的归属、必要依赖与适配尚未确定；Cordis `4.0.2` 的上游服务与事件兼容性也尚未经过运行验证。完成这两项验证前，不应宣称已得到可直接构建的最终依赖闭包；下一步先处理沙箱契约的独立前置任务，再建立 `fs` 包。
+**当前适配**：暂不引入沙箱包，文件契约移除上游 `sandboxMode` 和各修改方法的 `sandboxPolicy` 参数；这与上游接口不同，接入 `dsh-fs-sandbox` 前需要恢复并验证。现有 Cordis 的服务与事件兼容性在本包中验证。
 
-试装验证：直接依赖官方 `dsh-sandbox@0.2.2-rc.1` 额外引入 13 个包，`pnpm peers check` 报告这些上游包要求 Cordis `~4.1.0`，而项目安装的是 `4.0.2`；试装已撤销。使用现有 Cordis 验证上游风格服务的注册、同步观察事件和释放通过，但这不代表完整文件系统契约兼容。应先确定沙箱契约的独立复用方案并验证 Session ID 和 Cordis 的完整兼容，再继续接入 `fs`。
+试装验证：直接依赖官方 `dsh-sandbox@0.2.2-rc.1` 额外引入 13 个包，`pnpm peers check` 报告这些上游包要求 Cordis `~4.1.0`，而项目安装的是 `4.0.2`；试装已撤销。使用现有 Cordis 验证上游风格服务的注册、同步观察事件和释放通过，但这不代表完整文件系统契约兼容。本阶段不单独引入沙箱契约，沙箱接口延后到对应阶段。
 
 ## 2. 建立工作区包和来源记录
 
