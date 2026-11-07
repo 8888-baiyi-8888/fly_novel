@@ -42,7 +42,7 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 
 `systemPromptPluginDefinition` 已加入内置插件注册表。Preset 声明 `{ pluginId: 'system-prompt' }` 后，每个 Agent Context 会获得独立的 `systemPrompt` 服务，可注册 Section、变量并调用 `assemble()`；Agent 销毁时插件会清除并关闭服务。SystemPrompt 核心对象、Cordis 服务插件、注册定义与渲染接口由独立的 [`@fly-novel/system-prompt`](plugins/system-prompt/README.md) 包提供。
 
-`skills`、`skill-filesystem` 和 `tool-skill` 插件定义已加入内置注册表，世界初始化主 Agent 的 Preset 装配这些插件和 `tools`。`skills` 提供独立的 Skill 服务，`skill-filesystem` 需要可信调用方配置绝对 `root` 并向服务注册来源，`tool-skill` 使用同一实例的服务并在每个模型 Step 前提供可调用的 Skill 摘要。Skill 和工具服务不会从根 Context 继承注册；作用域销毁时注销工具和来源并关闭服务。其他 Agent 可在自己的 Preset 中选择这些插件。
+`skills`、`skill-filesystem` 和 `tool-skill` 插件定义已加入内置注册表，世界初始化主 Agent 的 Preset 装配这些插件和 `tools`。`skills` 提供独立的 Skill 服务，`skill-filesystem` 需要可信调用方配置绝对 `root` 并向服务注册来源，`tool-skill` 使用同一实例的服务并在每个模型 Step 前提供可调用的 Skill 摘要。Skill、工具和文件系统服务不会从根 Context 继承注册；作用域销毁时注销工具和来源并关闭服务。其他 Agent 可在自己的 Preset 中选择这些插件。
 
 `subagent` 插件定义已加入内置注册表；Preset 显式选择后，每个 Agent 获得独立的 `subagents` 服务。Agent 销毁时等待自身装配的服务关闭并向调用方报告清理失败；不会关闭仅从根 Context 继承的服务。该服务不自动装配 Provider，注册、启动和资源归属见 [SubAgent 包说明](plugins/subagent/subagent/README.md)。
 
