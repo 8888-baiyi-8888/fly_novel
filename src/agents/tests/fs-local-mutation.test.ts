@@ -7,6 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { parsePatch } from '../plugins/fs/fs-patch/index.js'
 
+// 行为参考 DeepSeek Harness fs-local 测试；版权及 MIT 许可见包内 LICENSE。
 async function setup(t: TestContext) {
   const dir = await mkdtemp(join(tmpdir(), 'fly-fs-write-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
@@ -46,6 +47,30 @@ test('创建、覆盖与版本保护返回实际结果', async t => {
   await fs.writeText(target, 'unconditional')
   assert.equal(await readFile(join(dir, 'file'), 'utf8'), 'unconditional')
   await assert.rejects(fs.writeText(await fs.resolve('missing'), 'bad', { kind: 'replaceIfVersion', version: changed.version }), { code: 'FS_STALE_VERSION' })
+})
+
+test('创建保护在暂存后仍拒绝外部竞争者并保留其内容', async t => {
+  const { dir, fs } = await setup(t)
+  const path = join(dir, 'race')
+  const target = await fs.resolve('race')
+  fs.internals.inspectTemp = async () => { await writeFile(path, 'competitor') }
+  await assert.rejects(fs.writeText(target, 'ours', { kind: 'createIfAbsent' }), { code: 'FS_NOT_OBSERVED' })
+  assert.equal(await readFile(path, 'utf8'), 'competitor')
+  assert.deepEqual(await readdir(dir), ['race'])
+})
+
+test('覆盖差异基准的字节上限为排他上限', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'fly-fs-bound-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const ctx = new Context()
+  const scope = await ctx.plugin(LocalFileSystem, { cwd: dir, diffBasisMaxBytes: 4 })
+  t.after(() => scope.dispose())
+  const fs = ctx.fs as LocalFileSystem
+  const target = await fs.resolve('file')
+  await writeFile(join(dir, 'file'), 'abc')
+  assert.equal((await fs.writeText(target, 'xy')).before, 'abc')
+  assert.equal((await fs.writeText(target, '中a')).before, null)
+  assert.equal((await fs.writeText(target, 'ok')).before, null)
 })
 
 test('字面编辑、补丁与删除保留换行并检查失败', async t => {
