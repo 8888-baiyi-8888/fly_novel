@@ -7,3 +7,5 @@
 存在观察产生版本保护，未观察或确认缺失的写入产生创建保护；编辑及删除对缺失观察返回 `FS_NOT_FOUND`。后端负责实际检查及文件操作，观察不会持久化，恢复和 Fork 使用新 Session。观察事件同步执行，监听器异常可在文件操作提交后传播。
 
 源码行为基于用户提供的 DeepSeek Harness `packages/fs/fs-observation-policy` 官方下载快照 `0.2.2-rc.1`，没有已核验的提交标识；源码哈希和发布清单比较见[开发计划](../../../../../docs/workflows/word-initialization/world-initialization-stage-4-fs-observation-policy-plan.md#第-1-步核对结论)。使用 [MIT 许可证](LICENSE)。本地将导入改为项目包，改为从工具执行上下文取得 Session，增加 Agent 身份路由、Session 归属与关闭检查、重复装配检查和显式 Harness 定义。更新时重新核对官方源码和许可证，重新应用这些适配并验证受影响行为。
+
+测试按上游行为覆盖观察、意图和释放，并验证本地增加的跨 Agent 隔离；与上游无注入、无身份过滤不同，本地注入 `tools` 和 `sessions`，未知身份的事件委派给后续监听器。真实文件工具接入、读取内容与版本之间的并发一致性，以及后端检查到发布之间的外部写入竞争尚未验证；后端版本保护不构成跨进程事务。
