@@ -119,7 +119,7 @@ export abstract class FileSystem extends Service {
     return Promise.reject(new FsError('Filesystem watching is not supported by this provider.', 'FS_IO_ERROR'))
   }
 
-/**
+  /**
    * Resolve a model/plugin-supplied path into a stable {@link FsTarget}. May perform I/O (a
    * remote/sandboxed backend may need a round-trip to map a path to a stable identity), hence
    * async even though the local backend only normalizes + realpaths.
