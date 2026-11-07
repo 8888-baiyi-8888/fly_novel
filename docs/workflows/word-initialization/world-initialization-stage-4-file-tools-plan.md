@@ -56,6 +56,7 @@ src/agents/plugins/fs/
 
 ### 4. `dsh-fs-observation-policy`：文件观察策略
 
+- 详细开发步骤见 [`dsh-fs-observation-policy` 开发计划](world-initialization-stage-4-fs-observation-policy-plan.md)。
 - **前置**：步骤 2 的契约完成；步骤 3 的本地后端用于集成验证，并非该策略的必需依赖。检查上游策略依赖和事件契约，单独接入实际必需的辅助包。
 - **开发**：接入文件观察事件和修改前状态检查，明确观察状态的作用域与释放方式，验证其与本项目 Agent 生命周期的关系。观察策略不承担路径授权。
 - **验收**：验证按选定策略读取后修改、未观察文件修改、文件在观察后变化的处理，以及 Agent 销毁时清理；不将该策略误称为目录沙箱。
