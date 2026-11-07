@@ -19,6 +19,22 @@
 
 **验收**：形成来源、许可证、依赖及接口映射，明确平台支持、待解决问题和最小本地改动；不可获取或不兼容的问题有明确处理方式。
 
+### 第 1 步核对结果
+
+**来源与范围。** 上游固定提交为 [`fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159`](https://github.com/deepseek-ai/deepseek-harness/tree/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/packages/fs/fs-local)。已读取该提交的[入口](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/packages/fs/fs-local/src/index.ts)、[README](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/packages/fs/fs-local/README.md)和 [`fs-sandbox` 入口](https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/packages/fs/fs-sandbox/src/index.ts)。README 列出的实现文件为 `src/index.ts`、`src/fsio.ts` 和 `src/win32.ts`；后两个文件、固定提交的包清单与测试尚未取得，不能把发布包内容认作已核对的固定源码。
+
+**发布包与许可。** 已下载并检查 [npm 发布包 `@deepseek-ai/dsh-fs-local@0.2.2-rc.1`](https://www.npmjs.com/package/@deepseek-ai/dsh-fs-local/v/0.2.2-rc.1)：包内许可证为 MIT，版权声明为 `Copyright (c) 2026 DeepSeek`；包含编译后的 `lib/index.js`、类型声明、文档、许可证和语言文件，不含 TypeScript 实现及测试。包元数据没有 `gitHead`，不能仅凭版本号断定与固定提交完全一致。同步源码时须再次核对固定提交的文件级声明并保留适用许可。
+
+**依赖与平台。** 发布包为 ESM；运行依赖为 `chokidar@5.0.0`、`koffi@3.1.1`、`@deepseek-ai/schemastery@~3.19.0`、`@deepseek-ai/dsh-fs-patch@0.2.2-rc.1`，peer 为 `@deepseek-ai/cordis@~4.1.0` 和 `@deepseek-ai/dsh-fs@0.2.2-rc.1`。固定提交入口静态导入 `chokidar` 用于监听、`schemastery` 用于配置；发布包在 Windows 替换路径惰性加载 `koffi`，调用 Windows API 复制 DACL 和替换文件。`chokidar@5.0.0` 和 `koffi@3.1.1` 的 npm 元数据均声明 MIT；前者要求 Node.js `>=20.19.0`。固定提交清单、完整测试及构建依赖和其他平台的行为仍须核对。
+
+当前 Windows x64、Node.js `v24.20.0` 临时安装发布包后，CommonJS `require` 可加载其公开入口，并可通过 `koffi` 加载 `advapi32.dll`、`kernel32.dll`。npm 12 阻止了 `koffi` 自动安装脚本；在临时目录单独执行该包声明的安装脚本成功。该冒烟不验证 pnpm 冻结安装、原生加载失败、DACL、实际文件操作或其他平台，也不代表项目构建兼容已通过。
+
+**接口映射和接入决定。** 固定提交的 `LocalFileSystem` 继承上游 `FileSystem`，入口消费 `FsError`、`FsVersion` 和 `Fs*` 类型，并使用 `fs-patch` 的 `applyHunks`、`PatchHunk`；发布包还从 `fs` 导入 `FsTargetKey`。本地适配时分别改用 `@fly-novel/fs` 与 `@fly-novel/fs-patch`，使错误、服务基类及品牌类型保持项目身份；显式在可信调用方的实例作用域注册服务。项目 `fs` 已移除 `sandboxMode` 和修改方法的 `sandboxPolicy`，而上游沙箱子类继承 `LocalFileSystem` 并对五种修改加策略检查；接入沙箱前须恢复并验证必要契约。本阶段不接入沙箱。官方包直接依赖上游 `fs` 和不同 Cordis 版本，优先按固定提交同步源码并适配项目包，发布包用于对照；具体源码和构建适配须在后续步骤验证。
+
+**行为边界。** 固定提交入口的锁属于后端实例；不推断跨实例或跨进程互斥。监听等待 `ready`，初始化失败关闭监听，成功后由调用方关闭；文件监听过滤父目录事件。上游 README 描述同目录暂存后发布、移动按目标顺序加锁并先发布目标再删除源，源删除失败以 `sourceDeleted: false` 报告；Linux 父目录删除重建后的监听恢复未提供。`cwd` 仅作路径解析基准，不提供授权。这些是上游代码或文档结论，不代表本项目已完成真实后端验证。
+
+**验收状态。** 部分核对完成，尚未取得固定提交的辅助源码、测试和包清单，无法完成逐项来源、依赖和文件级许可核验。恢复固定来源后先完成这些检查并更新本节，再按验收条件决定是否进入第 2 步；不以发布包或其他提交冒充固定源码。
+
 ## 2. 建立工作区包和明确装配方式
 
 1. 按第 1 步结论建立独立包，引入固定来源源码及适用许可证，配置公开入口、声明、依赖和构建；同步工作区清单、锁文件、必要的源码路径映射及构建边界，保证源码检查与产物检查各有明确前置条件。
