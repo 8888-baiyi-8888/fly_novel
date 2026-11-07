@@ -244,7 +244,7 @@ export class AgentLoopRuntime implements AgentLoop {
               })
               this.session.append('assistant/message', { turn, step, message })
               try {
-                const result = await tools.execute({ calls, signal: abort.signal, workingDirectory: this.config.workingDirectory,
+                const result = await tools.execute({ calls, signal: abort.signal, workingDirectory: this.config.workingDirectory, session: this.session,
                   log: { session: this.session, turn, step, checkpoint: () => this.checkpoint() } })
                 if (result.results.length !== calls.length ||
                     result.results.some((outcome, index) => outcome.callId !== calls[index]?.id)) {

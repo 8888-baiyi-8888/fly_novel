@@ -17,6 +17,7 @@
     "declaration": true,
     "moduleResolution": "NodeNext",
     "paths": {
+      "@fly-novel/fs-observation-policy": ["./src/agents/plugins/fs/fs-observation-policy/index.ts"],
       "@fly-novel/fs-local": [
         "./src/agents/plugins/fs/fs-local/index.ts"
       ],

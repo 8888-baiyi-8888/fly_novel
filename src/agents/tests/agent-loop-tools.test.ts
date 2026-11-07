@@ -121,6 +121,8 @@ test('不同 Agent 共用工具定义时保留身份、调用 ID 和授权目录
     { id: 'agent-b', callId: 'call-b', name: 'read_file', root: rootB },
   ])
   assert.ok(observed.every(exec => exec.signal instanceof AbortSignal))
+  assert.equal(observed.find(exec => exec.agent?.id === 'agent-a')?.session, agentA.context.sessions.list()[0])
+  assert.equal(observed.find(exec => exec.agent?.id === 'agent-b')?.session, agentB.context.sessions.list()[0])
   const contentA = adapterA.requests[1]?.messages.at(-1)?.content[0]
   const contentB = adapterB.requests[1]?.messages.at(-1)?.content[0]
   assert.ok(contentA?.type === 'tool-result' && contentB?.type === 'tool-result')

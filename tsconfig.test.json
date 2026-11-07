@@ -5,6 +5,9 @@
     "outDir": ".test-dist",
     "declaration": false,
     "paths": {
+      "@fly-novel/session": ["./src/agents/plugins/session/index.ts"],
+      "@fly-novel/fs": ["./src/agents/plugins/fs/fs/index.ts"],
+      "@fly-novel/fs-observation-policy": ["./src/agents/plugins/fs/fs-observation-policy/index.ts"],
       "@fly-novel/llm": ["./src/llm/index.ts"],
       "@fly-novel/system-prompt": ["./src/agents/plugins/system-prompt/index.ts"],
       "@fly-novel/skill": ["./src/agents/plugins/skill/index.ts"],

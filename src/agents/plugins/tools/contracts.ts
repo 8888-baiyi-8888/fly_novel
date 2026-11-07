@@ -15,6 +15,7 @@ export interface ToolRunContext {
   readonly callId: ToolCallId
   readonly name: string
   readonly agent?: ToolAgentIdentity
+  readonly session?: Session
   readonly workingDirectory: string
   readonly signal: AbortSignal
 }
@@ -41,6 +42,8 @@ export interface ToolBatchInput {
   readonly calls: readonly ToolCallBlock[]
   readonly signal: AbortSignal
   readonly workingDirectory: string
+  /** 代表本次执行的会话；独立调用可省略。 */
+  readonly session?: Session
   /** 写入当前 Step 的调用和结果；独立调用时可省略。 */
   readonly log?: { readonly session: Session; readonly turn: number; readonly step: number; readonly checkpoint?: () => Promise<void> }
 }

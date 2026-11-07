@@ -9,7 +9,7 @@ export class ToolsService {
   private readonly tools = new Map<string, ToolDefinition>()
   private closed = false
 
-  private readonly agent: ToolAgentIdentity | undefined
+  readonly agent: ToolAgentIdentity | undefined
 
   constructor(agent?: ToolAgentIdentity) {
     this.agent = agent === undefined ? undefined : Object.freeze({ ...agent })
@@ -55,6 +55,7 @@ export class ToolsService {
   /** 串行执行工具批次，按调用顺序记录并返回结果。 */
   async execute(input: ToolBatchInput): Promise<ToolBatchResult> {
     this.assertOpen()
+    if (input.session && input.log && input.session !== input.log.session) throw new Error('工具执行 Session 与日志 Session 不一致')
     if (new Set(input.calls.map(call => call.id)).size !== input.calls.length) {
       throw new Error('工具调用 ID 重复')
     }
@@ -95,6 +96,7 @@ export class ToolsService {
         if (snapshot === undefined) throw new ToolCallError('INVALID_ARGS', '工具参数必须是无损 JSON')
         const value = await tool.execute(snapshot, {
           callId: call.id, name: call.name, ...(this.agent === undefined ? {} : { agent: this.agent }),
+          ...(input.session === undefined ? {} : { session: input.session }),
           workingDirectory: input.workingDirectory, signal: input.signal,
         })
         if (input.signal.aborted) throw new ToolCallError('ABORTED', 'tool call aborted')

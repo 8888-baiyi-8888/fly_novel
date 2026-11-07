@@ -23,6 +23,9 @@ export class Session {
   private closed = false
   private closing = false
 
+  /** 会话是否仍可接收新的工具调用。 */
+  get active(): boolean { return !this.closed && !this.closing }
+
   constructor(options: SessionOptions, private readonly onEvent?: (session: Session, event: SessionEvent) => void) {
     const id = options.id?.trim() ?? randomUUID()
     if (!id) throw new Error('Session ID 不能为空')

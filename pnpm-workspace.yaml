@@ -17,6 +17,7 @@ packages:
   - 'src/agents/plugins/fs/fs-patch'
   - 'src/agents/plugins/fs/fs'
   - 'src/agents/plugins/fs/fs-local'
+  - 'src/agents/plugins/fs/fs-observation-policy'
   - 'src/agents/plugins/system-prompt'
   - 'src/agents/character/plugins/system-prompt'
   - 'src/agents/director/plugins/system-prompt'

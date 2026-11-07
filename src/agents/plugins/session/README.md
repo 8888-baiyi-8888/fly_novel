@@ -4,7 +4,7 @@
 
 ## Session 基础类
 
-`Session` 代表一个 Agent 会话，保存 Session ID、创建时间和按追加顺序排列的事件。ID 可由调用方提供，缺省时生成 UUID。`append(type, data)` 的事件类型限定为 `SessionEventMap` 的键，并由键推导对应负载；事件自动获得连续序号和写入时间。追加时会复制并深度冻结负载，避免调用方事后修改历史；`read()` 返回只读历史切片，支持排他游标 `afterIndex` 与数量限制 `limit`。关闭后清空内存事件并拒绝读写，重复关闭安全。
+`Session` 代表一个 Agent 会话，保存 Session ID、创建时间和按追加顺序排列的事件。ID 可由调用方提供，缺省时生成 UUID。`append(type, data)` 的事件类型限定为 `SessionEventMap` 的键，并由键推导对应负载；事件自动获得连续序号和写入时间。追加时会复制并深度冻结负载，避免调用方事后修改历史；`read()` 返回只读历史切片，支持排他游标 `afterIndex` 与数量限制 `limit`。关闭后清空内存事件并拒绝读写，重复关闭安全。`active` 在关闭开始后为 false，可用于拒绝新的会话关联操作。
 
 `SessionEventMap` 按 DeepSeek Harness 的声明合并方式允许插件扩展。基础类型区分 `turn/start`、`step/start` 等运行事件，以及 `user/message`、`assistant/message`、`tool/result` 等消息事件；消息负载复用 `@fly-novel/llm` 类型。助手消息内容中的 `tool-call` 块保留模型工具调用，独立的 `tool/call` 和 `tool/result` 事件记录执行过程。
 
