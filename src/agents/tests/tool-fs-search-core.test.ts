@@ -30,7 +30,7 @@ test('受控执行使用实际打包 ripgrep，在读取根内搜索并拒绝根
   await assert.rejects(runSearch(ctx, work, '.', ['--files'], { ...limits, rawOutputMaxBytes: 1 }, signal), /超过输出上限/)
   await assert.rejects(runSearch(ctx, work, '.', ['--json', '--regexp=['], limits, signal), error => {
     assert.ok(error instanceof Error)
-    assert.equal(error.message, '搜索执行失败')
+    assert.equal(error.message, '搜索模式无效')
     assert.doesNotMatch(error.message, /regex|outside|secret/i)
     return true
   })

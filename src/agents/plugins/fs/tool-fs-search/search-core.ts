@@ -37,7 +37,11 @@ export async function runSearch(ctx: Context, workingDirectory: string, targetPa
       }
     })()
     if (limit.signal.aborted) throw new Error(timeoutOf(limit.signal, 'SEARCH_TIMEOUT') ? '搜索超时' : '搜索已取消')
-    if (outcome.signal !== null || outcome.exitCode === null || (outcome.exitCode !== 0 && outcome.exitCode !== 1)) throw new Error('搜索执行失败')
+    if (outcome.signal !== null || outcome.exitCode === null || (outcome.exitCode !== 0 && outcome.exitCode !== 1)) {
+      const diagnostics = handle.collected.stderr.readFrom(0).text
+      if (/regex parse error|error parsing glob/i.test(diagnostics)) throw new Error('搜索模式无效')
+      throw new Error('搜索执行失败')
+    }
     const output = handle.collected.stdout.readFrom(0)
     if (output.lossy) throw new Error('搜索原始结果超过输出上限')
     return { stdout: output.text, noMatches: outcome.exitCode === 1, workdir }
