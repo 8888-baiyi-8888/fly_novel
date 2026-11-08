@@ -72,6 +72,9 @@ importers:
       '@fly-novel/fs-observation-policy':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/fs-observation-policy
+      '@fly-novel/fs-sandbox':
+        specifier: workspace:*
+        version: link:src/agents/plugins/fs/fs-sandbox
       '@fly-novel/sandbox':
         specifier: workspace:*
         version: link:src/agents/plugins/sandbox/sandbox
@@ -261,6 +264,27 @@ importers:
         version: link:../../tools
 
   src/agents/plugins/fs/fs-patch: {}
+
+  src/agents/plugins/fs/fs-sandbox:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/fs':
+        specifier: workspace:*
+        version: link:../fs
+      '@fly-novel/fs-local':
+        specifier: workspace:*
+        version: link:../fs-local
+      '@fly-novel/fs-patch':
+        specifier: workspace:*
+        version: link:../fs-patch
+      '@fly-novel/sandbox':
+        specifier: workspace:*
+        version: link:../../sandbox/sandbox
+      '@fly-novel/sandbox-policy':
+        specifier: workspace:*
+        version: link:../../sandbox/sandbox-policy
 
   src/agents/plugins/loop:
     dependencies:

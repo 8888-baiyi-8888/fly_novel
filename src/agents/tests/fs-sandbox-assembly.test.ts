@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import test from 'node:test'
+import { fsSandboxPluginDefinition, SandboxedFileSystem } from '@fly-novel/fs-sandbox'
+import { LocalFileSystem } from '@fly-novel/fs-local'
+import { sandboxPolicyPluginDefinition } from '@fly-novel/sandbox-policy'
+import { bootstrapAgents } from '../core/bootstrap.js'
+import { createTestAgent, withAgentLoop } from './agent-loop-fixtures.js'
+
+test('只读拒绝修改，可信可写策略允许工作区并拒绝非授权兄弟目录', async t => {
+  const parent = join(process.cwd(), 'tmp')
+  await mkdir(parent, { recursive: true })
+  const dir = await mkdtemp(join(parent, 'fly-fs-sandbox-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const root = join(dir, 'workspace')
+  const outside = join(dir, 'outside')
+  await mkdir(root); await mkdir(outside)
+  const realRoot = await realpath(root)
+  const framework = await bootstrapAgents()
+  t.after(() => framework.manager.disposeAll())
+  framework.plugins.register(sandboxPolicyPluginDefinition)
+  framework.plugins.register(fsSandboxPluginDefinition)
+  framework.presets.register({ id: 'sandbox-backend', version: '1', role: 'character', plugins: withAgentLoop([{ pluginId: 'sandbox-policy' }, { pluginId: 'fs-sandbox' }]) })
+  const make = (id: string, config: object) => createTestAgent(framework, { id, presetId: 'sandbox-backend', pluginConfigs: { 'sandbox-policy': config, 'fs-sandbox': { cwd: root } } })
+  const a = await make('restricted', { mode: 'workspace-write', workspaceRoot: realRoot })
+  const b = await make('readonly', {})
+  const fs = a.context.fs
+  assert.ok(fs instanceof SandboxedFileSystem)
+  const duplicate = a.context.plugin(LocalFileSystem, { cwd: root })
+  await assert.rejects(duplicate.await())
+  await duplicate.dispose()
+  const inside = await fs.resolve('inside')
+  const escape = await fs.resolve(join(outside, 'file'))
+  await fs.writeText(inside, 'good')
+  await assert.rejects(fs.writeText(escape, 'bad'), { code: 'FS_SANDBOX_DENIED' })
+  await assert.rejects(b.context.fs.writeText(await b.context.fs.resolve('blocked'), 'bad'), { code: 'FS_SANDBOX_DENIED' })
+  assert.equal(await readFile(join(root, 'inside'), 'utf8'), 'good')
+  assert.equal(await fs.stat(escape), undefined)
+  await framework.manager.dispose('restricted')
+  assert.equal(a.context.get('fs'), undefined)
+  assert.ok(b.context.get('fs'))
+})
+
+test('缺少策略时拒绝装配文件后端', async t => {
+  const framework = await bootstrapAgents()
+  t.after(() => framework.manager.disposeAll())
+  framework.plugins.register(fsSandboxPluginDefinition)
+  framework.presets.register({ id: 'sandbox-no-policy', version: '1', role: 'character', plugins: withAgentLoop([{ pluginId: 'fs-sandbox' }]) })
+  await assert.rejects(createTestAgent(framework, { id: 'missing-policy', presetId: 'sandbox-no-policy' }), /依赖未就绪/)
+})
