@@ -75,6 +75,9 @@ importers:
       '@fly-novel/sandbox':
         specifier: workspace:*
         version: link:src/agents/plugins/sandbox/sandbox
+      '@fly-novel/sandbox-policy':
+        specifier: workspace:*
+        version: link:src/agents/plugins/sandbox/sandbox-policy
       '@fly-novel/subagent':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent
@@ -114,6 +117,9 @@ importers:
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:../llm
+      '@fly-novel/sandbox-policy':
+        specifier: workspace:*
+        version: link:plugins/sandbox/sandbox-policy
       '@fly-novel/session':
         specifier: workspace:*
         version: link:plugins/session
@@ -289,6 +295,15 @@ importers:
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:../../../../llm
+
+  src/agents/plugins/sandbox/sandbox-policy:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
 
   src/agents/plugins/session:
     dependencies:

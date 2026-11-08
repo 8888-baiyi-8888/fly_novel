@@ -5,5 +5,5 @@
     "outDir": "dist",
     "paths": {}
   },
-  "exclude": ["node_modules", "dist", "tests/**", "plugins/loop", "plugins/session", "plugins/system-prompt", "plugins/tools", "plugins/subagent", "plugins/skill", "plugins/skill-filesystem", "plugins/tool-skill", "character/plugins/system-prompt", "director/plugins/system-prompt", "world-initialization-main-agent/plugins/system-prompt"]
+  "exclude": ["node_modules", "dist", "tests/**", "plugins/loop", "plugins/sandbox", "plugins/session", "plugins/system-prompt", "plugins/tools", "plugins/subagent", "plugins/skill", "plugins/skill-filesystem", "plugins/tool-skill", "character/plugins/system-prompt", "director/plugins/system-prompt", "world-initialization-main-agent/plugins/system-prompt"]
 }

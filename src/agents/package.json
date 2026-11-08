@@ -25,6 +25,7 @@
     "@fly-novel/character-system-prompt": "workspace:*",
     "@fly-novel/director-system-prompt": "workspace:*",
     "@fly-novel/llm": "workspace:*",
+    "@fly-novel/sandbox-policy": "workspace:*",
     "@fly-novel/session": "workspace:*",
     "@fly-novel/session-persistence": "workspace:*",
     "@fly-novel/skill": "workspace:*",

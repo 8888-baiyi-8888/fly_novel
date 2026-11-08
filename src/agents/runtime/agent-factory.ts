@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@fly-novel/sandbox-policy'
 import { AgentInstance } from '../core/agent.js'
 import type {
   AgentInfo,
@@ -56,8 +57,8 @@ export class AgentFactory {
 
     // 继承 bootstrap 根 Context 中的通用服务，
     // 同时为此 Agent 的插件服务建立独立隔离范围。
-    // Skill、工具和文件服务只能由实例装配显式授权，不继承根 Context 的注册。
-    let agentContext = this.rootContext.isolate('agent').isolate('skills').isolate('tools').isolate('fs').isolate('modelStepContext')
+    // Skill、工具、文件和沙箱策略只能由实例装配显式授权，不继承根 Context 的注册。
+    let agentContext = this.rootContext.isolate('agent').isolate('skills').isolate('tools').isolate('fs').isolate('sandboxPolicy').isolate('modelStepContext')
     const serviceNames = new Set(resolvedPlugins.flatMap(({ definition }) => {
       const provided = definition.plugin.provide
       return provided === undefined ? [] : Array.isArray(provided) ? provided : [provided]
