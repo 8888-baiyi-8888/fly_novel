@@ -42,6 +42,21 @@ test('启动失败和已取消请求明确失败', async t => {
   assert.throws(() => service.spawn({ ...spec(''), graceMs: 0 }), /宽限期/)
 })
 
+test('正常退出后重复终止无副作用，等待可由调用方取消', async t => {
+  const { service } = await setup(t)
+  const completed = service.spawn(spec('process.stdout.write("ok")'))
+  await completed.done
+  assert.equal(await completed.waitForExit(), true)
+  completed.terminate(); completed.terminate()
+  assert.equal(completed.collected.stdout.readFrom(0).text, 'ok')
+  const live = service.spawn(spec('setInterval(() => {}, 1000)'))
+  const controller = new AbortController(); controller.abort()
+  assert.equal(await live.waitForExit(controller.signal), false)
+  live.terminate(); live.terminate()
+  await live.done
+  assert.equal(await live.waitForExit(), true)
+})
+
 test('子进程环境缺省过滤凭据且支持可信覆盖', async t => {
   const { service } = await setup(t)
   const original = process.env.FLY_TEST_PASSWORD

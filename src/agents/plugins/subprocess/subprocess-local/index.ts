@@ -68,6 +68,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     child.stderr!.on('data', (chunk: Buffer) => stderr.append(chunk))
     let exited = false
     let terminated = false
+    let retired = false
     let killTimer: ReturnType<typeof setTimeout> | undefined
     let drainTimer: ReturnType<typeof setTimeout> | undefined
     let resolveDone!: (value: SubprocessOutcome) => void
@@ -93,6 +94,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     child.once('close', (exitCode, signal) => { exited = true; settle(exitOutcome ?? { exitCode, signal }) })
 
     const alive = (): boolean => {
+      if (retired) return false
       if (child.pid === undefined) return false
       if (process.platform === 'win32') return !exited
       try { process.kill(-child.pid, 0); return true } catch (error) {
@@ -130,6 +132,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
         if (signal?.aborted) return false
         await new Promise<void>(resolve => setTimeout(resolve, 15))
       }
+      retired = true
       return !signal?.aborted
     }
     const handle: SubprocessHandle = { collected: { stdout, stderr }, done, terminate, waitForExit: wait }
