@@ -3,3 +3,4 @@ export { buildWindow, formatReadOutput, READ_MAX_BYTES, READ_MAX_LINE_LENGTH } f
 export type { ReadWindow, WindowResult, FileReadOutcome, FileTextLine } from './read-render.js'
 export { toolFsReadPlugin, toolFsReadPluginDefinition } from './read.js'
 export { toolFsMutationPlugin, toolFsMutationPluginDefinition } from './mutation.js'
+export { toolFsPatchPlugin, toolFsPatchPluginDefinition } from './apply-patch.js'

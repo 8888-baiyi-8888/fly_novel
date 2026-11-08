@@ -297,6 +297,9 @@ importers:
       '@fly-novel/fs':
         specifier: workspace:*
         version: link:../fs
+      '@fly-novel/fs-patch':
+        specifier: workspace:*
+        version: link:../fs-patch
       '@fly-novel/fs-sandbox':
         specifier: workspace:*
         version: link:../fs-sandbox
