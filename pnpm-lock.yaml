@@ -96,6 +96,9 @@ importers:
       '@fly-novel/subprocess':
         specifier: workspace:*
         version: link:src/agents/plugins/subprocess/subprocess
+      '@fly-novel/subprocess-local':
+        specifier: workspace:*
+        version: link:src/agents/plugins/subprocess/subprocess-local
       '@fly-novel/tool-fs':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/tool-fs
@@ -451,6 +454,15 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
         version: 4.0.2
+
+  src/agents/plugins/subprocess/subprocess-local:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/subprocess':
+        specifier: workspace:*
+        version: link:../subprocess
 
   src/agents/plugins/system-prompt:
     dependencies:

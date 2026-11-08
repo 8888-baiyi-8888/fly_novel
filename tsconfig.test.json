@@ -6,6 +6,7 @@
     "declaration": false,
     "paths": {
       "@fly-novel/subprocess": ["./src/agents/plugins/subprocess/subprocess/index.ts"],
+      "@fly-novel/subprocess-local": ["./src/agents/plugins/subprocess/subprocess-local/index.ts"],
       "@fly-novel/sandbox": ["./src/agents/plugins/sandbox/sandbox/index.ts"],
       "@fly-novel/sandbox-policy": ["./src/agents/plugins/sandbox/sandbox-policy/index.ts"],
       "@fly-novel/session": ["./src/agents/plugins/session/index.ts"],

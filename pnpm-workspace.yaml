@@ -21,6 +21,7 @@ packages:
   - 'src/agents/plugins/fs/fs-sandbox'
   - 'src/agents/plugins/fs/tool-fs'
   - 'src/agents/plugins/subprocess/subprocess'
+  - 'src/agents/plugins/subprocess/subprocess-local'
   - 'src/agents/plugins/sandbox/sandbox'
   - 'src/agents/plugins/sandbox/sandbox-policy'
   - 'src/agents/plugins/system-prompt'

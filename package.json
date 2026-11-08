@@ -30,6 +30,7 @@
   "homepage": "https://github.com/8888-baiyi-8888/fly_novel#readme",
   "devDependencies": {
     "@fly-novel/subprocess": "workspace:*",
+    "@fly-novel/subprocess-local": "workspace:*",
     "@fly-novel/sandbox": "workspace:*",
     "@fly-novel/sandbox-policy": "workspace:*",
     "@fly-novel/fs-local": "workspace:*",
