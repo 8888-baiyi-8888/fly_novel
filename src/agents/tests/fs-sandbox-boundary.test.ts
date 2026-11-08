@@ -106,6 +106,22 @@ test('目录链接指向工作区外时拒绝，包括检查前替换链接', as
   assert.equal(await fs.stat(await fs.resolve(join(outside, 'file'))), undefined)
 })
 
+test('检查前目录链接改指向另一个根内目标时拒绝使用旧身份', async t => {
+  const { fs, work } = await setup(t)
+  const one = join(work, 'one'); const two = join(work, 'two'); const link = join(work, 'link')
+  await mkdir(one); await mkdir(two)
+  try { await symlink(one, link, process.platform === 'win32' ? 'junction' : 'dir') }
+  catch (error) {
+    if (error instanceof Error && 'code' in error && ['EPERM', 'EACCES', 'ENOTSUP'].includes(String(error.code))) { t.skip(`平台无法创建目录链接：${String(error.code)}`); return }
+    throw error
+  }
+  const stale = await fs.resolve('link/file')
+  await rm(link)
+  await symlink(two, link, process.platform === 'win32' ? 'junction' : 'dir')
+  await assert.rejects(fs.writeText(stale, 'wrong target'), { code: 'FS_STALE_VERSION' })
+  assert.equal(await fs.stat(await fs.resolve(join(two, 'file'))), undefined)
+})
+
 test('上游平台临时根可写，未授权的仓库邻目录不因临时目录而放行', async t => {
   const { fs, outside } = await setup(t)
   const temp = await mkdtemp(join(tmpdir(), 'fly-sandbox-grant-'))

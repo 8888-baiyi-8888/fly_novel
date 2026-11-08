@@ -35,7 +35,10 @@ export class SandboxedFileSystem extends LocalFileSystem {
     if (policy.mode === 'read-only') throw new FsError(`cannot write "${target.displayPath}": file access denied under read-only mode`, 'FS_SANDBOX_DENIED')
     const fresh = await this.resolve(target.displayPath)
     for (const root of writableRoots(policy)) {
-      if (await isPathUnder(fresh.targetKey, root)) return fresh
+      if (await isPathUnder(fresh.targetKey, root)) {
+        if (fresh.targetKey !== target.targetKey) throw new FsError('修改目标身份已变化，请重新解析', 'FS_STALE_VERSION')
+        return fresh
+      }
     }
     throw new FsError(`cannot write "${target.displayPath}": file access denied under workspace-write mode`, 'FS_SANDBOX_DENIED')
   }
