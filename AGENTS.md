@@ -33,6 +33,7 @@ src/agents/plugins/fs/fs-patch/ `@fly-novel/fs-patch` 独立工作区包，提�
 src/agents/plugins/fs/fs-local/ `@fly-novel/fs-local` 独立工作区包，提供显式装配的本机文件后端
 src/agents/plugins/fs/fs-observation-policy/ 文件观察策略独立工作区包，提供显式装配的事件监听插件
 src/agents/plugins/fs/fs-sandbox/ 文件修改路径边界独立工作区包
+src/agents/plugins/fs/tool-fs/ 文件工具和读取授权独立工作区包
 src/agents/plugins/sandbox/sandbox/ 沙箱文件模式和可写根计算独立工作区包
 src/agents/plugins/sandbox/sandbox-policy/ Agent 文件修改策略服务独立工作区包
 src/tools/skill/   `@fly-novel/skill-tool-core` 独立工作区包，提供 Skill 加载工具定义

@@ -19,6 +19,7 @@ packages:
   - 'src/agents/plugins/fs/fs-local'
   - 'src/agents/plugins/fs/fs-observation-policy'
   - 'src/agents/plugins/fs/fs-sandbox'
+  - 'src/agents/plugins/fs/tool-fs'
   - 'src/agents/plugins/sandbox/sandbox'
   - 'src/agents/plugins/sandbox/sandbox-policy'
   - 'src/agents/plugins/system-prompt'

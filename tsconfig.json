@@ -21,6 +21,7 @@
       "@fly-novel/sandbox-policy": ["./src/agents/plugins/sandbox/sandbox-policy/index.ts"],
       "@fly-novel/fs-observation-policy": ["./src/agents/plugins/fs/fs-observation-policy/index.ts"],
       "@fly-novel/fs-sandbox": ["./src/agents/plugins/fs/fs-sandbox/index.ts"],
+      "@fly-novel/tool-fs": ["./src/agents/plugins/fs/tool-fs/index.ts"],
       "@fly-novel/fs-local": [
         "./src/agents/plugins/fs/fs-local/index.ts"
       ],

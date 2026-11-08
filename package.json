@@ -33,6 +33,7 @@
     "@fly-novel/sandbox-policy": "workspace:*",
     "@fly-novel/fs-local": "workspace:*",
     "@fly-novel/fs-sandbox": "workspace:*",
+    "@fly-novel/tool-fs": "workspace:*",
     "@fly-novel/fs-observation-policy": "workspace:*",
     "@fly-novel/subagent": "workspace:*",
     "@fly-novel/subagent-in-process-driver": "workspace:*",

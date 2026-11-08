@@ -93,6 +93,9 @@ importers:
       '@fly-novel/subagent-spawn-in-process':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent-spawn-in-process
+      '@fly-novel/tool-fs':
+        specifier: workspace:*
+        version: link:src/agents/plugins/fs/tool-fs
       '@fly-novel/tool-subagent':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/tool-subagent
@@ -285,6 +288,12 @@ importers:
       '@fly-novel/sandbox-policy':
         specifier: workspace:*
         version: link:../../sandbox/sandbox-policy
+
+  src/agents/plugins/fs/tool-fs:
+    dependencies:
+      '@fly-novel/fs':
+        specifier: workspace:*
+        version: link:../fs
 
   src/agents/plugins/loop:
     dependencies:
