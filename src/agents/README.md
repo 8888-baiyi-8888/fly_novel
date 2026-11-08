@@ -14,6 +14,7 @@ Spawn 请求的可选 `parameters` 由可信创建函数校验并复制，作为
 - `plugins/fs/`：文件系统能力包；`fs-patch/` 提供补丁解析，`fs/` 提供文件系统服务契约与事件，[`fs-local/`](plugins/fs/fs-local/README.md) 提供需显式装配的本机后端；[`fs-observation-policy/`](plugins/fs/fs-observation-policy/README.md) 提供文件观察事件策略。
 - `plugins/fs/fs-sandbox/`：独立工作区包，提供[需显式装配的文件修改边界](plugins/fs/fs-sandbox/README.md)。
 - `plugins/fs/tool-fs/`：独立工作区包，提供[文件工具及读取范围检查](plugins/fs/tool-fs/README.md)。
+- `plugins/subprocess/subprocess/`：独立工作区包，定义[前台子进程契约](plugins/subprocess/subprocess/README.md)。
 - `plugins/tools/`：独立工作区包 `@fly-novel/tools`，提供工具定义与注册执行服务；具体工具见[工具目录](../tools/README.md)。
 - `plugins/sandbox/sandbox/`：独立工作区包 [`@fly-novel/sandbox`](plugins/sandbox/sandbox/README.md)，提供文件修改模式与可写根计算。
 - `plugins/sandbox/sandbox-policy/`：独立工作区包 [`@fly-novel/sandbox-policy`](plugins/sandbox/sandbox-policy/README.md)，提供 Agent 作用域文件修改策略。

@@ -17,6 +17,7 @@
     "declaration": true,
     "moduleResolution": "NodeNext",
     "paths": {
+      "@fly-novel/subprocess": ["./src/agents/plugins/subprocess/subprocess/index.ts"],
       "@fly-novel/sandbox": ["./src/agents/plugins/sandbox/sandbox/index.ts"],
       "@fly-novel/sandbox-policy": ["./src/agents/plugins/sandbox/sandbox-policy/index.ts"],
       "@fly-novel/fs-observation-policy": ["./src/agents/plugins/fs/fs-observation-policy/index.ts"],

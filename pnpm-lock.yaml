@@ -93,6 +93,9 @@ importers:
       '@fly-novel/subagent-spawn-in-process':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent-spawn-in-process
+      '@fly-novel/subprocess':
+        specifier: workspace:*
+        version: link:src/agents/plugins/subprocess/subprocess
       '@fly-novel/tool-fs':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/tool-fs
@@ -442,6 +445,12 @@ importers:
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:../../tools
+
+  src/agents/plugins/subprocess/subprocess:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
 
   src/agents/plugins/system-prompt:
     dependencies:
