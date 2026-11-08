@@ -23,9 +23,18 @@ importers:
       '@fly-novel/director-system-prompt':
         specifier: workspace:*
         version: link:src/agents/director/plugins/system-prompt
+      '@fly-novel/fs':
+        specifier: workspace:*
+        version: link:src/agents/plugins/fs/fs
+      '@fly-novel/fs-sandbox':
+        specifier: workspace:*
+        version: link:src/agents/plugins/fs/fs-sandbox
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:src/llm
+      '@fly-novel/sandbox':
+        specifier: workspace:*
+        version: link:src/agents/plugins/sandbox/sandbox
       '@fly-novel/session':
         specifier: workspace:*
         version: link:src/agents/plugins/session
@@ -72,12 +81,6 @@ importers:
       '@fly-novel/fs-observation-policy':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/fs-observation-policy
-      '@fly-novel/fs-sandbox':
-        specifier: workspace:*
-        version: link:src/agents/plugins/fs/fs-sandbox
-      '@fly-novel/sandbox':
-        specifier: workspace:*
-        version: link:src/agents/plugins/sandbox/sandbox
       '@fly-novel/sandbox-policy':
         specifier: workspace:*
         version: link:src/agents/plugins/sandbox/sandbox-policy

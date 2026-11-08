@@ -32,10 +32,8 @@
     "@fly-novel/subprocess": "workspace:*",
     "@fly-novel/subprocess-local": "workspace:*",
     "@fly-novel/timeout": "workspace:*",
-    "@fly-novel/sandbox": "workspace:*",
     "@fly-novel/sandbox-policy": "workspace:*",
     "@fly-novel/fs-local": "workspace:*",
-    "@fly-novel/fs-sandbox": "workspace:*",
     "@fly-novel/tool-fs": "workspace:*",
     "@fly-novel/tool-fs-search": "workspace:*",
     "@fly-novel/fs-observation-policy": "workspace:*",
@@ -48,6 +46,9 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@fly-novel/fs": "workspace:*",
+    "@fly-novel/fs-sandbox": "workspace:*",
+    "@fly-novel/sandbox": "workspace:*",
     "@deepseek-ai/cordis": "^4.0.2",
     "@fly-novel/agents": "workspace:*",
     "@fly-novel/agent-loop": "workspace:*",
