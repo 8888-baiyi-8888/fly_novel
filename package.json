@@ -31,6 +31,7 @@
   "devDependencies": {
     "@fly-novel/subprocess": "workspace:*",
     "@fly-novel/subprocess-local": "workspace:*",
+    "@fly-novel/timeout": "workspace:*",
     "@fly-novel/sandbox": "workspace:*",
     "@fly-novel/sandbox-policy": "workspace:*",
     "@fly-novel/fs-local": "workspace:*",

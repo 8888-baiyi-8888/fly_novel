@@ -99,6 +99,9 @@ importers:
       '@fly-novel/subprocess-local':
         specifier: workspace:*
         version: link:src/agents/plugins/subprocess/subprocess-local
+      '@fly-novel/timeout':
+        specifier: workspace:*
+        version: link:src/agents/plugins/subprocess/timeout
       '@fly-novel/tool-fs':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/tool-fs
@@ -463,6 +466,8 @@ importers:
       '@fly-novel/subprocess':
         specifier: workspace:*
         version: link:../subprocess
+
+  src/agents/plugins/subprocess/timeout: {}
 
   src/agents/plugins/system-prompt:
     dependencies:
