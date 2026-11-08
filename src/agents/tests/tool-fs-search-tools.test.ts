@@ -49,6 +49,14 @@ test('真实工具服务搜索文件并拒绝越界目录与链接', async t => 
   if (invalid.isError) assert.match(JSON.stringify(invalid), /搜索模式无效/)
   assert.equal((await call('grep', { pattern: 'hello', include: '*.txt,*.md' })).isError, true)
   assert.equal((await call('grep', { pattern: 'hello', include: '*.{txt,md}' })).isError, false)
+  await writeFile(join(root, '-特殊.txt'), '-needle\n')
+  const leading = await call('grep', { pattern: '-needle', path: '-特殊.txt' })
+  assert.equal(leading.isError, false)
+  if (!leading.isError) assert.match(JSON.stringify(leading.content), /-特殊\.txt/)
+  await writeFile(join(root, 'invalid.txt'), Buffer.from([0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0xff, 0x0a]))
+  const nonUtf8 = await call('grep', { pattern: 'prefix', path: 'invalid.txt' })
+  assert.equal(nonUtf8.isError, false)
+  if (!nonUtf8.isError) assert.match(JSON.stringify(nonUtf8.content), /\[bytes\]/)
   const backend = agent.context.fs
   const originalResolve = backend.resolve.bind(backend)
   const replacement = t.mock.method(backend, 'resolve', async (...[path, options]: Parameters<typeof backend.resolve>) => {

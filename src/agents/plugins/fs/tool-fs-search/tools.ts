@@ -39,7 +39,7 @@ function parseMatches(text: string): Match[] {
     if (typeof item.data !== 'object' || item.data === null) throw new Error('搜索结果格式无效')
     const data = item.data as { path?: { text?: unknown }, line_number?: unknown, lines?: { text?: unknown, bytes?: unknown } }
     if (typeof data.path?.text !== 'string' || !Number.isSafeInteger(data.line_number) || typeof data.line_number !== 'number' || data.line_number < 1) throw new Error('搜索结果路径或行号无效')
-    const value = typeof data.lines?.text === 'string' ? data.lines.text.replace(/\r?\n$/, '') : typeof data.lines?.bytes === 'string' ? '(行内容不是有效 UTF-8)' : undefined
+    const value = typeof data.lines?.text === 'string' ? data.lines.text.replace(/\r?\n$/, '') : typeof data.lines?.bytes === 'string' ? '[bytes]' : undefined
     if (value === undefined) throw new Error('搜索结果内容无效')
     matches.push({ path: data.path.text, lineNumber: data.line_number, line: value })
   }
