@@ -36,4 +36,23 @@ test('受控执行使用实际打包 ripgrep，在读取根内搜索并拒绝根
   })
   const cancelled = new AbortController(); cancelled.abort()
   await assert.rejects(runSearch(ctx, work, '.', ['--files'], limits, cancelled.signal), /搜索已取消/)
+  let markStarted!: () => void
+  const started = new Promise<void>(resolve => { markStarted = resolve })
+  const fake = t.mock.method(ctx.subprocess, 'spawn', (...[spec]: Parameters<typeof ctx.subprocess.spawn>) => {
+    markStarted()
+    const done = new Promise<{ exitCode: number | null, signal: NodeJS.Signals | null }>(resolve => {
+      const finish = () => resolve({ exitCode: null, signal: 'SIGTERM' })
+      if (spec.signal?.aborted) finish()
+      else spec.signal?.addEventListener('abort', finish, { once: true })
+    })
+    const output = { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) }
+    return { done, collected: { stdout: output, stderr: output }, terminate() {}, async waitForExit() { return true } }
+  })
+  const running = new AbortController()
+  const pending = runSearch(ctx, work, '.', ['--files'], limits, running.signal)
+  await started
+  running.abort()
+  await assert.rejects(pending, /搜索已取消/)
+  await assert.rejects(runSearch(ctx, work, '.', ['--files'], { ...limits, timeoutMs: 50 }, signal), /搜索超时/)
+  fake.mock.restore()
 })
