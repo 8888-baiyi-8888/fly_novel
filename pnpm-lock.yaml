@@ -72,6 +72,9 @@ importers:
       '@fly-novel/fs-observation-policy':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/fs-observation-policy
+      '@fly-novel/sandbox':
+        specifier: workspace:*
+        version: link:src/agents/plugins/sandbox/sandbox
       '@fly-novel/subagent':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent
@@ -280,6 +283,12 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+
+  src/agents/plugins/sandbox/sandbox:
+    dependencies:
+      '@fly-novel/llm':
+        specifier: workspace:*
+        version: link:../../../../llm
 
   src/agents/plugins/session:
     dependencies:

@@ -32,6 +32,7 @@ src/agents/plugins/fs/fs/ `@fly-novel/fs` 独立工作区包，定义文件系�
 src/agents/plugins/fs/fs-patch/ `@fly-novel/fs-patch` 独立工作区包，提供补丁解析和文本修改
 src/agents/plugins/fs/fs-local/ `@fly-novel/fs-local` 独立工作区包，提供显式装配的本机文件后端
 src/agents/plugins/fs/fs-observation-policy/ 文件观察策略独立工作区包，提供显式装配的事件监听插件
+src/agents/plugins/sandbox/sandbox/ 沙箱文件模式和可写根计算独立工作区包
 src/tools/skill/   `@fly-novel/skill-tool-core` 独立工作区包，提供 Skill 加载工具定义
 src/tools/skill/   Skill 加载工具及其文件系统提供方
 src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约

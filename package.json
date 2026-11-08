@@ -29,6 +29,7 @@
   },
   "homepage": "https://github.com/8888-baiyi-8888/fly_novel#readme",
   "devDependencies": {
+    "@fly-novel/sandbox": "workspace:*",
     "@fly-novel/fs-local": "workspace:*",
     "@fly-novel/fs-observation-policy": "workspace:*",
     "@fly-novel/subagent": "workspace:*",

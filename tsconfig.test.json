@@ -5,6 +5,7 @@
     "outDir": ".test-dist",
     "declaration": false,
     "paths": {
+      "@fly-novel/sandbox": ["./src/agents/plugins/sandbox/sandbox/index.ts"],
       "@fly-novel/session": ["./src/agents/plugins/session/index.ts"],
       "@fly-novel/fs": ["./src/agents/plugins/fs/fs/index.ts"],
       "@fly-novel/fs-observation-policy": ["./src/agents/plugins/fs/fs-observation-policy/index.ts"],
