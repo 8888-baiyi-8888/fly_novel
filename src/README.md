@@ -12,3 +12,4 @@
 | [llm/](llm/README.md) | 大语言模型调用接口与提供商适配。 |
 | [tools/](tools/README.md) | 可直接调用的具体工具实现。 |
 | [util/](util/README.md) | 跨模块共用的基础工具。 |
+| [world-init/](world-init/README.md) | 世界初始化工作区与资料读取等业务能力的归属。 |
