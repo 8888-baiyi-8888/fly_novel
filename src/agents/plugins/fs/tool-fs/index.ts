@@ -1,6 +1,9 @@
 import { FsError } from '@fly-novel/fs'
 import type { FileSystem, FsTarget } from '@fly-novel/fs'
 
+export { buildWindow, formatReadOutput, READ_MAX_BYTES, READ_MAX_LINE_LENGTH } from './read-render.js'
+export type { ReadWindow, WindowResult, FileReadOutcome, FileTextLine } from './read-render.js'
+
 /**
  * 解析读取目标，并在读取或探测目标前限制到可信授权目录。
  * @param fs 当前执行作用域的文件后端。
