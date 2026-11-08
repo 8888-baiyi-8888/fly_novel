@@ -8,6 +8,8 @@
 
 `world-initialization-debug.ts` 使用本机 DeepSeek 配置创建世界初始化主 Agent，在集成终端中直接输入并显示 Agent 回复；输入 `/exit` 结束。运行 `pnpm run world-initialization-debug`，或在 VS Code“运行和调试”选择“调试世界初始化主 Agent（DeepSeek）”并按 F5。调试入口以仓库为工作目录，使用仓库中的玄幻 Skill 样例；真实请求需要有效的模型配置和网络。此入口只测试 Agent 对话，不实现程序控制的确认和超时。
 
+`world-initialization-files-debug.ts` 使用受控测试工作区和真实模型交互调试文件、搜索及委派工具，显示主 Agent 的工具调用；启动方式、测试任务和目录边界见[文件工具调试指南](../../docs/cookbook/world-initialization-file-tools-debug.md)。
+
 `writer-agent-example.ts` 使用本地模型及凭据配置调用写作 Agent；运行前按[配置模块说明](../config/README.md)准备配置和凭据，也可用命令行参数选择 `settings.json` 中的提供商：
 
 ```bash

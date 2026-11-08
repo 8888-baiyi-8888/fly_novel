@@ -10,6 +10,8 @@
     "credentials": "pnpm run build && node dist/app/credentials-cli.js",
     "agent-harness-debug": "pnpm run build && node dist/app/agent_harness.js",
     "world-initialization-debug": "pnpm run build && node dist/app/world-initialization-debug.js",
+    "world-initialization-files-debug": "pnpm run build && node dist/app/world-initialization-files-debug.js",
+    "world-initialization-files-debug": "pnpm run build && node dist/app/world-initialization-files-debug.js",
     "writer-agent-example": "pnpm run build && node dist/app/writer-agent-example.js",
     "init-encryption-key": "pnpm run build && node dist/app/init-encryption-key.js",
     "typecheck": "tsc -p tsconfig.json",
