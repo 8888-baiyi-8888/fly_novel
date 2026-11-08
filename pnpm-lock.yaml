@@ -26,6 +26,9 @@ importers:
       '@fly-novel/fs':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/fs
+      '@fly-novel/fs-observation-policy':
+        specifier: workspace:*
+        version: link:src/agents/plugins/fs/fs-observation-policy
       '@fly-novel/fs-sandbox':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/fs-sandbox
@@ -35,6 +38,9 @@ importers:
       '@fly-novel/sandbox':
         specifier: workspace:*
         version: link:src/agents/plugins/sandbox/sandbox
+      '@fly-novel/sandbox-policy':
+        specifier: workspace:*
+        version: link:src/agents/plugins/sandbox/sandbox-policy
       '@fly-novel/session':
         specifier: workspace:*
         version: link:src/agents/plugins/session
@@ -50,9 +56,18 @@ importers:
       '@fly-novel/skill-tool-core':
         specifier: workspace:*
         version: link:src/tools/skill
+      '@fly-novel/subprocess-local':
+        specifier: workspace:*
+        version: link:src/agents/plugins/subprocess/subprocess-local
       '@fly-novel/system-prompt':
         specifier: workspace:*
         version: link:src/agents/plugins/system-prompt
+      '@fly-novel/tool-fs':
+        specifier: workspace:*
+        version: link:src/agents/plugins/fs/tool-fs
+      '@fly-novel/tool-fs-search':
+        specifier: workspace:*
+        version: link:src/agents/plugins/fs/tool-fs-search
       '@fly-novel/tool-skill':
         specifier: workspace:*
         version: link:src/agents/plugins/tool-skill
@@ -78,12 +93,6 @@ importers:
       '@fly-novel/fs-local':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/fs-local
-      '@fly-novel/fs-observation-policy':
-        specifier: workspace:*
-        version: link:src/agents/plugins/fs/fs-observation-policy
-      '@fly-novel/sandbox-policy':
-        specifier: workspace:*
-        version: link:src/agents/plugins/sandbox/sandbox-policy
       '@fly-novel/subagent':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/subagent
@@ -99,18 +108,9 @@ importers:
       '@fly-novel/subprocess':
         specifier: workspace:*
         version: link:src/agents/plugins/subprocess/subprocess
-      '@fly-novel/subprocess-local':
-        specifier: workspace:*
-        version: link:src/agents/plugins/subprocess/subprocess-local
       '@fly-novel/timeout':
         specifier: workspace:*
         version: link:src/agents/plugins/subprocess/timeout
-      '@fly-novel/tool-fs':
-        specifier: workspace:*
-        version: link:src/agents/plugins/fs/tool-fs
-      '@fly-novel/tool-fs-search':
-        specifier: workspace:*
-        version: link:src/agents/plugins/fs/tool-fs-search
       '@fly-novel/tool-subagent':
         specifier: workspace:*
         version: link:src/agents/plugins/subagent/tool-subagent
