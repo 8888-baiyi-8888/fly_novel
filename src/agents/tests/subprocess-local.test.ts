@@ -3,6 +3,10 @@ import test, { type TestContext } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import type { SubprocessSpawnSpec } from '@fly-novel/subprocess'
 import { LocalSubprocessRuntime } from '@fly-novel/subprocess-local'
+import { setTimeout as delay } from 'node:timers/promises'
+import { bootstrapAgents } from '../core/bootstrap.js'
+import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
+import { createTestAgent, withAgentLoop } from './agent-loop-fixtures.js'
 
 async function setup(t: TestContext) {
   const ctx = new Context()
@@ -67,4 +71,48 @@ test('取消与作用域销毁等待已启动的直接进程退出', async t => 
   await second.done
   assert.equal(await second.waitForExit(), true)
   assert.throws(() => service.spawn(spec('')), /已关闭/)
+})
+
+test('不同 Agent 的进程归各自作用域，销毁一方不终止另一方', async t => {
+  const framework = await bootstrapAgents()
+  t.after(() => framework.manager.disposeAll())
+  framework.plugins.register(localSubprocessPluginDefinition)
+  framework.presets.register({ id: 'subprocess-test', version: '1', role: 'character', plugins: withAgentLoop([{ pluginId: 'subprocess-local' }]) })
+  const a = await createTestAgent(framework, { id: 'process-a', presetId: 'subprocess-test' })
+  const b = await createTestAgent(framework, { id: 'process-b', presetId: 'subprocess-test' })
+  const first = a.context.subprocess.spawn(spec('setInterval(() => {}, 1000)'))
+  const second = b.context.subprocess.spawn(spec('setInterval(() => {}, 1000)'))
+  let secondExited = false
+  void second.done.then(() => { secondExited = true }, () => { secondExited = true })
+  await framework.manager.dispose('process-a')
+  await first.done
+  assert.equal(secondExited, false)
+  await framework.manager.dispose('process-b')
+  await second.done
+  assert.equal(await second.waitForExit(), true)
+})
+
+test('取消时尝试终止仍属于直接进程的后代', async t => {
+  const { service } = await setup(t)
+  const controller = new AbortController()
+  const request = spec('const {spawn}=require("node:child_process"); const c=spawn(process.execPath,["-e","setInterval(() => {}, 1000)"],{stdio:"ignore"}); console.log(c.pid); setInterval(() => {}, 1000)', controller.signal)
+  request.stdio.stdout.maxBytes = 128
+  const handle = service.spawn(request)
+  let pid = 0
+  for (let i = 0; i < 100 && !pid; i++) {
+    await delay(20)
+    pid = Number(handle.collected.stdout.readFrom(0).text.trim()) || 0
+  }
+  assert.ok(pid > 0, '测试后代未启动')
+  t.after(() => { try { process.kill(pid, 'SIGKILL') } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error } })
+  controller.abort()
+  await handle.done
+  let alive = true
+  for (let i = 0; i < 100 && alive; i++) {
+    try { process.kill(pid, 0); await delay(20) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+      alive = false
+    }
+  }
+  assert.equal(alive, false, '子进程终止后仍有后代运行')
 })
