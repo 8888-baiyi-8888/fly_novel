@@ -479,6 +479,8 @@ export function validateArgs(spec: ParameterSchemaSpec, args: unknown): string[]
 /** 工具声明：参数、输出和类型化执行函数。 */
 export interface DefineToolOptions<S extends ParameterSchemaSpec, O extends ValueSchemaSpec> {
   readonly name: string
+  /** 取消后保留已正常返回且通过输出校验的执行报告。 */
+  readonly reportOnAbort?: boolean
   readonly description: string
   readonly parameters: S
   readonly output: {
@@ -498,6 +500,7 @@ export function defineTool<const S extends ParameterSchemaSpec, const O extends 
   const userRender = options.output.render
   return {
     name: options.name,
+    ...(options.reportOnAbort === undefined ? {} : { reportOnAbort: options.reportOnAbort }),
     description: options.description,
     parameters: parameters as unknown as Record<string, unknown>,
     output: {

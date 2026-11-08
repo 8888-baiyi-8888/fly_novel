@@ -29,6 +29,8 @@ export interface ToolOutputDefinition {
 /** 工具的模型 schema、规范输出声明和执行函数。 */
 export interface ToolDefinition extends ToolSchema {
   readonly output: ToolOutputDefinition
+  /** 工具须在取消后返回完整的已提交／未提交结果时保留其成功返回值。 */
+  readonly reportOnAbort?: boolean
   execute(args: unknown, exec: ToolRunContext): Promise<unknown>
 }
 

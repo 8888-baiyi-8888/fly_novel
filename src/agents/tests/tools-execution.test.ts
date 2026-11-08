@@ -91,3 +91,33 @@ test('工具执行中的取消信号传给工具并等待其结束', async () =>
   assert.ok(result?.isError)
   assert.equal(result.error.info.code, 'ABORTED')
 })
+
+test('声明报告的工具在取消后保留已校验的部分结果，未开始调用仍被取消', async () => {
+  const tools = new ToolsService()
+  const controller = new AbortController()
+  let laterRan = false
+  tools.register(defineTool({
+    name: 'report', description: '报告部分结果', reportOnAbort: true,
+    parameters: {}, output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+    async execute() { controller.abort(); return '第一项已提交，第二项未执行' },
+  }))
+  tools.register(defineTool({
+    name: 'later', description: '后续调用', parameters: {},
+    output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+    async execute() { laterRan = true; return 'unexpected' },
+  }))
+  const laterId = 'call-2' as ToolCallId
+  const result = await tools.execute({ calls: [call('report', '{}'), { ...call('later', '{}'), id: laterId }], signal: controller.signal, workingDirectory: '.' })
+  assert.deepEqual(result.results[0]?.result, { isError: false, value: '第一项已提交，第二项未执行', content: [{ type: 'text', text: '第一项已提交，第二项未执行' }] })
+  assert.equal(result.results[1]?.result.isError, true)
+  assert.equal(laterRan, false)
+})
+
+test('取消后的报告仍须通过输出校验', async () => {
+  const tools = new ToolsService()
+  const controller = new AbortController()
+  tools.register({ name: 'bad-report', description: '无效报告', reportOnAbort: true, parameters: { type: 'object' },
+    output: { schema: { type: 'string' }, render: () => [] }, async execute() { controller.abort(); return 123 } })
+  const result = (await tools.execute({ calls: [call('bad-report', '{}')], signal: controller.signal, workingDirectory: '.' })).results[0]!.result
+  assert.equal(result.isError, true)
+})

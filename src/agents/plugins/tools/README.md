@@ -12,6 +12,8 @@
 
 `log.checkpoint` 由 Loop 提供时，在记录 `tool/call` 后、调用工具前等待持久化刷新；刷新失败时工具不会执行。
 
+工具默认在执行期间取消后返回 `ABORTED`。需要报告部分提交结果的工具可声明 `reportOnAbort`，此时仅保留工具正常返回且通过输出 schema 校验的结果；未启动的调用仍不执行，工具抛错仍按取消处理。Loop 仍以取消结束当前 Turn，已返回的工具结果会记录到 Session。
+
 `@fly-novel/tools` 是独立工作区包，公开工具定义、ToolsService 和 Cordis 插件。Harness Preset 按插件 ID `tools` 装配服务，具体工具由调用方注册。
 
 `@fly-novel/tools` 是独立工作区包，公开工具定义、ToolsService 和 Cordis 插件。Harness Preset 按插件 ID `tools` 装配服务，具体工具由调用方注册。

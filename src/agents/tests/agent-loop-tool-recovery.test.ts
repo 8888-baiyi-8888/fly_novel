@@ -133,3 +133,22 @@ test('工具执行中取消只记录一次取消结果并允许后续请求', as
   assert.equal(block.toolCallId, 'call-1')
   assert.equal(session.read().filter(event => event.type === 'tool/result').length, 1)
 })
+
+test('取消的 Turn 保留工具返回的部分提交报告', async t => {
+  const { agent, session } = await setup(t, false)
+  let notifyStarted!: () => void
+  const started = new Promise<void>(resolve => { notifyStarted = resolve })
+  agent.context.tools.register({ ...readFileTool, reportOnAbort: true, async execute(_args, exec) {
+    notifyStarted()
+    await new Promise<void>(resolve => exec.signal.addEventListener('abort', () => resolve(), { once: true }))
+    return '第一项已提交，第二项未执行'
+  } })
+  const pending = agent.run({ prompt: '读取' })
+  await started
+  agent.cancel()
+  await assert.rejects(pending, { code: 'ABORTED' })
+  const results = session.read().filter(event => event.type === 'tool/result')
+  assert.equal(results.length, 1)
+  assert.match(JSON.stringify(results[0]?.data.message.content), /第一项已提交，第二项未执行/)
+  assert.equal(results[0]?.data.error, undefined)
+})

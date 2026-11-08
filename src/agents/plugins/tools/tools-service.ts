@@ -99,7 +99,7 @@ export class ToolsService {
           ...(input.session === undefined ? {} : { session: input.session }),
           workingDirectory: input.workingDirectory, signal: input.signal,
         })
-        if (input.signal.aborted) throw new ToolCallError('ABORTED', 'tool call aborted')
+        if (input.signal.aborted && !tool.reportOnAbort) throw new ToolCallError('ABORTED', 'tool call aborted')
         const canonical = snapshotJsonValue(value)
         if (!isJsonValue(canonical) || validateJsonSchemaValue(tool.output.schema, canonical, '').length > 0) {
           throw new ToolCallError('INVALID_TOOL_OUTPUT', '工具输出不符合声明的 schema')
