@@ -8,6 +8,8 @@
 
 开始前固定可获取的上游提交，记录提交号、许可证和包版本，检查发布包可用性、Node.js、ESM 与本项目 CommonJS 构建的兼容性。逐包检查实际运行依赖、peer dependencies、所需服务和第三方许可证，区分测试依赖；确认直接依赖或同步源码的方式。源码同步时记录来源、许可证、固定版本、更新步骤和本地改动，并遵守仓库第三方源码管理规则。每步同步清单、锁文件和所属文档，运行该包相关的聚焦检查；需要的上游辅助库按依赖先行接入，不预先假定数量。
 
+文件观察策略及后续接入依据用户提供的官方 `0.2.2-rc.1` 下载快照，该快照没有已核验提交标识；具体来源、文件哈希、许可证和本地调整见各包详细计划及 README，不将其标为固定 Git 提交。
+
 下列包名和职责参照官方[文件工具说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/fs/tool-fs/README.md)、[文件系统接口](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/fs/fs/README.md)和[工具目录](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/tool-catalog.md)。实施时以固定提交核实，不把当前 `master` 当成固定版本。
 
 ## 包的目录安排
@@ -25,7 +27,7 @@ src/agents/plugins/fs/
 └── tool-fs-search/          Agent 文件搜索工具
 ```
 
-除 `fs-patch/` 和 `fs/` 外，上图是本阶段计划的目录，按各包实际引入时创建。辅助包按各自职责确定位置，不因依赖文件系统工具而自动放入 `fs/`。测试放在所属一级模块的 `src/agents/tests/`，不在各包下另建 `tests/`；引入时同步工作区清单、构建配置及相关目录说明。
+上图列出本阶段的文件能力包。辅助包按各自职责确定位置，不因依赖文件系统工具而自动放入 `fs/`。测试放在所属一级模块的 `src/agents/tests/`，不在各包下另建 `tests/`；引入时同步工作区清单、构建配置及相关目录说明。
 
 ## 依赖关系与实施顺序
 
