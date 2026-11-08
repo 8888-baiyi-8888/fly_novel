@@ -83,3 +83,60 @@ test('观察版本保护与修改授权组合时，拒绝越界且保留文件�
   assert.equal(await readFile(join(outside, 'file'), 'utf8'), 'outside')
   assert.equal(await readFile(join(work, 'file'), 'utf8'), 'changed')
 })
+
+test('两个 Agent 的真实后端分别限制根目录，销毁一方不影响另一方', async t => {
+  const parent = join(process.cwd(), 'tmp')
+  await mkdir(parent, { recursive: true })
+  const dir = await mkdtemp(join(parent, 'fly-sandbox-agents-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const rootA = join(dir, 'a'); const rootB = join(dir, 'b')
+  await mkdir(rootA); await mkdir(rootB)
+  const framework = await bootstrapAgents()
+  t.after(() => framework.manager.disposeAll())
+  framework.plugins.register(sandboxPolicyPluginDefinition)
+  framework.plugins.register(fsSandboxPluginDefinition)
+  framework.presets.register({ id: 'sandbox-isolation', version: '1', role: 'character', plugins: withAgentLoop([{ pluginId: 'sandbox-policy' }, { pluginId: 'fs-sandbox' }]) })
+  const make = async (id: string, root: string) => createTestAgent(framework, { id, presetId: 'sandbox-isolation', pluginConfigs: { 'sandbox-policy': { mode: 'workspace-write', workspaceRoot: await realpath(root) }, 'fs-sandbox': { cwd: root } } })
+  const a = await make('a', rootA)
+  const b = await make('b', rootB)
+  assert.notEqual(a.context.fs, b.context.fs)
+  await a.context.fs.writeText(await a.context.fs.resolve('file'), 'a')
+  await b.context.fs.writeText(await b.context.fs.resolve('file'), 'b')
+  await assert.rejects(a.context.fs.writeText(await a.context.fs.resolve(join(rootB, 'file')), 'intrusion'), { code: 'FS_SANDBOX_DENIED' })
+  await assert.rejects(b.context.fs.deleteFile(await b.context.fs.resolve(join(rootA, 'file'))), { code: 'FS_SANDBOX_DENIED' })
+  await framework.manager.dispose('a')
+  assert.equal(a.context.get('fs'), undefined)
+  await b.context.fs.writeText(await b.context.fs.resolve('file'), 'still b')
+  assert.equal(await readFile(join(rootA, 'file'), 'utf8'), 'a')
+  assert.equal(await readFile(join(rootB, 'file'), 'utf8'), 'still b')
+})
+
+test('Agent 销毁等待沙箱后端已启动的修改', async t => {
+  const parent = join(process.cwd(), 'tmp')
+  await mkdir(parent, { recursive: true })
+  const dir = await mkdtemp(join(parent, 'fly-sandbox-agent-close-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const framework = await bootstrapAgents()
+  t.after(() => framework.manager.disposeAll())
+  framework.plugins.register(sandboxPolicyPluginDefinition)
+  framework.plugins.register(fsSandboxPluginDefinition)
+  framework.presets.register({ id: 'sandbox-close', version: '1', role: 'character', plugins: withAgentLoop([{ pluginId: 'sandbox-policy' }, { pluginId: 'fs-sandbox' }]) })
+  const agent = await createTestAgent(framework, { id: 'closing', presetId: 'sandbox-close', pluginConfigs: { 'sandbox-policy': { mode: 'workspace-write', workspaceRoot: await realpath(dir) }, 'fs-sandbox': { cwd: dir } } })
+  const fs = agent.context.fs
+  assert.ok(fs instanceof SandboxedFileSystem)
+  let enter!: () => void; let resume!: () => void
+  const started = new Promise<void>(resolve => { enter = resolve })
+  const release = new Promise<void>(resolve => { resume = resolve })
+  fs.internals.inspectTemp = async () => { enter(); await release }
+  const operation = fs.writeText(await fs.resolve('file'), 'saved')
+  await started
+  let disposed = false
+  const closing = framework.manager.dispose('closing').then(() => { disposed = true })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.equal(disposed, false)
+  resume()
+  await operation
+  await closing
+  assert.equal(await readFile(join(dir, 'file'), 'utf8'), 'saved')
+  await assert.rejects(fs.writeText(await fs.resolve('file'), 'late'), /已销毁/)
+})

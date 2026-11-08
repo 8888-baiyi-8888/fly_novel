@@ -135,3 +135,47 @@ test('有效根内保持后端的过期版本和取消语义', async t => {
   await assert.rejects(fs.writeText(target, 'cancelled', undefined, abort.signal), { code: 'FS_ABORTED' })
   assert.equal(await readFile(join(work, 'file'), 'utf8'), 'newer')
 })
+
+test('允许路径移动时保留后端源删除失败的部分成功语义', async t => {
+  const { fs, work } = await setup(t)
+  await writeFile(join(work, 'source'), 'content')
+  const source = await fs.resolve('source')
+  const destination = await fs.resolve('destination')
+  fs.internals.removeFile = async () => { throw Object.assign(new Error('denied'), { code: 'EACCES' }) }
+  t.after(() => { delete fs.internals.removeFile })
+  const result = await fs.moveFile(source, destination, {})
+  assert.equal(result.sourceDeleted, false)
+  if (!result.sourceDeleted) assert.equal(result.sourceFailure.code, 'FS_PERMISSION_DENIED')
+  assert.equal(await readFile(join(work, 'source'), 'utf8'), 'content')
+  assert.equal(await readFile(join(work, 'destination'), 'utf8'), 'content')
+})
+
+test('作用域释放等待已开始的修改，释放后拒绝新修改', async t => {
+  const parent = join(process.cwd(), 'tmp')
+  await mkdir(parent, { recursive: true })
+  const dir = await mkdtemp(join(parent, 'fly-sandbox-dispose-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const ctx = new Context()
+  const policy = ctx.plugin(sandboxPolicyPlugin, { mode: 'workspace-write', workspaceRoot: await realpath(dir) })
+  await policy
+  const scope = ctx.plugin(SandboxedFileSystem, { cwd: dir })
+  await scope
+  t.after(async () => { await scope.dispose(); await policy.dispose() })
+  const fs = ctx.fs as SandboxedFileSystem
+  let enter!: () => void; let resume!: () => void
+  const started = new Promise<void>(resolve => { enter = resolve })
+  const release = new Promise<void>(resolve => { resume = resolve })
+  fs.internals.inspectTemp = async () => { enter(); await release }
+  const target = await fs.resolve('file')
+  const write = fs.writeText(target, 'committed')
+  await started
+  let closed = false
+  const closing = scope.dispose().then(() => { closed = true })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.equal(closed, false)
+  resume()
+  await write
+  await closing
+  assert.equal(await readFile(join(dir, 'file'), 'utf8'), 'committed')
+  await assert.rejects(fs.writeText(target, 'late'), /已销毁/)
+})
