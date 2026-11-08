@@ -50,6 +50,28 @@ test('父 Agent 通过正式委派工具运行通用子 Agent 并接收结果', 
   } finally { await framework.manager.disposeAll() }
 })
 
+test('可信装配可为委派工具选择专用子 Agent Preset', async () => {
+  const framework = await bootstrapAgents()
+  framework.presets.register({ ...framework.presets.get('generic-subagent'), id: 'restricted-child' })
+  const parentAdapter = new ParentAdapter()
+  const create = createSpawnAgentCreator(framework, { 'restricted-child': {
+    'agent-loop-runtime': { provider: 'child', model: 'child-model' },
+    llm: { adapters: [{ providers: ['child'], adapter: new EchoLlmAdapter() }] },
+  } })
+  framework.presets.register({ id: 'configured-parent', version: '1', role: 'general', plugins: withAgentLoop([
+    { pluginId: 'tools' }, { pluginId: 'subagent' }, { pluginId: 'subagent-spawn-in-process' }, { pluginId: 'tool-subagent' },
+  ]) })
+  try {
+    const parent = await createTestAgent(framework, { id: 'configured-parent', presetId: 'configured-parent', pluginConfigs: {
+      'agent-loop-runtime': { provider: 'parent', model: 'model', workingDirectory: process.cwd() },
+      llm: { adapters: [{ providers: ['parent'], adapter: parentAdapter }] },
+      'subagent-spawn-in-process': { create }, 'tool-subagent': { presetId: 'restricted-child' },
+    } })
+    assert.deepEqual(await parent.run({ prompt: '委派' }), { content: '父 Agent 已收到结果' })
+    assert.deepEqual(framework.manager.list().map(agent => agent.info.identity.id), ['configured-parent'])
+  } finally { await framework.manager.disposeAll() }
+})
+
 test('通用委派工具拒绝空任务，并按 Agent 作用域隔离', async () => {
   const framework = await bootstrapAgents()
   const create = createSpawnAgentCreator(framework, { 'generic-subagent': {

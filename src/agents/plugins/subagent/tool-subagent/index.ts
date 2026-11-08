@@ -2,8 +2,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@fly-novel/subagent'
 import { defineTool } from '@fly-novel/tools'
 
+/** 可信装配可为委派工具指定已注册的子 Agent Preset。 */
+export interface ToolSubagentConfig { presetId?: string }
+
 /** 在当前 Agent 作用域注册前台通用委派工具，卸载时注销。 */
-export const toolSubagentPlugin = Object.assign(function toolSubagentPlugin(ctx: Context): void {
+export const toolSubagentPlugin = Object.assign(function toolSubagentPlugin(ctx: Context, config: ToolSubagentConfig = {}): void {
+  const presetId = config.presetId ?? 'generic-subagent'
+  if (!presetId || presetId.trim() !== presetId) throw new Error('子 Agent Preset ID 无效')
   if (!ctx.subagents.getProvider('spawn')) throw new Error('通用委派工具需要已注册的 spawn Provider')
   const parentId = ctx.agent.id
   const tool = defineTool({
@@ -16,7 +21,7 @@ export const toolSubagentPlugin = Object.assign(function toolSubagentPlugin(ctx:
       if (!exec.agent || exec.agent.id !== parentId) throw new Error('委派工具需要当前父 Agent 身份')
       const run = await ctx.subagents.start('spawn', {
         parent: { info: { identity: { id: parentId } } },
-        presetId: 'generic-subagent', prompt: task, signal: exec.signal,
+        presetId, prompt: task, signal: exec.signal,
       })
       const [execution] = await Promise.allSettled([run.result.then(result => {
         if (result.stopReason === 'error') throw new Error(`子任务执行失败${result.errorCode ? ` (${result.errorCode})` : ''}`)
