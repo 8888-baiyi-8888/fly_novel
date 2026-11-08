@@ -7,6 +7,7 @@ import { writableRoots } from '@fly-novel/sandbox'
 import type {} from '@fly-novel/sandbox-policy'
 import type { PatchHunk } from '@fly-novel/fs-patch'
 import { isPathUnder } from './containment.js'
+export { isPathUnder } from './containment.js'
 
 /** 仅限制修改的本机后端；读取仍须由调用方另行授权。 */
 export class SandboxedFileSystem extends LocalFileSystem {
