@@ -291,9 +291,15 @@ importers:
 
   src/agents/plugins/fs/tool-fs:
     dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
       '@fly-novel/fs':
         specifier: workspace:*
         version: link:../fs
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:../../tools
 
   src/agents/plugins/loop:
     dependencies:
