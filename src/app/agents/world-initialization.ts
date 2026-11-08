@@ -14,6 +14,7 @@ import { readFileTool } from '../../tools/index.js'
 import { validateWorldInitializationWorkspace, type WorldInitializationWorkspace } from './world-initialization-workspace.js'
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
 import { worldInitializationSkillPluginDefinition } from './world-initialization-skill.js'
+import { worldInitializationWorkspacePromptPluginDefinition } from './world-initialization-workspace-prompt.js'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
@@ -61,17 +62,17 @@ export async function createWorldInitializationAgentWithWorkspace(workspace: Wor
   const framework = await bootstrapAgents()
   for (const definition of [sandboxPolicyPluginDefinition, fsSandboxPluginDefinition, fsObservationPolicyPluginDefinition,
     toolFsPluginDefinition, toolFsReadPluginDefinition, toolFsSearchPluginDefinition, localSubprocessPluginDefinition,
-    worldInitializationDraftFsPluginDefinition, worldInitializationSkillPluginDefinition]) framework.plugins.register(definition)
+    worldInitializationDraftFsPluginDefinition, worldInitializationSkillPluginDefinition, worldInitializationWorkspacePromptPluginDefinition]) framework.plugins.register(definition)
   const fileChildId = 'world-initialization-readonly-subagent'
   const baseChild = framework.presets.get('generic-subagent')
   framework.presets.register({ ...baseChild, id: fileChildId, plugins: [...baseChild.plugins,
-    { pluginId: 'tools' }, { pluginId: 'sandbox-policy' }, { pluginId: 'fs-sandbox' },
+    { pluginId: 'tools' }, { pluginId: 'world-initialization-workspace-prompt' }, { pluginId: 'sandbox-policy' }, { pluginId: 'fs-sandbox' },
     { pluginId: 'fs-observation-policy' }, { pluginId: 'subprocess-local' }, { pluginId: 'tool-fs-read' }, { pluginId: 'tool-fs-search' },
   ] })
   const baseMain = framework.presets.get('world-initialization-main-agent')
   const mainId = 'world-initialization-file-main'
   framework.presets.register({ ...baseMain, id: mainId, plugins: [...baseMain.plugins.filter(binding => binding.pluginId !== 'skill-filesystem'),
-    { pluginId: 'world-initialization-skill-source' },
+    { pluginId: 'world-initialization-skill-source' }, { pluginId: 'world-initialization-workspace-prompt' },
     { pluginId: 'sandbox-policy' }, { pluginId: 'world-initialization-draft-fs' }, { pluginId: 'fs-observation-policy' },
     { pluginId: 'subprocess-local' }, { pluginId: 'tool-fs' }, { pluginId: 'tool-fs-search' },
     { pluginId: 'subagent' }, { pluginId: 'subagent-spawn-in-process' }, { pluginId: 'tool-subagent' },
@@ -81,11 +82,13 @@ export async function createWorldInitializationAgentWithWorkspace(workspace: Wor
   const create = createSpawnAgentCreator(framework, { [fileChildId]: {
     'agent-loop-runtime': loopConfig, llm: modelConfig,
     'sandbox-policy': { mode: 'read-only', workspaceRoot: roots.viewRoot }, 'fs-sandbox': { cwd: roots.viewRoot },
+    'world-initialization-workspace-prompt': { ...roots, mode: 'read-only' },
   } })
   return framework.factory.create({ id: `world-initialization-${randomUUID()}`, presetId: mainId, pluginConfigs: {
     'agent-loop-runtime': loopConfig, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
     'sandbox-policy': { mode: 'workspace-write', workspaceRoot: roots.draftRoot },
     'world-initialization-draft-fs': { cwd: roots.viewRoot, draftRoot: roots.draftRoot },
+    'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write' },
     'tool-fs': { applyPatch: true }, 'subagent-spawn-in-process': { create }, 'tool-subagent': { presetId: fileChildId },
   } })
 }

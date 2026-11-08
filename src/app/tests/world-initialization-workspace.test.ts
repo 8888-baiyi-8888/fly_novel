@@ -12,7 +12,9 @@ import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } f
 import { createWorldInitializationAgentWithWorkspace } from '../agents/index.js'
 
 class FixedAdapter extends LlmAdapter {
-  override async *stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
+  readonly requests: GenerateOptions[] = []
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    this.requests.push(options)
     yield { type: 'block-end', index: 0, block: { type: 'text', text: '完成' } }
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
@@ -66,15 +68,22 @@ test('显式工作区入口装配文件与委派工具，不注册旧的 read_fi
   const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })
   const raw = await mkdtemp(join(parent, 'fly-world-entry-'))
   t.after(() => rm(raw, { recursive: true, force: true }))
-  const viewRoot = await realpath(raw); const draftRoot = join(viewRoot, 'draft'); const confirmedRoot = join(viewRoot, 'confirmed')
+  const viewRoot = await realpath(raw); const draftRoot = join(viewRoot, 'my-drafts'); const confirmedRoot = join(viewRoot, 'approved')
   await mkdir(draftRoot); await mkdir(confirmedRoot)
-  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new FixedAdapter() }))
+  const adapter = new FixedAdapter()
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter }))
   const agent = await createWorldInitializationAgentWithWorkspace({ viewRoot, draftRoot, confirmedRoot })
   try {
     const names = agent.context.tools.schemas().map(tool => tool.name)
     for (const name of ['read', 'write', 'edit', 'apply_patch', 'glob', 'grep', 'delegate']) assert.ok(names.includes(name), name)
     assert.ok(!names.includes('read_file'))
     assert.deepEqual(await agent.run({ prompt: '构想' }), { content: '完成' })
+    const system = adapter.requests[0]!.messages.find(message => message.role === 'system')!
+    const text = system.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
+    assert.ok(text.includes(JSON.stringify(viewRoot)))
+    assert.match(text, /可创建、修改和删除的草稿目录："my-drafts"/)
+    assert.match(text, /"my-drafts\/文件名\.md"/)
+    assert.match(text, /已确认资料目录："approved"，只能读取和搜索/)
     const execute = async (name: string, args: object) => (await agent.context.tools.execute({ calls: [{ type: 'tool-call', id: 'id' as ToolCallId, name, arguments: JSON.stringify(args) }], workingDirectory: viewRoot, session: agent.context.sessions.list()[0]!, signal: new AbortController().signal })).results[0]!.result
     assert.equal((await execute('skill', { name: 'fantasy-world-planning' })).isError, false)
     const outside = join(process.cwd(), 'src/agents/world-initialization-main-agent/skills/fantasy-world-planning/SKILL.md')

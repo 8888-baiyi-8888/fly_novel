@@ -63,6 +63,10 @@ test('真实主子 Agent 搜索、修改草稿并保护已确认资料', async t
     assert.equal(adapter.childRequests.length, 5)
     assert.ok(adapter.childRequests[0]?.tools?.some(tool => tool.name === 'read'))
     assert.ok(!adapter.childRequests[0]?.tools?.some(tool => tool.name === 'write'))
+    const childSystem = adapter.childRequests[0]!.messages.find(message => message.role === 'system')!
+    const childPrompt = childSystem.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
+    assert.match(childPrompt, /当前 Agent 只能读取和搜索工作区文件，不能创建、修改或删除文件/)
+    assert.match(childPrompt, /草稿目录为 "draft"，同样只能读取/)
     const childHistory = JSON.stringify(adapter.childRequests.at(-1)?.messages)
     assert.match(childHistory, /confirmed fact/)
     assert.doesNotMatch(childHistory, /主任务完成/)
