@@ -31,6 +31,7 @@ src/agents/plugins/fs/ 文件系统能力工作区包目录，包含基础库、
 src/agents/plugins/fs/fs/ `@fly-novel/fs` 独立工作区包，定义文件系统服务契约和事件
 src/agents/plugins/fs/fs-patch/ `@fly-novel/fs-patch` 独立工作区包，提供补丁解析和文本修改
 src/agents/plugins/fs/fs-local/ `@fly-novel/fs-local` 独立工作区包，提供显式装配的本机文件后端
+src/agents/plugins/fs/tool-fs-search/ `@fly-novel/tool-fs-search` 独立工作区包，提供受读取范围约束的文件搜索工具
 src/agents/plugins/subprocess/subprocess/ `@fly-novel/subprocess` 独立工作区包，定义受管理前台子进程契约
 src/agents/plugins/subprocess/subprocess-local/ `@fly-novel/subprocess-local` 独立工作区包，提供显式装配的本机子进程后端
 src/agents/plugins/subprocess/timeout/ `@fly-novel/timeout` 独立工作区包，提供可释放的期限信号

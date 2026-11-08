@@ -14,6 +14,7 @@ Spawn 请求的可选 `parameters` 由可信创建函数校验并复制，作为
 - `plugins/fs/`：文件系统能力包；`fs-patch/` 提供补丁解析，`fs/` 提供文件系统服务契约与事件，[`fs-local/`](plugins/fs/fs-local/README.md) 提供需显式装配的本机后端；[`fs-observation-policy/`](plugins/fs/fs-observation-policy/README.md) 提供文件观察事件策略。
 - `plugins/fs/fs-sandbox/`：独立工作区包，提供[需显式装配的文件修改边界](plugins/fs/fs-sandbox/README.md)。
 - `plugins/fs/tool-fs/`：独立工作区包，提供[文件工具及读取范围检查](plugins/fs/tool-fs/README.md)。
+- `plugins/fs/tool-fs-search/`：独立工作区包，提供[文件搜索能力](plugins/fs/tool-fs-search/README.md)。
 - `plugins/subprocess/subprocess/`：独立工作区包，定义[前台子进程契约](plugins/subprocess/subprocess/README.md)。
 - `plugins/subprocess/subprocess-local/`：独立工作区包，提供[本机子进程后端](plugins/subprocess/subprocess-local/README.md)。
 - `plugins/subprocess/timeout/`：独立工作区包，提供[期限信号](plugins/subprocess/timeout/README.md)。

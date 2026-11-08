@@ -15,6 +15,7 @@
       "@fly-novel/fs-observation-policy": ["./src/agents/plugins/fs/fs-observation-policy/index.ts"],
       "@fly-novel/fs-sandbox": ["./src/agents/plugins/fs/fs-sandbox/index.ts"],
       "@fly-novel/tool-fs": ["./src/agents/plugins/fs/tool-fs/index.ts"],
+      "@fly-novel/tool-fs-search": ["./src/agents/plugins/fs/tool-fs-search/index.ts"],
       "@fly-novel/llm": ["./src/llm/index.ts"],
       "@fly-novel/system-prompt": ["./src/agents/plugins/system-prompt/index.ts"],
       "@fly-novel/skill": ["./src/agents/plugins/skill/index.ts"],
