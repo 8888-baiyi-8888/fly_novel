@@ -1,5 +1,7 @@
 # @fly-novel/tool-fs
 
+可信装配可以注册 `toolFsPluginDefinition`：默认提供 `read`、`write` 和 `edit`，只有配置 `applyPatch: true` 才注册 `apply_patch`。修改工具要求沙箱后端；Agent 作用域销毁时工具随之注销。
+
 文件工具包正在按[详细计划](../../../../../docs/workflows/word-initialization/world-initialization-stage-4-tool-fs-plan.md)接入。`resolveReadTarget` 在读取前使用可信工作目录和文件后端的规范目标检查读取范围；它不读取文件、不发出观察事件，也不提供修改授权。`toolFsReadPlugin` 显式注册 `read`，以流方式读取和限制输出；读取前后版本不一致时拒绝并不记录观察。该检查不保证系统级原子快照，检查后到读取之间的外部路径替换不受内核隔离保护。
 
 上游来源为用户提供的 DeepSeek Harness 官方下载快照 `packages/fs/tool-fs`，版本 `0.2.2-rc.1`，没有已核验提交标识；许可证见 [LICENSE](LICENSE)。实际移植文件的哈希和调整随接入步骤记录，更新时重新核对源码、许可证和测试。

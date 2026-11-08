@@ -4,3 +4,5 @@ export type { ReadWindow, WindowResult, FileReadOutcome, FileTextLine } from './
 export { toolFsReadPlugin, toolFsReadPluginDefinition } from './read.js'
 export { toolFsMutationPlugin, toolFsMutationPluginDefinition } from './mutation.js'
 export { toolFsPatchPlugin, toolFsPatchPluginDefinition } from './apply-patch.js'
+export { toolFsPlugin, toolFsPluginDefinition } from './plugin.js'
+export type { ToolFsConfig } from './plugin.js'
