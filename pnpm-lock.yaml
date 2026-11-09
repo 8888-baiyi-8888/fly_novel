@@ -89,6 +89,9 @@ importers:
       '@langchain/openai':
         specifier: ^1.5.13
         version: 1.6.2(@langchain/core@1.2.14(openai@7.27.0(zod@4.6.5)))
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
       zod:
         specifier: ^4.6.5
         version: 4.6.5

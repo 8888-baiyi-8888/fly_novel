@@ -3,3 +3,7 @@
 本目录用于组织世界初始化的业务能力，包括世界工作区、资料目录和资料读取；Agent 框架与通用文件工具分别位于 [`agents/`](../agents/README.md) 和 [`tools/`](../tools/README.md)。本目录是源码目录，不是运行时存放世界资料的工作区。
 
 共享工作区与资料读取的范围、待确认事项和开发步骤见[第五阶段详细计划](../../docs/workflows/word-initialization/world-initialization-stage-5-workspace-plan.md)。业务代码和测试按实际实现建立；测试放在 `src/world-init/tests/`。
+
+`character-format.ts` 提供角色资料与需求清单的版本化 YAML front matter 解析、序列化和校验；未知版本、重复字段及无效状态被拒绝。该模块不执行文件读写、角色 ID 分配或用户确认。YAML 使用 `yaml` 依赖，采用 ISC 许可证。
+
+`character-store.ts` 由可信应用提供真实角色根目录，负责生成 UUID、保存角色建议、校验名称和分类索引、读取资料、保存待审修改以及在可信调用方确认后提交。`CharacterStore.open(root, true)` 仅初始化空目录；现有目录使用 `open(root)`，完成后调用 `close()`。`open(root, false, true)` 用于可信恢复操作，不自动处理损坏或未完成提交。重建已有索引前保留原索引备份。服务仅限制同一进程中重复打开同一角色根，调用方必须确保不存在其他写入进程并保护目录免受未授权的普通文件工具修改；该服务不是系统级沙箱。提交通过原资料与候选摘要校验，文件或索引操作失败时可能留下待恢复状态，不能将失败视为整体回滚。资料工具见[工具说明](../tools/README.md)。

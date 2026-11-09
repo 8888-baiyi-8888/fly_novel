@@ -4,6 +4,8 @@
 
 `index.ts` 是普通具体工具的统一导出入口，应用可以从该入口导入 `readFileTool` 和 `createCharacterDelegationTool`。Skill 工具使用其独立工作区包入口。
 
+`character/character-tools.ts` 基于可信应用提供的角色资料服务创建角色资料工具；调用方负责注册与注销。工具提供角色创建、名称和分类查询、单个及批量读取、待审修改和需求清单读写；模型不能通过工具确认提交。角色资料服务与权限限制见[世界初始化模块说明](../world-init/README.md)。
+
 `filesystem/read-file.ts` 定义 `read_file`，通过 `execute({ path }, { callId, name, workingDirectory, signal })` 直接读取授权目录内不超过 1 MiB 的 UTF-8 普通文件。绝对路径、越界路径和解析后指向目录外的符号链接被拒绝；无效 UTF-8 和文件系统错误会使调用失败。授权目录必须由可信调用方提供，路径检查不保证抵御其他进程在检查与打开之间恶意替换目录或符号链接，调用方应确保授权目录不被不可信进程并发修改。
 
 `skill/` 是独立工作区包 `@fly-novel/skill-tool-core`，其 `createSkillTool(skills)` 使用可信调用方传入的 Skill 服务。[`tool-skill` 插件](../agents/plugins/tool-skill/README.md)已加入 Harness 内置注册表，依赖当前 Agent 的 `skills` 和 `tools` 服务，并随作用域注销工具。模型只传入名称；工具通过该服务查询与加载，不能指定来源或路径。文件系统来源检查授权工作目录、元信息、权限和文件边界；加载结果包含名称、来源、资源目录和正文。读取正文中引用的其他资源仍由对应工具独立授权。
