@@ -1,16 +1,18 @@
 import { randomUUID } from 'node:crypto'
-import { stat } from 'node:fs/promises'
+import { realpath, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { bootstrapAgents, createSpawnAgentCreator, type Agent } from '@fly-novel/agents'
 import { sandboxPolicyPluginDefinition } from '@fly-novel/sandbox-policy'
-import { fsSandboxPluginDefinition } from '@fly-novel/fs-sandbox'
+import { fsSandboxPluginDefinition, isPathUnder } from '@fly-novel/fs-sandbox'
+import { createPersistentAgentCreator } from '@fly-novel/subagent-persistent-in-process'
 import { fsObservationPolicyPluginDefinition } from '@fly-novel/fs-observation-policy'
 import { toolFsPluginDefinition, toolFsReadPluginDefinition } from '@fly-novel/tool-fs'
 import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
 import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import { registerAll } from '@fly-novel/util'
 import { loadConfiguredAdapter } from '../call-llm.js'
-import { readFileTool } from '../../tools/index.js'
+import { createCharacterCreatorDelegationTool, readFileTool } from '../../tools/index.js'
+import { createCharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
 import { validateWorldInitializationWorkspace, type WorldInitializationWorkspace } from './world-initialization-workspace.js'
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
 import { worldInitializationSkillPluginDefinition } from './world-initialization-skill.js'
@@ -52,10 +54,26 @@ export async function createWorldInitializationAgent(): Promise<Agent> {
 /**
  * 使用可信工作区创建带文件工具及只读子 Agent 的世界初始化主 Agent。
  * @param workspace 已有的读取视图、草稿目录和已确认资料目录。
+ * @param characterCreator 可选的可信角色创建 Agent 配置；不由模型提供。
  * @returns 初始化完成的 Agent；调用方使用完毕后须调用 dispose()。
  */
-export async function createWorldInitializationAgentWithWorkspace(workspace: WorldInitializationWorkspace): Promise<Agent> {
+export async function createWorldInitializationAgentWithWorkspace(workspace: WorldInitializationWorkspace, characterCreator?: CharacterCreatorConfig): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
+  const creatorConfig = characterCreator && { ...characterCreator }
+  if (creatorConfig) {
+    const [readRoot, characterRoot, sessionRoot] = await Promise.all([
+      realpath(creatorConfig.readRoot), realpath(creatorConfig.characterRoot), realpath(creatorConfig.sessionRoot),
+    ])
+    if (readRoot !== roots.viewRoot || readRoot !== resolve(creatorConfig.readRoot) || characterRoot !== resolve(creatorConfig.characterRoot) || sessionRoot !== resolve(creatorConfig.sessionRoot)) {
+      throw new Error('角色创建 Agent 的读取视图及目录必须使用可信真实路径')
+    }
+    if (!await isPathUnder(characterRoot, roots.viewRoot) || characterRoot === roots.viewRoot ||
+        await isPathUnder(characterRoot, roots.draftRoot) || await isPathUnder(roots.draftRoot, characterRoot) ||
+        await isPathUnder(characterRoot, roots.confirmedRoot) || await isPathUnder(roots.confirmedRoot, characterRoot)) {
+      throw new Error('角色目录必须位于读取视图内，且不能与草稿或已确认资料根重叠')
+    }
+    if (await isPathUnder(sessionRoot, roots.viewRoot) || await isPathUnder(roots.viewRoot, sessionRoot)) throw new Error('角色 Session 目录不能与读取视图重叠')
+  }
   const skillRoot = resolve(process.cwd(), 'src/agents/world-initialization-main-agent/skills')
   if (!(await stat(skillRoot)).isDirectory()) throw new Error('世界初始化 Skill 根路径不是目录')
   const { provider, model, adapter } = await loadConfiguredAdapter('deepseek')
@@ -76,6 +94,7 @@ export async function createWorldInitializationAgentWithWorkspace(workspace: Wor
     { pluginId: 'sandbox-policy' }, { pluginId: 'world-initialization-draft-fs' }, { pluginId: 'fs-observation-policy' },
     { pluginId: 'subprocess-local' }, { pluginId: 'tool-fs' }, { pluginId: 'tool-fs-search' },
     { pluginId: 'subagent' }, { pluginId: 'subagent-spawn-in-process' }, { pluginId: 'tool-subagent' },
+    ...(creatorConfig ? [{ pluginId: 'subagent-persistent-in-process' }] : []),
   ] })
   const modelConfig = { adapters: [{ providers: [provider], adapter }] }
   const loopConfig = { provider, model, workingDirectory: roots.viewRoot }
@@ -84,11 +103,24 @@ export async function createWorldInitializationAgentWithWorkspace(workspace: Wor
     'sandbox-policy': { mode: 'read-only', workspaceRoot: roots.viewRoot }, 'fs-sandbox': { cwd: roots.viewRoot },
     'world-initialization-workspace-prompt': { ...roots, mode: 'read-only' },
   } })
-  return framework.factory.create({ id: `world-initialization-${randomUUID()}`, presetId: mainId, pluginConfigs: {
+  const persistentCreate = creatorConfig && createPersistentAgentCreator({ presetId: 'character-creator', sessionMode: creatorConfig.sessionMode,
+    async create({ sessionMode, initial }) {
+      const child = await createCharacterCreator({ ...creatorConfig, sessionMode, initializeCharacters: initial && creatorConfig.initializeCharacters })
+      return { agent: child, dispose: () => child.dispose() }
+    } })
+  const agent = await framework.factory.create({ id: `world-initialization-${randomUUID()}`, presetId: mainId, pluginConfigs: {
     'agent-loop-runtime': loopConfig, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
     'sandbox-policy': { mode: 'workspace-write', workspaceRoot: roots.draftRoot },
     'world-initialization-draft-fs': { cwd: roots.viewRoot, draftRoot: roots.draftRoot },
     'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write' },
     'tool-fs': { applyPatch: true }, 'subagent-spawn-in-process': { create }, 'tool-subagent': { presetId: fileChildId },
+    ...(persistentCreate ? { 'subagent-persistent-in-process': { create: persistentCreate } } : {}),
   } })
+  try {
+    if (creatorConfig) agent.context.tools.register(createCharacterCreatorDelegationTool(agent.context.subagents, agent.info.identity.id))
+    return agent
+  } catch (error) {
+    try { await agent.dispose() } catch (cleanup) { throw new AggregateError([error, cleanup], '主 Agent 装配和清理失败') }
+    throw error
+  }
 }

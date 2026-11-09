@@ -31,6 +31,7 @@ src/*/tests/       按 src 一级模块归属的自动化测试，不在更深�
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/tools/         具体工具实现，测试放在 src/tools/tests/
 src/tools/character/ 角色专用工具实现
+src/tools/character/delegate-character-creator.ts 角色创建 Agent 的专用委派工具
 src/agents/plugins/fs/ 文件系统能力工作区包目录，包含基础库、服务、后端与工具插件
 src/agents/plugins/fs/fs/ `@fly-novel/fs` 独立工作区包，定义文件系统服务契约和事件
 src/agents/plugins/fs/fs-patch/ `@fly-novel/fs-patch` 独立工作区包，提供补丁解析和文本修改
@@ -59,6 +60,7 @@ src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由
 src/agents/plugins/tools/ `@fly-novel/tools` 独立工作区包，提供工具定义、注册与执行服务
 src/agents/plugins/subagent/subagent/ `@fly-novel/subagent` 独立工作区包，提供子 Agent 委派服务及 Cordis 插件
 src/agents/plugins/subagent/subagent-in-process-driver/ `@fly-novel/subagent-in-process-driver` 独立工作区包，提供进程内子 Agent 一次性运行驱动
+src/agents/plugins/subagent/subagent-persistent-in-process/ `@fly-novel/subagent-persistent-in-process` 独立工作区包，提供持续身份子 Agent Provider 与可信创建绑定
 src/agents/plugins/subagent/subagent-fork-in-process/ 进程内 Fork Provider，继承父会话已结束轮次
 src/agents/plugins/skill/ `@fly-novel/skill` 独立工作区包，提供 Skill 来源注册、查询与 Cordis 服务插件
 src/agents/plugins/skill-filesystem/ `@fly-novel/skill-filesystem` 独立工作区包，提供文件系统 Skill 来源及插件

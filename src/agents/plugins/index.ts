@@ -15,6 +15,7 @@ import { filesystemSkillPluginDefinition } from '@fly-novel/skill-filesystem'
 import { toolSkillPluginDefinition } from '@fly-novel/tool-skill'
 import { subagentPluginDefinition } from '@fly-novel/subagent'
 import { spawnInProcessPluginDefinition } from '@fly-novel/subagent-spawn-in-process'
+import { persistentInProcessPluginDefinition } from '@fly-novel/subagent-persistent-in-process'
 import { forkInProcessPluginDefinition } from '@fly-novel/subagent-fork-in-process'
 import { genericSubagentSystemPromptDefinition } from '../generic-subagent/system-prompt.js'
 import { toolSubagentPluginDefinition } from '@fly-novel/tool-subagent'
@@ -32,6 +33,7 @@ export const builtInPlugins: AgentPluginDefinition[] = [
   toolSkillPluginDefinition,
   subagentPluginDefinition,
   spawnInProcessPluginDefinition,
+  persistentInProcessPluginDefinition,
   forkInProcessPluginDefinition,
   genericSubagentSystemPromptDefinition,
   toolSubagentPluginDefinition,

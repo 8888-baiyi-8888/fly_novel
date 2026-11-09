@@ -24,6 +24,7 @@ Spawn 请求的可选 `parameters` 由可信创建函数校验并复制，作为
 - `plugins/subagent/subagent/`：独立工作区包 [`@fly-novel/subagent`](plugins/subagent/subagent/README.md)，提供一次性子 Agent 委派服务及 Cordis 插件。
 - `plugins/subagent/subagent-in-process-driver/`：独立工作区包 [进程内运行驱动](plugins/subagent/subagent-in-process-driver/README.md)，提供一次性子 Agent 的创建交接与任务执行。
 - `plugins/subagent/subagent-spawn-in-process/`：独立工作区包 [Spawn Provider](plugins/subagent/subagent-spawn-in-process/README.md)，注册进程内 Spawn 并接收可信创建函数。
+- `plugins/subagent/subagent-persistent-in-process/`：独立工作区包 [持续子 Agent Provider](plugins/subagent/subagent-persistent-in-process/README.md)，通过可信创建函数绑定持续身份和会话。
 - `plugins/subagent/subagent-fork-in-process/`：独立工作区包 [Fork Provider](plugins/subagent/subagent-fork-in-process/README.md)，从父 Loop 捕获历史并启动独立子实例。
 - `plugins/subagent/tool-subagent/`：独立工作区包 [通用委派工具](plugins/subagent/tool-subagent/README.md)，在父 Agent 作用域注册 `delegate`。
 - `generic-subagent/`：通用子 Agent 的 Preset 与职责提示词插件。
@@ -59,6 +60,8 @@ Agent 初始化先激活父作用域，再等待所选插件及其依赖链启�
 世界初始化的受控文件装配由[应用入口](../app/README.md)显式选择，使用独立读取视图、草稿根及只读子 Agent；通用 Preset 本身不自动获得文件访问能力。
 
 `createSpawnAgentCreator(framework, presets)` 为 Spawn Provider 提供可信创建函数。`presets` 以可委派的 Preset ID 为键，值为该子 Agent 的插件配置；应用须显式提供标准 `agent-loop-runtime` 和 LLM 配置。创建函数复用同一框架的 Preset 注册表和 Manager，拒绝未注册或未配置的 Preset，以及持久化 Session ID；Agent 创建成功后由运行句柄通过同一 Manager 释放。应用须确认选用的自定义插件不会恢复或共享 Session。该函数不自动将 Spawn 装配到父 Agent；父 Preset 须选择 `subagent` 和 `subagent-spawn-in-process`，并在后者配置中提供创建函数。
+
+父 Agent 可另行装配 `subagent-persistent-in-process`，通过 `subagents.start('persistent', ...)` 启动持续身份的子 Agent。可信应用使用 `@fly-novel/subagent-persistent-in-process` 的 `createPersistentAgentCreator` 绑定 Preset、首轮会话模式和实际创建函数；Session 后端、稳定身份及资源仍由创建函数负责。它不继承父会话，不接受模型指定的创建参数，使用和并发边界见[持续子 Agent 包说明](plugins/subagent/subagent-persistent-in-process/README.md)。
 
 `createForkAgentCreator(framework, presets)` 为 Fork Provider 提供可信创建函数；父 Preset 显式选择 `subagent` 和 `subagent-fork-in-process`，并为后者提供该函数。Fork 继承已结束轮次的受限历史，装配示例、兼容和释放规则见 [Fork 包说明](plugins/subagent/subagent-fork-in-process/README.md)。
 

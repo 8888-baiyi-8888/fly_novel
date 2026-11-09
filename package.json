@@ -51,6 +51,7 @@
     "@fly-novel/tool-fs": "workspace:*",
     "@fly-novel/tool-fs-search": "workspace:*",
     "@fly-novel/subprocess-local": "workspace:*",
+    "@fly-novel/subagent-persistent-in-process": "workspace:*",
     "@deepseek-ai/cordis": "^4.0.2",
     "@fly-novel/agents": "workspace:*",
     "@fly-novel/agent-loop": "workspace:*",
