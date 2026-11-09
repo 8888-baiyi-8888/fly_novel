@@ -8,6 +8,7 @@ import { directorAgentPreset } from '../director/preset.js'
 import { writerAgentPreset } from '../writer/preset.js'
 import { worldInitializationMainAgentPreset } from '../world-initialization-main-agent/preset.js'
 import { genericSubagentPreset } from '../generic-subagent/preset.js'
+import { characterCreatorPreset } from '../character-creator/preset.js'
 import { registerAll } from '@fly-novel/util'
 
 export interface AgentFramework {
@@ -32,6 +33,7 @@ export async function bootstrapAgents(): Promise<AgentFramework> {
     writerAgentPreset,
     worldInitializationMainAgentPreset,
     genericSubagentPreset,
+    characterCreatorPreset,
   ], preset => presets.register(preset))
 
   // 验证 Preset 中的插件绑定是否存在于 PluginRegistry 中

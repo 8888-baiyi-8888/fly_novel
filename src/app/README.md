@@ -6,6 +6,8 @@
 
 受控入口根据实际工作区目录为主、子 Agent 分别注册文件权限提示词：主 Agent 获得草稿目录和路径示例，子 Agent 获得只读说明。提示词用于指导模型，实际访问仍由文件后端和读取授权检查执行。
 
+`createCharacterCreator` 创建独立角色设定创建 Agent。可信应用显式提供世界和 Agent 身份、Session ID 及新建或恢复模式、现有的读取根、角色资料根、Session 根、模型适配器与默认生成数量；应用须在重新创建时提供相同的世界、Agent 和 Session ID。入口由三者派生存储用 Session ID，避免不同身份复用同名会话。角色根必须位于读取根内，Session 根与读取根不得重叠；角色根仅在明确指定初始化且为空时创建索引。Agent 注册角色资料工具和授权范围内的只读文件工具，返回的句柄负责运行、取消和等待释放。调用方必须 `await dispose()`，并确保同一世界没有其他进程同时写入；进程内相同身份或 Session 不允许并发启动。该入口不提供共享工作区的跨 Agent 写入隔离，也不实现主 Agent 委派。
+
 `agent_harness.ts` 提供 Cordis Harness 的独立调试函数 `debugAgentHarness(prompt)`，按角色 Preset 创建 Agent、读取本机 DeepSeek 配置并调用真实 Agent Loop，最后销毁实例。在仓库根目录运行 `pnpm run agent-harness-debug -- "你明天会回来吗？"`，或在 VS Code“运行和调试”中选择“调试 Cordis Agent Harness（DeepSeek）”并按 F5。该调试配置先构建 Agent 包和应用，可在函数、`AgentInstance.run()` 和 `AgentLoopRuntime` 中设置断点。
 
 `world-initialization-debug.ts` 使用本机 DeepSeek 配置创建世界初始化主 Agent，在集成终端中直接输入并显示 Agent 回复；输入 `/exit` 结束。运行 `pnpm run world-initialization-debug`，或在 VS Code“运行和调试”选择“调试世界初始化主 Agent（DeepSeek）”并按 F5。调试入口以仓库为工作目录，使用仓库中的玄幻 Skill 样例；真实请求需要有效的模型配置和网络。此入口只测试 Agent 对话，不实现程序控制的确认和超时。
