@@ -1,6 +1,6 @@
 # 角色资料与分类读取设计
 
-本文为角色创建 Agent 和后续角色读取工具提供设计草案；不表示当前已有存储、索引或读取工具。世界隔离、授权和用户确认遵循[共享工作区计划](world-initialization-stage-5-workspace-plan.md)及[初始化业务流程](world-initialization-stage-1-plan.md)。
+本文描述角色资料和分类读取的业务设计；当前实现及限制以[角色资料模块说明](../../../src/world-init/README.md)为准。世界隔离、授权和用户确认遵循[共享工作区计划](world-initialization-stage-5-workspace-plan.md)及[初始化业务流程](world-initialization-stage-1-plan.md)。
 
 ## 整体工作制度
 

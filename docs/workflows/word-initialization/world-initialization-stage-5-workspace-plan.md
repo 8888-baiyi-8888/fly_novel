@@ -46,7 +46,7 @@
 - [读取授权](../../../src/agents/plugins/fs/tool-fs/read-access.ts)以可信工作目录为根解析模型提供的路径并检查包含关系；搜索复用读取授权。[文件观察策略](../../../src/agents/plugins/fs/fs-observation-policy/index.ts)按工具所属 Agent 和 Session 路由观察及修改意图，Session 关闭时清理观察。观察记录不等于持续身份或记忆恢复。
 - [子 Agent 服务](../../../src/agents/plugins/subagent/subagent/runtime.ts)取消并等待尚未交付的启动，已交付运行由句柄持有方释放；[进程内创建](../../../src/agents/plugins/subagent/subagent-in-process-driver/create.ts)在启动期间取消时释放迟到的句柄。持续身份与目录复用、同一身份并发运行及其失败清理仍需确定并实现。
 - [通用创建器](../../../src/agents/runtime/subagent-in-process-creator.ts)为每次启动生成新的 Agent 实例 ID 和运行 ID；[Agent Manager](../../../src/agents/runtime/agent-manager.ts)拒绝同一 Manager 内重复的实例 ID，包括创建和清理期间，但这不会自动限制使用不同实例 ID 的同一业务身份。通用子 Agent 服务也不登记已交付的运行；基于通用机制实现的特殊子 Agent 应结合这些现有能力设计持续身份与并发策略，不能直接假定已有按业务身份的互斥。
-- 通用创建器通过可信的 Preset 插件配置装配子 Agent，Spawn Provider 也接受可信创建函数；专用工具可以在装配时接收工作区配置并通过既有创建扩展点传入子 Agent。现有通用委派工具本身只配置 Preset ID，具体注入方式仍待设计。
+- 通用创建器通过可信的 Preset 插件配置装配子 Agent，Spawn Provider 接受可信创建函数；角色创建专用工具通过 `persistent` Provider 接收可信装配的身份、Session 与目录配置。现有通用委派工具仍配置只读子 Agent Preset；通用工作区的各 Agent 配置和权限由第 3 步实现。
 - [本机文件后端版本](../../../src/agents/plugins/fs/fs-local/fsio.ts)由文件身份、大小和时间元数据组成，用于文件修改时的新鲜度检查，不是内容摘要。资料目录长期保存时能否使用该后端版本，或使用文件内容摘要，仍需结合存储与恢复要求决定。
 - 资料目录、专用登记工具与简介版本对齐尚无实现。目录是导航信息，成果文件和已确认资料仍是各自独立的内容；登记不会触发未来的业务确认流程。
 
@@ -104,9 +104,11 @@
 
 详细开发步骤见[角色创建子 Agent 与专用工具计划](world-initialization-stage-5-character-creator-plan.md)。
 
+角色创建 Agent、角色资料工具及主 Agent 委派已在受控测试目录完成集成验证；角色设定创建使用 `persistent`，通用只读委派继续使用 `spawn`。角色资料的受控读写与持续 Session 不代表整个世界的共享工作区、跨 Agent 写入边界或跨世界隔离已经完成。
+
 1. 核对现有通用子 Agent、委派工具和角色相关实现，明确角色创建子 Agent 的职责、任务输入和结果；该子 Agent 用于协助创建世界中的各种角色，不将示例角色或角色分类固定为所有世界的必需内容。
 2. 基于现有通用子 Agent 机制创建角色创建专用子 Agent，由可信应用将其专用工具装配给主 Agent；主 Agent 通过工具提交角色创建任务，子 Agent 的职责和配置由应用确定，不由模型自行创建或授权子 Agent。
-3. 明确工具的任务参数、结果、失败、取消和资源释放语义，复用现有 Spawn 和生命周期能力；为后续注入所属世界及工作区权限保留实际需要的装配位置，本步不预设世界数据的最终根目录，也不实现虚假的记忆恢复。
+3. 明确工具的任务参数、结果、失败、取消和资源释放语义；通过 `persistent` Provider 和共享运行驱动委派角色创建 Agent，可信应用提供世界、目录和持续 Session 配置。本步不预设世界数据的最终根目录，也不实现虚假的记忆恢复。
 4. 使用固定模型替身通过真实主子 Agent 和工具链验证角色创建任务的传递、结果返回、失败、取消和释放；验证不同角色任务可以交给该专用子 Agent，不将替身结果描述为真实模型能力验证。
 
 **验收**：主 Agent 能通过可信装配的专用工具调用基于通用机制的角色创建子 Agent，并获得任务结果；调用失败、取消和清理行为可验证，为下一步注入工作区配置提供入口。

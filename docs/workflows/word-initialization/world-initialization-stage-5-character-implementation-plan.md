@@ -73,10 +73,10 @@
 ## 5. 接入主 Agent 委派
 
 1. 建立角色创建专用委派工具，由可信应用绑定角色创建 Agent 的 Preset、世界、稳定身份、模型及 Session 配置；模型只提供本次业务任务与所需背景。保留现有通用 `delegate` 和角色扮演 `delegate_character` 的职责。
-2. 复用 Spawn Provider 和运行驱动。现有 `createSpawnAgentCreator` 禁止为子 Agent 指定持久化 Session ID，因此为角色创建 Agent 配置可信创建函数以装配已有持久化 Session 能力，不放宽通用创建器的既有隔离规则；不使用 Fork 的父会话快照代替子 Agent 自己的会话。
+2. 使用独立的 `persistent` Provider 和共享运行驱动，由可信创建函数装配角色创建 Agent 的持久化 Session；普通 `spawn` 保持独立会话约束，不使用 Fork 的父会话快照代替子 Agent 自己的会话。
 3. 委派工具拒绝空任务和错误父身份，等待子 Agent 结果并释放运行；启动、执行、取消和释放失败明确报告，执行与释放同时失败保留两个原因。将工具注册到可信主 Agent 入口并随作用域清理。
 
-**验收**：主 Agent 经专用工具、Spawn 和角色创建 Agent 接收结果；后续委派可继续该 Agent 自己的 Session，父会话不被误当作子 Agent 会话；取消和作用域释放无资源遗留。
+**验收**：主 Agent 经专用工具、`persistent` Provider 和角色创建 Agent 接收结果；后续委派可继续该 Agent 自己的 Session，父会话不被误当作子 Agent 会话；取消和作用域释放无资源遗留。
 
 ## 6. 集成验证与交付
 
