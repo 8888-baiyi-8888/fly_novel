@@ -49,6 +49,7 @@ src/agents/        写作 Agent 工作区包；core/ 定义 Cordis Harness 实�
 src/agents/world-initialization-main-agent/plugins/system-prompt/ 世界初始化主 Agent 的专有提示词插件独立工作区包
 src/agents/world-initialization-main-agent/skills/ 世界初始化主 Agent 的专属 Skill 内容
 src/agents/character/plugins/system-prompt/、src/agents/director/plugins/system-prompt/ 角色和导演的专有提示词插件独立工作区包
+src/agents/character-creator/plugins/system-prompt/ 角色设定创建专有提示词插件独立工作区包
 src/agents/generic-subagent/ 通用子 Agent 的 Preset 和职责提示词插件
 src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理
 src/agents/plugins/tools/ `@fly-novel/tools` 独立工作区包，提供工具定义、注册与执行服务

@@ -62,6 +62,9 @@
       "@fly-novel/character-system-prompt": [
         "./src/agents/character/plugins/system-prompt/index.ts"
       ],
+      "@fly-novel/character-creator-system-prompt": [
+        "./src/agents/character-creator/plugins/system-prompt/index.ts"
+      ],
       "@fly-novel/director-system-prompt": [
         "./src/agents/director/plugins/system-prompt/index.ts"
       ],

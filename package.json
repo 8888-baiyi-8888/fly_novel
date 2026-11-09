@@ -55,6 +55,7 @@
     "@fly-novel/agents": "workspace:*",
     "@fly-novel/agent-loop": "workspace:*",
     "@fly-novel/character-system-prompt": "workspace:*",
+    "@fly-novel/character-creator-system-prompt": "workspace:*",
     "@fly-novel/director-system-prompt": "workspace:*",
     "@fly-novel/llm": "workspace:*",
     "@fly-novel/session": "workspace:*",

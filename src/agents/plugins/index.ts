@@ -1,5 +1,6 @@
 import type { AgentPluginDefinition } from '../core/contracts/agent.js'
 import { characterPluginDefinitions } from '../character/plugins.js'
+import { characterCreatorSystemPromptPluginDefinition } from '@fly-novel/character-creator-system-prompt'
 import { directorSystemPromptPluginDefinition } from '@fly-novel/director-system-prompt'
 import { writerSystemPromptPluginDefinition } from '../writer/system-prompt-plugin.js'
 import { worldInitializationSystemPromptPluginDefinition } from '@fly-novel/world-initialization-system-prompt'
@@ -35,6 +36,7 @@ export const builtInPlugins: AgentPluginDefinition[] = [
   genericSubagentSystemPromptDefinition,
   toolSubagentPluginDefinition,
   ...characterPluginDefinitions,
+  characterCreatorSystemPromptPluginDefinition,
   directorSystemPromptPluginDefinition,
   writerSystemPromptPluginDefinition,
   worldInitializationSystemPromptPluginDefinition,

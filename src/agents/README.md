@@ -31,6 +31,7 @@ Spawn 请求的可选 `parameters` 由可信创建函数校验并复制，作为
 - `plugins/tool-skill/`：独立工作区包，注册 Skill 加载工具并发布模型可见目录。
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `character/plugins/system-prompt/`、`director/plugins/system-prompt/`：角色和导演的专有提示词插件独立工作区包，包含各自的 Harness 注册定义。
+- `character-creator/plugins/system-prompt/`：角色设定创建的[专有提示词插件](character-creator/plugins/system-prompt/README.md)，与角色扮演职责独立；需可信应用配置默认生成数量。
 - `world-initialization-main-agent/preset.ts`：世界初始化主 Agent 的内置 Preset，组合提示词、Skill 及基础服务。
 - `world-initialization-main-agent/plugins/system-prompt/`：世界初始化主 Agent 的专有提示词插件独立工作区包，包含 Harness 注册定义。
 - `world-initialization-main-agent/skills/`：世界初始化主 Agent 的 Skill 样例；运行时来源由可信应用提供。
