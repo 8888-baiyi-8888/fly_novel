@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import test from 'node:test'
@@ -10,6 +10,8 @@ import { fsObservationPolicyPluginDefinition } from '@fly-novel/fs-observation-p
 import { toolFsPluginDefinition } from '@fly-novel/tool-fs'
 import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
 import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
+import { createPersistentAgentCreator } from '@fly-novel/subagent-persistent-in-process'
+import { startInProcessRun } from '@fly-novel/subagent-in-process-driver'
 import configured = require('../call-llm.js')
 import { createWorldInitializationAgentWithWorldWorkspaces } from '../agents/index.js'
 import { worldInitializationDraftFsPluginDefinition } from '../agents/world-initialization-draft-fs.js'
@@ -44,6 +46,8 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
   const deployment = { singleWriterProcess: true } as const
   const main = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', undefined, deployment)
   t.after(() => main.dispose())
+  const mainB = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'b', undefined, deployment)
+  t.after(() => mainB.dispose())
   const framework = await bootstrapAgents()
   t.after(() => framework.manager.disposeAll())
   for (const plugin of [sandboxPolicyPluginDefinition, fsObservationPolicyPluginDefinition, toolFsPluginDefinition,
@@ -59,15 +63,29 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
     'sandbox-policy': { mode: 'workspace-write', workspaceRoot: otherRoot },
     'world-initialization-draft-fs': { cwd: a.readRoot, draftRoot: otherRoot }, 'tool-fs': { applyPatch: true },
   } })
-  const call = async (agent: Agent, name: string, args: object) => (await agent.context.tools.execute({
+  const otherB = await framework.manager.create({ id: 'other-b', presetId: 'workspace-test-agent', pluginConfigs: {
+    'agent-loop-runtime': { provider: 'test', model: 'test', workingDirectory: b.readRoot },
+    llm: { adapters: [{ providers: ['test'], adapter }] },
+    'sandbox-policy': { mode: 'workspace-write', workspaceRoot: b.agents[1]!.writableRoot },
+    'world-initialization-draft-fs': { cwd: b.readRoot, draftRoot: b.agents[1]!.writableRoot }, 'tool-fs': { applyPatch: true },
+  } })
+  const call = async (agent: Agent, name: string, args: object, workdir = a.readRoot) => (await agent.context.tools.execute({
     calls: [{ type: 'tool-call', id: 'test' as ToolCallId, name, arguments: JSON.stringify(args) }],
-    workingDirectory: a.readRoot, session: agent.context.sessions.list()[0]!, signal: new AbortController().signal,
+    workingDirectory: workdir, session: agent.context.sessions.list()[0]!, signal: new AbortController().signal,
   })).results[0]!.result
   assert.equal((await call(main, 'read', { file_path: 'other/other.md' })).isError, false)
   assert.equal((await call(other, 'write', { file_path: 'other/new.md', content: 'new' })).isError, false)
   assert.equal((await call(main, 'read', { file_path: 'other/new.md' })).isError, false)
   assert.equal((await call(main, 'write', { file_path: 'main/main.md', content: 'main' })).isError, false)
   assert.equal((await call(other, 'read', { file_path: 'main/main.md' })).isError, false)
+  assert.equal((await call(otherB, 'write', { file_path: 'other/b.md', content: 'world b' }, b.readRoot)).isError, false)
+  assert.equal((await call(mainB, 'read', { file_path: 'other/b.md' }, b.readRoot)).isError, false)
+  assert.equal((await call(mainB, 'write', { file_path: 'main/b.md', content: 'main b' }, b.readRoot)).isError, false)
+  assert.equal((await call(otherB, 'read', { file_path: 'main/b.md' }, b.readRoot)).isError, false)
+  assert.equal((await call(mainB, 'write', { file_path: 'other/b.md', content: 'bad' }, b.readRoot)).isError, true)
+  assert.equal((await call(otherB, 'write', { file_path: 'main/b.md', content: 'bad' }, b.readRoot)).isError, true)
+  assert.equal((await call(mainB, 'read', { file_path: join(a.agents[1]!.writableRoot, 'other.md') }, b.readRoot)).isError, true)
+  assert.equal((await call(otherB, 'write', { file_path: join(a.mainAgent.writableRoot, 'main.md'), content: 'bad' }, b.readRoot)).isError, true)
   for (const target of ['other/other.md', 'characters/index.json', 'confirmed/fact.md', 'catalog/catalog.md', join(b.mainAgent.writableRoot, 'secret.md')]) {
     assert.equal((await call(main, 'write', { file_path: target, content: 'bad' })).isError, true, target)
   }
@@ -76,14 +94,78 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
   assert.equal((await call(main, 'edit', { file_path: 'other/other.md', old_string: 'other', new_string: 'bad' })).isError, true)
   assert.equal((await call(main, 'read', { file_path: join(b.mainAgent.writableRoot, 'secret.md') })).isError, true)
   assert.equal((await call(main, 'grep', { pattern: 'secret', path: b.readRoot })).isError, true)
+  assert.equal((await call(main, 'read', { file_path: '../b/main/secret.md' })).isError, true)
+  assert.equal((await call(main, 'write', { file_path: '../b/main/new.md', content: 'bad' })).isError, true)
+  await t.test('目录链接不能扩大读写范围', async subtest => {
+    try {
+      await symlink(b.mainAgent.writableRoot, join(a.mainAgent.writableRoot, 'outside-link'), process.platform === 'win32' ? 'junction' : 'dir')
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && ['EPERM', 'EACCES', 'ENOTSUP'].includes(String(error.code))) {
+        subtest.skip(`平台不允许创建目录链接：${String(error.code)}`); return
+      }
+      throw error
+    }
+    assert.equal((await call(main, 'read', { file_path: 'main/outside-link/secret.md' })).isError, true)
+    assert.equal((await call(main, 'write', { file_path: 'main/outside-link/new.md', content: 'bad' })).isError, true)
+    assert.equal((await call(main, 'grep', { path: 'main/outside-link', pattern: 'secret' })).isError, true)
+  })
   const deniedPatch = await call(main, 'apply_patch', { input: '*** Begin Patch\n*** Delete File: other/other.md\n*** End Patch' })
   assert.match(JSON.stringify(deniedPatch), /FS_SANDBOX_DENIED/)
   const moveOut = await call(main, 'apply_patch', { input: '*** Begin Patch\n*** Update File: main/main.md\n*** Move to: other/moved.md\n@@\n-main\n+moved\n*** End Patch' })
   assert.match(JSON.stringify(moveOut), /FS_SANDBOX_DENIED/)
   const moveIn = await call(main, 'apply_patch', { input: '*** Begin Patch\n*** Update File: other/other.md\n*** Move to: main/moved.md\n@@\n-other data\n+moved\n*** End Patch' })
   assert.match(JSON.stringify(moveIn), /FS_SANDBOX_DENIED/)
+  if (process.platform === 'win32') {
+    assert.equal((await call(main, 'write', { file_path: join(b.readRoot.toUpperCase(), 'MAIN', 'case.md'), content: 'bad' })).isError, true)
+  }
   assert.equal(await readFile(join(a.agents[1]!.writableRoot, 'other.md'), 'utf8'), 'other data\n')
   assert.equal(await readFile(join(a.confirmedRoot, 'fact.md'), 'utf8'), 'confirmed\n')
+  await Promise.all([framework.manager.dispose('other'), framework.manager.dispose('other-b')])
+  const runSpecial = async (parentAgent: Agent, world: WorldWorkspaceConfig) => {
+    class SpecialAdapter extends LlmAdapter {
+      calls = 0
+      override async *stream(): AsyncIterable<StreamChunk> {
+        if (++this.calls === 1) {
+          for (const [index, item] of [
+            { name: 'read', args: { file_path: world.worldId === 'a' ? 'main/main.md' : 'main/b.md' } },
+            { name: 'write', args: { file_path: 'other/delegated.md', content: world.worldId } },
+          ].entries()) yield { type: 'block-end', index, block: { type: 'tool-call', id: `special-${index}` as ToolCallId, name: item.name, arguments: JSON.stringify(item.args) } }
+          yield { type: 'finish', reason: { kind: 'tool-calls' } }
+        } else {
+          yield { type: 'block-end', index: 0, block: { type: 'text', text: '已处理' } }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        }
+      }
+    }
+    const agentId = `fixture-${world.worldId}`
+    let child: Agent | undefined
+    const create = createPersistentAgentCreator({ presetId: 'test-special', sessionMode: 'create', async create() {
+      const instance = await framework.manager.create({ id: agentId, presetId: 'workspace-test-agent', pluginConfigs: {
+        'agent-loop-runtime': { provider: 'test', model: 'test', workingDirectory: world.readRoot },
+        llm: { adapters: [{ providers: ['test'], adapter: new SpecialAdapter() }] },
+        'sandbox-policy': { mode: 'workspace-write', workspaceRoot: world.agents[1]!.writableRoot },
+        'world-initialization-draft-fs': { cwd: world.readRoot, draftRoot: world.agents[1]!.writableRoot },
+        'tool-fs': { applyPatch: true },
+      } })
+      child = instance
+      return { agent: instance, dispose: () => framework.manager.dispose(agentId) }
+    } })
+    const unregister = parentAgent.context.subagents.registerProvider({ name: 'fixture-special', supportsParameters: false,
+      start: request => startInProcessRun(request, create) })
+    try {
+      const run = await parentAgent.context.subagents.start('fixture-special', { parent: parentAgent, presetId: 'test-special',
+        prompt: '读取共享资料并写入自己的目录', signal: new AbortController().signal })
+      assert.deepEqual(await run.result, { stopReason: 'completed', output: '已处理' })
+      assert.ok(child)
+      const results = child.context.sessions.list()[0]!.read().filter(event => event.type === 'tool/result')
+      assert.equal(results.length, 2)
+      assert.ok(results.every(event => event.data.error === undefined))
+      await run.dispose()
+      assert.equal(await readFile(join(world.agents[1]!.writableRoot, 'delegated.md'), 'utf8'), world.worldId)
+    } finally { unregister() }
+  }
+  await runSpecial(main, a)
+  await runSpecial(mainB, b)
   await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([a, b], 'missing', undefined, deployment), /世界配置不存在/)
   const sessionRoot = join(root, 'sessions'); await mkdir(sessionRoot)
   const creator = { agentId: 'main', sessionId: 's', sessionMode: 'create' as const, sessionRoot, initializeCharacters: true,
@@ -92,13 +174,14 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
   await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', { ...creator, agentId: 'creator', sessionRoot: b.mainAgent.writableRoot }, deployment), /任何世界/)
   class CharacterAdapter extends LlmAdapter {
     requests: GenerateOptions[] = []
+    constructor(private readonly world: WorldWorkspaceConfig, private readonly outside: WorldWorkspaceConfig) { super() }
     override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
       this.requests.push(options)
       if (this.requests.length === 1) {
         const calls = [
-          { id: 'search', name: 'grep', args: { pattern: 'other data', path: 'other' } },
-          { id: 'outside', name: 'read', args: { file_path: join(b.mainAgent.writableRoot, 'secret.md') } },
-          { id: 'create', name: 'character_create', args: { character: { name: '测试角色', summary: '角色建议', categories: {}, body: '设定' } } },
+          { id: 'search', name: 'grep', args: { pattern: this.world.worldId === 'a' ? 'other data' : 'world b', path: 'other' } },
+          { id: 'outside', name: 'read', args: { file_path: join(this.outside.mainAgent.writableRoot, this.outside.worldId === 'a' ? 'main.md' : 'secret.md') } },
+          { id: 'create', name: 'character_create', args: { character: { name: `测试角色-${this.world.worldId}`, summary: '角色建议', categories: {}, body: '设定' } } },
         ]
         for (const [index, item] of calls.entries()) yield { type: 'block-end', index, block: { type: 'tool-call', id: item.id as ToolCallId, name: item.name, arguments: JSON.stringify(item.args) } }
         yield { type: 'finish', reason: { kind: 'tool-calls' } }
@@ -108,7 +191,21 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
       }
     }
   }
-  const childAdapter = new CharacterAdapter()
+  const childAdapter = new CharacterAdapter(a, b)
+  const childAdapterB = new CharacterAdapter(b, a)
+  await mainB.dispose()
+  const delegatedB = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'b', { ...creator, agentId: 'creator', adapter: childAdapterB }, deployment)
+  try {
+    assert.equal((await call(delegatedB, 'delegate_character_creator', { task: '创建世界 B 的角色' }, b.readRoot)).isError, false)
+    const blocks = childAdapterB.requests[1]!.messages.flatMap(message => message.content)
+    for (const [id, isError] of [['search', false], ['outside', true], ['create', false]] as const) {
+      const block = blocks.find(item => item.type === 'tool-result' && item.toolCallId === id)
+      assert.ok(block && block.type === 'tool-result')
+      assert.equal(!!block.isError, isError, id)
+    }
+    assert.match(await readFile(join(b.agents[0]!.writableRoot, 'index.json'), 'utf8'), /测试角色-b/)
+    assert.equal((await call(delegatedB, 'write', { file_path: 'characters/index.json', content: 'bad' }, b.readRoot)).isError, true)
+  } finally { await delegatedB.dispose() }
   await main.dispose()
   const delegated = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', { ...creator, agentId: 'creator', adapter: childAdapter }, deployment)
   try {
