@@ -49,7 +49,7 @@
 
 ### 内容关联、并发和失败
 
-登记和更新由服务读取实际文件字节并计算 SHA-256，模型不提供或决定摘要。读取前后核对真实目标与文件版本；暂存目录文件后、发布前再次检查目标与摘要，变化或检查失败时不发布新记录并报告冲突或具体错误。状态以检查时刻为准：`current` 表示摘要一致，`stale` 表示内容不同，`missing` 表示目标不存在，`unreadable` 表示读取或权限失败，`changing` 表示检查期间变化；不把错误当作不存在，也不宣称检查与外部写入是跨文件原子事务。可识别的目标改指其他 Agent、世界或受保护目录时报告越权，而不是读取其内容计算摘要。
+登记和更新由服务读取实际文件字节并计算 SHA-256，模型不提供或决定摘要。读取前后核对真实目标与文件版本；调用目录文件发布前再次检查目标与摘要，发布完成后再核对成果状态。发布前发现变化则不写入目录；发布后发现变化时保留已提交记录并明确报告过期或检查失败，不能声称未提交或自动回滚。状态以检查时刻为准：`current` 表示摘要一致，`stale` 表示内容不同，`missing` 表示目标不存在，`unreadable` 表示读取或权限失败，`changing` 表示检查期间变化；不把错误当作不存在，也不宣称检查与外部写入是跨文件原子事务。可识别的目标改指其他 Agent、世界或受保护目录时报告越权，而不是读取其内容计算摘要。
 
 同一世界的所有绑定共享一个世界级服务及串行写队列：不同记录的并发登记依次读取最新目录并合并；同记录通过 revision 拒绝过期更新或删除。目录文件按同目录独占临时文件写入并原子发布；发布前检查目录自身版本，不能无条件覆盖外部修改。尽量复用现有文件后端的单文件发布与版本保护，先验证其跨 Windows 和其他目标平台的实际能力；若不能保证所需语义则明确失败并保留原文件，不自行声称已经实现安全替换。服务关闭拒绝新操作并等待队列结束，Agent 工具释放不关闭其他 Agent 共用的世界服务；世界作用域关闭后才释放服务。
 
@@ -67,6 +67,56 @@
 4. 核实现有文件服务的目标解析、文件版本、同目录原子替换、取消和 Windows 行为；明确实际可复用接口、不能覆盖的外部并发及失败状态。如果首版设计与既有契约或实际能力冲突，先修正文档并说明原因，再进入实现。
 
 **验收**：登记、查询和权限边界有具体工具调用示例；服务所有者与释放顺序明确；实现计划不把文件观察或提示词当作授权，也不假设通用特殊 Agent 生产装配已经存在。
+
+#### 第 1 步核对结论：实例与服务
+
+以下是依据当前实现确定的开发设计，工具和目录服务尚未实现：
+
+| 对象 | 当前入口和身份 | 本步后续装配设计 |
+| --- | --- | --- |
+| 主 Agent | [世界入口](../../../src/app/agents/world-initialization.ts)校验世界集合后，按 `(worldId, mainAgent.agentId)` 占用业务身份；底层 Agent 实例 ID 为随机值。 | 世界服务管理器从可信世界配置取得目录及业务身份；主 Agent 创建成功后，以其 `context.tools.agent` 的对象身份绑定目录句柄，并注册五个目录工具。 |
+| 角色 Agent | [角色入口](../../../src/app/agents/character-creator.ts)使用稳定 Agent ID、独立框架和持久 Session；由 `persistent` 创建函数在任务时启动。 | 可信创建回调把同一世界服务的受限句柄传入角色入口；角色实例创建后以该实例 `context.tools.agent` 绑定，角色工具可维护自己的记录。 |
+| 第二个特殊 Agent | [双世界测试](../../../src/app/tests/world-workspace-assembly.test.ts)通过测试 Provider、独立实例和现有进程内驱动验证；没有通用业务生产装配。 | 测试中由可信应用绑定另一业务 ID 和目录，使用同一目录服务及实际工具链；不增加虚构的生产 Agent。 |
+
+`ToolsService` 在构造时冻结自己的 Agent 身份副本，并在每次执行时将该**同一对象**放入 `exec.agent`；工具注册时捕获所属 `tools.agent` 并要求 `exec.agent === capturedAgent`，缺失或不匹配时拒绝。业务 `ownerAgentId`、世界和目录由可信闭包提供；不与可重复或随机的实例 ID 混用。`exec.workingDirectory` 是工具批次提供的运行上下文，不作为目录授权来源；目录路径始终以受信世界根解析。Session 可用于执行与日志关联，不决定目录负责人；Session 恢复也不恢复工具权限，必须重新可信装配。
+
+世界服务由可信应用持有，按已校验的世界 ID、真实读取根及 `catalogRoot` 在当前进程复用同一服务和写队列；同世界但路径、Agent 绑定或目录配置不一致时拒绝，不另开并行写服务。服务为主、角色和测试 Agent 生成各自受限句柄并计数；销毁某个 Agent 只撤销其注册和句柄。世界所有者关闭时先阻止新绑定，取消并等待所属子运行和主 Agent 释放，再等待已提交目录操作及全部句柄退出，最后关闭后端和释放世界服务占用；清理失败传播错误并阻止不安全重入。启动失败逆序清理已创建资源；任务与清理均失败时保留两者。
+
+旧的 `createWorldInitializationAgentWithWorkspace` 不具备可信世界身份和资料目录配置，默认不注册目录工具；独立 `createCharacterCreator` 未获得世界服务时也不注册。不能从工作目录猜测世界或自动开启目录访问。只读通用子 Agent 首版不装配目录工具；需要查询时通过主 Agent 或后续明确的可信装配提供。
+
+#### 第 1 步核对结论：工具契约
+
+首版在 `src/tools/` 建立 `catalog/` 工具实现；具体持久化格式、目录服务及路径授权属于 `src/world-init/`，应用装配属于 `src/app/agents/`。五个工具均由 `defineTool` 创建，输入严格拒绝未声明字段，路径以世界读取根为基准，只接受规范相对路径；模型不能提交世界 ID、授权根或记录负责人。`ownerAgentId` 仅可作为查询筛选条件。工具返回 JSON 对象，模型可见内容与规范值表达相同状态；以下名称和字段是本计划确定的实现目标，不代表当前工具已存在。
+
+| 工具 | 输入 | 成功结果与含义 |
+| --- | --- | --- |
+| `catalog_register` | `path`、`summary` | `{ status: "registered", record, fileStatus }`；目标未登记，服务从实际文件生成摘要和 revision。 |
+| `catalog_update` | `path`、`summary`、`revision` | `{ status: "updated", record, fileStatus }`；只更新自己记录，必须匹配读取到的 revision。移动文件时先删除旧记录，再登记新路径，不自动改动成果。 |
+| `catalog_remove` | `path`、`revision` | `{ status: "removed", path }`；只删除自己记录，不删除成果。目标文件已经缺失时仍可基于目录中的规范路径和记录 revision 删除；不得为此读取或解析越权目标。 |
+| `catalog_search` | 可选 `ownerAgentId`、`keyword`、`offset`、`limit`、`version` | `{ items, total, offset, nextOffset, version }`；每项为 `{ record, fileStatus }`。`offset` 默认 0，`limit` 默认 50、最大 100；后续页必须传入上次 `version`。 |
+| `catalog_read` | `path` | `{ status: "found", record, fileStatus }` 或 `{ status: "not_registered", path }`；未登记与已登记但文件缺失明确区分。 |
+
+查询按规范路径排序；`version` 为服务读取到的目录文档字节 SHA-256，目录内容变动时后续页返回 `CATALOG_CONFLICT`。版本只固定目录记录快照，各项 `fileStatus` 是各自检查时刻的结果，不保证不同项或页面在同一时刻检查。记录 `revision` 是由程序生成的 UUID，和目录分页版本、成果文件 `contentSha256` 分别使用，不可互换。简介关键词按区分大小写的普通子串匹配，不执行正则；没有筛选条件时查询所有记录。
+
+服务以带 `code` 的受控错误区分 `CATALOG_INVALID_INPUT`、`CATALOG_FORBIDDEN`、`CATALOG_CONFLICT`、`CATALOG_NOT_FOUND`、`CATALOG_INVALID_DOCUMENT`、`CATALOG_IO_ERROR` 和 `CATALOG_CLOSED`；工具执行器把未取消情况下的 `Error.code` 传入工具错误信息。`catalog_read` 的未登记是正常结果，已登记文件丢失则返回 `fileStatus: "missing"`；对于被替换到越权位置的单项，使用 `fileStatus: "forbidden"` 且不读取该目标。`unreadable`、`changing` 逐项保留，不等同于空查询。外部摘要不一致的结果为 `stale`，不由工具自动更新简介。
+
+文件写入工具均设置 `reportOnAbort: true`。现有 [ToolsService](../../../src/agents/plugins/tools/tools-service.ts) 在信号已取消且工具抛错时会将错误码覆盖为 `ABORTED`；因此目录工具对**可能已发布**的提交结果返回结构化结果，包含 `status: "committed"` 或 `"unknown"` 和可用的操作、路径与检查状态，不能依赖异常码传递提交结果。发布前取消则报告未提交的取消；其他失败与清理同时失败时，服务保留两个原因，工具返回不泄露宿主路径的稳定失败信息，并在可信调用侧保留完整错误。实现须测试取消发生在发布前、发布中、发布后及报告过程中；不得把 `isError: false` 单独当作提交成功，必须检查 `status`。
+
+#### 第 1 步核对结论：调用示例
+
+示例路径均相对世界读取根，返回值中的摘要与 revision 为示意值；实际摘要和 revision 由服务生成。
+
+1. 主 Agent 完成自己的 `agents/main/world.md` 后调用 `catalog_register({"path":"agents/main/world.md","summary":"世界背景草案"})`，得到 `registered` 记录；目录不因此把草案确认为事实。再次登记同一路径得到 `CATALOG_CONFLICT`。
+2. 角色 Agent 创建角色资料后调用 `catalog_register({"path":"agents/characters/<角色ID>/profile.md","summary":"角色建议及其背景"})`；主 Agent 可以 `catalog_search({"ownerAgentId":"creator"})` 和 `catalog_read({"path":"agents/characters/<角色ID>/profile.md"})`。主 Agent 对该路径执行 `catalog_update` 或 `catalog_remove` 得到 `CATALOG_FORBIDDEN`；若简介有误，由主 Agent 委派角色 Agent 处理。
+3. 角色 Agent 先读取记录并取得 `revision`，再调用 `catalog_update({"path":"agents/characters/<角色ID>/profile.md","summary":"更新后的角色建议","revision":"<读取所得 revision>"})`。若成果在检查或提交后发生变化，结果明确区分未提交冲突和已提交但 `stale`；若成果被删除，详情返回 `missing`，负责人仍可用记录 revision 删除目录项。
+
+#### 第 1 步核对结论：文件接口与限制
+
+[文件服务](../../../src/agents/plugins/fs/fs/index.ts)提供 `resolve`、`stat`、`lstat`、`readBytes`、`readByteRange` 和带意图的 `writeText`；`FsVersion` 是不透明的新鲜度令牌，不是 SHA-256。成果摘要按原始字节计算，可使用有界字节窗口逐块哈希，读取前后检查目标和版本；窗口读取不构成系统级原子快照。目录 JSON 可通过单个可信 `LocalFileSystem` 实例使用 `writeText` 的版本意图，不能使用面向 Agent 的草稿后端写入受保护目录。
+
+[本机后端](../../../src/agents/plugins/fs/fs-local/README.md)提供单文件暂存发布、实例内目标锁和版本检查，Windows 替换涉及保留 DACL；`writeText` 未公开“暂存完成、发布之前调用业务检查”的扩展点，也未提供与成果文件联合提交的事务。首版采用发布前检查成果、调用带目录版本意图的 `writeText`、发布后复核成果的顺序；如果复核发现变化，返回已提交及 `stale`，而不是声称拒绝了发布。提交期间的外部路径替换、硬链接和多个进程写入仍不能由此消除。若需求以后必须保证发布瞬间成果未变，需要单独设计可验证的事务或宿主隔离，不能把现有接口描述为已有此能力。
+
+`writeText` 发布后清理暂存目录失败不保证回滚；目录服务应以实际后端结果和后续读取确认状态，不能把异常当作原文件必然未变。`readBytes` 有大小上限，分块 `readByteRange` 每次检查取消；`readText` 的 UTF-8 解码和换行处理不能代替原始字节摘要。文件观察策略按工具和 Session 路由，只服务观察与版本意图，不提供目录授权；目录服务需自行校验身份、路径与文件状态。
 
 ### 2. 实现版本化格式与目标校验
 
