@@ -11,7 +11,8 @@ import { toolFsReadPluginDefinition } from '@fly-novel/tool-fs'
 import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
 import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import type { LlmAdapter } from '@fly-novel/llm'
-import { createCharacterTools, readFileTool } from '../../tools/index.js'
+import { createCatalogTools, createCharacterTools, readFileTool } from '../../tools/index.js'
+import type { CatalogBinding } from '../../world-init/workspace/catalog/service.js'
 import { CharacterStore } from '../../world-init/character/store.js'
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 
@@ -29,6 +30,8 @@ export interface CharacterCreatorConfig {
   model: string
   adapter: LlmAdapter
   defaultCharacterCount: number
+  /** 可选的可信目录能力；仅由应用装配。 */
+  catalogBinding?: CatalogBinding
 }
 
 /** 调用方拥有该句柄，必须在使用后等待 dispose。 */
@@ -98,6 +101,11 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
       'character-creator-system-prompt': { defaultCharacterCount: config.defaultCharacterCount },
     } })
     for (const tool of [...createCharacterTools(store), readFileTool]) agent.context.tools.register(tool)
+    if (config.catalogBinding) {
+      const identity = agent.context.tools.agent
+      if (!identity) throw new Error('角色 Agent 的目录工具缺少身份')
+      for (const tool of createCatalogTools(config.catalogBinding, identity)) agent.context.tools.register(tool)
+    }
     const current = agent
     const ownedStore = store
     const disposeOwnedFramework = disposeFramework

@@ -11,7 +11,7 @@ import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
 import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import { registerAll } from '@fly-novel/util'
 import { loadConfiguredAdapter } from '../call-llm.js'
-import { createCharacterCreatorDelegationTool, readFileTool } from '../../tools/index.js'
+import { createCatalogTools, createCharacterCreatorDelegationTool, readFileTool } from '../../tools/index.js'
 import { createCharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
 import { validateWorldInitializationWorkspace, type WorldInitializationWorkspace } from './world-initialization-workspace.js'
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
@@ -19,12 +19,13 @@ import { worldInitializationSkillPluginDefinition } from './world-initialization
 import { worldInitializationWorkspacePromptPluginDefinition } from './world-initialization-workspace-prompt.js'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
+import { CatalogService } from '../../world-init/workspace/catalog/service.js'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
 
 /** 角色创建 Agent 的非授权配置；世界和目录由工作区绑定。 */
-export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worldId' | 'readRoot' | 'characterRoot'>
+export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worldId' | 'readRoot' | 'characterRoot' | 'catalogBinding'>
 
 /**
  * 从可信世界配置创建主 Agent 并按稳定身份绑定角色 Agent。
@@ -36,7 +37,7 @@ export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worl
  */
 export async function createWorldInitializationAgentWithWorldWorkspaces(
   workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator: WorkspaceCharacterCreatorConfig | undefined,
-  deployment: { readonly singleWriterProcess: true },
+  deployment: { readonly singleWriterProcess: true; readonly catalog?: { readonly maxCatalogBytes?: number } },
 ): Promise<Agent> {
   if (deployment?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   const worlds = await validateWorldWorkspaceConfigs(workspaces)
@@ -52,15 +53,20 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
         throw new Error('角色 Session 目录不能与任何世界读取根重叠')
       }
     }
-    creator = { ...characterCreator, worldId: world.worldId, readRoot: world.readRoot, characterRoot: owner.writableRoot }
+    creator = { ...characterCreator, worldId: world.worldId, readRoot: world.readRoot, characterRoot: owner.writableRoot, catalogBinding: undefined }
   }
   const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
   let agent: Agent
+  let catalog: CatalogService | undefined
   try {
-    agent = await createWorldInitializationAgentWithWorkspace({ viewRoot: world.readRoot, draftRoot: world.mainAgent.writableRoot,
-      confirmedRoot: world.confirmedRoot }, creator)
+    if (deployment.catalog) catalog = await CatalogService.open(world, { singleWriterProcess: true, ...deployment.catalog })
+    if (creator && catalog) creator = { ...creator, catalogBinding: catalog.bind(creator.agentId) }
+    agent = await createWorldInitializationAgentWithWorkspaceInternal({ viewRoot: world.readRoot, draftRoot: world.mainAgent.writableRoot,
+      confirmedRoot: world.confirmedRoot }, creator, catalog?.bind(world.mainAgent.agentId))
   } catch (error) {
-    if (!(error instanceof AggregateError)) releaseIdentity()
+    if (!(error instanceof AggregateError)) {
+      try { await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
+    }
     throw error
   }
   let disposal: Promise<void> | undefined
@@ -68,7 +74,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     info: agent.info, context: agent.context,
     get state() { return agent.state },
     run: input => agent.run(input), cancel: () => agent.cancel(),
-    dispose: () => disposal ??= (async () => { await agent.dispose(); releaseIdentity() })(),
+    dispose: () => disposal ??= (async () => { await agent.dispose(); await catalog?.close(); releaseIdentity() })(),
   }
 }
 
@@ -109,6 +115,11 @@ export async function createWorldInitializationAgent(): Promise<Agent> {
  * @returns 初始化完成的 Agent；调用方使用完毕后须调用 dispose()。
  */
 export async function createWorldInitializationAgentWithWorkspace(workspace: WorldInitializationWorkspace, characterCreator?: CharacterCreatorConfig): Promise<Agent> {
+  return createWorldInitializationAgentWithWorkspaceInternal(workspace, characterCreator)
+}
+
+async function createWorldInitializationAgentWithWorkspaceInternal(workspace: WorldInitializationWorkspace, characterCreator?: CharacterCreatorConfig,
+  catalogBinding?: import('../../world-init/workspace/catalog/service.js').CatalogBinding): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -169,6 +180,11 @@ export async function createWorldInitializationAgentWithWorkspace(workspace: Wor
   } })
   try {
     if (creatorConfig) agent.context.tools.register(createCharacterCreatorDelegationTool(agent.context.subagents, agent.info.identity.id))
+    if (catalogBinding) {
+      const identity = agent.context.tools.agent
+      if (!identity) throw new Error('主 Agent 的目录工具缺少身份')
+      for (const tool of createCatalogTools(catalogBinding, identity)) agent.context.tools.register(tool)
+    }
     return agent
   } catch (error) {
     try { await agent.dispose() } catch (cleanup) { throw new AggregateError([error, cleanup], '主 Agent 装配和清理失败') }

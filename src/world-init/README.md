@@ -10,7 +10,7 @@
 
 `workspace/catalog/` 包含工作区资料目录相关实现：`format.ts` 定义版本 1 JSON、严格解析和序列化；`initializeCatalog` 只在现有真实目录内独占创建 `catalog.json`，`readCatalog` 校验世界配置及可解析目标的重复别名。成果暂时缺失或不可访问时保留记录，未知版本、损坏、重复字段或重复目标拒绝读取。`path.ts` 的 `resolveCatalogTarget` 将可信世界和 Agent 身份与模型提供的规范相对路径结合，检查现有普通文件属于其专属目录，并返回真实目标的规范相对路径。
 
-`workspace/catalog/service.ts` 提供可信世界级 `CatalogService`，仅打开已经初始化的目录；同一进程中相同世界或目录只能打开一次。可信应用打开时须声明 `singleWriterProcess: true`，并持有服务，通过 `bind(agentId)` 创建共享队列的身份句柄，使用完毕后等待 `close()`。登记和更新使用实际文件字节摘要，记录 revision 控制更新和删除，分页使用目录文件内容摘要检查版本。目录文件读取上限 `maxCatalogBytes` 默认为 16 MiB，可由可信应用配置；目录发布结果无法确认时报告 `CATALOG_COMMIT_UNKNOWN`，不假定操作回滚。发布后检查成果状态，取消或发布过程的外部竞争不构成跨文件事务。该声明不是跨进程锁；应用负责确保同一世界只有一个写入进程，路径检查不能防止恶意进程并发替换及硬链接。此服务尚未装配模型工具。
+`workspace/catalog/service.ts` 提供可信世界级 `CatalogService`，仅打开已经初始化的目录；同一进程中相同世界或目录只能打开一次。可信应用打开时须声明 `singleWriterProcess: true`，并持有服务，通过 `bind(agentId)` 创建共享队列的身份句柄，使用完毕后等待 `close()`。登记和更新使用实际文件字节摘要，记录 revision 控制更新和删除，分页使用目录文件内容摘要检查版本。目录文件读取上限 `maxCatalogBytes` 默认为 16 MiB，可由可信应用配置；目录发布结果无法确认时报告 `CATALOG_COMMIT_UNKNOWN`，不假定操作回滚。发布后检查成果状态，取消或发布过程的外部竞争不构成跨文件事务。该声明不是跨进程锁；应用负责确保同一世界只有一个写入进程，路径检查不能防止恶意进程并发替换及硬链接。主子 Agent 的工具装配见[应用说明](../app/README.md)。
 
 `character/format.ts` 提供角色资料与需求清单的版本化 YAML front matter 解析、序列化和校验；未知版本、重复字段及无效状态被拒绝。该模块不执行文件读写、角色 ID 分配或用户确认。YAML 使用 `yaml` 依赖，采用 ISC 许可证。
 
