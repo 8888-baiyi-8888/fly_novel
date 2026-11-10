@@ -129,6 +129,17 @@ test('分页检测目录变化，文件变化和缺失保留记录与真实状�
   await assert.rejects(main.search({ offset: 1, version: page.version }), { code: 'CATALOG_CONFLICT' })
 })
 
+test('成果读取失败单独报告，不伪装成缺失或空结果', async t => {
+  const { service, main } = await setup(t)
+  await main.register('main/world.md', '世界')
+  const fs: unknown = Reflect.get(service, 'fs'); assert.ok(fs instanceof LocalFileSystem)
+  t.mock.method(fs, 'readByteRange', async () => { throw Object.assign(new Error('拒绝读取'), { code: 'EACCES' }) })
+  assert.equal((await main.read('main/world.md'))?.fileStatus, 'unreadable')
+  const page = await main.search()
+  assert.equal(page.total, 1)
+  assert.equal(page.items[0]?.fileStatus, 'unreadable')
+})
+
 test('取消和外部修改时不覆盖目录', async t => {
   const { root, service, main } = await setup(t)
   const abort = new AbortController(); abort.abort()
