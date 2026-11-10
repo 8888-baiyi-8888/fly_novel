@@ -5,7 +5,7 @@ import { CatalogError, type CatalogBinding } from '../../world-init/workspace/ca
 
 const path = z.string().min(1)
 const registerInput = z.object({ path, summary: z.string().min(1) }).strict()
-const updateInput = registerInput.extend({ revision: z.string().min(1) }).strict()
+const updateInput = registerInput.extend({ revision: z.string().min(1), receipt: z.string().min(1) }).strict()
 const removeInput = z.object({ path, revision: z.string().min(1) }).strict()
 const readInput = z.object({ path }).strict()
 const searchInput = z.object({ ownerAgentId: z.string().optional(), keyword: z.string().optional(),
@@ -35,9 +35,12 @@ export function createCatalogTools(binding: CatalogBinding, identity: ToolAgentI
     defineTool({ name: 'catalog_register', description: '登记自己目录中的成果文件；登记不确认事实。', reportOnAbort: true,
       parameters: { path: { type: 'string', required: true }, summary: { type: 'string', required: true } }, output,
       async execute(args, exec) { const input = registerInput.parse(args); return mutation(exec, 'register', input.path, async () => ({ status: 'registered', ...await binding.register(input.path, input.summary, exec.signal) })) } }),
-    defineTool({ name: 'catalog_update', description: '更新自己登记的成果简介，必须提供记录 revision。', reportOnAbort: true,
-      parameters: { path: { type: 'string', required: true }, summary: { type: 'string', required: true }, revision: { type: 'string', required: true } }, output,
-      async execute(args, exec) { const input = updateInput.parse(args); return mutation(exec, 'update', input.path, async () => ({ status: 'updated', ...await binding.update(input.path, input.summary, input.revision, exec.signal) })) } }),
+    defineTool({ name: 'catalog_update', description: '根据完整读取的成果更新自己登记的简介，必须提供 revision 和读取凭据。', reportOnAbort: true,
+      parameters: { path: { type: 'string', required: true }, summary: { type: 'string', required: true }, revision: { type: 'string', required: true }, receipt: { type: 'string', required: true } }, output,
+      async execute(args, exec) { const input = updateInput.parse(args); return mutation(exec, 'update', input.path, async () => ({ status: 'updated', ...await binding.update(input.path, input.summary, input.revision, input.receipt, exec.signal) })) } }),
+    defineTool({ name: 'catalog_read_source', description: '完整读取自己负责的成果并取得更新简介所需的一次性凭据。', reportOnAbort: true,
+      parameters: { path: { type: 'string', required: true }, revision: { type: 'string', required: true } }, output,
+      async execute(args, exec): Promise<JsonValue> { authorize(exec); const input = removeInput.parse(args); return { ...await safe(() => binding.readSource(input.path, input.revision, exec.signal)) } } }),
     defineTool({ name: 'catalog_remove', description: '删除自己的目录记录，不删除成果文件。', reportOnAbort: true,
       parameters: { path: { type: 'string', required: true }, revision: { type: 'string', required: true } }, output,
       async execute(args, exec) { const input = removeInput.parse(args); return mutation(exec, 'remove', input.path, async () => ({ status: 'removed', ...await binding.remove(input.path, input.revision, exec.signal) })) } }),

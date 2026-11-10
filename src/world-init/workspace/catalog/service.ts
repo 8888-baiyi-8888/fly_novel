@@ -25,10 +25,12 @@ const code = (error: unknown) => error instanceof Error && 'code' in error ? Str
 /** 可信装配固定的 Agent 能力；调用参数不包含世界或负责人。 */
 export interface CatalogBinding {
   register(path: string, summary: string, signal?: AbortSignal): Promise<{ record: CatalogRecord; fileStatus: CatalogFileStatus }>
-  update(path: string, summary: string, revision: string, signal?: AbortSignal): Promise<{ record: CatalogRecord; fileStatus: CatalogFileStatus }>
+  readSource(path: string, revision: string, signal?: AbortSignal): Promise<{ path: string; revision: string; content: string; contentSha256: string; receipt: string }>
+  update(path: string, summary: string, revision: string, receipt: string, signal?: AbortSignal): Promise<{ record: CatalogRecord; fileStatus: CatalogFileStatus }>
   remove(path: string, revision: string, signal?: AbortSignal): Promise<{ path: string }>
   read(path: string, signal?: AbortSignal): Promise<CatalogItem | undefined>
   search(input?: { ownerAgentId?: string; keyword?: string; offset?: number; limit?: number; version?: string }, signal?: AbortSignal): Promise<CatalogPage>
+  close(): Promise<void>
 }
 
 /** 由可信应用持有的单世界目录服务；必须等待 close。 */
@@ -36,14 +38,19 @@ export class CatalogService {
   private tail: Promise<void> = Promise.resolve()
   private closed = false
   private closing?: Promise<void>
+  private readonly revokers = new Set<() => void>()
   private constructor(private readonly world: WorldWorkspaceConfig, private readonly fs: LocalFileSystem,
-    private readonly disposeFs: () => Promise<void>, private readonly rootKey: string, private readonly maxCatalogBytes: number) {}
+    private readonly disposeFs: () => Promise<void>, private readonly rootKey: string, private readonly maxCatalogBytes: number,
+    private readonly maxSourceBytes: number, private readonly receiptTtlMs: number, private readonly maxReceipts: number) {}
 
   /** 打开已有目录；同一世界或目录在进程内只能由一个服务打开。 */
-  static async open(config: WorldWorkspaceConfig, options: { singleWriterProcess: true; maxCatalogBytes?: number }): Promise<CatalogService> {
+  static async open(config: WorldWorkspaceConfig, options: { singleWriterProcess: true; maxCatalogBytes?: number; maxSourceBytes?: number; receiptTtlMs?: number; maxReceipts?: number }): Promise<CatalogService> {
     if (options?.singleWriterProcess !== true) throw new CatalogError('CATALOG_FORBIDDEN', '必须确保同一世界仅由一个可信进程写入')
     const maxCatalogBytes = options.maxCatalogBytes ?? 16 * 1024 * 1024
-    if (!Number.isSafeInteger(maxCatalogBytes) || maxCatalogBytes < 1) throw new CatalogError('CATALOG_INVALID_INPUT', '目录文件大小上限无效')
+    const maxSourceBytes = options.maxSourceBytes ?? 1024 * 1024
+    const receiptTtlMs = options.receiptTtlMs ?? 300_000
+    const maxReceipts = options.maxReceipts ?? 32
+    if ([maxCatalogBytes, maxSourceBytes, receiptTtlMs, maxReceipts].some(value => !Number.isSafeInteger(value) || value < 1)) throw new CatalogError('CATALOG_INVALID_INPUT', '目录服务配置无效')
     const [world] = await validateWorldWorkspaceConfigs([config])
     if (!world) throw new CatalogError('CATALOG_INVALID_INPUT', '世界配置无效')
     const rootKey = process.platform === 'win32' ? world.catalogRoot.toLowerCase() : world.catalogRoot
@@ -55,7 +62,7 @@ export class CatalogService {
       await readCatalog(world, maxCatalogBytes)
       scope = context.plugin(LocalFileSystem, { cwd: world.readRoot })
       await scope
-      return new CatalogService(world, context.fs as LocalFileSystem, () => scope!.dispose(), rootKey, maxCatalogBytes)
+      return new CatalogService(world, context.fs as LocalFileSystem, () => scope!.dispose(), rootKey, maxCatalogBytes, maxSourceBytes, receiptTtlMs, maxReceipts)
     } catch (error) {
       try { await scope?.dispose() } catch (cleanup) { throw new AggregateError([error, cleanup], '目录服务启动及清理失败') }
       occupiedWorlds.delete(world.worldId); occupiedRoots.delete(rootKey)
@@ -74,13 +81,68 @@ export class CatalogService {
   bind(agentId: string): CatalogBinding {
     if (this.closed) throw new CatalogError('CATALOG_CLOSED', '目录服务已关闭')
     if (![this.world.mainAgent, ...this.world.agents].some(agent => agent.agentId === agentId)) throw new CatalogError('CATALOG_FORBIDDEN', 'Agent 不属于该世界')
+    let bindingClosed = false
+    let closing: Promise<void> | undefined
+    const receipts = new Map<string, { path: string; revision: string; digest: string; expires: number }>()
+    const revoke = () => { bindingClosed = true; receipts.clear(); this.revokers.delete(revoke) }
+    this.revokers.add(revoke)
+    const enqueue = <T>(action: () => Promise<T>): Promise<T> => bindingClosed ? Promise.reject(new CatalogError('CATALOG_CLOSED', '目录绑定已关闭')) : this.enqueue(action)
+    const prune = () => { const now = performance.now(); for (const [key, item] of receipts) if (item.expires <= now) receipts.delete(key) }
     return Object.freeze({
-      register: (path: string, summary: string, signal?: AbortSignal) => this.enqueue(() => this.write('register', agentId, path, summary, undefined, signal)),
-      update: (path: string, summary: string, revision: string, signal?: AbortSignal) => this.enqueue(() => this.write('update', agentId, path, summary, revision, signal)),
-      remove: (path: string, revision: string, signal?: AbortSignal) => this.enqueue(() => this.remove(agentId, path, revision, signal)),
-      read: (path: string, signal?: AbortSignal) => this.enqueue(() => this.read(path, signal)),
-      search: (input = {}, signal?: AbortSignal) => this.enqueue(() => this.search(input, signal)),
+      register: (path: string, summary: string, signal?: AbortSignal) => enqueue(() => this.write('register', agentId, path, summary, undefined, undefined, signal)),
+      readSource: (path: string, revision: string, signal?: AbortSignal) => enqueue(async () => {
+        prune()
+        if (receipts.size >= this.maxReceipts) throw new CatalogError('CATALOG_RECEIPT_LIMIT', '读取凭据数量已达上限')
+        const source = await this.readSource(agentId, path, revision, signal)
+        cancelled(signal)
+        const receipt = randomUUID()
+        receipts.set(hash(receipt), { path: source.path, revision, digest: source.contentSha256, expires: performance.now() + this.receiptTtlMs })
+        return { ...source, receipt }
+      }),
+      update: (path: string, summary: string, revision: string, receipt: string, signal?: AbortSignal) => enqueue(async () => {
+        cancelled(signal); prune()
+        const key = typeof receipt === 'string' ? hash(receipt) : ''
+        const entry = receipts.get(key)
+        if (!entry || entry.path !== path || entry.revision !== revision) throw new CatalogError('CATALOG_RECEIPT_INVALID', '读取凭据无效或已过期')
+        receipts.delete(key)
+        return this.write('update', agentId, path, summary, revision, entry.digest, signal)
+      }),
+      remove: (path: string, revision: string, signal?: AbortSignal) => enqueue(() => this.remove(agentId, path, revision, signal)),
+      read: (path: string, signal?: AbortSignal) => enqueue(() => this.read(path, signal)),
+      search: (input = {}, signal?: AbortSignal) => enqueue(() => this.search(input, signal)),
+      close: () => { if (!closing) { bindingClosed = true; closing = this.tail.then(revoke) }; return closing },
     })
+  }
+
+  private async readSource(owner: string, path: string, revision: string, signal?: AbortSignal): Promise<{ path: string; revision: string; content: string; contentSha256: string }> {
+    const snapshot = await this.snapshot(signal)
+    const record = this.lookup(snapshot.doc, path)
+    if (!record) throw new CatalogError('CATALOG_NOT_FOUND', '目录记录不存在')
+    if (record.ownerAgentId !== owner) throw new CatalogError('CATALOG_FORBIDDEN', '不能读取其他 Agent 的更新凭据')
+    if (record.revision !== revision) throw new CatalogError('CATALOG_CONFLICT', '记录版本已变化')
+    let resolved: Awaited<ReturnType<typeof resolveCatalogTarget>>
+    try { resolved = await resolveCatalogTarget(this.world, owner, path) } catch (error) {
+      if (error instanceof Error && /不属于|授权范围|负责人/.test(error.message)) throw new CatalogError('CATALOG_FORBIDDEN', '成果不属于当前 Agent', { cause: error })
+      throw error
+    }
+    if (resolved.path !== record.path) throw new CatalogError('CATALOG_CONFLICT', '成果路径已变化')
+    const target = await this.fs.resolve(resolved.absolutePath, { signal })
+    const before = await this.fs.stat(target, signal)
+    if (!before || before.type !== 'file') throw new CatalogError('CATALOG_NOT_FOUND', '成果文件不存在')
+    let bytes: Uint8Array
+    try { bytes = await this.fs.readBytes(target, signal, this.maxSourceBytes) } catch (error) {
+      if (code(error) === 'FS_TOO_LARGE') throw new CatalogError('CATALOG_SOURCE_TOO_LARGE', '成果文件超过读取上限', { cause: error })
+      throw error
+    }
+    const after = await this.fs.stat(target, signal)
+    const again = await resolveCatalogTarget(this.world, owner, path)
+    if (!after || after.version !== before.version || again.absolutePath !== resolved.absolutePath) throw new CatalogError('CATALOG_CONFLICT', '成果读取期间变化')
+    const current = await this.snapshot(signal)
+    if (this.lookup(current.doc, record.path)?.revision !== revision) throw new CatalogError('CATALOG_CONFLICT', '记录读取期间变化')
+    let content: string
+    try { content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) } catch (error) { throw new CatalogError('CATALOG_SOURCE_ENCODING', '成果不是有效 UTF-8', { cause: error }) }
+    if (content.includes('\0') || !Buffer.from(content, 'utf8').equals(Buffer.from(bytes))) throw new CatalogError('CATALOG_SOURCE_ENCODING', '成果不是可无损读取的文本')
+    return { path: record.path, revision, content, contentSha256: hash(bytes) }
   }
 
   private async snapshot(signal?: AbortSignal): Promise<{ doc: CatalogDocument; version: string; target: FsTarget; fsVersion: FsVersion }> {
@@ -148,10 +210,11 @@ export class CatalogService {
     }
   }
 
-  private async write(mode: 'register' | 'update', owner: string, path: string, summary: string, revision?: string, signal?: AbortSignal) {
+  private async write(mode: 'register' | 'update', owner: string, path: string, summary: string, revision?: string, expectedDigest?: string, signal?: AbortSignal) {
     if (typeof summary !== 'string' || !summary.trim()) throw new CatalogError('CATALOG_INVALID_INPUT', '简介不能为空')
     const snapshot = await this.snapshot(signal)
     const first = await this.digest(owner, path, signal)
+    if (mode === 'update' && first.digest !== expectedDigest) throw new CatalogError('CATALOG_CONFLICT', '成果自读取后已变化')
     const existing = this.lookup(snapshot.doc, first.path)
     if (mode === 'register' && existing) throw new CatalogError('CATALOG_CONFLICT', '成果已经登记')
     if (mode === 'update') {
@@ -199,6 +262,6 @@ export class CatalogService {
   close(): Promise<void> {
     if (this.closing) return this.closing
     this.closed = true
-    return this.closing = (async () => { await this.tail; await this.disposeFs(); occupiedWorlds.delete(this.world.worldId); occupiedRoots.delete(this.rootKey) })()
+    return this.closing = (async () => { await this.tail; for (const revoke of this.revokers) revoke(); await this.disposeFs(); occupiedWorlds.delete(this.world.worldId); occupiedRoots.delete(this.rootKey) })()
   }
 }

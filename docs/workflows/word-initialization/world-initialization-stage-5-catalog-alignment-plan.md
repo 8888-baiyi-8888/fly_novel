@@ -6,7 +6,7 @@
 
 - [资料目录服务](../../../src/world-init/workspace/catalog/service.ts)按文件实际字节计算 SHA-256；查询或读取记录时返回 `current`、`stale`、`missing`、`unreadable`、`changing` 或 `forbidden`。`catalog_read` 的 `not_registered` 是请求路径没有登记，不等于成果文件缺失；当前没有自动发现所有未登记成果的能力。
 - 目录记录含负责人、世界相对路径、简介、`contentSha256` 和记录 `revision`；目录分页使用整个目录文件的版本。三种版本用途不同：内容摘要描述成果字节，记录 revision 控制记录更新冲突，分页版本固定目录记录快照。状态检查和登记不会确认世界事实。
-- [目录工具](../../../src/tools/catalog/catalog-tools.ts)只允许负责人更新或删除自己的记录，主 Agent 可查询其他 Agent 的记录但不能代改。`catalog_update` 当前在提交前自行读取文件摘要，但不验证该摘要是否对应 Agent 写简介时实际阅读的内容；不能仅凭更新成功或 `fileStatus: current` 证明简介基于所读版本。
+- [目录工具](../../../src/tools/catalog/catalog-tools.ts)只允许负责人更新或删除自己的记录，主 Agent 可查询其他 Agent 的记录但不能代改。`catalog_update` 要求负责人先完整读取成果并提交实例绑定的一次性凭据；服务重新核对文件摘要，但不能证明简介的语义正确。
 - [世界入口](../../../src/app/agents/world-initialization.ts)可装配主 Agent、角色创建 Agent 和一个共享目录服务；现有 [角色委派工具](../../../src/tools/character/delegate-character-creator.ts)固定指向角色创建职责。`persistent` 支持可信创建绑定和路由，但当前生产装配并不提供按任意负责人选择的通用特殊 Agent 工具；第二个特殊 Agent 仅有测试装配。不能把配置中的任意 ID 假定为可调用 Agent。
 - 角色 Agent 的资料由专用工具和直接文件访问维护；不能依靠普通文件观察事件捕捉所有成果变化。已有 Session 按可信配置恢复对话历史，长期记忆、自动压缩和跨进程写锁不在本步实现。
 
@@ -57,6 +57,8 @@
 
 #### 第 1 步核对结论：当前调用与差距
 
+本节保留第 1 步核对时的基线；其中读取凭据与实例绑定差距已由第 2 步解决，检查和委派仍待后续步骤。
+
 | 环节 | 当前代码 | 下一步需要建立的连接 |
 | --- | --- | --- |
 | 发现 | [目录服务](../../../src/world-init/workspace/catalog/service.ts)的 `search` 每页读取目录快照并逐条计算状态；`catalog_search` 暴露分页。记录顺序按路径排序，第二页需携带目录文件摘要版本。 | 增加显式检查入口，保留各条状态、扫描版本和覆盖范围；当前 `search` 中途取消会抛错，不能直接声称保留了本页已检查结果。 |
@@ -69,7 +71,7 @@
 
 #### 第 1 步核对结论：工具与凭据契约
 
-以下名称和字段是后续实现契约，当前尚不可调用：
+以下是第 1 步确定的工具和字段契约。第 2 步已实现 `catalog_read_source` 及带凭据的 `catalog_update`；`catalog_check_page` 仍待第 3 步实现。
 
 | 操作 | 输入 | 输出与约束 |
 | --- | --- | --- |
@@ -110,6 +112,8 @@
 当前直接使用目录更新接口的代码包括[目录工具](../../../src/tools/catalog/catalog-tools.ts)、[目录服务测试](../../../src/world-init/tests/catalog-service.test.ts)及[双世界集成测试](../../../src/app/tests/catalog-two-worlds.test.ts)；步骤 2 须同步这些调用、输入 schema 和行为测试。现有 `catalog_register` 和目录 JSON 版本保持不变；凭据仅在内存持有，不新增持久化字段。`ToolsService` 在取消后对抛出的异常统一标记 `ABORTED`，因此读取、检查及可能已提交的更新需要结合 `reportOnAbort` 和结构化结果设计，不能靠异常代码表达已提交或不确定结果。
 
 ### 2. 实现读取凭据与受控简介更新
+
+**进度：已完成。** 完整读取、实例绑定的一次性凭据、受控更新和角色 Agent 实例清理已接入；后续的全量检查与负责人委派仍按第 3、4 步实施。
 
 1. 在工作区目录服务中提供完整成果读取及临时凭据，绑定可信世界、负责人、路径、记录 revision 和实际内容摘要；只允许负责人读取用于更新的成果，继续保留普通共享读取能力。
 2. `catalog_update` 增加必需的读取凭据并在服务端核对；服务自行计算成果字节摘要，检查读取、更新和发布后的真实版本。实现凭据过期、重复使用、实例撤销、服务关闭、跨负责人和跨世界拒绝；不修改成果文件和用户确认状态。

@@ -31,7 +31,7 @@ export interface CharacterCreatorConfig {
   adapter: LlmAdapter
   defaultCharacterCount: number
   /** 可选的可信目录能力；仅由应用装配。 */
-  catalogBinding?: CatalogBinding
+  createCatalogBinding?: () => CatalogBinding
 }
 
 /** 调用方拥有该句柄，必须在使用后等待 dispose。 */
@@ -76,6 +76,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
   let store: CharacterStore | undefined
   let agent: Agent | undefined
   let disposeFramework: (() => Promise<void>) | undefined
+  let catalogBinding: CatalogBinding | undefined
   try {
     store = await CharacterStore.open(characterRoot, config.initializeCharacters)
     const framework = await bootstrapAgents()
@@ -101,10 +102,11 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
       'character-creator-system-prompt': { defaultCharacterCount: config.defaultCharacterCount },
     } })
     for (const tool of [...createCharacterTools(store), readFileTool]) agent.context.tools.register(tool)
-    if (config.catalogBinding) {
+    if (config.createCatalogBinding) {
+      catalogBinding = config.createCatalogBinding()
       const identity = agent.context.tools.agent
       if (!identity) throw new Error('角色 Agent 的目录工具缺少身份')
-      for (const tool of createCatalogTools(config.catalogBinding, identity)) agent.context.tools.register(tool)
+      for (const tool of createCatalogTools(catalogBinding, identity)) agent.context.tools.register(tool)
     }
     const current = agent
     const ownedStore = store
@@ -115,6 +117,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
       cancel: () => current.cancel(),
       dispose: () => disposal ??= (async () => {
         await disposeOwnedFramework()
+        await catalogBinding?.close()
         await ownedStore.close()
         unlock()
       })(),
@@ -122,6 +125,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
   } catch (error) {
     try {
       await disposeFramework?.()
+      await catalogBinding?.close()
       await store?.close()
       if (!(error instanceof AggregateError)) unlock()
     } catch (cleanup) {

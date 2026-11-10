@@ -90,7 +90,9 @@ test('两个世界的主 Agent、角色 Agent 和测试特殊 Agent 分别登记
     assert.ok(!own.isError && own.value && typeof own.value === 'object' && !Array.isArray(own.value))
     const record = own.value.record
     assert.ok(record && typeof record === 'object' && !Array.isArray(record) && typeof record.revision === 'string')
-    const updated = await call(agent, world, 'catalog_update', { path: 'main/world.md', summary: '更新建议', revision: record.revision })
+    const source = await call(agent, world, 'catalog_read_source', { path: 'main/world.md', revision: record.revision })
+    assert.ok(!source.isError && source.value && typeof source.value === 'object' && !Array.isArray(source.value) && typeof source.value.receipt === 'string')
+    const updated = await call(agent, world, 'catalog_update', { path: 'main/world.md', summary: '更新建议', revision: record.revision, receipt: source.value.receipt })
     assert.equal(updated.isError, false)
     assert.ok(!updated.isError && updated.value && typeof updated.value === 'object' && !Array.isArray(updated.value))
     const updatedRecord = updated.value.record

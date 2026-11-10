@@ -9,7 +9,7 @@ import type { WorldWorkspaceConfig } from '../workspace/config.js'
 
 const deployment = { singleWriterProcess: true } as const
 
-async function setup(t: TestContext, expectCloseFailure = false) {
+async function setup(t: TestContext, expectCloseFailure = false, options: { maxSourceBytes?: number; receiptTtlMs?: number; maxReceipts?: number } = {}) {
   const temp = join(process.cwd(), 'tmp'); await mkdir(temp, { recursive: true })
   const root = await realpath(await mkdtemp(join(temp, 'catalog-service-')))
   t.after(() => rm(root, { recursive: true, force: true }))
@@ -19,13 +19,87 @@ async function setup(t: TestContext, expectCloseFailure = false) {
   await initializeCatalog(config.catalogRoot, config.worldId)
   await writeFile(join(root, 'main', 'world.md'), '世界')
   await writeFile(join(root, 'characters', 'person.md'), '角色')
-  const service = await CatalogService.open(config, deployment)
+  const service = await CatalogService.open(config, { ...deployment, ...options })
   t.after(async () => {
     if (expectCloseFailure) await assert.rejects(service.close(), /清理失败/)
     else await service.close()
   })
   return { root, config, service, main: service.bind('main'), creator: service.bind('creator') }
 }
+
+test('读取凭据绑定实例和版本，变化、关闭及重复使用均拒绝', async t => {
+  const { root, service, main, creator } = await setup(t)
+  const record = (await main.register('main/world.md', '原简介')).record
+  const source = await main.readSource(record.path, record.revision)
+  assert.equal(source.content, '世界')
+  const another = service.bind('main')
+  await assert.rejects(another.update(record.path, '伪造', record.revision, source.receipt), { code: 'CATALOG_RECEIPT_INVALID' })
+  await assert.rejects(creator.update(record.path, '伪造', record.revision, source.receipt), { code: 'CATALOG_RECEIPT_INVALID' })
+  await writeFile(join(root, 'main', 'world.md'), '改变')
+  await assert.rejects(main.update(record.path, '过期简介', record.revision, source.receipt), { code: 'CATALOG_CONFLICT' })
+  await assert.rejects(main.update(record.path, '重用', record.revision, source.receipt), { code: 'CATALOG_RECEIPT_INVALID' })
+  assert.equal((await main.read(record.path))?.record.summary, '原简介')
+  const fresh = await main.readSource(record.path, record.revision)
+  const updated = await main.update(record.path, '新简介', record.revision, fresh.receipt)
+  assert.equal(updated.fileStatus, 'current')
+  await assert.rejects(main.update(record.path, '重用', record.revision, fresh.receipt), { code: 'CATALOG_RECEIPT_INVALID' })
+  const last = await main.readSource(record.path, updated.record.revision)
+  await main.close()
+  await assert.rejects(main.update(record.path, '关闭后', updated.record.revision, last.receipt), { code: 'CATALOG_CLOSED' })
+  await assert.rejects(another.update(record.path, '跨实例', updated.record.revision, last.receipt), { code: 'CATALOG_RECEIPT_INVALID' })
+  await another.close()
+})
+
+test('凭据上限、过期、文件过大和不支持的编码均明确拒绝', async t => {
+  const { root, main } = await setup(t, false, { maxSourceBytes: 16, maxReceipts: 1, receiptTtlMs: 1 })
+  const record = (await main.register('main/world.md', '简介')).record
+  const first = await main.readSource(record.path, record.revision)
+  await new Promise(resolve => setTimeout(resolve, 10))
+  await assert.rejects(main.update(record.path, '过期', record.revision, first.receipt), { code: 'CATALOG_RECEIPT_INVALID' })
+  await writeFile(join(root, 'main', 'world.md'), 'x'.repeat(17))
+  await assert.rejects(main.readSource(record.path, record.revision), { code: 'CATALOG_SOURCE_TOO_LARGE' })
+  await writeFile(join(root, 'main', 'world.md'), Buffer.from([0xff]))
+  await assert.rejects(main.readSource(record.path, record.revision), { code: 'CATALOG_SOURCE_ENCODING' })
+})
+
+test('有效凭据达到上限时拒绝新凭据', async t => {
+  const { main } = await setup(t, false, { maxReceipts: 1 })
+  const record = (await main.register('main/world.md', '简介')).record
+  const source = await main.readSource(record.path, record.revision)
+  await assert.rejects(main.readSource(record.path, record.revision), { code: 'CATALOG_RECEIPT_LIMIT' })
+  await main.update(record.path, '更新', record.revision, source.receipt)
+})
+
+test('完整读取期间成果变化时不签发凭据', async t => {
+  const { root, service, main } = await setup(t)
+  const record = (await main.register('main/world.md', '简介')).record
+  const fs: unknown = Reflect.get(service, 'fs'); assert.ok(fs instanceof LocalFileSystem)
+  const read = fs.readBytes.bind(fs)
+  const mocked = t.mock.method(fs, 'readBytes', async (...args: Parameters<typeof read>) => {
+    const result = await read(...args)
+    await writeFile(join(root, 'main', 'world.md'), '读取期间的变更')
+    return result
+  })
+  await assert.rejects(main.readSource(record.path, record.revision), { code: 'CATALOG_CONFLICT' })
+  mocked.mock.restore()
+  assert.equal((await main.readSource(record.path, record.revision)).content, '读取期间的变更')
+})
+
+test('简介发布后成果变化时保留更新并报告过期', async t => {
+  const { root, service, main } = await setup(t)
+  const record = (await main.register('main/world.md', '简介')).record
+  const source = await main.readSource(record.path, record.revision)
+  const fs: unknown = Reflect.get(service, 'fs'); assert.ok(fs instanceof LocalFileSystem)
+  const write = fs.writeText.bind(fs)
+  t.mock.method(fs, 'writeText', async (...args: Parameters<typeof write>) => {
+    const result = await write(...args)
+    await writeFile(join(root, 'main', 'world.md'), '发布后的变更')
+    return result
+  })
+  const updated = await main.update(record.path, '新简介', record.revision, source.receipt)
+  assert.equal(updated.fileStatus, 'stale')
+  assert.equal((await main.read(record.path))?.record.summary, '新简介')
+})
 
 test('清理失败保留世界占用，避免不安全重开', async t => {
   const { service, config } = await setup(t, true)
@@ -50,10 +124,11 @@ test('同世界并发登记不丢失，跨身份拒绝，更新删除检查 revi
   const [a, b] = await Promise.all([main.register('main/world.md', '世界建议'), creator.register('characters/person.md', '角色建议')])
   assert.equal(a.fileStatus, 'current'); assert.equal(b.fileStatus, 'current')
   assert.equal((await main.search()).total, 2)
-  await assert.rejects(main.update(b.record.path, '越权', b.record.revision), { code: 'CATALOG_FORBIDDEN' })
+  await assert.rejects(main.readSource(b.record.path, b.record.revision), { code: 'CATALOG_FORBIDDEN' })
   await assert.rejects(main.remove(b.record.path, b.record.revision), { code: 'CATALOG_FORBIDDEN' })
-  await assert.rejects(creator.update(b.record.path, '修改', a.record.revision), { code: 'CATALOG_CONFLICT' })
-  const changed = await creator.update(b.record.path, '新简介', b.record.revision)
+  await assert.rejects(creator.readSource(b.record.path, a.record.revision), { code: 'CATALOG_CONFLICT' })
+  const source = await creator.readSource(b.record.path, b.record.revision)
+  const changed = await creator.update(b.record.path, '新简介', b.record.revision, source.receipt)
   await assert.rejects(creator.remove(b.record.path, b.record.revision), { code: 'CATALOG_CONFLICT' })
   await creator.remove(b.record.path, changed.record.revision)
   assert.equal(await readFile(join(root, 'characters', 'person.md'), 'utf8'), '角色')
@@ -125,7 +200,8 @@ test('分页检测目录变化，文件变化和缺失保留记录与真实状�
   assert.equal((await main.read('characters/person.md'))?.fileStatus, 'missing')
   assert.equal(await main.read('main/not-registered.md'), undefined)
   const record = (await main.read('main/world.md'))!.record
-  await main.update(record.path, '更新', record.revision)
+  const source = await main.readSource(record.path, record.revision)
+  await main.update(record.path, '更新', record.revision, source.receipt)
   await assert.rejects(main.search({ offset: 1, version: page.version }), { code: 'CATALOG_CONFLICT' })
 })
 

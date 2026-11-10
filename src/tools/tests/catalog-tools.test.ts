@@ -35,6 +35,7 @@ test('目录工具绑定实例身份和业务身份，按负责人隔离修改�
   })).results[0]!.result
   const created = await call(creator.tools, 'catalog_register', { path: 'creator/profile.md', summary: '角色建议' })
   assert.equal(created.isError, false)
+  assert.equal((await call(creator.tools, 'catalog_update', { path: 'creator/profile.md', summary: '旧调用', revision: 'r' })).isError, true)
   assert.equal((await call(other.tools, 'catalog_register', { path: 'other/work.md', summary: '其他成果' })).isError, false)
   const found = await call(main.tools, 'catalog_search', { ownerAgentId: 'creator' })
   assert.equal(found.isError, false)
@@ -56,8 +57,9 @@ test('发布结果不确定且信号取消时保留结构化结果', async () =>
   const controller = new AbortController()
   const binding: CatalogBinding = {
     async register() { controller.abort(); throw new CatalogError('CATALOG_COMMIT_UNKNOWN', '结果未知') },
+    async readSource() { throw new Error('unused') },
     async update() { throw new Error('unused') }, async remove() { throw new Error('unused') },
-    async read() { return undefined }, async search() { return { items: [], total: 0, offset: 0, nextOffset: null, version: 'v' } },
+    async read() { return undefined }, async search() { return { items: [], total: 0, offset: 0, nextOffset: null, version: 'v' } }, async close() {},
   }
   for (const tool of createCatalogTools(binding, identity)) tools.register(tool)
   const result = (await tools.execute({ calls: [{ type: 'tool-call', id: 'id' as ToolCallId, name: 'catalog_register',
