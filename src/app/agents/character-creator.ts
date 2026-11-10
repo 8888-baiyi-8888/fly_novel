@@ -13,6 +13,7 @@ import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import type { LlmAdapter } from '@fly-novel/llm'
 import { createCharacterTools, readFileTool } from '../../tools/index.js'
 import { CharacterStore } from '../../world-init/character-store.js'
+import { acquireWorldAgentLease } from '../../world-init/world-agent-lease.js'
 
 /** 由可信应用提供身份、存储及模型路由。所有目录必须已经存在。 */
 export interface CharacterCreatorConfig {
@@ -37,7 +38,6 @@ export interface CharacterCreator {
   dispose(): Promise<void>
 }
 
-const identities = new Set<string>()
 const sessions = new Set<string>()
 
 async function physicalDirectory(path: string): Promise<string> {
@@ -64,13 +64,12 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
   ])
   if (!await isPathUnder(characterRoot, readRoot)) throw new Error('角色目录必须位于读取范围内')
   if (await isPathUnder(sessionRoot, readRoot) || await isPathUnder(readRoot, sessionRoot)) throw new Error('Session 目录不能与读取范围重叠')
-  const identityKey = JSON.stringify([config.worldId, config.agentId])
   const storageSessionId = `character-creator-${createHash('sha256').update(JSON.stringify([config.worldId, config.agentId, config.sessionId])).digest('hex')}`
   const sessionKey = JSON.stringify([sessionRoot, storageSessionId])
-  if (identities.has(identityKey) || sessions.has(sessionKey)) throw new Error('角色创建 Agent 身份或 Session 正在使用')
-  identities.add(identityKey)
+  if (sessions.has(sessionKey)) throw new Error('角色创建 Agent Session 正在使用')
+  const releaseIdentity = acquireWorldAgentLease(config.worldId, config.agentId)
   sessions.add(sessionKey)
-  const unlock = () => { identities.delete(identityKey); sessions.delete(sessionKey) }
+  const unlock = () => { releaseIdentity(); sessions.delete(sessionKey) }
   let store: CharacterStore | undefined
   let agent: Agent | undefined
   let disposeFramework: (() => Promise<void>) | undefined
@@ -116,7 +115,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
     try {
       await disposeFramework?.()
       await store?.close()
-      unlock()
+      if (!(error instanceof AggregateError)) unlock()
     } catch (cleanup) {
       throw new AggregateError([error, cleanup], '角色创建 Agent 启动及清理失败')
     }

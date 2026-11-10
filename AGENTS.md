@@ -25,6 +25,7 @@ src/               源码目录，包含应用组装、LLM 调用、Agent 运行
 src/app/agents/    各类 Agent 的应用层创建入口
 src/world-init/    世界初始化业务能力目录，测试放在 src/world-init/tests/
 src/world-init/world-workspace-config.ts 多世界工作区与 Agent 专属目录的可信配置校验
+src/world-init/world-agent-lease.ts 世界内 Agent 身份的进程内占用管理
 src/world-init/character-format.ts 角色资料与需求清单的版本化 Markdown 格式解析与校验
 src/world-init/character-store.ts 角色资料、索引和待审修改的受控文件服务
 src/app/world-initialization-files-debug.ts 世界初始化受控文件工具的真实模型交互调试入口

@@ -41,7 +41,8 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
   await writeFile(join(b.mainAgent.writableRoot, 'secret.md'), 'secret\n')
   const adapter = new FixedAdapter()
   t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter }))
-  const main = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a')
+  const deployment = { singleWriterProcess: true } as const
+  const main = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', undefined, deployment)
   t.after(() => main.dispose())
   const framework = await bootstrapAgents()
   t.after(() => framework.manager.disposeAll())
@@ -83,12 +84,12 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
   assert.match(JSON.stringify(moveIn), /FS_SANDBOX_DENIED/)
   assert.equal(await readFile(join(a.agents[1]!.writableRoot, 'other.md'), 'utf8'), 'other data\n')
   assert.equal(await readFile(join(a.confirmedRoot, 'fact.md'), 'utf8'), 'confirmed\n')
-  await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([a, b], 'missing'), /世界配置不存在/)
+  await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([a, b], 'missing', undefined, deployment), /世界配置不存在/)
   const sessionRoot = join(root, 'sessions'); await mkdir(sessionRoot)
   const creator = { agentId: 'main', sessionId: 's', sessionMode: 'create' as const, sessionRoot, initializeCharacters: true,
     provider: 'test', model: 'test', adapter, defaultCharacterCount: 2 }
-  await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', creator), /身份不属于/)
-  await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', { ...creator, agentId: 'creator', sessionRoot: b.mainAgent.writableRoot }), /任何世界/)
+  await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', creator, deployment), /身份不属于/)
+  await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', { ...creator, agentId: 'creator', sessionRoot: b.mainAgent.writableRoot }, deployment), /任何世界/)
   class CharacterAdapter extends LlmAdapter {
     requests: GenerateOptions[] = []
     override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
@@ -108,7 +109,8 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
     }
   }
   const childAdapter = new CharacterAdapter()
-  const delegated = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', { ...creator, agentId: 'creator', adapter: childAdapter })
+  await main.dispose()
+  const delegated = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', { ...creator, agentId: 'creator', adapter: childAdapter }, deployment)
   try {
     const result = await call(delegated, 'delegate_character_creator', { task: '搜索资料并创建角色' })
     assert.equal(result.isError, false)
@@ -120,4 +122,12 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
     }
     assert.match(await readFile(join(a.agents[0]!.writableRoot, 'index.json'), 'utf8'), /测试角色/)
   } finally { await delegated.dispose() }
+  const resumed = await createWorldInitializationAgentWithWorldWorkspaces([a, b], 'a', {
+    ...creator, agentId: 'creator', adapter: childAdapter, sessionMode: 'resume', initializeCharacters: false,
+  }, deployment)
+  try {
+    assert.equal((await call(resumed, 'delegate_character_creator', { task: '继续角色任务' })).isError, false)
+    assert.match(JSON.stringify(childAdapter.requests[2]!.messages), /搜索资料并创建角色/)
+    assert.match(await readFile(join(a.agents[0]!.writableRoot, 'index.json'), 'utf8'), /测试角色/)
+  } finally { await resumed.dispose() }
 })

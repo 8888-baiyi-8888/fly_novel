@@ -18,6 +18,7 @@ import { worldInitializationDraftFsPluginDefinition } from './world-initializati
 import { worldInitializationSkillPluginDefinition } from './world-initialization-skill.js'
 import { worldInitializationWorkspacePromptPluginDefinition } from './world-initialization-workspace-prompt.js'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/world-workspace-config.js'
+import { acquireWorldAgentLease } from '../../world-init/world-agent-lease.js'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
@@ -30,11 +31,14 @@ export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worl
  * @param workspaces 本次应用装配范围内的全部世界配置。
  * @param worldId 由可信应用选定的世界身份。
  * @param characterCreator 可选的角色 Agent 模型与 Session 配置。
+ * @param deployment 可信应用对同一世界只有本进程写入的部署保证。
  * @returns 已装配的主 Agent；调用方须等待 dispose。
  */
 export async function createWorldInitializationAgentWithWorldWorkspaces(
-  workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator?: WorkspaceCharacterCreatorConfig,
+  workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator: WorkspaceCharacterCreatorConfig | undefined,
+  deployment: { readonly singleWriterProcess: true },
 ): Promise<Agent> {
+  if (deployment?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   const worlds = await validateWorldWorkspaceConfigs(workspaces)
   const world = worlds.find(item => item.worldId === worldId)
   if (!world) throw new Error('世界配置不存在')
@@ -50,8 +54,22 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     }
     creator = { ...characterCreator, worldId: world.worldId, readRoot: world.readRoot, characterRoot: owner.writableRoot }
   }
-  return createWorldInitializationAgentWithWorkspace({ viewRoot: world.readRoot, draftRoot: world.mainAgent.writableRoot,
-    confirmedRoot: world.confirmedRoot }, creator)
+  const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
+  let agent: Agent
+  try {
+    agent = await createWorldInitializationAgentWithWorkspace({ viewRoot: world.readRoot, draftRoot: world.mainAgent.writableRoot,
+      confirmedRoot: world.confirmedRoot }, creator)
+  } catch (error) {
+    if (!(error instanceof AggregateError)) releaseIdentity()
+    throw error
+  }
+  let disposal: Promise<void> | undefined
+  return {
+    info: agent.info, context: agent.context,
+    get state() { return agent.state },
+    run: input => agent.run(input), cancel: () => agent.cancel(),
+    dispose: () => disposal ??= (async () => { await agent.dispose(); releaseIdentity() })(),
+  }
 }
 
 /**
