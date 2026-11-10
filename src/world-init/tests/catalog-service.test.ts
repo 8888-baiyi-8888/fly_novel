@@ -205,6 +205,94 @@ test('分页检测目录变化，文件变化和缺失保留记录与真实状�
   await assert.rejects(main.search({ offset: 1, version: page.version }), { code: 'CATALOG_CONFLICT' })
 })
 
+test('全量检查分页保留各项状态并拒绝跨版本翻页', async t => {
+  const { root, main, creator } = await setup(t)
+  const empty = await main.checkPage()
+  assert.equal(empty.status, 'completed'); assert.equal(empty.total, 0); assert.equal(empty.nextOffset, null)
+  await main.register('main/world.md', '世界')
+  await creator.register('characters/person.md', '角色')
+  await writeFile(join(root, 'main', 'third.md'), '第三项')
+  await main.register('main/third.md', '第三项')
+  await writeFile(join(root, 'main', 'world.md'), '发生变化')
+  await rm(join(root, 'characters', 'person.md'))
+  const first = await main.checkPage({ limit: 1 })
+  assert.equal(first.status, 'completed'); assert.equal(first.total, 3); assert.equal(first.nextOffset, 1)
+  assert.equal(first.items[0]?.fileStatus, 'missing'); assert.equal(first.items[0]?.record.ownerAgentId, 'creator')
+  const second = await main.checkPage({ offset: 1, limit: 1, version: first.version })
+  const third = await main.checkPage({ offset: 2, limit: 1, version: first.version })
+  assert.equal(second.items[0]?.fileStatus, 'current'); assert.equal(third.items[0]?.fileStatus, 'stale'); assert.equal(third.nextOffset, null)
+  await assert.rejects(main.checkPage({ offset: 1 }), { code: 'CATALOG_INVALID_INPUT' })
+  const record = second.items[0]!.record
+  await main.remove(record.path, record.revision)
+  await assert.rejects(main.checkPage({ offset: 1, version: first.version }), { code: 'CATALOG_CONFLICT' })
+  assert.equal(await main.read('main/third.md'), undefined)
+  assert.equal(await readFile(join(root, 'main', 'third.md'), 'utf8'), '第三项')
+})
+
+test('检查取消时保留已完成项和未检查位置', async t => {
+  const { root, service, main } = await setup(t)
+  await writeFile(join(root, 'main', 'a.md'), 'a')
+  await writeFile(join(root, 'main', 'b.md'), 'b')
+  await main.register('main/a.md', 'a'); await main.register('main/b.md', 'b')
+  const fs: unknown = Reflect.get(service, 'fs'); assert.ok(fs instanceof LocalFileSystem)
+  const read = fs.readByteRange.bind(fs); const controller = new AbortController()
+  let calls = 0
+  t.mock.method(fs, 'readByteRange', async (...args: Parameters<typeof read>) => {
+    if (++calls === 2) controller.abort()
+    return read(...args)
+  })
+  const page = await main.checkPage({}, controller.signal)
+  assert.equal(page.status, 'cancelled'); assert.equal(page.items.length, 1); assert.equal(page.nextOffset, 1); assert.equal(page.total, 2)
+  const rest = await main.checkPage({ offset: page.nextOffset!, version: page.version })
+  assert.equal(rest.status, 'completed'); assert.equal(rest.items.length, 1); assert.equal(rest.nextOffset, null)
+})
+
+test('检查期间目录变化或损坏时不返回有效页', async t => {
+  const { root, service, main } = await setup(t)
+  await main.register('main/world.md', '原简介')
+  const fs: unknown = Reflect.get(service, 'fs'); assert.ok(fs instanceof LocalFileSystem)
+  const read = fs.readByteRange.bind(fs)
+  const catalogPath = join(root, 'catalog', 'catalog.json')
+  const old = await readFile(catalogPath, 'utf8')
+  const mock = t.mock.method(fs, 'readByteRange', async (...args: Parameters<typeof read>) => {
+    const value = await read(...args)
+    await writeFile(catalogPath, old.replace('原简介', '新简介'))
+    return value
+  })
+  await assert.rejects(main.checkPage(), { code: 'CATALOG_CONFLICT' })
+  mock.mock.restore()
+  await writeFile(catalogPath, '{broken')
+  await assert.rejects(main.checkPage())
+  assert.equal(await readFile(catalogPath, 'utf8'), '{broken')
+})
+
+test('检查分别报告不可读和失效负责人', async t => {
+  const { root, service, main, creator } = await setup(t)
+  await main.register('main/world.md', '世界'); await creator.register('characters/person.md', '角色')
+  const catalogPath = join(root, 'catalog', 'catalog.json')
+  const data = (await readFile(catalogPath, 'utf8')).replace('"ownerAgentId": "creator"', '"ownerAgentId": "removed"')
+  await writeFile(catalogPath, data)
+  const fs: unknown = Reflect.get(service, 'fs'); assert.ok(fs instanceof LocalFileSystem)
+  t.mock.method(fs, 'readByteRange', async () => { throw Object.assign(new Error('拒绝读取'), { code: 'EACCES' }) })
+  const page = await main.checkPage()
+  assert.deepEqual(page.items.map(item => item.fileStatus), ['forbidden', 'unreadable'])
+  assert.equal(page.items[0]?.record.ownerAgentId, 'removed')
+})
+
+test('检查期间成果变化时逐项报告 changing', async t => {
+  const { root, service, main } = await setup(t)
+  await main.register('main/world.md', '世界')
+  const fs: unknown = Reflect.get(service, 'fs'); assert.ok(fs instanceof LocalFileSystem)
+  const read = fs.readByteRange.bind(fs)
+  t.mock.method(fs, 'readByteRange', async (...args: Parameters<typeof read>) => {
+    const value = await read(...args)
+    await writeFile(join(root, 'main', 'world.md'), '检查过程中的新内容')
+    return value
+  })
+  const page = await main.checkPage()
+  assert.equal(page.status, 'completed'); assert.equal(page.items[0]?.fileStatus, 'changing')
+})
+
 test('成果读取失败单独报告，不伪装成缺失或空结果', async t => {
   const { service, main } = await setup(t)
   await main.register('main/world.md', '世界')

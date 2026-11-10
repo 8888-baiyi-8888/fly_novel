@@ -10,6 +10,8 @@
 
 `catalog/catalog-tools.ts` 基于可信目录身份句柄和当前工具服务的实例身份创建登记、更新、删除、查询及读取工具；模型不能指定世界、目录根或记录负责人。每次调用核对工具服务身份；登记不确认事实。更新简介前须通过 `catalog_read_source` 完整读取成果并获得一次性凭据，再向 `catalog_update` 提供对应的路径、revision 和凭据。操作返回 `status`，发布结果不确定时返回 `unknown`，调用方不能只根据工具是否报错判断是否提交。目录服务及访问范围见[世界初始化模块说明](../world-init/README.md)。
 
+`catalog_check_page` 检查已登记成果的单页，返回负责人、文件状态及分页进度；取消时保留已完成结果。全量完成的判断与版本限制见[目录服务说明](../world-init/README.md)。
+
 `filesystem/read-file.ts` 定义 `read_file`，通过 `execute({ path }, { callId, name, workingDirectory, signal })` 直接读取授权目录内不超过 1 MiB 的 UTF-8 普通文件。绝对路径、越界路径和解析后指向目录外的符号链接被拒绝；无效 UTF-8 和文件系统错误会使调用失败。授权目录必须由可信调用方提供，路径检查不保证抵御其他进程在检查与打开之间恶意替换目录或符号链接，调用方应确保授权目录不被不可信进程并发修改。
 
 `skill/` 是独立工作区包 `@fly-novel/skill-tool-core`，其 `createSkillTool(skills)` 使用可信调用方传入的 Skill 服务。[`tool-skill` 插件](../agents/plugins/tool-skill/README.md)已加入 Harness 内置注册表，依赖当前 Agent 的 `skills` 和 `tools` 服务，并随作用域注销工具。模型只传入名称；工具通过该服务查询与加载，不能指定来源或路径。文件系统来源检查授权工作目录、元信息、权限和文件边界；加载结果包含名称、来源、资源目录和正文。读取正文中引用的其他资源仍由对应工具独立授权。

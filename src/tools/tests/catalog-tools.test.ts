@@ -41,6 +41,11 @@ test('目录工具绑定实例身份和业务身份，按负责人隔离修改�
   assert.equal(found.isError, false)
   if (found.isError || !found.value || typeof found.value !== 'object' || Array.isArray(found.value)) throw new Error('查询失败')
   assert.equal(found.value.total, 1)
+  const checked = await call(main.tools, 'catalog_check_page', { limit: 1 })
+  assert.equal(checked.isError, false)
+  if (checked.isError || !checked.value || typeof checked.value !== 'object' || Array.isArray(checked.value)) throw new Error('检查失败')
+  assert.equal(checked.value.status, 'completed'); assert.equal(checked.value.nextOffset, 1)
+  assert.equal((await call(main.tools, 'catalog_check_page', { ownerAgentId: 'creator' })).isError, true)
   assert.equal((await call(main.tools, 'catalog_remove', { path: 'creator/profile.md', revision: 'wrong' })).isError, true)
   assert.equal((await call(creator.tools, 'catalog_register', { path: 'creator/profile.md', summary: '伪造', ownerAgentId: 'main' })).isError, true)
   const tool = creator.definitions[0]!
@@ -51,6 +56,25 @@ test('目录工具绑定实例身份和业务身份，按负责人隔离修改�
   main.tools.dispose(); other.tools.dispose()
 })
 
+test('检查取消后工具保留已完成范围', async () => {
+  const tools = new ToolsService({ id: 'agent', name: 'agent', role: 'general' })
+  const identity = tools.agent; assert.ok(identity)
+  const controller = new AbortController()
+  const binding: CatalogBinding = {
+    async register() { throw new Error('unused') }, async readSource() { throw new Error('unused') },
+    async update() { throw new Error('unused') }, async remove() { throw new Error('unused') },
+    async read() { return undefined }, async search() { throw new Error('unused') }, async close() {},
+    async checkPage() { controller.abort(); return { items: [], total: 2, offset: 0, nextOffset: 0, version: 'v', status: 'cancelled' } },
+  }
+  for (const tool of createCatalogTools(binding, identity)) tools.register(tool)
+  const result = (await tools.execute({ calls: [{ type: 'tool-call', id: 'id' as ToolCallId, name: 'catalog_check_page', arguments: '{}' }],
+    workingDirectory: '.', signal: controller.signal })).results[0]!.result
+  assert.equal(result.isError, false)
+  if (result.isError || !result.value || typeof result.value !== 'object' || Array.isArray(result.value)) throw new Error('结果无效')
+  assert.equal(result.value.status, 'cancelled'); assert.equal(result.value.nextOffset, 0)
+  tools.dispose()
+})
+
 test('发布结果不确定且信号取消时保留结构化结果', async () => {
   const tools = new ToolsService({ id: 'agent', name: 'agent', role: 'general' })
   const identity = tools.agent; assert.ok(identity)
@@ -59,7 +83,8 @@ test('发布结果不确定且信号取消时保留结构化结果', async () =>
     async register() { controller.abort(); throw new CatalogError('CATALOG_COMMIT_UNKNOWN', '结果未知') },
     async readSource() { throw new Error('unused') },
     async update() { throw new Error('unused') }, async remove() { throw new Error('unused') },
-    async read() { return undefined }, async search() { return { items: [], total: 0, offset: 0, nextOffset: null, version: 'v' } }, async close() {},
+    async read() { return undefined }, async search() { return { items: [], total: 0, offset: 0, nextOffset: null, version: 'v' } },
+    async checkPage() { return { items: [], total: 0, offset: 0, nextOffset: null, version: 'v', status: 'completed' } }, async close() {},
   }
   for (const tool of createCatalogTools(binding, identity)) tools.register(tool)
   const result = (await tools.execute({ calls: [{ type: 'tool-call', id: 'id' as ToolCallId, name: 'catalog_register',

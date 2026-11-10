@@ -10,6 +10,7 @@ const removeInput = z.object({ path, revision: z.string().min(1) }).strict()
 const readInput = z.object({ path }).strict()
 const searchInput = z.object({ ownerAgentId: z.string().optional(), keyword: z.string().optional(),
   offset: z.number().int().nonnegative().optional(), limit: z.number().int().min(1).max(100).optional(), version: z.string().optional() }).strict()
+const checkInput = searchInput.pick({ offset: true, limit: true, version: true })
 const output = { schema: { type: 'json' as const }, render: (_args: unknown, value: unknown) => [{ type: 'text' as const, text: JSON.stringify(value) }] }
 
 /** 为一个可信 Agent 绑定资料目录工具；身份和业务权限不由模型指定。 */
@@ -50,5 +51,8 @@ export function createCatalogTools(binding: CatalogBinding, identity: ToolAgentI
     defineTool({ name: 'catalog_search', description: '查询世界资料目录，按负责人和简介筛选；翻页需携带版本。',
       parameters: { ownerAgentId: { type: 'string' }, keyword: { type: 'string' }, offset: { type: 'integer' }, limit: { type: 'integer' }, version: { type: 'string' } }, output,
       async execute(args, exec): Promise<JsonValue> { authorize(exec); const result = await safe(() => binding.search(searchInput.parse(args), exec.signal)); return { ...result, items: result.items.map(item => ({ record: { ...item.record }, fileStatus: item.fileStatus })) } } }),
+    defineTool({ name: 'catalog_check_page', description: '检查已登记成果的一页。按顺序从 0 开始并携带同一版本取得所有有效页，才能报告全量检查完成；取消时返回已完成项。', reportOnAbort: true,
+      parameters: { offset: { type: 'integer' }, limit: { type: 'integer' }, version: { type: 'string' } }, output,
+      async execute(args, exec): Promise<JsonValue> { authorize(exec); const result = await safe(() => binding.checkPage(checkInput.parse(args), exec.signal)); return { ...result, items: result.items.map(item => ({ record: { ...item.record }, fileStatus: item.fileStatus })) } } }),
   ] as const
 }

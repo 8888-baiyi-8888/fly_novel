@@ -10,6 +10,8 @@ import { resolveCatalogTarget } from './path.js'
 export type CatalogFileStatus = 'current' | 'stale' | 'missing' | 'unreadable' | 'changing' | 'forbidden'
 export interface CatalogItem { record: CatalogRecord; fileStatus: CatalogFileStatus }
 export interface CatalogPage { items: CatalogItem[]; total: number; offset: number; nextOffset: number | null; version: string }
+export interface CatalogCheckPage extends CatalogPage { status: 'completed' | 'cancelled' }
+export interface CatalogCheckInput { offset?: number; limit?: number; version?: string }
 
 /** 目录操作失败的稳定错误码。 */
 export class CatalogError extends Error {
@@ -30,6 +32,7 @@ export interface CatalogBinding {
   remove(path: string, revision: string, signal?: AbortSignal): Promise<{ path: string }>
   read(path: string, signal?: AbortSignal): Promise<CatalogItem | undefined>
   search(input?: { ownerAgentId?: string; keyword?: string; offset?: number; limit?: number; version?: string }, signal?: AbortSignal): Promise<CatalogPage>
+  checkPage(input?: CatalogCheckInput, signal?: AbortSignal): Promise<CatalogCheckPage>
   close(): Promise<void>
 }
 
@@ -110,6 +113,7 @@ export class CatalogService {
       remove: (path: string, revision: string, signal?: AbortSignal) => enqueue(() => this.remove(agentId, path, revision, signal)),
       read: (path: string, signal?: AbortSignal) => enqueue(() => this.read(path, signal)),
       search: (input = {}, signal?: AbortSignal) => enqueue(() => this.search(input, signal)),
+      checkPage: (input = {}, signal?: AbortSignal) => enqueue(() => this.checkPage(input, signal)),
       close: () => { if (!closing) { bindingClosed = true; closing = this.tail.then(revoke) }; return closing },
     })
   }
@@ -256,6 +260,27 @@ export class CatalogService {
     const items: CatalogItem[] = []
     for (const record of records.slice(offset, offset + limit)) items.push({ record, fileStatus: await this.status(record, signal) })
     return { items, total: records.length, offset, nextOffset: offset + items.length < records.length ? offset + items.length : null, version: snapshot.version }
+  }
+
+  /** 检查已登记记录的一页；取消后返回已完成项和下一个未检查位置。 */
+  private async checkPage(input: CatalogCheckInput, signal?: AbortSignal): Promise<CatalogCheckPage> {
+    const offset = input.offset ?? 0; const limit = input.limit ?? 50
+    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100 || (offset > 0 && !input.version)) throw new CatalogError('CATALOG_INVALID_INPUT', '分页参数无效')
+    const snapshot = await this.snapshot(signal)
+    if (input.version && input.version !== snapshot.version) throw new CatalogError('CATALOG_CONFLICT', '目录版本已变化')
+    const records = [...snapshot.doc.records].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+    if (offset > records.length) throw new CatalogError('CATALOG_INVALID_INPUT', '分页起点超出目录范围')
+    const items: CatalogItem[] = []
+    for (const record of records.slice(offset, offset + limit)) {
+      if (signal?.aborted) break
+      try { items.push({ record, fileStatus: await this.status(record, signal) }) }
+      catch (error) { if (!signal?.aborted) throw error; break }
+    }
+    const current = await this.snapshot()
+    if (current.version !== snapshot.version) throw new CatalogError('CATALOG_CONFLICT', '目录检查期间发生变化')
+    const next = offset + items.length
+    const status = signal?.aborted ? 'cancelled' : 'completed'
+    return { items, total: records.length, offset, nextOffset: status === 'cancelled' ? next : next < records.length ? next : null, version: snapshot.version, status }
   }
 
   /** 等待已提交操作并释放后端；清理失败保留世界占用。 */
