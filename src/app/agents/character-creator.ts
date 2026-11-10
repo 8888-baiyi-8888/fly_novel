@@ -4,6 +4,12 @@ import { realpath, stat } from 'node:fs/promises'
 import { bootstrapAgents, jsonlSessionPersistencePlugin, type Agent } from '@fly-novel/agents'
 import type { AgentLoopInput, AgentLoopResult } from '@fly-novel/agent-loop'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
+import { fsSandboxPluginDefinition } from '@fly-novel/fs-sandbox'
+import { sandboxPolicyPluginDefinition } from '@fly-novel/sandbox-policy'
+import { fsObservationPolicyPluginDefinition } from '@fly-novel/fs-observation-policy'
+import { toolFsReadPluginDefinition } from '@fly-novel/tool-fs'
+import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
+import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import type { LlmAdapter } from '@fly-novel/llm'
 import { createCharacterTools, readFileTool } from '../../tools/index.js'
 import { CharacterStore } from '../../world-init/character-store.js'
@@ -71,15 +77,24 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
   try {
     store = await CharacterStore.open(characterRoot, config.initializeCharacters)
     const framework = await bootstrapAgents()
+    for (const definition of [sandboxPolicyPluginDefinition, fsSandboxPluginDefinition, fsObservationPolicyPluginDefinition,
+      toolFsReadPluginDefinition, toolFsSearchPluginDefinition, localSubprocessPluginDefinition]) framework.plugins.register(definition)
+    const base = framework.presets.get('character-creator')
+    const presetId = 'character-creator-world-read'
+    framework.presets.register({ ...base, id: presetId, plugins: [...base.plugins,
+      { pluginId: 'sandbox-policy' }, { pluginId: 'fs-sandbox' }, { pluginId: 'fs-observation-policy' },
+      { pluginId: 'subprocess-local' }, { pluginId: 'tool-fs-read' }, { pluginId: 'tool-fs-search' },
+    ] })
     const backend = framework.context.plugin(jsonlSessionPersistencePlugin, { root: sessionRoot })
     disposeFramework = async () => {
       await framework.manager.disposeAll()
       await backend.dispose()
     }
     await backend
-    agent = await framework.manager.create({ id: config.agentId, presetId: 'character-creator', pluginConfigs: {
+    agent = await framework.manager.create({ id: config.agentId, presetId, pluginConfigs: {
       'agent-loop-runtime': { provider: config.provider, model: config.model, workingDirectory: readRoot,
         ...(config.sessionMode === 'create' ? { sessionId: storageSessionId } : { resumeSessionId: storageSessionId }) },
+      'sandbox-policy': { mode: 'read-only', workspaceRoot: readRoot }, 'fs-sandbox': { cwd: readRoot },
       llm: { adapters: [{ providers: [config.provider], adapter: config.adapter }] },
       'character-creator-system-prompt': { defaultCharacterCount: config.defaultCharacterCount },
     } })

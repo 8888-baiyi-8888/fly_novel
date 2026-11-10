@@ -17,9 +17,42 @@ import { validateWorldInitializationWorkspace, type WorldInitializationWorkspace
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
 import { worldInitializationSkillPluginDefinition } from './world-initialization-skill.js'
 import { worldInitializationWorkspacePromptPluginDefinition } from './world-initialization-workspace-prompt.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/world-workspace-config.js'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
+
+/** 角色创建 Agent 的非授权配置；世界和目录由工作区绑定。 */
+export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worldId' | 'readRoot' | 'characterRoot'>
+
+/**
+ * 从可信世界配置创建主 Agent 并按稳定身份绑定角色 Agent。
+ * @param workspaces 本次应用装配范围内的全部世界配置。
+ * @param worldId 由可信应用选定的世界身份。
+ * @param characterCreator 可选的角色 Agent 模型与 Session 配置。
+ * @returns 已装配的主 Agent；调用方须等待 dispose。
+ */
+export async function createWorldInitializationAgentWithWorldWorkspaces(
+  workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator?: WorkspaceCharacterCreatorConfig,
+): Promise<Agent> {
+  const worlds = await validateWorldWorkspaceConfigs(workspaces)
+  const world = worlds.find(item => item.worldId === worldId)
+  if (!world) throw new Error('世界配置不存在')
+  let creator: CharacterCreatorConfig | undefined
+  if (characterCreator) {
+    const owner = world.agents.find(item => item.agentId === characterCreator.agentId)
+    if (!owner) throw new Error('角色创建 Agent 身份不属于该世界的特殊 Agent')
+    const sessionRoot = await realpath(characterCreator.sessionRoot)
+    for (const item of worlds) {
+      if (await isPathUnder(sessionRoot, item.readRoot) || await isPathUnder(item.readRoot, sessionRoot)) {
+        throw new Error('角色 Session 目录不能与任何世界读取根重叠')
+      }
+    }
+    creator = { ...characterCreator, worldId: world.worldId, readRoot: world.readRoot, characterRoot: owner.writableRoot }
+  }
+  return createWorldInitializationAgentWithWorkspace({ viewRoot: world.readRoot, draftRoot: world.mainAgent.writableRoot,
+    confirmedRoot: world.confirmedRoot }, creator)
+}
 
 /**
  * 使用本机 DeepSeek 配置和仓库 Skill 目录创建世界初始化主 Agent。

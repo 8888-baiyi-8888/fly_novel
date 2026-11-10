@@ -4,7 +4,7 @@
 
 共享工作区与资料读取的范围、待确认事项和开发步骤见[第五阶段详细计划](../../docs/workflows/word-initialization/world-initialization-stage-5-workspace-plan.md)。业务代码和测试按实际实现建立；测试放在 `src/world-init/tests/`。
 
-`world-workspace-config.ts` 的 `validateWorldWorkspaceConfigs` 校验可信应用提供的一组世界配置：每个世界包含稳定世界 ID、读取根、已确认资料根、资料目录保护根，以及主 Agent 和特殊 Agent 的稳定 ID 与专属目录。所有目录必须存在且使用绝对真实路径；同世界各专属目录和受保护目录位于读取根内且两两不重叠，世界 ID 和同世界 Agent ID 唯一，不同世界读取根不能重叠。函数返回冻结的配置快照，不修改目录。调用方须提供本次装配范围内的全部世界；该函数不保存配置、不锁定文件或目录，也不能防止本机并发替换和硬链接。它尚未接入 Agent 创建入口，单独调用校验不会为工具装配权限。
+`world-workspace-config.ts` 的 `validateWorldWorkspaceConfigs` 校验可信应用提供的一组世界配置：每个世界包含稳定世界 ID、读取根、已确认资料根、资料目录保护根，以及主 Agent 和特殊 Agent 的稳定 ID 与专属目录。所有目录必须存在且使用绝对真实路径；同世界各专属目录和受保护目录位于读取根内且两两不重叠，世界 ID 和同世界 Agent ID 唯一，不同世界读取根不能重叠。函数返回冻结的配置快照，不修改目录。调用方须提供本次装配范围内的全部世界；该函数不保存配置、不锁定文件或目录，也不能防止本机并发替换和硬链接。应用装配及当前范围见[应用说明](../app/README.md)。
 
 `character-format.ts` 提供角色资料与需求清单的版本化 YAML front matter 解析、序列化和校验；未知版本、重复字段及无效状态被拒绝。该模块不执行文件读写、角色 ID 分配或用户确认。YAML 使用 `yaml` 依赖，采用 ISC 许可证。
 

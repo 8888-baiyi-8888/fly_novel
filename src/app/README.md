@@ -6,9 +6,11 @@
 
 受控入口根据实际工作区目录为主、子 Agent 分别注册文件权限提示词：主 Agent 获得草稿目录和路径示例，子 Agent 获得只读说明。提示词用于指导模型，实际访问仍由文件后端和读取授权检查执行。
 
-`createCharacterCreator` 创建独立角色设定创建 Agent。可信应用显式提供世界和 Agent 身份、Session ID 及新建或恢复模式、现有的读取根、角色资料根、Session 根、模型适配器与默认生成数量；应用须在重新创建时提供相同的世界、Agent 和 Session ID。入口由三者派生存储用 Session ID，避免不同身份复用同名会话。角色根必须位于读取根内，Session 根与读取根不得重叠；角色根仅在明确指定初始化且为空时创建索引。Agent 注册角色资料工具和授权范围内的只读文件工具，返回的句柄负责运行、取消和等待释放。调用方必须 `await dispose()`，并确保同一世界没有其他进程同时写入；进程内相同身份或 Session 不允许并发启动。该入口不提供共享工作区的跨 Agent 写入隔离。
+`createCharacterCreator` 创建独立角色设定创建 Agent。可信应用显式提供世界和 Agent 身份、Session ID 及新建或恢复模式、现有的读取根、角色资料根、Session 根、模型适配器与默认生成数量；应用须在重新创建时提供相同的世界、Agent 和 Session ID。入口由三者派生存储用 Session ID，避免不同身份复用同名会话。角色根必须位于读取根内，Session 根与读取根不得重叠；角色根仅在明确指定初始化且为空时创建索引。Agent 注册角色资料工具及授权范围内的只读文件和搜索工具，返回的句柄负责运行、取消和等待释放。调用方必须 `await dispose()`，并确保同一世界没有其他进程同时写入；进程内相同身份或 Session 不允许并发启动。该独立入口不验证其他 Agent 的目录关系。
 
 `createWorldInitializationAgentWithWorkspace(workspace, characterCreator)` 可选接收可信角色创建配置，为主 Agent 装配 `delegate_character_creator`，通过 `persistent` Provider 委派；原有只读子 Agent 的 `delegate` 继续使用 `spawn`。角色读取根必须与主 Agent 读取视图一致，角色根必须位于视图内且与草稿根和已确认根不重叠，Session 根不能与读取视图重叠。首次成功启动按配置选择创建或恢复，后续委派恢复同一 Session。父 Agent 销毁会取消运行并等待子 Agent 清理。角色目录或 Session 初始化失败时保留已创建数据，调用方按实际状态重新配置；该入口不等于完整共享工作区隔离。
+
+`createWorldInitializationAgentWithWorldWorkspaces` 接收可信应用提供的全部世界配置和选定世界 ID，并使用[世界工作区配置校验](../world-init/README.md)检查目录与身份关系。主 Agent 的草稿根绑定该世界主 Agent 的专属目录；可选角色 Agent 的 `agentId` 必须属于该世界特殊 Agent，角色资料根从该身份的专属目录取得，模型不能指定这些授权。角色 Session 根不得与任何传入世界的读取根重叠。主 Agent 的普通文件工具只能修改自己的目录；角色 Agent 通过专用资料工具维护角色目录，普通文件工具只提供读取和搜索。读取和搜索范围均为该世界读取根。此入口尚未提供其他特殊 Agent 的生产装配、统一持续身份互斥或跨进程写锁；测试中的第二个可写 Agent 使用相同的文件后端。应用必须确保同一世界只有一个可信进程写入，并在生产使用前评估路径替换和硬链接风险。
 
 [角色创建集成测试](tests/character-creator-integration.test.ts)使用固定模型替身验证主 Agent 委派、子 Agent 读取世界资料、创建多个角色、恢复 Session、按名称查找和保存待审修改；另验证读取缺失资料时错误和反馈在主子 Agent 之间传递。替身不验证真实模型的角色规划或工具选择能力。
 
