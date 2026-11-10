@@ -12,6 +12,8 @@
 
 `createWorldInitializationAgentWithWorldWorkspaces` 接收可信应用提供的全部世界配置和选定世界 ID，并使用[世界工作区配置校验](../world-init/README.md)检查目录与身份关系。主 Agent 的草稿根绑定该世界主 Agent 的专属目录；可选角色 Agent 的 `agentId` 必须属于该世界特殊 Agent，角色资料根从该身份的专属目录取得，模型不能指定这些授权。角色 Session 根不得与任何传入世界的读取根重叠。主 Agent 的普通文件工具只能修改自己的目录；角色 Agent 通过专用资料工具维护角色目录，普通文件工具只提供读取和搜索。读取和搜索范围均为该世界读取根。调用方须传入 `{ singleWriterProcess: true }`，声明已确保同一世界只有一个可信应用进程写入；入口不会验证进程外的实际写入，也不提供跨进程锁。主 Agent 与角色 Agent 共用按世界和业务身份的进程内占用，启动到成功释放期间拒绝重复启动；清理失败保留占用。不同身份或世界不因身份相同而互斥。重建时调用方须继续提供相同的目录与 Session 配置。此入口尚未提供其他特殊 Agent 的生产装配；测试中的第二个可写 Agent 使用相同的文件后端。生产使用前须评估路径替换和硬链接风险。
 
+旧的 `createWorldInitializationAgentWithWorkspace` 主 Agent 没有世界业务身份，不参与新入口的身份占用；应用不能通过同时使用旧入口绕过同一世界目录的写入协调。角色资料服务和角色 Agent 的 `read_file` 直接访问文件，不产生普通文件工具的观察事件；观察策略本身不授予路径权限。角色 Session 恢复的是对话历史，不代表恢复长期记忆。
+
 [角色创建集成测试](tests/character-creator-integration.test.ts)使用固定模型替身验证主 Agent 委派、子 Agent 读取世界资料、创建多个角色、恢复 Session、按名称查找和保存待审修改；另验证读取缺失资料时错误和反馈在主子 Agent 之间传递。替身不验证真实模型的角色规划或工具选择能力。
 
 `agent_harness.ts` 提供 Cordis Harness 的独立调试函数 `debugAgentHarness(prompt)`，按角色 Preset 创建 Agent、读取本机 DeepSeek 配置并调用真实 Agent Loop，最后销毁实例。在仓库根目录运行 `pnpm run agent-harness-debug -- "你明天会回来吗？"`，或在 VS Code“运行和调试”中选择“调试 Cordis Agent Harness（DeepSeek）”并按 F5。该调试配置先构建 Agent 包和应用，可在函数、`AgentInstance.run()` 和 `AgentLoopRuntime` 中设置断点。
