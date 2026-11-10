@@ -24,6 +24,23 @@
 
 **验收**：依据实际代码和测试指出可复用入口、当前差距及直接文件访问路径；不把提示词或观察策略当作授权机制。
 
+### 第 1 步核对结论
+
+| 调用方 | 实际读取路径 | 实际修改路径与授权 |
+| --- | --- | --- |
+| 主 Agent | [受控入口](../../../src/app/agents/world-initialization.ts)将 `viewRoot` 作为可信工作目录；文件读取和搜索由文件后端解析并检查读取根。 | `tool-fs` 经[草稿后端](../../../src/app/agents/world-initialization-draft-fs.ts)修改 `draftRoot`；写入、编辑、补丁、删除分别检查目标，移动检查源和目标。 |
+| 通用只读子 Agent | 同一入口用 `spawn` 装配相同的 `viewRoot`、只读文件工具和搜索工具。 | 文件后端使用只读策略；没有装配普通修改工具。 |
+| 角色创建 Agent | [独立入口](../../../src/app/agents/character-creator.ts)从可信配置取得 `readRoot`；当前 `read_file` 是[直接读取实现](../../../src/tools/filesystem/read-file.ts)，自行检查相对路径和真实路径，不经过第四阶段文件观察策略；当前入口没有装配搜索工具。 | [角色工具](../../../src/tools/character/character-tools.ts)绑定 `CharacterStore`，由服务直接操作可信 `characterRoot`，不经过草稿后端或普通文件工具的观察策略；模型不能传入授权根。 |
+| 第二个特殊子 Agent | 当前没有该工作区测试装配。 | 后续使用通用机制和真实文件工具建立测试实例，不能把只读子 Agent 当作第二个可写实例。 |
+
+角色资料服务在角色根下直接维护 `index.json`、`requirements.md`、角色 ID 目录中的 `profile.md`、`pending.md` 和 `pending.json`；可信确认、恢复和重建还会使用 `backup.md`、`operation.json`、索引备份以及同目录临时文件。服务使用程序生成的角色 ID，按根目录在进程内排他并串行执行操作；确认提交和恢复不是模型工具。其直接文件访问必须与普通文件工具一起纳入后续边界验证，不能仅检查工具参数。
+
+当前工作区配置只表达 `viewRoot`、`draftRoot` 和 `confirmedRoot`；入口对可选角色根检查它与草稿根、已确认根不重叠，并要求角色 Session 根与读取视图分离。它尚未统一表达世界 ID、多 Agent 专属目录、资料目录保护根及多个世界的相互关系。通用 `workspace-write` 包含平台临时目录，但当前草稿后端另行限制所有修改目标必须在草稿根内；后续装配不能只依赖通用沙箱根。资料目录登记服务尚不存在，预留保护根应由可信配置提供。
+
+文件观察按工具调用的 Agent 身份和 Session 路由，不提供路径授权；角色服务和 `read_file` 的直接文件调用不产生这条观察链。`persistent` 创建绑定在启动到释放期间独占；角色创建入口另按世界与 Agent 身份、Session 和角色根进行进程内占用检查，但这些机制不构成统一的跨 Agent 或跨进程工作区锁。角色入口先释放框架和 Session 后端，再关闭角色服务并解除占用；委派工具等待任务结果和释放，任务与释放同时失败时保留两个错误。启动取消由现有运行驱动清理迟到实例。
+
+现有验证入口包括[工作区与草稿边界测试](../../../src/app/tests/world-initialization-workspace.test.ts)、[角色持续委派测试](../../../src/app/tests/world-initialization-persistent-delegation.test.ts)、[角色 Agent 集成测试](../../../src/app/tests/character-creator-integration.test.ts)、[角色资料服务测试](../../../src/world-init/tests/character-store.test.ts)、[文件沙箱边界测试](../../../src/agents/tests/fs-sandbox-boundary.test.ts)、[真实文件观察集成测试](../../../src/agents/tests/fs-observation-local-integration.test.ts)及 [persistent 生命周期测试](../../../src/agents/tests/subagent-persistent-in-process.test.ts)。这些测试覆盖各自局部行为，尚不能替代本计划要求的两个世界、多个可写 Agent 和全部文件访问路径的组合验证。
+
 ## 2. 实现可信工作区配置与校验
 
 1. 在应用或世界初始化业务层提供工作区配置：可信应用显式提供世界 ID、已有世界读取根、已确认资料根、资料目录保护根，以及各 Agent 的稳定 ID 与已有专属目录。目录名称和最终根位置不写死；模型任务参数不提供或扩大这些授权。
