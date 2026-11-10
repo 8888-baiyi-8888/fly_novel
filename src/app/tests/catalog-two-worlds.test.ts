@@ -72,6 +72,9 @@ test('两个世界的主 Agent、角色 Agent 和测试特殊 Agent 分别登记
     workingDirectory: world.readRoot, session: agent.context.sessions.list()[0]!, signal: new AbortController().signal,
   })).results[0]!.result
   for (const [agent, world, other] of [[parentA, a, b], [parentB, b, a]] as const) {
+    const guidance = agent.context.systemPrompt.getSection('world-initialization:catalog-alignment')
+    assert.match(String(guidance?.text), /"owner":"creator","tool":"delegate_character_creator"/)
+    assert.doesNotMatch(String(guidance?.text), /"owner":"other"/)
     const created = await call(agent, world, 'catalog_register', { path: 'main/world.md', summary: world.worldId })
     assert.equal(created.isError, false)
     assert.equal((await call(agent, world, 'delegate_character_creator', { task: '创建并登记角色' })).isError, false)

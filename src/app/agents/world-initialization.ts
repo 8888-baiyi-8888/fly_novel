@@ -67,7 +67,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     }
     mainBinding = catalog?.bind(world.mainAgent.agentId)
     agent = await createWorldInitializationAgentWithWorkspaceInternal({ viewRoot: world.readRoot, draftRoot: world.mainAgent.writableRoot,
-      confirmedRoot: world.confirmedRoot }, creator, mainBinding)
+      confirmedRoot: world.confirmedRoot }, creator, mainBinding, mainBinding ? world.mainAgent.agentId : undefined)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
       try { await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
@@ -124,7 +124,7 @@ export async function createWorldInitializationAgentWithWorkspace(workspace: Wor
 }
 
 async function createWorldInitializationAgentWithWorkspaceInternal(workspace: WorldInitializationWorkspace, characterCreator?: CharacterCreatorConfig,
-  catalogBinding?: import('../../world-init/workspace/catalog/service.js').CatalogBinding): Promise<Agent> {
+  catalogBinding?: CatalogBinding, catalogMainOwner?: string): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -179,7 +179,9 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     'agent-loop-runtime': loopConfig, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
     'sandbox-policy': { mode: 'workspace-write', workspaceRoot: roots.draftRoot },
     'world-initialization-draft-fs': { cwd: roots.viewRoot, draftRoot: roots.draftRoot },
-    'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write' },
+    'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write', ...(catalogBinding && catalogMainOwner ? { catalog: {
+      mainOwner: catalogMainOwner, delegates: creatorConfig ? [{ owner: creatorConfig.agentId, tool: 'delegate_character_creator' }] : [],
+    } } : {}) },
     'tool-fs': { applyPatch: true }, 'subagent-spawn-in-process': { create }, 'tool-subagent': { presetId: fileChildId },
     ...(persistentCreate ? { 'subagent-persistent-in-process': { create: persistentCreate } } : {}),
   } })

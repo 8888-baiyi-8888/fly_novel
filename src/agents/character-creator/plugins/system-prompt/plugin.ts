@@ -23,7 +23,7 @@ export const characterCreatorSystemPromptPlugin = Object.assign(function charact
 
 按需要使用获授权的工具读取资料和维护角色设定；资料仍不足时向调用方说明缺少的内容和无法判断的范围，不把假设或传闻当成已确认事实。修改时先定位用户指定的现存角色，围绕该角色形成待审修改，不直接修改其他角色或世界资料。用户要求、你的补充建议、待审内容和已确认资料应当区分；创建或修改成功不代表用户已确认。使用自然语言回复，并说明相关角色资料和待定事项。
 
-如果已装配资料目录工具，更新自己负责的记录简介前，先通过 catalog_read 取得记录 revision，再用 catalog_read_source 完整读取成果并取得凭据；依据读取内容生成简介，用 revision 和凭据调用 catalog_update。文件变化或凭据失效时重新读取，不将目录登记或简介更新视为用户确认。`,
+如果已装配资料目录工具，处理目录简介任务时先通过 catalog_read 复查记录负责人、revision 和状态，只更新自己负责的记录。用 catalog_read_source 完整读取成果并取得凭据；依据读取内容生成简介，用 revision 和凭据调用 catalog_update。之后通过 catalog_read 复查更新后的 revision 和文件状态，并在回复中说明实际结果。文件缺失、不可读、权限不足、变化或凭据失效时说明未完成原因，必要时重新读取；不将目录登记或简介更新视为用户确认。`,
   }))
 }, { inject: ['systemPrompt'] })
 

@@ -16,6 +16,7 @@ class ParentAdapter extends LlmAdapter {
 }
 class ChildAdapter extends LlmAdapter {
   requests: GenerateOptions[] = []
+  alignment?: { path: string; revision: string }
   constructor(private readonly waitForCancel?: () => void) { super() }
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
@@ -30,6 +31,16 @@ class ChildAdapter extends LlmAdapter {
       assert.ok(result && typeof result === 'object' && 'id' in result && typeof result.id === 'string')
       yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'register' as ToolCallId, name: 'catalog_register',
         arguments: JSON.stringify({ path: `characters/${result.id}/profile.md`, summary: '角色甲的建议' }) } }
+    } else if (this.alignment && this.requests.length === 4) {
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'source' as ToolCallId, name: 'catalog_read_source', arguments: JSON.stringify(this.alignment) } }
+    } else if (this.alignment && this.requests.length === 5) {
+      const block = options.messages.flatMap(message => message.content).find(item => item.type === 'tool-result' && item.toolCallId === 'source')
+      assert.ok(block && block.type === 'tool-result' && !block.isError)
+      const text = block.content.find(item => item.type === 'text'); assert.ok(text && text.type === 'text')
+      const result: unknown = JSON.parse(text.text)
+      assert.ok(result && typeof result === 'object' && 'receipt' in result && typeof result.receipt === 'string')
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'update' as ToolCallId, name: 'catalog_update',
+        arguments: JSON.stringify({ ...this.alignment, receipt: result.receipt, summary: '更新后的角色简介' }) } }
     } else {
       if (this.waitForCancel) {
         this.waitForCancel()
@@ -68,6 +79,10 @@ test('世界入口共享目录服务给主子 Agent，子任务结束及父实�
   const call = async (name: string, args: object) => (await parent.context.tools.execute({ calls: [{ type: 'tool-call', id: 'test' as ToolCallId,
     name, arguments: JSON.stringify(args) }], workingDirectory: worldRoot, session: parent.context.sessions.list()[0]!, signal: new AbortController().signal })).results[0]!.result
   try {
+    const section = parent.context.systemPrompt.getSection('world-initialization:catalog-alignment')
+    assert.equal(typeof section?.text, 'string')
+    assert.match(String(section?.text), /"owner":"creator","tool":"delegate_character_creator"/)
+    assert.match(String(section?.text), /未列出的负责人没有已装配的委派工具/)
     assert.equal((await call('catalog_register', { path: 'main/world.md', summary: '世界草案' })).isError, false)
     assert.equal((await call('delegate_character_creator', { task: '创建并登记角色' })).isError, false)
     const result = childAdapter.requests[2]!.messages.flatMap(message => message.content).find(item => item.type === 'tool-result' && item.toolCallId === 'register')
@@ -76,12 +91,37 @@ test('世界入口共享目录服务给主子 Agent，子任务结束及父实�
     assert.equal(search.isError, false)
     if (search.isError || !search.value || typeof search.value !== 'object' || Array.isArray(search.value)) throw new Error('查询失败')
     assert.equal(search.value.total, 1)
+    const items = search.value.items
+    assert.ok(Array.isArray(items) && items[0] && typeof items[0] === 'object' && !Array.isArray(items[0]))
+    const record = items[0].record
+    assert.ok(record && typeof record === 'object' && !Array.isArray(record) && typeof record.path === 'string' && typeof record.revision === 'string')
+    const profilePath = join(worldRoot, ...record.path.split('/'))
+    await writeFile(profilePath, (await readFile(profilePath, 'utf8')).replace('草案', '更新后的角色资料'))
+    const before = await call('catalog_read', { path: record.path })
+    assert.ok(!before.isError && before.value && typeof before.value === 'object' && !Array.isArray(before.value))
+    assert.equal(before.value.fileStatus, 'stale')
+    childAdapter.alignment = { path: record.path, revision: record.revision }
+    assert.equal((await call('delegate_character_creator', { task: `更新 ${record.path} 的目录简介，原版本 ${record.revision}` })).isError, false)
+    const after = await call('catalog_read', { path: record.path })
+    assert.ok(!after.isError && after.value && typeof after.value === 'object' && !Array.isArray(after.value))
+    assert.equal(after.value.fileStatus, 'current')
+    assert.ok(after.value.record && typeof after.value.record === 'object' && !Array.isArray(after.value.record))
+    assert.equal(after.value.record.summary, '更新后的角色简介'); assert.notEqual(after.value.record.revision, record.revision)
+    assert.equal((await call('delegate_character_creator', { task: '继续角色任务', presetId: 'other', agentId: 'other' })).isError, false)
+    assert.match(JSON.stringify(childAdapter.requests.at(-1)?.messages), /继续角色任务/)
     assert.equal((await call('write', { file_path: 'catalog/catalog.json', content: 'bad' })).isError, true)
   } finally { await parent.dispose() }
   const text = await readFile(join(world.catalogRoot, 'catalog.json'), 'utf8')
-  assert.match(text, /角色甲的建议/); assert.match(text, /世界草案/)
+  assert.match(text, /更新后的角色简介/); assert.match(text, /世界草案/)
   const resumed = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, { ...child, sessionMode: 'resume', initializeCharacters: false }, deployment)
   await resumed.dispose()
+  const withoutCreator = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, deployment)
+  try {
+    assert.equal(withoutCreator.context.tools.get('delegate_character_creator'), undefined)
+    const section = withoutCreator.context.systemPrompt.getSection('world-initialization:catalog-alignment')
+    assert.match(String(section?.text), /映射（owner、tool）为 \[\]/)
+    assert.doesNotMatch(String(section?.text), /"owner":"creator"/)
+  } finally { await withoutCreator.dispose() }
 })
 
 test('父 Agent 取消角色任务时等待目录操作并释放服务', async t => {

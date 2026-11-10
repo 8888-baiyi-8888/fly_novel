@@ -7,7 +7,7 @@ export function createCharacterCreatorDelegationTool(subagents: SubagentRuntime,
   if (!subagents.getProvider('persistent')) throw new Error('角色创建委派工具需要已注册的 persistent Provider')
   return defineTool({
     name: 'delegate_character_creator',
-    description: '委派角色设定创建或修改；子 Agent 看不到父会话，请提供任务和必要背景。结果为建议，不代表用户已确认。',
+    description: '委派角色设定创建、修改或更新该角色 Agent 负责的资料目录简介；子 Agent 看不到父会话，请提供任务和必要背景。结果为建议，不代表用户已确认。',
     parameters: { task: { type: 'string', required: true, description: '角色创建或修改任务及必要上下文。' } },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     async execute({ task }, exec) {

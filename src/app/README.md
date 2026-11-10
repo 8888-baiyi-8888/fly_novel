@@ -16,6 +16,8 @@
 
 可信应用可在世界入口的部署配置中提供 `catalog: {}`（可配置目录及成果读取上限和凭据限制），为主 Agent 和角色创建 Agent 装配同一个世界资料目录服务及各自的工具。调用前须显式初始化 `catalog.json`；缺失或损坏会使装配失败，入口不会覆盖或修复文件。父 Agent 释放后关闭目录服务；每次角色 Agent 实例创建独立绑定并在释放时撤销其凭据。未提供目录配置时不注册目录工具，旧主 Agent 入口不自动启用。目录登记不确认事实；可查询、修改的范围及部署限制见[目录服务说明](../world-init/README.md)。
 
+世界入口在启用资料目录时为主 Agent 提供其稳定负责人身份和已装配的负责人委派工具映射；角色创建配置存在时映射到 `delegate_character_creator`，未装配工具的身份不进入映射。检查、委派及复核由主 Agent 根据提示执行，模型不能通过委派参数指定身份、工作区或 Session；职责权限仍由可信绑定控制。
+
 [角色创建集成测试](tests/character-creator-integration.test.ts)使用固定模型替身验证主 Agent 委派、子 Agent 读取世界资料、创建多个角色、恢复 Session、按名称查找和保存待审修改；另验证读取缺失资料时错误和反馈在主子 Agent 之间传递。替身不验证真实模型的角色规划或工具选择能力。
 
 `agent_harness.ts` 提供 Cordis Harness 的独立调试函数 `debugAgentHarness(prompt)`，按角色 Preset 创建 Agent、读取本机 DeepSeek 配置并调用真实 Agent Loop，最后销毁实例。在仓库根目录运行 `pnpm run agent-harness-debug -- "你明天会回来吗？"`，或在 VS Code“运行和调试”中选择“调试 Cordis Agent Harness（DeepSeek）”并按 F5。该调试配置先构建 Agent 包和应用，可在函数、`AgentInstance.run()` 和 `AgentLoopRuntime` 中设置断点。
