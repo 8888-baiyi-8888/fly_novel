@@ -55,6 +55,60 @@
 
 **验收**：两种场景有具体调用和状态示例；明确所读版本如何贯穿到更新和最终检查，以及负责人不存在、实例未启动和各类错误的处理。
 
+#### 第 1 步核对结论：当前调用与差距
+
+| 环节 | 当前代码 | 下一步需要建立的连接 |
+| --- | --- | --- |
+| 发现 | [目录服务](../../../src/world-init/workspace/catalog/service.ts)的 `search` 每页读取目录快照并逐条计算状态；`catalog_search` 暴露分页。记录顺序按路径排序，第二页需携带目录文件摘要版本。 | 增加显式检查入口，保留各条状态、扫描版本和覆盖范围；当前 `search` 中途取消会抛错，不能直接声称保留了本页已检查结果。 |
+| 读取 | [普通 `read`](../../../src/agents/plugins/fs/tool-fs/read.ts)每次最多 2000 行、50 KiB 输出，单行也可能截断；[旧 `read_file`](../../../src/tools/filesystem/read-file.ts)最多 1 MiB，完整读取但不返回文件摘要或版本。 | 使用目录服务的原始字节读取、目标及前后版本检查提供完整文本和凭据；不能把截断的普通读取或旧 `read_file` 当作完整读取证明。 |
+| 委派 | [角色委派工具](../../../src/tools/character/delegate-character-creator.ts)只接收 `task`，固定 `character-creator`；通用 `delegate` 使用 `spawn` 和固定只读 Preset。`persistent` 路由接受可信绑定，模型参数不能指定创建配置。 | 世界入口从可信配置注册负责人和其专用工具的对应关系；保持角色专用工具职责，另一个负责人使用测试工具与绑定，不能把通用只读 `delegate` 当作负责人更新工具。 |
+| 更新与复查 | `catalog_update` 输入只有 `path`、`summary`、`revision`；服务在内部两次计算文件摘要，发布后返回 `fileStatus`。 | 增加实例绑定的读取凭据，核验所读摘要与提交时内容；主 Agent 在委派返回后再调用 `catalog_read`，而不是把子 Agent 文本回复视为对齐证明。 |
+| 生命周期 | 世界入口持有目录服务；主 Agent 释放后关闭服务。角色 Agent 独立创建与销毁，但当前入口在创建子实例前就调用一次 `catalog.bind(creator.agentId)` 并把同一绑定复用于后续实例。 | 每次子实例创建时新建受限绑定；关闭该实例时撤销其凭据，世界服务及其他身份的绑定继续可用。不能以当前复用绑定直接满足“实例关闭即撤销”。 |
+
+主 Agent 的[系统提示词](../../../src/agents/world-initialization-main-agent/plugins/system-prompt/plugin.ts)和[角色创建提示词](../../../src/agents/character-creator/plugins/system-prompt/plugin.ts)目前没有目录对齐流程；应在后续装配可用时增补相应指导。提示词中的任务安排不等于权限，实际写入仍由目录服务的可信绑定和版本检查控制。[进程内驱动](../../../src/agents/plugins/subagent/subagent-in-process-driver/run.ts)与委派工具负责等待结果、取消和释放；启动中取消的迟到句柄由[创建驱动](../../../src/agents/plugins/subagent/subagent-in-process-driver/create.ts)回收。
+
+#### 第 1 步核对结论：工具与凭据契约
+
+以下名称和字段是后续实现契约，当前尚不可调用：
+
+| 操作 | 输入 | 输出与约束 |
+| --- | --- | --- |
+| `catalog_read_source` | `path`、`revision` | 仅负责人可调用；成功返回 `path`、`revision`、完整 `content`、实际 `contentSha256` 和 `receipt`。不登记、不修改成果；缺失、越权、版本冲突、超限、编码无效或读取期间变化时不发凭据。 |
+| `catalog_update` | `path`、`summary`、`revision`、`receipt` | 必须由同一实例绑定调用；原先缺少 `receipt` 的调用直接拒绝。结果保留 `updated`、`record`、`fileStatus`；发布结果不明时保留现有 `unknown` 语义。 |
+| `catalog_check_page` | 可选 `offset`、`limit`、`version` | 不修改目录；返回已完成的 `items`、检查所用目录 `version`、当前页起点、`nextOffset` 和页状态。每项包含原记录及实际文件状态；后续页须带相同版本。 |
+
+`catalog_check_page` 默认从 0 开始、每页 50 项，最大 100 项，与现有 `catalog_search` 一致。正常页结束时逐项提供检查结果；取消时通过 `reportOnAbort` 返回已完成项、下一未检查位置和 `cancelled`，不能把该页报告为完成。目录读取失败或目录版本不一致时明确返回错误或冲突；实现须在页首及返回前核对目录版本，若已变化则不把该页标为有效完成。`nextOffset: null` 仅表示该页到达快照末尾；只有调用方从第 0 页按顺序取得同一版本的所有有效页，才能报告全量检查完成。这个检查只覆盖已登记记录，不推断磁盘上其他未登记文件。
+
+读取内容按实际字节计算 SHA-256；首版仅签发完整、可无损往返的 UTF-8 内容凭据，不接受文件超过可信应用提供的 `maxSourceBytes` 时的截断结果。默认上限为 1 MiB，可由可信应用配置并校验为正整数；禁止由模型扩大。读取目标的规范路径、文件类型、后端 `FsVersion` 和原始字节在读取前后分别检查，再按 UTF-8 严格解码并确认重新编码与原字节一致；失配、二进制或读取变化不签发凭据。该检查不能防止不可信本机进程在检查后替换路径或通过硬链接修改内容。
+
+凭据是 `randomUUID()` 生成的非持久化不透明字符串，服务仅保存其哈希及绑定信息：世界服务实例、Agent **实例绑定**、稳定负责人、规范路径、记录 revision、成果字节摘要和到期时刻；不将凭据写入目录 JSON。默认有效期 5 分钟、每个实例绑定最多 32 个未使用凭据；两个值由可信应用配置并校验，使用单调时钟检查到期并在发放或消费时清理过期项，不创建后台定时器。达到上限时明确拒绝新凭据，不静默撤销其他有效凭据。凭据会作为工具调用结果进入 Agent Session；实例或世界服务结束后即使旧 Session 仍包含字符串，凭据也无效。
+
+消费在世界服务串行队列内执行：先校验当前实例绑定、凭据归属、路径、revision 和有效期；一旦匹配并受理更新即消耗凭据，然后重新检查记录和成果摘要。受理后遇到冲突、取消或发布失败也不恢复该凭据，调用者须重新读取；无效、过期、重复或跨实例凭据返回 `CATALOG_RECEIPT_INVALID`，记录或文件变化返回 `CATALOG_CONFLICT`，超过读取上限返回 `CATALOG_SOURCE_TOO_LARGE`，无法无损解码返回 `CATALOG_SOURCE_ENCODING`。实际目标失去授权返回 `CATALOG_FORBIDDEN`，缺失与 I/O 错误沿用目录工具的明确结果；工具错误不得包含宿主绝对路径。
+
+绑定在 Agent 实例创建时由世界服务生成，除了现有身份受限方法还需要可重复、可等待的关闭操作：先拒绝新请求，等待该绑定已受理操作结算，再撤销凭据；清理失败传播并保留相应不安全资源占用。绑定 A 的关闭不能撤销绑定 B 或关闭共享世界服务。角色子实例成功创建后绑定其 `ToolsService.agent`，实例销毁先停止 Loop 并等待工具任务，再关闭绑定；创建失败同样清理该实例已生成凭据。父实例销毁先停止其 Loop、取消并等待子运行和实例绑定退出，再关闭主绑定和世界服务。当前 `catalogBinding` 跨角色子实例复用，步骤 2 必须调整为可信工厂按实例创建，不能只在提示词中声明失效。
+
+#### 第 1 步核对结论：场景与状态
+
+**场景一：主 Agent 的世界构想文件过期。** 假设自身记录路径 `main/world.md` 在 `catalog_check_page` 中返回 `stale` 和 revision `R1`。主 Agent 再用 `catalog_read` 读取该记录，若仍为本人且仍过期，调用 `catalog_read_source({"path":"main/world.md","revision":"R1"})` 获取完整内容和 `receipt`；然后调用 `catalog_update({"path":"main/world.md","summary":"重新整理的世界草案简介","revision":"R1","receipt":"<读取凭据>"})`。更新返回 `updated`、新 revision `R2` 和状态后，再调用 `catalog_read`；仅当路径、负责人、`R2` 和 `current` 均符合预期时报告该条对齐。
+
+**场景二：角色 Agent 负责的文件过期且实例已销毁。** 主 Agent 通过检查得到 `characters/<角色ID>/profile.md` 的 `stale`、负责人 `creator` 和 revision `R1`，先复查该记录，再调用可信绑定的 `delegate_character_creator`，任务中说明相对路径、原 revision 和“读取实际文件并更新自己的目录简介”。该任务不携带授权根或 Session ID。`persistent` 按可信配置重建原身份和 Session；角色 Agent 使用自己的 `catalog_read_source` 取得凭据并通过 `catalog_update` 更新。主 Agent 收到回复后独立调用 `catalog_read` 验证负责人、更新后的 revision 和 `current`；任务回复中的“已完成”不能替代检查。若角色 Agent 没有更新记录、目录 revision 仍为 `R1`，不能报告本次处理成功。
+
+| 情况 | 处理结果 |
+| --- | --- |
+| `catalog_read` 返回 `not_registered` | 标记未登记；不自动创建记录或说成果不存在。 |
+| 文件 `missing`、`unreadable`、`changing` 或 `forbidden` | 保留原记录和具体状态；不委派生成一个假定正确的简介。 |
+| 负责人不在可信配置或没有对应专用工具 | 报告负责人未配置；主 Agent 不代替负责人修改。 |
+| 子实例未运行但已有可信绑定 | 使用原持续身份与 Session 配置启动；启动或恢复失败保留未处理结果。 |
+| 读取后成果或记录变化 | 凭据或 revision 校验拒绝提交；重新读取后才可尝试，不无限自动重试。 |
+| 发布成功后再次变化或复核失败 | 保留已提交记录，分别报告 `stale`、`changing`、`missing`、`unreadable` 等实际状态，不宣称回滚。 |
+| 目录损坏、分页版本冲突、取消或发布结果未知 | 保留已知结果与未完成范围；不能报告全量一致或确定未提交。 |
+
+#### 第 1 步核对结论：可信路由与迁移范围
+
+可信应用从世界配置和用户选择的专用 Agent 配置建立**只包含已装配能力**的映射：`ownerAgentId → 专用工具名 → 固定 persistent 创建绑定`。映射仅在应用层生成并以提示词或工具说明展示，模型只选择已注册的专用工具并提供任务；它不能提供或改变路由中的世界、身份、目录、Provider、Preset 或 Session。现有 `delegate_character_creator` 保持角色职责，`createPersistentAgentRouter` 可在确有多个可信绑定时复用；第二种负责人以测试注册验证，不能宣称其他业务 Agent 已实现。配置身份存在但没有专用工具时明确报告未配置；同一身份忙或清理失败遵循现有占用策略。
+
+当前直接使用目录更新接口的代码包括[目录工具](../../../src/tools/catalog/catalog-tools.ts)、[目录服务测试](../../../src/world-init/tests/catalog-service.test.ts)及[双世界集成测试](../../../src/app/tests/catalog-two-worlds.test.ts)；步骤 2 须同步这些调用、输入 schema 和行为测试。现有 `catalog_register` 和目录 JSON 版本保持不变；凭据仅在内存持有，不新增持久化字段。`ToolsService` 在取消后对抛出的异常统一标记 `ABORTED`，因此读取、检查及可能已提交的更新需要结合 `reportOnAbort` 和结构化结果设计，不能靠异常代码表达已提交或不确定结果。
+
 ### 2. 实现读取凭据与受控简介更新
 
 1. 在工作区目录服务中提供完整成果读取及临时凭据，绑定可信世界、负责人、路径、记录 revision 和实际内容摘要；只允许负责人读取用于更新的成果，继续保留普通共享读取能力。
