@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../call-llm.js')
 import { createWorldInitializationAgentWithWorkspace } from '../agents/index.js'
-import { CharacterStore } from '../../world-init/character-store.js'
+import { CharacterStore } from '../../world-init/character/store.js'
 
 class ParentAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
-import { formatCatalogDocument, initializeCatalog, parseCatalogDocument, readCatalog, type CatalogDocument } from '../catalog/format.js'
-import type { WorldWorkspaceConfig } from '../world-workspace-config.js'
+import { formatCatalogDocument, initializeCatalog, parseCatalogDocument, readCatalog, type CatalogDocument } from '../workspace/catalog/format.js'
+import type { WorldWorkspaceConfig } from '../workspace/config.js'
 
 const record = { path: 'agents/main/world.md', ownerAgentId: 'main', summary: '世界草案',
   contentSha256: 'a'.repeat(64), revision: '123e4567-e89b-42d3-a456-426614174000' }

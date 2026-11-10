@@ -1,8 +1,8 @@
 import { defineTool } from '@fly-novel/tools'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { characterMetadataSchema, requirementsSchema } from '../../world-init/character-format.js'
-import type { CharacterStore } from '../../world-init/character-store.js'
+import { characterMetadataSchema, requirementsSchema } from '../../world-init/character/format.js'
+import type { CharacterStore } from '../../world-init/character/store.js'
 
 const inputSchema = characterMetadataSchema.pick({ name: true, summary: true, categories: true }).extend({ body: z.string() }).strict()
 const querySchema = z.object({ name: z.string().optional(), categories: z.record(z.string(), z.array(z.string().min(1)).min(1)).optional() }).strict()

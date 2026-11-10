@@ -12,8 +12,8 @@ import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
 import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import type { LlmAdapter } from '@fly-novel/llm'
 import { createCharacterTools, readFileTool } from '../../tools/index.js'
-import { CharacterStore } from '../../world-init/character-store.js'
-import { acquireWorldAgentLease } from '../../world-init/world-agent-lease.js'
+import { CharacterStore } from '../../world-init/character/store.js'
+import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 
 /** 由可信应用提供身份、存储及模型路由。所有目录必须已经存在。 */
 export interface CharacterCreatorConfig {

@@ -2,7 +2,7 @@ import { realpath, stat } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
 import { validateCatalogRelativePath } from './format.js'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../world-workspace-config.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../config.js'
 
 /** 解析后的世界相对路径及可信文件真实路径；不代表文件内容已读取。 */
 export interface CatalogTarget { readonly path: string; readonly absolutePath: string }

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { z } from 'zod'
-import { characterMetadataSchema, formatCharacterDocument, formatRequirementsDocument, parseCharacterDocument, parseRequirementsDocument, type CharacterDocument, type CharacterMetadata, type Requirements } from './character-format.js'
+import { characterMetadataSchema, formatCharacterDocument, formatRequirementsDocument, parseCharacterDocument, parseRequirementsDocument, type CharacterDocument, type CharacterMetadata, type Requirements } from './format.js'
 
 const idSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
 const indexSchema = z.object({ formatVersion: z.literal(1), characters: z.array(characterMetadataSchema) }).strict().superRefine((index, context) => {

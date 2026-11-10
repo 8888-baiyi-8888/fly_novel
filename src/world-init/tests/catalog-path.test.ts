@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
-import { resolveCatalogTarget } from '../catalog/path.js'
-import type { WorldWorkspaceConfig } from '../world-workspace-config.js'
+import { resolveCatalogTarget } from '../workspace/catalog/path.js'
+import type { WorldWorkspaceConfig } from '../workspace/config.js'
 
 test('仅解析所属 Agent 的现有普通文件，链接别名归一且越权拒绝', async t => {
   const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })

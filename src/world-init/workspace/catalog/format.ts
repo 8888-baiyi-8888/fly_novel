@@ -3,7 +3,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../world-workspace-config.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../config.js'
 
 const identity = z.string().min(1).refine(value => value.trim() === value, '身份首尾不能有空白')
 const relativePath = z.string().min(1).refine(value =>

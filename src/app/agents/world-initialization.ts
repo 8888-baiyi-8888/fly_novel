@@ -17,8 +17,8 @@ import { validateWorldInitializationWorkspace, type WorldInitializationWorkspace
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
 import { worldInitializationSkillPluginDefinition } from './world-initialization-skill.js'
 import { worldInitializationWorkspacePromptPluginDefinition } from './world-initialization-workspace-prompt.js'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/world-workspace-config.js'
-import { acquireWorldAgentLease } from '../../world-init/world-agent-lease.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
+import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const

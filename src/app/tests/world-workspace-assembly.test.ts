@@ -15,7 +15,7 @@ import { startInProcessRun } from '@fly-novel/subagent-in-process-driver'
 import configured = require('../call-llm.js')
 import { createWorldInitializationAgentWithWorldWorkspaces } from '../agents/index.js'
 import { worldInitializationDraftFsPluginDefinition } from '../agents/world-initialization-draft-fs.js'
-import type { WorldWorkspaceConfig } from '../../world-init/world-workspace-config.js'
+import type { WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
 
 class FixedAdapter extends LlmAdapter {
   override async *stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {

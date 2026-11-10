@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import test, { type TestContext } from 'node:test'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../world-workspace-config.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 
 async function fixture(t: TestContext) {
   const parent = join(process.cwd(), 'tmp')

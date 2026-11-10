@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { formatCharacterDocument, formatRequirementsDocument, parseCharacterDocument, parseRequirementsDocument } from '../character-format.js'
+import { formatCharacterDocument, formatRequirementsDocument, parseCharacterDocument, parseRequirementsDocument } from '../character/format.js'
 
 const id = '2e59b48c-2c7c-4abc-b232-97dc06111001'
 

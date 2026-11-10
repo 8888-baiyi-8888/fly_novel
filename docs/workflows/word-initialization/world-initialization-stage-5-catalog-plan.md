@@ -6,7 +6,7 @@
 
 为每个世界建立一份资料导航目录，让同世界获授权的 Agent 查询成果文件的位置、用途、负责人及简介对应的内容版本；由专用工具受控登记、更新和删除记录。目录记录是导航信息，成果内容和确认状态以原文件及业务流程为准；登记、搜索或对齐均不确认世界事实。
 
-[世界工作区配置](../../../src/world-init/world-workspace-config.ts)已经提供读取根、资料目录保护根和各 Agent 专属目录；[工作区装配入口](../../../src/app/agents/world-initialization.ts)保护主 Agent 与角色 Agent 的目录边界，但目前没有资料目录服务。角色创建 Agent 由[独立应用入口](../../../src/app/agents/character-creator.ts)创建，拥有独立的框架和 Session；角色资料服务[角色索引](../../../src/world-init/character-store.ts)负责角色 ID、名称和分类，与跨成果文件的世界资料目录不同。角色服务和旧 `read_file` 使用直接文件访问，不能假设它们会发出普通文件工具的观察事件。
+[世界工作区配置](../../../src/world-init/workspace/config.ts)已经提供读取根、资料目录保护根和各 Agent 专属目录；[工作区装配入口](../../../src/app/agents/world-initialization.ts)保护主 Agent 与角色 Agent 的目录边界，但目前没有资料目录服务。角色创建 Agent 由[独立应用入口](../../../src/app/agents/character-creator.ts)创建，拥有独立的框架和 Session；角色资料服务[角色索引](../../../src/world-init/character/store.ts)负责角色 ID、名称和分类，与跨成果文件的世界资料目录不同。角色服务和旧 `read_file` 使用直接文件访问，不能假设它们会发出普通文件工具的观察事件。
 
 主 Agent 当前运行实例 ID 随创建生成，角色 Agent 有可信业务 ID；通用工具的执行上下文绑定实例身份。目录服务必须由可信应用把 `(世界 ID, 稳定 Agent ID, 专属目录)` 绑定到实例及工具作用域，不能用运行 ID 代替业务身份，也不能接受模型传入的世界、负责人或授权根来授予权限。现有生产入口只装配主 Agent 和角色创建 Agent；第二个特殊 Agent 用现有机制及固定测试职责验证，不提前实现新的业务 Agent。
 
