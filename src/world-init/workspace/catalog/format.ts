@@ -1,4 +1,4 @@
-import { lstat, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { lstat, open, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
@@ -56,13 +56,32 @@ export async function initializeCatalog(root: string, worldId: string): Promise<
 }
 
 /** 读取并校验已有目录及可解析成果的别名；不会自动创建或修复数据。 */
-export async function readCatalog(config: WorldWorkspaceConfig): Promise<CatalogDocument> {
+export async function readCatalog(config: WorldWorkspaceConfig, maxBytes?: number): Promise<CatalogDocument> {
   const [world] = await validateWorldWorkspaceConfigs([config])
   if (!world) throw new Error('世界配置无效')
   const file = await catalogFile(world.catalogRoot)
   const info = await lstat(file)
   if (!info.isFile() || info.isSymbolicLink()) throw new Error('资料目录文件必须是普通文件')
-  const text = new TextDecoder('utf-8', { fatal: true }).decode(await readFile(file))
+  let bytes: Uint8Array
+  if (maxBytes === undefined) bytes = await readFile(file)
+  else {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error('目录文件大小上限无效')
+    const handle = await open(file, 'r')
+    try {
+      const chunks: Buffer[] = []
+      let length = 0
+      for (;;) {
+        const chunk = Buffer.alloc(Math.min(65536, maxBytes - length + 1))
+        const result = await handle.read(chunk, 0, chunk.length, null)
+        if (!result.bytesRead) break
+        length += result.bytesRead
+        if (length > maxBytes) throw new Error('目录文件超过大小上限')
+        chunks.push(chunk.subarray(0, result.bytesRead))
+      }
+      bytes = Buffer.concat(chunks, length)
+    } finally { await handle.close() }
+  }
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   const document = parseCatalogDocument(text, world.worldId)
   const seen = new Set<string>()
   for (const record of document.records) {

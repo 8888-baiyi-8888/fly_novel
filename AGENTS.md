@@ -26,6 +26,7 @@ src/app/agents/    各类 Agent 的应用层创建入口
 src/world-init/    世界初始化业务能力目录，测试放在 src/world-init/tests/
 src/world-init/workspace/ 多世界工作区配置校验、Agent 身份占用及资料目录
 src/world-init/workspace/catalog/ 资料目录格式、持久化与成果路径校验
+src/world-init/workspace/catalog/service.ts 世界级资料目录服务与可信身份绑定
 src/world-init/character/ 角色资料格式、索引及待审修改的受控文件服务
 src/app/world-initialization-files-debug.ts 世界初始化受控文件工具的真实模型交互调试入口
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
