@@ -39,6 +39,7 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
   const a = await makeWorld('a'); const b = await makeWorld('b')
   await writeFile(join(a.agents[1]!.writableRoot, 'other.md'), 'other data\n')
   await writeFile(join(a.confirmedRoot, 'fact.md'), 'confirmed\n')
+  await writeFile(join(a.confirmedRoot, 'blank.md'), '势力关系：用户明确留白，暂不设定。\n')
   await writeFile(join(a.catalogRoot, 'catalog.md'), 'catalog\n')
   await writeFile(join(b.mainAgent.writableRoot, 'secret.md'), 'secret\n')
   const adapter = new FixedAdapter()
@@ -74,6 +75,13 @@ test('可信世界配置装配主 Agent 和第二个特殊 Agent 的真实文件
     workingDirectory: workdir, session: agent.context.sessions.list()[0]!, signal: new AbortController().signal,
   })).results[0]!.result
   assert.equal((await call(main, 'read', { file_path: 'other/other.md' })).isError, false)
+  for (const agent of [main, other]) {
+    const blank = await call(agent, 'read', { file_path: 'confirmed/blank.md' })
+    assert.equal(blank.isError, false)
+    assert.match(JSON.stringify(blank), /用户明确留白/)
+    assert.equal((await call(agent, 'read', { file_path: 'confirmed/not-created.md' })).isError, true)
+  }
+  assert.equal((await call(other, 'write', { file_path: 'confirmed/blank.md', content: '擅自设定' })).isError, true)
   assert.equal((await call(other, 'write', { file_path: 'other/new.md', content: 'new' })).isError, false)
   assert.equal((await call(main, 'read', { file_path: 'other/new.md' })).isError, false)
   assert.equal((await call(main, 'write', { file_path: 'main/main.md', content: 'main' })).isError, false)
