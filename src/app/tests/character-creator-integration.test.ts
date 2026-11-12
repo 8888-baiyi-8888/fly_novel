@@ -126,3 +126,79 @@ test('子 Agent 读取缺失资料失败后向主 Agent 报告缺口', async t =
   const store = await CharacterStore.open(characterRoot)
   try { assert.deepEqual(await store.query({}), []) } finally { await store.close() }
 })
+
+test('修仙世界方案整合实际角色建议并保留待审状态', async t => {
+  const temp = join(process.cwd(), 'tmp'); await mkdir(temp, { recursive: true })
+  const root = await realpath(await mkdtemp(join(temp, 'first-plan-character-')))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const viewRoot = join(root, 'world'); const draftRoot = join(viewRoot, 'draft'); const confirmedRoot = join(viewRoot, 'confirmed')
+  const characterRoot = join(viewRoot, 'characters'); const sessionRoot = join(root, 'sessions')
+  await mkdir(viewRoot); await mkdir(draftRoot); await mkdir(confirmedRoot); await mkdir(characterRoot); await mkdir(sessionRoot)
+  await writeFile(join(confirmedRoot, 'rules.md'), '力量本身没有善恶。')
+  let characterId = ''
+  let planPath = ''
+  class CharacterPlanAdapter extends LlmAdapter {
+    calls = 0
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      if (++this.calls === 1) {
+        assert.match(JSON.stringify(options.messages), /力量本身没有善恶/)
+        yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'create' as ToolCallId, name: 'character_create',
+          arguments: JSON.stringify({ character: { name: '林岚', summary: '调查灵脉', categories: {}, body: '目标：调查灵脉；与守护者有利益分歧。' } }) } }
+        yield { type: 'finish', reason: { kind: 'tool-calls' } }; return
+      }
+      const result = options.messages.flatMap(message => message.content).find(block => block.type === 'tool-result' && block.toolCallId === 'create')
+      assert.ok(result && result.type === 'tool-result' && !result.isError)
+      const content = result.content.find(block => block.type === 'text'); assert.ok(content && content.type === 'text')
+      const created: unknown = JSON.parse(content.text)
+      assert.ok(created && typeof created === 'object' && 'id' in created && typeof created.id === 'string')
+      characterId = created.id
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: `角色建议：characters/${characterId}/profile.md` } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+  class WorldPlanAdapter extends LlmAdapter {
+    readonly requests: GenerateOptions[] = []
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      this.requests.push(options)
+      const call = (id: string, name: string, args: object): StreamChunk => ({ type: 'block-end', index: 0, block: { type: 'tool-call', id: id as ToolCallId, name, arguments: JSON.stringify(args) } })
+      if (this.requests.length === 1) yield call('rules', 'read', { file_path: 'confirmed/rules.md' })
+      else if (this.requests.length === 2) {
+        assert.match(JSON.stringify(options.messages), /力量本身没有善恶/)
+        yield call('delegate', 'delegate_character_creator', { task: '根据力量本身没有善恶的世界背景创建一位调查灵脉的角色，设计角色关系。' })
+      } else if (this.requests.length === 3) {
+        assert.match(JSON.stringify(options.messages), new RegExp(characterId))
+        yield call('profile', 'read', { file_path: `characters/${characterId}/profile.md` })
+      } else if (this.requests.length === 4) {
+        assert.match(JSON.stringify(options.messages), /与守护者有利益分歧/)
+        yield call('save-plan', 'save_first_world_plan', { content: `用户要求：力量无善恶。建议：林岚调查灵脉；角色资料：characters/${characterId}/profile.md。未来方向：调查可能改变双方关系。` })
+      } else {
+        const result = options.messages.flatMap(message => message.content).find(block => block.type === 'tool-result' && block.toolCallId === 'save-plan')
+        assert.ok(result && result.type === 'tool-result' && !result.isError)
+        const content = result.content.find(block => block.type === 'text'); assert.ok(content && content.type === 'text')
+        const saved: unknown = JSON.parse(content.text)
+        assert.ok(saved && typeof saved === 'object' && 'status' in saved && saved.status === 'saved' && 'path' in saved && typeof saved.path === 'string')
+        planPath = saved.path
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: `待审第一版：力量无善恶；林岚调查灵脉，角色资料：characters/${characterId}/profile.md；总览：${planPath}` } }
+        yield { type: 'finish', reason: { kind: 'stop' } }; return
+      }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+    }
+  }
+  const parentAdapter = new WorldPlanAdapter(); const childAdapter = new CharacterPlanAdapter()
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: parentAdapter }))
+  const parent = await createWorldInitializationAgentWithWorkspace({ viewRoot, draftRoot, confirmedRoot }, {
+    worldId: 'first-plan', agentId: 'creator', sessionId: 'session', sessionMode: 'create', sessionRoot, characterRoot,
+    initializeCharacters: true, readRoot: viewRoot, provider: 'child', model: 'test', adapter: childAdapter, defaultCharacterCount: 1,
+  })
+  try {
+    const result = await parent.run({ prompt: '构想已确认：力量无善恶，规划修仙世界并创建一位角色。' })
+    assert.match(result.content, /待审第一版/); assert.match(result.content, new RegExp(characterId)); assert.match(result.content, new RegExp(planPath))
+    const plan = await readFile(join(viewRoot, planPath), 'utf8')
+    assert.match(plan, /第一版世界方案（待审）/); assert.match(plan, new RegExp(characterId)); assert.match(plan, /未来方向/)
+    const events = parent.context.sessions.list()[0]!.read().filter(event => event.type === 'tool/result')
+    assert.equal(events.length, 4); assert.ok(events.every(event => event.data.error === undefined))
+    assert.equal(await readFile(join(confirmedRoot, 'rules.md'), 'utf8'), '力量本身没有善恶。')
+  } finally { await parent.dispose() }
+  const store = await CharacterStore.open(characterRoot)
+  try { assert.equal((await store.read(characterId)).metadata.contentStatus, 'suggested') } finally { await store.close() }
+})

@@ -122,3 +122,36 @@ test('受控入口的子任务失败和取消后释放子 Agent', { timeout: 100
     assert.equal(disposed[1]!.state, 'disposed')
   } finally { await agent.dispose() }
 })
+
+test('第一版总览创建独立待审文件，保存结果不确定时保留核查路径', async t => {
+  const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })
+  const viewRoot = await realpath(await mkdtemp(join(parent, 'first-plan-save-')))
+  t.after(() => rm(viewRoot, { recursive: true, force: true }))
+  const draftRoot = join(viewRoot, 'draft'); const confirmedRoot = join(viewRoot, 'confirmed')
+  await mkdir(draftRoot); await mkdir(confirmedRoot)
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new WorldFilesAdapter() }))
+  const agent = await createWorldInitializationAgentWithWorkspace({ viewRoot, draftRoot, confirmedRoot })
+  try {
+    const save = async (content: string) => (await agent.context.tools.execute({ calls: [{ type: 'tool-call', id: 'save' as ToolCallId,
+      name: 'save_first_world_plan', arguments: JSON.stringify({ content }) }], workingDirectory: viewRoot,
+      session: agent.context.sessions.list()[0]!, signal: new AbortController().signal })).results[0]!.result
+    const first = await save('第一份世界规划')
+    const second = await save('第二份世界规划')
+    assert.ok(!first.isError && first.value && typeof first.value === 'object' && !Array.isArray(first.value) && typeof first.value.path === 'string')
+    assert.ok(!second.isError && second.value && typeof second.value === 'object' && !Array.isArray(second.value) && typeof second.value.path === 'string')
+    assert.equal(first.value.status, 'saved'); assert.equal(second.value.status, 'saved'); assert.notEqual(first.value.path, second.value.path)
+    assert.match(await readFile(join(viewRoot, first.value.path), 'utf8'), /第一份世界规划/)
+    assert.match(await readFile(join(viewRoot, second.value.path), 'utf8'), /第二份世界规划/)
+    const write = agent.context.fs.writeText.bind(agent.context.fs)
+    t.mock.method(agent.context.fs, 'writeText', async (...args: Parameters<typeof write>) => {
+      await write(...args)
+      throw new Error('模拟发布结果不确定')
+    })
+    const unknown = await save('第三份世界规划')
+    assert.ok(!unknown.isError && unknown.value && typeof unknown.value === 'object' && !Array.isArray(unknown.value))
+    assert.equal(unknown.value.status, 'unknown'); assert.match(String(unknown.value.path), /^draft\/world-plan-/)
+    assert.match(String(unknown.value.reason), /模拟发布结果不确定/)
+    assert.match(await readFile(join(viewRoot, String(unknown.value.path)), 'utf8'), /第三份世界规划/)
+    assert.match(await readFile(join(viewRoot, first.value.path), 'utf8'), /第一份世界规划/)
+  } finally { await agent.dispose() }
+})

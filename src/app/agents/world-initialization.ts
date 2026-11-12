@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { bootstrapAgents, createSpawnAgentCreator, jsonlSessionPersistencePlugin, type Agent } from '@fly-novel/agents'
 import { sandboxPolicyPluginDefinition } from '@fly-novel/sandbox-policy'
 import { fsSandboxPluginDefinition, isPathUnder } from '@fly-novel/fs-sandbox'
@@ -10,6 +10,7 @@ import { toolFsPluginDefinition, toolFsReadPluginDefinition } from '@fly-novel/t
 import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
 import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import { registerAll } from '@fly-novel/util'
+import { defineTool } from '@fly-novel/tools'
 import { loadConfiguredAdapter } from '../call-llm.js'
 import { createCatalogTools, createCharacterCreatorDelegationTool, readFileTool } from '../../tools/index.js'
 import { createCharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
@@ -213,6 +214,28 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     ...(persistentCreate ? { 'subagent-persistent-in-process': { create: persistentCreate } } : {}),
     } })
     if (creatorConfig) agent.context.tools.register(createCharacterCreatorDelegationTool(agent.context.subagents, agent.info.identity.id))
+    const createdAgent = agent
+    const draftRelative = relative(roots.viewRoot, roots.draftRoot).split(sep).join('/')
+    agent.context.tools.register(defineTool({
+      name: 'save_first_world_plan', description: '保存完整的待审第一版世界方案；每次创建独立文件，不覆盖已有成果。', reportOnAbort: true,
+      parameters: { content: { type: 'string', required: true, description: '已经整合的完整第一版方案正文。' } },
+      output: { schema: { type: 'object', additionalProperties: false, properties: {
+        status: { type: 'string', enum: ['saved', 'unknown'], required: true }, path: { type: 'string', required: true }, reason: { type: 'string' },
+      } }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+      async execute({ content }, exec) {
+        if (!content.trim()) throw new Error('世界方案正文不能为空')
+        exec.signal.throwIfAborted()
+        const path = `${draftRelative}/world-plan-${randomUUID()}.md`
+        const target = await createdAgent.context.fs.resolve(path, { cwd: roots.viewRoot, signal: exec.signal })
+        try {
+          const outcome = await createdAgent.context.fs.writeText(target, `# 第一版世界方案（待审）\n\n${content.trim()}\n`, { kind: 'createIfAbsent' }, exec.signal)
+          createdAgent.context.emit('fs/observed', target, { kind: 'present', version: outcome.version }, exec)
+          return { status: 'saved' as const, path }
+        } catch (error) {
+          return { status: 'unknown' as const, path, reason: error instanceof Error ? error.message : String(error) }
+        }
+      },
+    }))
     if (catalogBinding) {
       const identity = agent.context.tools.agent
       if (!identity) throw new Error('主 Agent 的目录工具缺少身份')

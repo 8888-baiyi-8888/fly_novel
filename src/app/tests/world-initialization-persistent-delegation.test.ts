@@ -44,7 +44,13 @@ test('未装配角色 Agent 时主 Agent 可读取资料并自行规划', async 
       if (this.requests.length === 1) {
         yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'sea' as ToolCallId, name: 'read', arguments: '{"file_path":"confirmed/sea.md"}' } }
         yield { type: 'finish', reason: { kind: 'tool-calls' } }
+      } else if (this.requests.length === 2) {
+        yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'save' as ToolCallId, name: 'save_first_world_plan',
+          arguments: JSON.stringify({ content: '用户留白：外海暂不设定。建议：城邦通过贸易分配有限能源。未来方向：贸易可能影响城邦关系。' }) } }
+        yield { type: 'finish', reason: { kind: 'tool-calls' } }
       } else {
+        const result = options.messages.flatMap(message => message.content).find(block => block.type === 'tool-result' && block.toolCallId === 'save')
+        assert.ok(result && result.type === 'tool-result' && !result.isError)
         yield { type: 'block-end', index: 0, block: { type: 'text', text: '城邦资源规划；外海暂不设定。' } }
         yield { type: 'finish', reason: { kind: 'stop' } }
       }
@@ -59,6 +65,9 @@ test('未装配角色 Agent 时主 Agent 可读取资料并自行规划', async 
     const read = adapter.requests[1]?.messages.flatMap(message => message.content).find(block => block.type === 'tool-result' && block.toolCallId === 'sea')
     assert.ok(read && read.type === 'tool-result' && !read.isError)
     assert.match(JSON.stringify(read), /外海暂不设定/)
+    const saved = adapter.requests[2]?.messages.flatMap(message => message.content).find(block => block.type === 'tool-result' && block.toolCallId === 'save')
+    assert.ok(saved && saved.type === 'tool-result' && !saved.isError)
+    assert.match(JSON.stringify(saved), /saved/)
   } finally { await parent.dispose() }
 })
 
