@@ -30,7 +30,7 @@
 
 [持续角色委派测试](tests/world-initialization-persistent-delegation.test.ts)覆盖未装配角色 Agent 时的资料读取、角色委派、子任务失败向主 Agent 传播以及取消和释放。固定模型替身按预设路径调用工具，不能证明真实模型会选择正确工具或完成第一版，也不能证明失败后自动恢复。
 
-[世界工作区生命周期测试](tests/world-workspace-lifecycle.test.ts)覆盖主 Agent 生成失败后恢复同一 Session、重新读取已保存成果及继续输入，并验证不同世界的会话隔离；测试使用固定模型替身，不评估模型自主排查质量。
+[世界工作区生命周期测试](tests/world-workspace-lifecycle.test.ts)覆盖主 Agent 生成失败后恢复同一 Session、重新读取已保存成果及继续输入，并验证不同世界的会话隔离；还覆盖角色创建后子任务失败、主子会话恢复、核查已有角色并保存总览。测试使用固定模型替身，不评估模型自主排查质量。
 
 `agent_harness.ts` 提供 Cordis Harness 的独立调试函数 `debugAgentHarness(prompt)`，按角色 Preset 创建 Agent、读取本机 DeepSeek 配置并调用真实 Agent Loop，最后销毁实例。在仓库根目录运行 `pnpm run agent-harness-debug -- "你明天会回来吗？"`，或在 VS Code“运行和调试”中选择“调试 Cordis Agent Harness（DeepSeek）”并按 F5。该调试配置先构建 Agent 包和应用，可在函数、`AgentInstance.run()` 和 `AgentLoopRuntime` 中设置断点。
 

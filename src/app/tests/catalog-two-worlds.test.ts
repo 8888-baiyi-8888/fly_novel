@@ -34,6 +34,11 @@ class ChildAdapter extends LlmAdapter {
       yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'register' as ToolCallId, name: 'catalog_register',
         arguments: JSON.stringify({ path: `characters/${data.id}/profile.md`, summary: this.label }) } }
     } else {
+      const result = options.messages.flatMap(message => message.content).find(item => item.type === 'tool-result' && item.toolCallId === 'register')
+      assert.ok(result && result.type === 'tool-result' && !result.isError, `角色目录登记失败：${JSON.stringify(result)}`)
+      const content = result.content.find(item => item.type === 'text'); assert.ok(content && content.type === 'text')
+      const registration: unknown = JSON.parse(content.text)
+      assert.ok(registration && typeof registration === 'object' && 'status' in registration && registration.status === 'registered', `角色目录登记结果：${content.text}`)
       yield { type: 'block-end', index: 0, block: { type: 'text', text: '已登记建议' } }
       yield { type: 'finish', reason: { kind: 'stop' } }; return
     }

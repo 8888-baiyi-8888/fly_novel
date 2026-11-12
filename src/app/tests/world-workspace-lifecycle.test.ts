@@ -172,3 +172,100 @@ test('主 Agent 失败后恢复同一 Session，由新输入继续并读取已�
   } finally { await resumed.dispose() }
   assert.equal(await readFile(join(world.mainAgent.writableRoot, 'rules.md'), 'utf8'), '力量没有善恶')
 })
+
+test('角色创建后子任务失败，恢复会话并核对已有角色后完成总览', async t => {
+  const temp = join(process.cwd(), 'tmp'); await mkdir(temp, { recursive: true })
+  const root = await realpath(await mkdtemp(join(temp, 'world-first-plan-recovery-')))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const readRoot = join(root, 'world'); const sessionRoot = join(root, 'sessions')
+  for (const dir of ['main', 'character', 'confirmed', 'catalog']) await mkdir(join(readRoot, dir), { recursive: true })
+  await mkdir(sessionRoot)
+  await writeFile(join(readRoot, 'confirmed', 'rules.md'), '力量本身无善恶。')
+  const world: WorldWorkspaceConfig = { worldId: 'first-plan-recovery', readRoot, confirmedRoot: join(readRoot, 'confirmed'),
+    catalogRoot: join(readRoot, 'catalog'), mainAgent: { agentId: 'main', writableRoot: join(readRoot, 'main') },
+    agents: [{ agentId: 'creator', writableRoot: join(readRoot, 'character') }] }
+  const call = (id: string, name: string, args: object): StreamChunk => ({ type: 'block-end', index: 0,
+    block: { type: 'tool-call', id: id as ToolCallId, name, arguments: JSON.stringify(args) } })
+  const findResult = (options: GenerateOptions, id: string) => options.messages.flatMap(message => message.content)
+    .find(block => block.type === 'tool-result' && block.toolCallId === id)
+  let characterId = ''
+  let planPath = ''
+  class ChildAdapter extends LlmAdapter {
+    calls = 0
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      this.calls++
+      if (this.calls === 1) {
+        yield call('create', 'character_create', { character: { name: '林岚', summary: '调查灵脉', categories: {}, body: '目标：调查灵脉。' } })
+      } else if (this.calls === 2) {
+        yield { type: 'finish', reason: { kind: 'error', failure: { message: '角色生成中断', code: 'PROVIDER_ERROR' } } }; return
+      } else if (this.calls === 3) {
+        assert.match(JSON.stringify(options.messages), /创建角色/)
+        yield call('search', 'character_search', { filter: { name: '林岚' } })
+      } else {
+        const result = findResult(options, 'search'); assert.ok(result && result.type === 'tool-result' && !result.isError)
+        const text = result.content.find(block => block.type === 'text'); assert.ok(text && text.type === 'text')
+        const parsed: unknown = JSON.parse(text.text)
+        assert.ok(parsed && typeof parsed === 'object' && 'items' in parsed && Array.isArray(parsed.items) && parsed.items.length === 1)
+        const item: unknown = parsed.items[0]
+        assert.ok(item && typeof item === 'object' && 'id' in item && typeof item.id === 'string')
+        characterId = item.id
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: `已有角色：character/${characterId}/profile.md` } }
+        yield { type: 'finish', reason: { kind: 'stop' } }; return
+      }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+    }
+  }
+  class ParentAdapter extends LlmAdapter {
+    calls = 0
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      this.calls++
+      if (this.calls === 1) yield call('read-rules', 'read', { file_path: 'confirmed/rules.md' })
+      else if (this.calls === 2) {
+        assert.match(JSON.stringify(options.messages), /力量本身无善恶/)
+        yield call('delegate-first', 'delegate_character_creator', { task: '创建角色林岚，背景为力量本身无善恶。' })
+      } else if (this.calls === 3) {
+        const result = findResult(options, 'delegate-first'); assert.ok(result && result.type === 'tool-result' && result.isError)
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: '角色任务中断，第一版未完成。' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }; return
+      } else if (this.calls === 4) {
+        assert.match(JSON.stringify(options.messages), /角色任务中断/)
+        yield call('delegate-resume', 'delegate_character_creator', { task: '核查已创建的林岚并继续，不要重复创建。' })
+      } else if (this.calls === 5) {
+        assert.match(JSON.stringify(options.messages), new RegExp(characterId))
+        yield call('read-role', 'read', { file_path: `character/${characterId}/profile.md` })
+      } else if (this.calls === 6) {
+        assert.match(JSON.stringify(options.messages), /调查灵脉/)
+        yield call('save-plan', 'save_first_world_plan', { content: `用户要求：力量无善恶。角色建议：林岚调查灵脉，见 character/${characterId}/profile.md。` })
+      } else {
+        const result = findResult(options, 'save-plan'); assert.ok(result && result.type === 'tool-result' && !result.isError)
+        const text = result.content.find(block => block.type === 'text'); assert.ok(text && text.type === 'text')
+        const saved: unknown = JSON.parse(text.text)
+        assert.ok(saved && typeof saved === 'object' && 'status' in saved && saved.status === 'saved' && 'path' in saved && typeof saved.path === 'string')
+        planPath = saved.path
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: '待审第一版已完成。' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }; return
+      }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+    }
+  }
+  const parentAdapter = new ParentAdapter(); const childAdapter = new ChildAdapter()
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: parentAdapter }))
+  const child = { agentId: 'creator', sessionId: 'child', sessionMode: 'create' as const, sessionRoot,
+    initializeCharacters: true, provider: 'test', model: 'test', adapter: childAdapter, defaultCharacterCount: 1 }
+  const mainSession = { sessionRoot, sessionId: 'main', sessionMode: 'create' as const }
+  const first = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, child, { singleWriterProcess: true, mainSession })
+  try { assert.deepEqual(await first.run({ prompt: '构想已确认，规划世界并创建角色。' }), { content: '角色任务中断，第一版未完成。' }) }
+  finally { await first.dispose() }
+  const resumed = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId,
+    { ...child, sessionMode: 'resume', initializeCharacters: false }, { singleWriterProcess: true, mainSession: { ...mainSession, sessionMode: 'resume' } })
+  try { assert.deepEqual(await resumed.run({ prompt: '继续' }), { content: '待审第一版已完成。' }) }
+  finally { await resumed.dispose() }
+  const store = await CharacterStore.open(world.agents[0]!.writableRoot)
+  try {
+    const roles = await store.query({ name: '林岚' })
+    assert.equal(roles.length, 1); assert.equal(roles[0]?.id, characterId)
+    assert.equal((await store.read(characterId)).metadata.contentStatus, 'suggested')
+  } finally { await store.close() }
+  assert.match(await readFile(join(readRoot, planPath), 'utf8'), new RegExp(characterId))
+  assert.equal(await readFile(join(world.confirmedRoot, 'rules.md'), 'utf8'), '力量本身无善恶。')
+})
