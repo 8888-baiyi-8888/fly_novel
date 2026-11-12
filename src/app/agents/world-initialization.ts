@@ -1,7 +1,7 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
-import { resolve } from 'node:path'
-import { bootstrapAgents, createSpawnAgentCreator, type Agent } from '@fly-novel/agents'
+import { isAbsolute, resolve } from 'node:path'
+import { bootstrapAgents, createSpawnAgentCreator, jsonlSessionPersistencePlugin, type Agent } from '@fly-novel/agents'
 import { sandboxPolicyPluginDefinition } from '@fly-novel/sandbox-policy'
 import { fsSandboxPluginDefinition, isPathUnder } from '@fly-novel/fs-sandbox'
 import { createPersistentAgentCreator } from '@fly-novel/subagent-persistent-in-process'
@@ -27,22 +27,42 @@ const worldInitializationTools = [readFileTool] as const
 /** 角色创建 Agent 的非授权配置；世界和目录由工作区绑定。 */
 export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worldId' | 'readRoot' | 'characterRoot' | 'createCatalogBinding'>
 
+/** 由可信应用指定主 Agent 会话；目录必须存在且不与世界读取范围重叠。 */
+export interface WorldInitializationSessionConfig {
+  readonly sessionRoot: string
+  readonly sessionId: string
+  readonly sessionMode: 'create' | 'resume'
+}
+
 /**
  * 从可信世界配置创建主 Agent 并按稳定身份绑定角色 Agent。
  * @param workspaces 本次应用装配范围内的全部世界配置。
  * @param worldId 由可信应用选定的世界身份。
  * @param characterCreator 可选的角色 Agent 模型与 Session 配置。
- * @param deployment 可信应用对同一世界只有本进程写入的部署保证。
+ * @param deployment 单进程写入保证及可选的目录、主 Agent Session 配置；恢复时须提供相同世界、身份和 Session ID。
  * @returns 已装配的主 Agent；调用方须等待 dispose。
  */
 export async function createWorldInitializationAgentWithWorldWorkspaces(
   workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator: WorkspaceCharacterCreatorConfig | undefined,
-  deployment: { readonly singleWriterProcess: true; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number } },
+  deployment: { readonly singleWriterProcess: true; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig },
 ): Promise<Agent> {
   if (deployment?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   const worlds = await validateWorldWorkspaceConfigs(workspaces)
   const world = worlds.find(item => item.worldId === worldId)
   if (!world) throw new Error('世界配置不存在')
+  let mainSession: { root: string; id: string; mode: 'create' | 'resume' } | undefined
+  if (deployment.mainSession) {
+    const { sessionRoot, sessionId, sessionMode } = deployment.mainSession
+    if (typeof sessionId !== 'string' || !sessionId || sessionId.trim() !== sessionId || (sessionMode !== 'create' && sessionMode !== 'resume') ||
+        typeof sessionRoot !== 'string' || !isAbsolute(sessionRoot)) throw new Error('主 Agent Session 配置无效')
+    const root = await realpath(sessionRoot)
+    if (root !== resolve(sessionRoot) || !(await stat(root)).isDirectory()) throw new Error('主 Agent Session 目录必须是现有真实目录')
+    for (const item of worlds) {
+      if (await isPathUnder(root, item.readRoot) || await isPathUnder(item.readRoot, root)) throw new Error('主 Agent Session 目录不能与任何世界读取根重叠')
+    }
+    const id = `world-initialization-${createHash('sha256').update(JSON.stringify([world.worldId, world.mainAgent.agentId, sessionId])).digest('hex')}`
+    mainSession = { root, id, mode: sessionMode }
+  }
   let creator: CharacterCreatorConfig | undefined
   if (characterCreator) {
     const owner = world.agents.find(item => item.agentId === characterCreator.agentId)
@@ -67,7 +87,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     }
     mainBinding = catalog?.bind(world.mainAgent.agentId)
     agent = await createWorldInitializationAgentWithWorkspaceInternal({ viewRoot: world.readRoot, draftRoot: world.mainAgent.writableRoot,
-      confirmedRoot: world.confirmedRoot }, creator, mainBinding, mainBinding ? world.mainAgent.agentId : undefined)
+      confirmedRoot: world.confirmedRoot }, creator, mainBinding, mainBinding ? world.mainAgent.agentId : undefined, mainSession)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
       try { await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
@@ -124,7 +144,7 @@ export async function createWorldInitializationAgentWithWorkspace(workspace: Wor
 }
 
 async function createWorldInitializationAgentWithWorkspaceInternal(workspace: WorldInitializationWorkspace, characterCreator?: CharacterCreatorConfig,
-  catalogBinding?: CatalogBinding, catalogMainOwner?: string): Promise<Agent> {
+  catalogBinding?: CatalogBinding, catalogMainOwner?: string, mainSession?: { root: string; id: string; mode: 'create' | 'resume' }): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -175,8 +195,15 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
       const child = await createCharacterCreator({ ...creatorConfig, sessionMode, initializeCharacters: initial && creatorConfig.initializeCharacters })
       return { agent: child, dispose: () => child.dispose() }
     } })
-  const agent = await framework.factory.create({ id: `world-initialization-${randomUUID()}`, presetId: mainId, pluginConfigs: {
-    'agent-loop-runtime': loopConfig, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
+  let backend: ReturnType<typeof framework.context.plugin> | undefined
+  let agent: Agent | undefined
+  try {
+    if (mainSession) {
+      backend = framework.context.plugin(jsonlSessionPersistencePlugin, { root: mainSession.root })
+      await backend
+    }
+    agent = await framework.factory.create({ id: `world-initialization-${randomUUID()}`, presetId: mainId, pluginConfigs: {
+    'agent-loop-runtime': { ...loopConfig, ...(mainSession && (mainSession.mode === 'create' ? { sessionId: mainSession.id } : { resumeSessionId: mainSession.id })) }, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
     'sandbox-policy': { mode: 'workspace-write', workspaceRoot: roots.draftRoot },
     'world-initialization-draft-fs': { cwd: roots.viewRoot, draftRoot: roots.draftRoot },
     'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write', ...(catalogBinding && catalogMainOwner ? { catalog: {
@@ -184,17 +211,21 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     } } : {}) },
     'tool-fs': { applyPatch: true }, 'subagent-spawn-in-process': { create }, 'tool-subagent': { presetId: fileChildId },
     ...(persistentCreate ? { 'subagent-persistent-in-process': { create: persistentCreate } } : {}),
-  } })
-  try {
+    } })
     if (creatorConfig) agent.context.tools.register(createCharacterCreatorDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (catalogBinding) {
       const identity = agent.context.tools.agent
       if (!identity) throw new Error('主 Agent 的目录工具缺少身份')
       for (const tool of createCatalogTools(catalogBinding, identity)) agent.context.tools.register(tool)
     }
-    return agent
+    const created = agent
+    const persistence = backend
+    let disposal: Promise<void> | undefined
+    return { info: created.info, context: created.context, get state() { return created.state },
+      run: input => created.run(input), cancel: () => created.cancel(),
+      dispose: () => disposal ??= (async () => { await created.dispose(); await persistence?.dispose() })() }
   } catch (error) {
-    try { await agent.dispose() } catch (cleanup) { throw new AggregateError([error, cleanup], '主 Agent 装配和清理失败') }
+    try { await agent?.dispose(); await backend?.dispose() } catch (cleanup) { throw new AggregateError([error, cleanup], '主 Agent 装配和清理失败') }
     throw error
   }
 }

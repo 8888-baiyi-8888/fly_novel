@@ -5,7 +5,7 @@
 | 目录或文件 | 用途 |
 | --- | --- |
 | `src/` | 项目源码与所属模块的测试，包含应用入口、配置管理、Agent 和工具。详见[源码目录说明](../src/README.md)。 |
-| `src/agents/` | Harness 按 Agent 隔离插件服务，等待依赖插件启动后发布实例；Manager 协调实例清理，Loop 将 Session 传递给工具服务。文件后端、观察策略与修改策略由可信调用方显式装配，文件事件按工具身份路由；世界初始化受控入口另检查读取视图、草稿与已确认目录，详见[应用说明](../src/app/README.md)和 [Agent 包说明](../src/agents/README.md)。 |
+| `src/agents/` | Harness 按 Agent 隔离插件服务，等待依赖插件启动后发布实例；Manager 协调实例清理，Loop 将 Session 传递给工具服务。文件后端、观察策略与修改策略由可信调用方显式装配，文件事件按工具身份路由；世界初始化受控入口另检查读取视图、草稿与已确认目录，并可为主 Agent 装配持久化 Session，详见[应用说明](../src/app/README.md)和 [Agent 包说明](../src/agents/README.md)。 |
 | `src/world-init/` | 世界初始化业务能力的源码归属，包含世界工作区配置、进程内身份占用、资料目录服务，以及角色资料的格式校验与受控存储。应用入口为主子 Agent 绑定目录权限；普通文件读取与角色业务工具、资料目录各有职责，见[模块说明](../src/world-init/README.md)和[应用说明](../src/app/README.md)。 |
 | `docs/` | 面向开发者的项目架构、模块设计、业务工作流和工程决策文档。详见[文档协作规则](AGENTS.md)。 |
 | `.agents/` | Agent 开发协作中的重要工程决策记录，说明问题、决定、影响与验证。 |

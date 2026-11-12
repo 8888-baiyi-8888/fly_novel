@@ -44,6 +44,9 @@ test('世界初始化提示词进入模型请求，按 Agent 隔离并随作用�
   const section = prompt.getSection('world-initialization:identity')
   assert.equal(typeof section?.text, 'string')
   assert.deepEqual(system?.content, [{ type: 'text', text: section?.text }])
+  assert.match(String(section?.text), /只调用实际提供的工具/)
+  assert.match(String(section?.text), /子 Agent 看不到父会话/)
+  assert.match(String(section?.text), /只有完整第一版生成并整合后才交付整体审阅/)
 
   await framework.manager.dispose('world-prompt')
   assert.throws(() => prompt.assemble(), /已销毁/)

@@ -116,3 +116,59 @@ test('父 Agent 销毁取消角色任务，保留已创建资料并释放身份�
     sessionMode: 'resume', initializeCharacters: false, adapter: new FixedAdapter() })
   await resumed.dispose()
 })
+
+test('主 Agent 失败后恢复同一 Session，由新输入继续并读取已保存成果', async t => {
+  const temp = join(process.cwd(), 'tmp'); await mkdir(temp, { recursive: true })
+  const root = await realpath(await mkdtemp(join(temp, 'world-main-session-')))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const sessionRoot = join(root, 'sessions'); await mkdir(sessionRoot)
+  const makeWorld = async (worldId: string): Promise<WorldWorkspaceConfig> => {
+    const readRoot = join(root, worldId)
+    for (const dir of ['main', 'confirmed', 'catalog']) await mkdir(join(readRoot, dir), { recursive: true })
+    return { worldId, readRoot, confirmedRoot: join(readRoot, 'confirmed'), catalogRoot: join(readRoot, 'catalog'),
+      mainAgent: { agentId: 'main', writableRoot: join(readRoot, 'main') }, agents: [] }
+  }
+  const world = await makeWorld('a'); const other = await makeWorld('b')
+  class ResumeAdapter extends LlmAdapter {
+    readonly requests: GenerateOptions[] = []
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      this.requests.push(options)
+      switch (this.requests.length) {
+        case 1:
+          yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'save' as ToolCallId, name: 'write',
+            arguments: JSON.stringify({ file_path: 'main/rules.md', content: '力量没有善恶' }) } }
+          yield { type: 'finish', reason: { kind: 'tool-calls' } }; return
+        case 2:
+          yield { type: 'finish', reason: { kind: 'error', failure: { message: '生成中断', code: 'PROVIDER_ERROR' } } }; return
+        case 3:
+          yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'read' as ToolCallId, name: 'read',
+            arguments: JSON.stringify({ file_path: 'main/rules.md' }) } }
+          yield { type: 'finish', reason: { kind: 'tool-calls' } }; return
+        default:
+          yield { type: 'block-end', index: 0, block: { type: 'text', text: '已核对已有规则并继续规划。' } }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+  }
+  const adapter = new ResumeAdapter()
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter }))
+  const config = { sessionRoot, sessionId: 'conversation', sessionMode: 'create' as const }
+  const create = (worldId: string, mainSession: typeof config | { sessionRoot: string; sessionId: string; sessionMode: 'resume' }) =>
+    createWorldInitializationAgentWithWorldWorkspaces([world, other], worldId, undefined, { singleWriterProcess: true, mainSession })
+  await assert.rejects(create(world.worldId, { ...config, sessionRoot: world.mainAgent.writableRoot }), /不能与任何世界读取根重叠/)
+  const first = await create(world.worldId, config)
+  try { await assert.rejects(first.run({ prompt: '规划修仙世界' }), /生成中断/) } finally { await first.dispose() }
+  assert.equal(await readFile(join(world.mainAgent.writableRoot, 'rules.md'), 'utf8'), '力量没有善恶')
+  await assert.rejects(create(other.worldId, { ...config, sessionMode: 'resume' }), { code: 'ENOENT' })
+  const otherAgent = await create(other.worldId, config)
+  await otherAgent.dispose()
+  await assert.rejects(create(world.worldId, config), /Session 已存在/)
+  const resumed = await create(world.worldId, { ...config, sessionMode: 'resume' })
+  try {
+    assert.deepEqual(await resumed.run({ prompt: '继续' }), { content: '已核对已有规则并继续规划。' })
+    const prior = JSON.stringify(adapter.requests[2]?.messages)
+    assert.match(prior, /规划修仙世界/); assert.match(prior, /save/); assert.match(prior, /继续/)
+    assert.match(JSON.stringify(adapter.requests[3]?.messages), /力量没有善恶/)
+  } finally { await resumed.dispose() }
+  assert.equal(await readFile(join(world.mainAgent.writableRoot, 'rules.md'), 'utf8'), '力量没有善恶')
+})
