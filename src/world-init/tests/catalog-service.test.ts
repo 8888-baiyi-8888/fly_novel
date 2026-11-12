@@ -50,6 +50,40 @@ test('读取凭据绑定实例和版本，变化、关闭及重复使用均拒�
   await another.close()
 })
 
+test('删除重建或并发更新后旧读取凭据不能覆盖新记录', async t => {
+  const { root, main } = await setup(t)
+  const first = (await main.register('main/world.md', '原简介')).record
+  const old = await main.readSource(first.path, first.revision)
+  await main.remove(first.path, first.revision)
+  const recreated = (await main.register(first.path, '重建简介')).record
+  await assert.rejects(main.update(first.path, '旧简介', first.revision, old.receipt), { code: 'CATALOG_CONFLICT' })
+  const a = await main.readSource(first.path, recreated.revision)
+  const b = await main.readSource(first.path, recreated.revision)
+  const outcomes = await Promise.allSettled([
+    main.update(first.path, '并发甲', recreated.revision, a.receipt),
+    main.update(first.path, '并发乙', recreated.revision, b.receipt),
+  ])
+  assert.equal(outcomes.filter(item => item.status === 'fulfilled').length, 1)
+  const rejected = outcomes.find(item => item.status === 'rejected')
+  assert.ok(rejected && rejected.status === 'rejected')
+  assert.equal(rejected.reason.code, 'CATALOG_CONFLICT')
+  assert.equal((await main.read(first.path))?.record.summary, '并发甲')
+  assert.equal(await readFile(join(root, 'main', 'world.md'), 'utf8'), '世界')
+})
+
+test('世界服务关闭重开后旧凭据失效', async t => {
+  const { config, service, main } = await setup(t)
+  const record = (await main.register('main/world.md', '简介')).record
+  const source = await main.readSource(record.path, record.revision)
+  await service.close()
+  const reopened = await CatalogService.open(config, deployment)
+  try {
+    const binding = reopened.bind('main')
+    await assert.rejects(binding.update(record.path, '旧凭据', record.revision, source.receipt), { code: 'CATALOG_RECEIPT_INVALID' })
+    assert.equal((await binding.read(record.path))?.record.summary, '简介')
+  } finally { await reopened.close() }
+})
+
 test('凭据上限、过期、文件过大和不支持的编码均明确拒绝', async t => {
   const { root, main } = await setup(t, false, { maxSourceBytes: 16, maxReceipts: 1, receiptTtlMs: 1 })
   const record = (await main.register('main/world.md', '简介')).record
