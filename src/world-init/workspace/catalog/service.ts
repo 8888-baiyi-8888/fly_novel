@@ -28,6 +28,7 @@ const code = (error: unknown) => error instanceof Error && 'code' in error ? Str
 export interface CatalogBinding {
   register(path: string, summary: string, signal?: AbortSignal): Promise<{ record: CatalogRecord; fileStatus: CatalogFileStatus }>
   readSource(path: string, revision: string, signal?: AbortSignal): Promise<{ path: string; revision: string; content: string; contentSha256: string; receipt: string }>
+  readSharedSource(path: string, revision: string, signal?: AbortSignal): Promise<{ path: string; revision: string; content: string; contentSha256: string; fileStatus: 'current' | 'stale' }>
   update(path: string, summary: string, revision: string, receipt: string, signal?: AbortSignal): Promise<{ record: CatalogRecord; fileStatus: CatalogFileStatus }>
   remove(path: string, revision: string, signal?: AbortSignal): Promise<{ path: string }>
   read(path: string, signal?: AbortSignal): Promise<CatalogItem | undefined>
@@ -100,7 +101,12 @@ export class CatalogService {
         cancelled(signal)
         const receipt = randomUUID()
         receipts.set(hash(receipt), { path: source.path, revision, digest: source.contentSha256, expires: performance.now() + this.receiptTtlMs })
-        return { ...source, receipt }
+        return { path: source.path, revision: source.revision, content: source.content, contentSha256: source.contentSha256, receipt }
+      }),
+      readSharedSource: (path: string, revision: string, signal?: AbortSignal) => enqueue(async () => {
+        const source = await this.readSource(undefined, path, revision, signal)
+        return { path: source.path, revision: source.revision, content: source.content, contentSha256: source.contentSha256,
+          fileStatus: source.contentSha256 === source.registeredSha256 ? 'current' as const : 'stale' as const }
       }),
       update: (path: string, summary: string, revision: string, receipt: string, signal?: AbortSignal) => enqueue(async () => {
         cancelled(signal); prune()
@@ -118,14 +124,14 @@ export class CatalogService {
     })
   }
 
-  private async readSource(owner: string, path: string, revision: string, signal?: AbortSignal): Promise<{ path: string; revision: string; content: string; contentSha256: string }> {
+  private async readSource(owner: string | undefined, path: string, revision: string, signal?: AbortSignal): Promise<{ path: string; revision: string; content: string; contentSha256: string; registeredSha256: string }> {
     const snapshot = await this.snapshot(signal)
     const record = this.lookup(snapshot.doc, path)
     if (!record) throw new CatalogError('CATALOG_NOT_FOUND', '目录记录不存在')
-    if (record.ownerAgentId !== owner) throw new CatalogError('CATALOG_FORBIDDEN', '不能读取其他 Agent 的更新凭据')
+    if (owner !== undefined && record.ownerAgentId !== owner) throw new CatalogError('CATALOG_FORBIDDEN', '不能读取其他 Agent 的更新凭据')
     if (record.revision !== revision) throw new CatalogError('CATALOG_CONFLICT', '记录版本已变化')
     let resolved: Awaited<ReturnType<typeof resolveCatalogTarget>>
-    try { resolved = await resolveCatalogTarget(this.world, owner, path) } catch (error) {
+    try { resolved = await resolveCatalogTarget(this.world, record.ownerAgentId, path) } catch (error) {
       if (error instanceof Error && /不属于|授权范围|负责人/.test(error.message)) throw new CatalogError('CATALOG_FORBIDDEN', '成果不属于当前 Agent', { cause: error })
       throw error
     }
@@ -139,14 +145,14 @@ export class CatalogService {
       throw error
     }
     const after = await this.fs.stat(target, signal)
-    const again = await resolveCatalogTarget(this.world, owner, path)
+    const again = await resolveCatalogTarget(this.world, record.ownerAgentId, path)
     if (!after || after.version !== before.version || again.absolutePath !== resolved.absolutePath) throw new CatalogError('CATALOG_CONFLICT', '成果读取期间变化')
     const current = await this.snapshot(signal)
     if (this.lookup(current.doc, record.path)?.revision !== revision) throw new CatalogError('CATALOG_CONFLICT', '记录读取期间变化')
     let content: string
     try { content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) } catch (error) { throw new CatalogError('CATALOG_SOURCE_ENCODING', '成果不是有效 UTF-8', { cause: error }) }
     if (content.includes('\0') || !Buffer.from(content, 'utf8').equals(Buffer.from(bytes))) throw new CatalogError('CATALOG_SOURCE_ENCODING', '成果不是可无损读取的文本')
-    return { path: record.path, revision, content, contentSha256: hash(bytes) }
+    return { path: record.path, revision, content, contentSha256: hash(bytes), registeredSha256: record.contentSha256 }
   }
 
   private async snapshot(signal?: AbortSignal): Promise<{ doc: CatalogDocument; version: string; target: FsTarget; fsVersion: FsVersion }> {

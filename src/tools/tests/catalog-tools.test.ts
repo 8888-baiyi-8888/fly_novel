@@ -61,7 +61,7 @@ test('检查取消后工具保留已完成范围', async () => {
   const identity = tools.agent; assert.ok(identity)
   const controller = new AbortController()
   const binding: CatalogBinding = {
-    async register() { throw new Error('unused') }, async readSource() { throw new Error('unused') },
+    async register() { throw new Error('unused') }, async readSource() { throw new Error('unused') }, async readSharedSource() { throw new Error('unused') },
     async update() { throw new Error('unused') }, async remove() { throw new Error('unused') },
     async read() { return undefined }, async search() { throw new Error('unused') }, async close() {},
     async checkPage() { controller.abort(); return { items: [], total: 2, offset: 0, nextOffset: 0, version: 'v', status: 'cancelled' } },
@@ -81,7 +81,7 @@ test('发布结果不确定且信号取消时保留结构化结果', async () =>
   const controller = new AbortController()
   const binding: CatalogBinding = {
     async register() { controller.abort(); throw new CatalogError('CATALOG_COMMIT_UNKNOWN', '结果未知') },
-    async readSource() { throw new Error('unused') },
+    async readSource() { throw new Error('unused') }, async readSharedSource() { throw new Error('unused') },
     async update() { throw new Error('unused') }, async remove() { throw new Error('unused') },
     async read() { return undefined }, async search() { return { items: [], total: 0, offset: 0, nextOffset: null, version: 'v' } },
     async checkPage() { return { items: [], total: 0, offset: 0, nextOffset: null, version: 'v', status: 'completed' } }, async close() {},

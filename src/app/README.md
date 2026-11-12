@@ -20,7 +20,7 @@
 
 [资料目录对齐端到端测试](tests/catalog-alignment-e2e.test.ts)通过真实主子 Agent、目录工具和 Session，以及固定模型替身验证检查、委派、复核和未配置负责人的部分结果；该测试不验证真实模型是否遵循指引。
 
-[世界工作区装配测试](tests/world-workspace-assembly.test.ts)验证同世界交叉读取、各自写入、跨世界及受保护目录拒绝、角色实例重建和 Session 复用；明确留白目前作为资料文件内容读取，不提供独立的结构化留白状态或业务解释接口。
+[世界工作区装配测试](tests/world-workspace-assembly.test.ts)验证同世界交叉读取、各自写入、跨世界及受保护目录拒绝、角色实例重建和 Session 复用；明确留白目前作为资料文件内容读取，不提供独立的结构化留白状态或业务解释接口。[双世界目录测试](tests/catalog-two-worlds.test.ts)还验证主 Agent 通过目录定位并读取本世界角色成果，成果变化后目录报告过期；这不保证跨文件版本一致或自动恢复生成进度。
 
 [角色创建集成测试](tests/character-creator-integration.test.ts)使用固定模型替身验证主 Agent 委派、子 Agent 读取世界资料、创建多个角色、恢复 Session、按名称查找和保存待审修改；另验证读取缺失资料时错误和反馈在主子 Agent 之间传递。替身不验证真实模型的角色规划或工具选择能力。
 

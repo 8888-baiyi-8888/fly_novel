@@ -8,7 +8,7 @@
 
 `character/delegate-character-creator.ts` 创建角色设定专用委派工具 `delegate_character_creator`。可信调用方提供父 Agent 的 SubAgent 服务和身份并负责注册；模型只提供任务与背景，工具通过 `persistent` Provider 等待结果并释放运行。该工具与面向角色扮演的 `delegate_character` 不同。
 
-`catalog/catalog-tools.ts` 基于可信目录身份句柄和当前工具服务的实例身份创建登记、更新、删除、查询及读取工具；模型不能指定世界、目录根或记录负责人。每次调用核对工具服务身份；登记不确认事实。更新简介前须通过 `catalog_read_source` 完整读取成果并获得一次性凭据，再向 `catalog_update` 提供对应的路径、revision 和凭据。操作返回 `status`，发布结果不确定时返回 `unknown`，调用方不能只根据工具是否报错判断是否提交。目录服务及访问范围见[世界初始化模块说明](../world-init/README.md)。
+`catalog/catalog-tools.ts` 基于可信目录身份句柄和当前工具服务的实例身份创建登记、更新、删除、查询及读取工具；模型不能指定世界、目录根或记录负责人。每次调用核对工具服务身份；登记不确认事实。`catalog_read_shared_source` 按目录记录 revision 读取同世界已登记成果，返回正文、内容摘要和目录过期状态，不提供更新凭据。更新简介前须通过 `catalog_read_source` 完整读取本人成果并获得一次性凭据，再向 `catalog_update` 提供对应的路径、revision 和凭据。目录变更操作在发布结果不确定时返回 `unknown`，调用方不能只根据工具是否报错判断是否提交。目录服务及访问范围见[世界初始化模块说明](../world-init/README.md)。
 
 `catalog_check_page` 检查已登记成果的单页，返回负责人、文件状态及分页进度；取消时保留已完成结果。全量完成的判断与版本限制见[目录服务说明](../world-init/README.md)。
 

@@ -119,6 +119,30 @@ test('完整读取期间成果变化时不签发凭据', async t => {
   assert.equal((await main.readSource(record.path, record.revision)).content, '读取期间的变更')
 })
 
+test('共享成果读取拒绝过大、损坏及读取期间变化，不提供修改凭据', async t => {
+  const { root, service, main, creator } = await setup(t, false, { maxSourceBytes: 32 })
+  const record = (await creator.register('characters/person.md', '角色')).record
+  const shared = await main.readSharedSource(record.path, record.revision)
+  assert.equal(shared.content, '角色')
+  assert.equal(shared.fileStatus, 'current')
+  assert.equal('receipt' in shared, false)
+  await assert.rejects(main.readSource(record.path, record.revision), { code: 'CATALOG_FORBIDDEN' })
+  await assert.rejects(main.readSharedSource('characters/missing.md', record.revision), { code: 'CATALOG_NOT_FOUND' })
+  await writeFile(join(root, 'characters', 'person.md'), 'x'.repeat(33))
+  await assert.rejects(main.readSharedSource(record.path, record.revision), { code: 'CATALOG_SOURCE_TOO_LARGE' })
+  await writeFile(join(root, 'characters', 'person.md'), Buffer.from([0xff]))
+  await assert.rejects(main.readSharedSource(record.path, record.revision), { code: 'CATALOG_SOURCE_ENCODING' })
+  await writeFile(join(root, 'characters', 'person.md'), '角色')
+  const fs: unknown = Reflect.get(service, 'fs'); assert.ok(fs instanceof LocalFileSystem)
+  const read = fs.readBytes.bind(fs)
+  t.mock.method(fs, 'readBytes', async (...args: Parameters<typeof read>) => {
+    const result = await read(...args)
+    if (args[0].displayPath.endsWith('person.md')) await writeFile(join(root, 'characters', 'person.md'), '读取时变更')
+    return result
+  })
+  await assert.rejects(main.readSharedSource(record.path, record.revision), { code: 'CATALOG_CONFLICT' })
+})
+
 test('简介发布后成果变化时保留更新并报告过期', async t => {
   const { root, service, main } = await setup(t)
   const record = (await main.register('main/world.md', '简介')).record
