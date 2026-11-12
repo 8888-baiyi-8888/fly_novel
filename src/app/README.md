@@ -18,6 +18,8 @@
 
 世界入口在启用资料目录时为主 Agent 提供其稳定负责人身份和已装配的负责人委派工具映射；角色创建配置存在时映射到 `delegate_character_creator`，未装配工具的身份不进入映射。检查、委派及复核由主 Agent 根据提示执行，模型不能通过委派参数指定身份、工作区或 Session；职责权限仍由可信绑定控制。
 
+[资料目录对齐端到端测试](tests/catalog-alignment-e2e.test.ts)通过真实主子 Agent、目录工具和 Session，以及固定模型替身验证检查、委派、复核和未配置负责人的部分结果；该测试不验证真实模型是否遵循指引。
+
 [角色创建集成测试](tests/character-creator-integration.test.ts)使用固定模型替身验证主 Agent 委派、子 Agent 读取世界资料、创建多个角色、恢复 Session、按名称查找和保存待审修改；另验证读取缺失资料时错误和反馈在主子 Agent 之间传递。替身不验证真实模型的角色规划或工具选择能力。
 
 `agent_harness.ts` 提供 Cordis Harness 的独立调试函数 `debugAgentHarness(prompt)`，按角色 Preset 创建 Agent、读取本机 DeepSeek 配置并调用真实 Agent Loop，最后销毁实例。在仓库根目录运行 `pnpm run agent-harness-debug -- "你明天会回来吗？"`，或在 VS Code“运行和调试”中选择“调试 Cordis Agent Harness（DeepSeek）”并按 F5。该调试配置先构建 Agent 包和应用，可在函数、`AgentInstance.run()` 和 `AgentLoopRuntime` 中设置断点。
