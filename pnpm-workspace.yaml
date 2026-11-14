@@ -30,6 +30,7 @@ packages:
   - 'src/agents/plugins/system-prompt'
   - 'src/agents/character/plugins/system-prompt'
   - 'src/agents/character-creator/plugins/system-prompt'
+  - 'src/agents/world-basics/plugins/system-prompt'
   - 'src/agents/director/plugins/system-prompt'
   - 'src/agents/world-initialization-main-agent/plugins/system-prompt'
   - 'src/util'

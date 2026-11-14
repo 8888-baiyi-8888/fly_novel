@@ -65,6 +65,9 @@
       "@fly-novel/character-creator-system-prompt": [
         "./src/agents/character-creator/plugins/system-prompt/index.ts"
       ],
+      "@fly-novel/world-basics-system-prompt": [
+        "./src/agents/world-basics/plugins/system-prompt/index.ts"
+      ],
       "@fly-novel/director-system-prompt": [
         "./src/agents/director/plugins/system-prompt/index.ts"
       ],

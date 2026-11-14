@@ -83,6 +83,9 @@ importers:
       '@fly-novel/util':
         specifier: workspace:*
         version: link:src/util
+      '@fly-novel/world-basics-system-prompt':
+        specifier: workspace:*
+        version: link:src/agents/world-basics/plugins/system-prompt
       '@fly-novel/world-initialization-system-prompt':
         specifier: workspace:*
         version: link:src/agents/world-initialization-main-agent/plugins/system-prompt
@@ -195,6 +198,9 @@ importers:
       '@fly-novel/util':
         specifier: workspace:*
         version: link:../util
+      '@fly-novel/world-basics-system-prompt':
+        specifier: workspace:*
+        version: link:world-basics/plugins/system-prompt
       '@fly-novel/world-initialization-system-prompt':
         specifier: workspace:*
         version: link:world-initialization-main-agent/plugins/system-prompt
@@ -573,6 +579,15 @@ importers:
       '@fly-novel/util':
         specifier: workspace:*
         version: link:../../../util
+
+  src/agents/world-basics/plugins/system-prompt:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/system-prompt':
+        specifier: workspace:*
+        version: link:../../../plugins/system-prompt
 
   src/agents/world-initialization-main-agent/plugins/system-prompt:
     dependencies:

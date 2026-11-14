@@ -57,6 +57,7 @@ src/agents/world-initialization-main-agent/skills/ 世界初始化主 Agent 的�
 src/agents/character/plugins/system-prompt/、src/agents/director/plugins/system-prompt/ 角色和导演的专有提示词插件独立工作区包
 src/agents/character-creator/plugins/system-prompt/ 角色设定创建专有提示词插件独立工作区包
 src/agents/character-creator/preset.ts 角色创建 Agent 的 Harness Preset
+src/agents/world-basics/ 世界基础信息 Agent 的 Harness Preset 与专有提示词插件
 src/app/agents/character-creator.ts 角色创建 Agent 的独立应用装配与生命周期入口
 src/agents/generic-subagent/ 通用子 Agent 的 Preset 和职责提示词插件
 src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理

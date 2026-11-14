@@ -11,6 +11,7 @@ export { createSpawnAgentCreator, createForkAgentCreator, type SpawnPresetConfig
 export { characterAgentPreset } from './character/preset.js'
 export { genericSubagentPreset } from './generic-subagent/preset.js'
 export { characterCreatorPreset } from './character-creator/preset.js'
+export { worldBasicsPreset } from './world-basics/preset.js'
 export { directorAgentPreset } from './director/preset.js'
 export { writerAgentPreset } from './writer/preset.js'
 export { worldInitializationMainAgentPreset } from './world-initialization-main-agent/preset.js'
