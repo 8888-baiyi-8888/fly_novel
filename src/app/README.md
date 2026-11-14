@@ -14,9 +14,11 @@
 
 世界入口的部署配置可提供 `worldBasics`，以特殊 Agent 身份、Session 和模型配置装配 `delegate_world_basics`。主 Agent 提供任务和必要背景，世界、身份、目录与权限由工作区绑定；首次运行使用配置的 Session 模式，后续委派恢复同一 Session。角色创建与基础信息委派可同时装配并使用各自身份；启用目录时共享世界目录服务，各子运行使用独立绑定。父 Agent 关闭时取消并等待子运行释放；未配置时不注册该工具。主 Agent 的工作区提示词指导其将基础信息开发交给专用 Agent，并保留十模块之外的主动补充；提示词不保证真实模型遵循。
 
+[基础信息端到端测试](tests/world-basics-e2e.test.ts)使用固定模型替身分别走查修仙世界和城邦群的主 Agent 委派、专用 Agent 保存及主 Agent 读取实际待审成果；目录登记、Session 恢复和失败处理分别由[委派测试](tests/world-basics-delegation.test.ts)与[独立入口测试](tests/world-basics.test.ts)覆盖。固定替身验证预设执行路径和状态，不证明真实模型正确规划、辨别来源或遵循留白。
+
 `createWorldInitializationAgentWithWorkspace(workspace, characterCreator)` 可选接收可信角色创建配置，为主 Agent 装配 `delegate_character_creator`，通过 `persistent` Provider 委派；原有只读子 Agent 的 `delegate` 继续使用 `spawn`。角色读取根必须与主 Agent 读取视图一致，角色根必须位于视图内且与草稿根和已确认根不重叠，Session 根不能与读取视图重叠。首次成功启动按配置选择创建或恢复，后续委派恢复同一 Session。父 Agent 销毁会取消运行并等待子 Agent 清理。角色目录或 Session 初始化失败时保留已创建数据，调用方按实际状态重新配置；该入口不等于完整共享工作区隔离。
 
-`createWorldInitializationAgentWithWorldWorkspaces` 接收可信应用提供的全部世界配置和选定世界 ID，并使用[世界工作区配置校验](../world-init/README.md)检查目录与身份关系。主 Agent 的草稿根绑定该世界主 Agent 的专属目录；可选角色 Agent 的 `agentId` 必须属于该世界特殊 Agent，角色资料根从该身份的专属目录取得，模型不能指定这些授权。角色 Session 根不得与任何传入世界的读取根重叠。主 Agent 的普通文件工具只能修改自己的目录；角色 Agent 通过专用资料工具维护角色目录，普通文件工具只提供读取和搜索。读取和搜索范围均为该世界读取根。调用方须传入 `{ singleWriterProcess: true }`，声明已确保同一世界只有一个可信应用进程写入；入口不会验证进程外的实际写入，也不提供跨进程锁。主 Agent 与角色 Agent 共用按世界和业务身份的进程内占用，启动到成功释放期间拒绝重复启动；清理失败保留占用。不同身份或世界不因身份相同而互斥。重建时调用方须继续提供相同的目录与 Session 配置。此入口尚未提供其他特殊 Agent 的生产装配；测试中的第二个可写 Agent 使用相同的文件后端。生产使用前须评估路径替换和硬链接风险。
+`createWorldInitializationAgentWithWorldWorkspaces` 接收可信应用提供的全部世界配置和选定世界 ID，并使用[世界工作区配置校验](../world-init/README.md)检查目录与身份关系。主 Agent 的草稿根绑定该世界主 Agent 的专属目录；角色和基础信息 Agent 的 `agentId` 必须属于该世界的特殊 Agent，各自目录从身份配置取得，模型不能指定这些授权。Session 根不得与任何传入世界的读取根重叠。主 Agent 的普通文件工具只能修改自己的目录；专用 Agent 通过各自工具维护成果，普通文件工具只提供读取和搜索。读取和搜索范围均为该世界读取根。调用方须传入 `{ singleWriterProcess: true }`，声明已确保同一世界只有一个可信应用进程写入；入口不会验证进程外的实际写入，也不提供跨进程锁。主 Agent 与专用 Agent 共用按世界和业务身份的进程内占用，启动到成功释放期间拒绝重复启动；清理失败保留占用。不同身份或世界不因身份相同而互斥。重建时调用方须继续提供相同的目录与 Session 配置。生产使用前须评估路径替换和硬链接风险。
 
 世界入口的部署配置可提供 `mainSession: { sessionRoot, sessionId, sessionMode }`，由可信应用使用 `create` 新建或 `resume` 恢复主 Agent 的 JSONL Session。`sessionRoot` 必须是现有绝对真实目录，不能与传入的任何世界读取根重叠；存储身份由世界 ID、主 Agent 身份和 Session ID 派生，重建时必须使用相同的值和目录。未提供配置时使用内存 Session。恢复后用户可在同一会话继续，主 Agent 根据历史和获授权工具核对成果并决定后续操作；中断工具结果未知时不得假设成功或盲目重试。持久化恢复的是会话历史，不保证模型正确排查，也不提供长期记忆。调用方须等待 `dispose()` 完成，后端随主 Agent 释放；已保存的世界成果不会因 Session 关闭而删除。
 
