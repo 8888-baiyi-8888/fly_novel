@@ -50,6 +50,9 @@
       "@fly-novel/skill": [
         "./src/agents/plugins/skill/index.ts"
       ],
+      "@fly-novel/map": [
+        "./src/agents/plugins/map/index.ts"
+      ],
       "@fly-novel/skill-filesystem": [
         "./src/agents/plugins/skill-filesystem/index.ts"
       ],

@@ -29,6 +29,7 @@ Spawn 请求的可选 `parameters` 由可信创建函数校验并复制，作为
 - `plugins/subagent/tool-subagent/`：独立工作区包 [通用委派工具](plugins/subagent/tool-subagent/README.md)，在父 Agent 作用域注册 `delegate`。
 - `generic-subagent/`：通用子 Agent 的 Preset 与职责提示词插件。
 - `plugins/skill/`、`plugins/skill-filesystem/`：独立工作区包，分别提供 Skill 注册查询服务和文件系统来源；各自包含 Cordis 插件及 Harness 注册定义。
+- `plugins/map/`：独立工作区包，提供[地图 JSON 格式与受控文件存储](plugins/map/README.md)；地图查询、模型工具和 Cordis 插件尚未装配。
 - `plugins/tool-skill/`：独立工作区包，注册 Skill 加载工具并发布模型可见目录。
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。
 - `character/plugins/system-prompt/`、`director/plugins/system-prompt/`：角色和导演的专有提示词插件独立工作区包，包含各自的 Harness 注册定义。
