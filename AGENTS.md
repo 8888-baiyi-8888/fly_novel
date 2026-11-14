@@ -59,6 +59,7 @@ src/agents/character-creator/plugins/system-prompt/ 角色设定创建专有提�
 src/agents/character-creator/preset.ts 角色创建 Agent 的 Harness Preset
 src/agents/world-basics/ 世界基础信息 Agent 的 Harness Preset 与专有提示词插件
 src/app/agents/character-creator.ts 角色创建 Agent 的独立应用装配与生命周期入口
+src/app/agents/world-basics.ts 世界基础信息 Agent 的独立应用装配与受控成果保存入口
 src/agents/generic-subagent/ 通用子 Agent 的 Preset 和职责提示词插件
 src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理
 src/agents/plugins/tools/ `@fly-novel/tools` 独立工作区包，提供工具定义、注册与执行服务

@@ -10,6 +10,8 @@
 
 `createCharacterCreator` 创建独立角色设定创建 Agent。可信应用显式提供世界和 Agent 身份、Session ID 及新建或恢复模式、现有的读取根、角色资料根、Session 根、模型适配器与默认生成数量；应用须在重新创建时提供相同的世界、Agent 和 Session ID。入口由三者派生存储用 Session ID，避免不同身份复用同名会话。角色根必须位于读取根内，Session 根与读取根不得重叠；角色根仅在明确指定初始化且为空时创建索引。Agent 注册角色资料工具及授权范围内的只读文件和搜索工具，返回的句柄负责运行、取消和等待释放。调用方必须 `await dispose()`，并确保同一世界没有其他进程同时写入；进程内相同身份或 Session 不允许并发启动。该独立入口不验证其他 Agent 的目录关系。
 
+`createWorldBasicsAgent` 使用可信调用方提供的全部世界配置、世界 ID 和特殊 Agent ID 绑定世界基础信息 Agent 的读取根与专属目录；Session 根不得与任何传入世界读取根重叠。调用方提供模型、持久 Session 及单可信写入进程保证，使用后必须等待 `dispose()`；同世界相同身份在进程内独占。只读文件和搜索工具用于读取世界资料；`save_world_basics` 在专属目录以独立名称和 `createIfAbsent` 保存待审 Markdown，结果为 `unknown` 时按返回路径核查。可选目录服务须预先初始化，独立入口自行持有服务，同世界已有目录服务打开时不能再次打开；目录工具独立报告登记结果，保存和登记都不确认事实。恢复 Session 不证明业务任务完成；路径检查不提供跨进程锁或系统级隔离。此入口尚不装配主 Agent 委派。
+
 `createWorldInitializationAgentWithWorkspace(workspace, characterCreator)` 可选接收可信角色创建配置，为主 Agent 装配 `delegate_character_creator`，通过 `persistent` Provider 委派；原有只读子 Agent 的 `delegate` 继续使用 `spawn`。角色读取根必须与主 Agent 读取视图一致，角色根必须位于视图内且与草稿根和已确认根不重叠，Session 根不能与读取视图重叠。首次成功启动按配置选择创建或恢复，后续委派恢复同一 Session。父 Agent 销毁会取消运行并等待子 Agent 清理。角色目录或 Session 初始化失败时保留已创建数据，调用方按实际状态重新配置；该入口不等于完整共享工作区隔离。
 
 `createWorldInitializationAgentWithWorldWorkspaces` 接收可信应用提供的全部世界配置和选定世界 ID，并使用[世界工作区配置校验](../world-init/README.md)检查目录与身份关系。主 Agent 的草稿根绑定该世界主 Agent 的专属目录；可选角色 Agent 的 `agentId` 必须属于该世界特殊 Agent，角色资料根从该身份的专属目录取得，模型不能指定这些授权。角色 Session 根不得与任何传入世界的读取根重叠。主 Agent 的普通文件工具只能修改自己的目录；角色 Agent 通过专用资料工具维护角色目录，普通文件工具只提供读取和搜索。读取和搜索范围均为该世界读取根。调用方须传入 `{ singleWriterProcess: true }`，声明已确保同一世界只有一个可信应用进程写入；入口不会验证进程外的实际写入，也不提供跨进程锁。主 Agent 与角色 Agent 共用按世界和业务身份的进程内占用，启动到成功释放期间拒绝重复启动；清理失败保留占用。不同身份或世界不因身份相同而互斥。重建时调用方须继续提供相同的目录与 Session 配置。此入口尚未提供其他特殊 Agent 的生产装配；测试中的第二个可写 Agent 使用相同的文件后端。生产使用前须评估路径替换和硬链接风险。

@@ -2,5 +2,6 @@ export { createWorldInitializationAgent, createWorldInitializationAgentWithWorks
 export type { WorldInitializationWorkspace } from './world-initialization-workspace.js'
 export { createCharacterAgent } from './character.js'
 export { createCharacterCreator, type CharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
+export { createWorldBasicsAgent, type WorldBasicsAgent, type WorldBasicsConfig } from './world-basics.js'
 export { createDirectorAgent } from './director.js'
 export { createWriterAgent } from './writer.js'
