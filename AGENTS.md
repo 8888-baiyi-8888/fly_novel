@@ -69,7 +69,7 @@ src/agents/plugins/subagent/subagent-in-process-driver/ `@fly-novel/subagent-in-
 src/agents/plugins/subagent/subagent-persistent-in-process/ `@fly-novel/subagent-persistent-in-process` 独立工作区包，提供持续身份子 Agent Provider 与可信创建绑定
 src/agents/plugins/subagent/subagent-fork-in-process/ 进程内 Fork Provider，继承父会话已结束轮次
 src/agents/plugins/skill/ `@fly-novel/skill` 独立工作区包，提供 Skill 来源注册、查询与 Cordis 服务插件
-src/agents/plugins/map/ `@fly-novel/map` 独立工作区包，提供地图 JSON 格式和受控文档存储
+src/agents/plugins/map/ `@fly-novel/map` 独立工作区包，提供地图 JSON 格式、受控文档存储、查询及工具定义
 src/agents/plugins/skill-filesystem/ `@fly-novel/skill-filesystem` 独立工作区包，提供文件系统 Skill 来源及插件
 src/agents/plugins/tool-skill/ `@fly-novel/tool-skill` 独立工作区包，装配 Skill 工具和模型目录
 src/agents/plugins/subagent/ SubAgent 核心服务、进程内运行驱动和 Spawn Provider 工作区包

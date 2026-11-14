@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { FileSystem, FsTarget, FsVersion } from '@fly-novel/fs'
 import { mapConnectionSchema, mapIdSchema, mapPlaceSchema, worldMapSchema, formatMapDocument, parseMapConnection, parseMapPlace, parseWorldMap,
@@ -28,6 +28,12 @@ export interface MapStoreConfig {
 
 export interface StoredMapDocument<T> { document: T; path: string; version: FsVersion }
 export interface CreatedMapDocument { id: string; path: string; version: FsVersion }
+export interface MapSnapshot {
+  overview: StoredMapDocument<WorldMap>
+  places: StoredMapDocument<MapPlace>[]
+  connections: StoredMapDocument<MapConnection>[]
+  version: string
+}
 
 const occupiedWorlds = new Set<string>()
 const occupiedRoots = new Set<string>()
@@ -43,6 +49,9 @@ export class MapStore {
   private constructor(private readonly fs: FileSystem, private readonly rootPath: string, private readonly root: FsTarget,
     private readonly worldId: string, private readonly access: 'read-only' | 'read-write',
     private readonly maxDocumentBytes: number, private readonly maxDocuments: number) {}
+
+  /** 此句柄是否允许写入；只读工具可绑定到读写句柄。 */
+  get writable(): boolean { return this.access === 'read-write' }
 
   /**
    * 打开现有真实地图根及 places、connections 子目录，不初始化或修改资料。
@@ -246,6 +255,45 @@ export class MapStore {
       if (found.document.worldId !== this.worldId || found.document.id !== id) throw new MapStoreError('连通身份不匹配', 'MAP_INVALID_DOCUMENT', found.path)
       await this.checkConnection(found.document, signal)
       return found
+    })
+  }
+
+  /** 读取并校验查询所需资料；版本覆盖所有扫描文件，扫描不是跨进程原子快照。 */
+  snapshot(signal?: AbortSignal): Promise<MapSnapshot> {
+    return this.enqueue(async () => {
+      const overview = await this.map(signal)
+      const graph = await this.places(overview.document, signal)
+      const places: StoredMapDocument<MapPlace>[] = []
+      for (const [id, value] of graph) {
+        const entry = await this.read(`places/${id}.json`, parseMapPlace, signal)
+        if (JSON.stringify(value) !== JSON.stringify(entry.document)) throw new MapStoreError('扫描期间地点发生变化', 'MAP_CONFLICT')
+        places.push(entry)
+      }
+      const dir = await this.directory('connections')
+      const entries = await this.fs.listDir(dir, signal)
+      if (entries.length > this.maxDocuments) throw new MapStoreError('连通文档数量超过限制', 'MAP_LIMIT')
+      const connections: StoredMapDocument<MapConnection>[] = []
+      for (const item of entries) {
+        signal?.throwIfAborted()
+        if (!item.name.endsWith('.json')) continue
+        const id = item.name.slice(0, -5)
+        if (!mapIdSchema.safeParse(id).success) throw new MapStoreError('连通文件名无效', 'MAP_INVALID_DOCUMENT')
+        const entry = await this.read(`connections/${id}.json`, parseMapConnection, signal)
+        const value = entry.document
+        if (value.id !== id || value.worldId !== this.worldId || !graph.has(value.fromId) || !graph.has(value.toId)) throw new MapStoreError('连通身份或端点无效', 'MAP_INVALID_DOCUMENT', entry.path)
+        connections.push(entry)
+      }
+      places.sort((a, b) => a.path.localeCompare(b.path)); connections.sort((a, b) => a.path.localeCompare(b.path))
+      for (const entry of [overview, ...places, ...connections]) {
+        const target = await this.target(entry.path)
+        if ((await this.fs.stat(target, signal))?.version !== entry.version) throw new MapStoreError('扫描期间地图文档发生变化', 'MAP_CONFLICT')
+      }
+      for (const [name, documents] of [['places', places], ['connections', connections]] as const) {
+        const names = (await this.fs.listDir(await this.directory(name), signal)).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name).sort()
+        if (JSON.stringify(names) !== JSON.stringify(documents.map(entry => entry.path.slice(name.length + 1)).sort())) throw new MapStoreError('扫描期间地图目录发生变化', 'MAP_CONFLICT')
+      }
+      const version = createHash('sha256').update(JSON.stringify([overview, places, connections])).digest('hex')
+      return { overview, places, connections, version }
     })
   }
 

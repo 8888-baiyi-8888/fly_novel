@@ -412,6 +412,9 @@ importers:
       '@fly-novel/fs':
         specifier: workspace:*
         version: link:../fs/fs
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:../tools
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
