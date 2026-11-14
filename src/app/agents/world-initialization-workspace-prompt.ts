@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@fly-novel/system-prompt'
 import type { WorldInitializationWorkspace } from './world-initialization-workspace.js'
 
-type WorkspacePromptConfig = WorldInitializationWorkspace & { readonly mode: 'draft-write' | 'read-only'; readonly worldBasics?: boolean; readonly catalog?: {
+type WorkspacePromptConfig = WorldInitializationWorkspace & { readonly mode: 'draft-write' | 'read-only'; readonly worldBasics?: boolean; readonly mapAgent?: boolean; readonly catalog?: {
   readonly mainOwner: string; readonly delegates: readonly { readonly owner: string; readonly tool: string }[]
 } }
 
@@ -23,6 +23,10 @@ export const worldInitializationWorkspacePromptPlugin = Object.assign(function w
   if (config.worldBasics && config.mode === 'draft-write') ctx.effect(() => ctx.systemPrompt.section({
     name: 'world-initialization:world-basics', order: 12, interpolate: false,
     text: '需要开发世界基础信息时，使用 delegate_world_basics 委派专用 Agent，提供用户要求和必要背景；读取并核对实际成果后再整合，不自行代写该模块。其他模块按已装配能力处理；十个模块之外世界构想需要的内容仍可主动补充。',
+  }))
+  if (config.mapAgent && config.mode === 'draft-write') ctx.effect(() => ctx.systemPrompt.section({
+    name: 'world-initialization:map-agent', order: 13, interpolate: false,
+    text: '需要开发地图与空间资料时，使用 delegate_map 委派地图专用 Agent，提供用户要求、近期故事需要和已有资料线索；核对实际成果和状态后再整合。地图之外的世界构想仍按实际需要协调或补充。',
   }))
   if (config.catalog && config.mode === 'draft-write') {
     const catalog = config.catalog

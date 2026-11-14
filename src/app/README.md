@@ -14,6 +14,10 @@
 
 世界入口的部署配置可提供 `worldBasics`，以特殊 Agent 身份、Session 和模型配置装配 `delegate_world_basics`。主 Agent 提供任务和必要背景，世界、身份、目录与权限由工作区绑定；首次运行使用配置的 Session 模式，后续委派恢复同一 Session。角色创建与基础信息委派可同时装配并使用各自身份；启用目录时共享世界目录服务，各子运行使用独立绑定。父 Agent 关闭时取消并等待子运行释放；未配置时不注册该工具。主 Agent 的工作区提示词指导其将基础信息开发交给专用 Agent，并保留十模块之外的主动补充；提示词不保证真实模型遵循。
 
+`createMapAgent` 为可信世界配置中指定的特殊 Agent 创建地图专用 Agent。该身份的 `writableRoot` 即地图根，调用前须建立真实的根目录及其 `places/`、`connections/` 子目录；Session 根必须是现有真实目录，且不能与任何传入世界读取根重叠。调用方提供世界 ID、Agent ID、Session ID、`create` / `resume` 模式、模型适配器及单可信写入进程保证。地图根、地图存储与工具权限由应用绑定，模型只能提供地图内容；地图工具返回相对地图根的路径，目录登记使用相对世界读取根的路径。使用完须等待 `dispose()`，取消和关闭不会删除已有地图文件。
+
+世界入口的部署配置可提供 `mapAgent`，字段为 `agentId`、`sessionId`、`sessionMode`、`sessionRoot`、`provider`、`model`、`adapter`；从该身份的世界配置取得地图根，不能与角色创建或基础信息 Agent 使用相同身份。配置后主 Agent 获得 `delegate_map`，地图 Agent 通过地图插件执行读写；未配置时不注册该委派。启用目录时共享世界目录服务，地图 Agent 使用独立绑定；父 Agent 关闭时取消并等待子运行释放。Session 恢复对话历史，不证明地图任务已完成。提示词指导模型核实成果和遵守留白，但不能保证模型实际遵循。
+
 [基础信息端到端测试](tests/world-basics-e2e.test.ts)使用固定模型替身分别走查修仙世界和城邦群的主 Agent 委派、专用 Agent 保存及主 Agent 读取实际待审成果；目录登记、Session 恢复和失败处理分别由[委派测试](tests/world-basics-delegation.test.ts)与[独立入口测试](tests/world-basics.test.ts)覆盖。固定替身验证预设执行路径和状态，不证明真实模型正确规划、辨别来源或遵循留白。
 
 `createWorldInitializationAgentWithWorkspace(workspace, characterCreator)` 可选接收可信角色创建配置，为主 Agent 装配 `delegate_character_creator`，通过 `persistent` Provider 委派；原有只读子 Agent 的 `delegate` 继续使用 `spawn`。角色读取根必须与主 Agent 读取视图一致，角色根必须位于视图内且与草稿根和已确认根不重叠，Session 根不能与读取视图重叠。首次成功启动按配置选择创建或恢复，后续委派恢复同一 Session。父 Agent 销毁会取消运行并等待子 Agent 清理。角色目录或 Session 初始化失败时保留已创建数据，调用方按实际状态重新配置；该入口不等于完整共享工作区隔离。

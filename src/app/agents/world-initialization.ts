@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { realpath, stat } from 'node:fs/promises'
+import { lstat, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { bootstrapAgents, createSpawnAgentCreator, jsonlSessionPersistencePlugin, type Agent } from '@fly-novel/agents'
 import { sandboxPolicyPluginDefinition } from '@fly-novel/sandbox-policy'
@@ -16,6 +16,8 @@ import { createCatalogTools, createCharacterCreatorDelegationTool, readFileTool 
 import { createCharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
 import { createWorldBasicsAgentWithCatalogBinding, type WorldBasicsConfig } from './world-basics.js'
 import { createWorldBasicsDelegationTool } from '../../tools/world-basics/delegate-world-basics.js'
+import { createMapAgentWithCatalogBinding, type MapAgentConfig } from './map-agent.js'
+import { createMapDelegationTool } from '@fly-novel/map'
 import { validateWorldInitializationWorkspace, type WorldInitializationWorkspace } from './world-initialization-workspace.js'
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
 import { worldInitializationSkillPluginDefinition } from './world-initialization-skill.js'
@@ -32,6 +34,8 @@ export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worl
 
 /** 基础信息 Agent 的非授权配置；世界和目录由工作区绑定。 */
 export type WorkspaceWorldBasicsConfig = Omit<WorldBasicsConfig, 'workspaces' | 'worldId' | 'singleWriterProcess' | 'catalog'>
+/** 地图 Agent 的非授权配置；世界和目录由工作区绑定。 */
+export type WorkspaceMapAgentConfig = Omit<MapAgentConfig, 'workspaces' | 'worldId' | 'singleWriterProcess' | 'catalog'>
 
 /** 由可信应用指定主 Agent 会话；目录必须存在且不与世界读取范围重叠。 */
 export interface WorldInitializationSessionConfig {
@@ -50,7 +54,7 @@ export interface WorldInitializationSessionConfig {
  */
 export async function createWorldInitializationAgentWithWorldWorkspaces(
   workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator: WorkspaceCharacterCreatorConfig | undefined,
-  deployment: { readonly singleWriterProcess: true; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig },
+  deployment: { readonly singleWriterProcess: true; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig },
 ): Promise<Agent> {
   if (deployment?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   const worlds = await validateWorldWorkspaceConfigs(workspaces)
@@ -92,6 +96,20 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     }
     basics = { ...config, workspaces: worlds, worldId: world.worldId, singleWriterProcess: true }
   }
+  let mapConfig: MapAgentConfig | undefined
+  if (deployment.mapAgent) {
+    const config = deployment.mapAgent
+    const owner = world.agents.find(item => item.agentId === config.agentId)
+    if (!owner) throw new Error('地图 Agent 身份不属于该世界的特殊 Agent')
+    if (creator?.agentId === config.agentId || basics?.agentId === config.agentId) throw new Error('地图 Agent 与其他专用 Agent 身份不能相同')
+    for (const name of ['places', 'connections']) {
+      const path = resolve(owner.writableRoot, name)
+      if (!(await lstat(path)).isDirectory() || await realpath(path) !== path) throw new Error('地图子目录必须是现有真实目录')
+    }
+    const sessionRoot = await realpath(config.sessionRoot)
+    for (const item of worlds) if (await isPathUnder(sessionRoot, item.readRoot) || await isPathUnder(item.readRoot, sessionRoot)) throw new Error('地图 Session 目录不能与任何世界读取根重叠')
+    mapConfig = { ...config, workspaces: worlds, worldId: world.worldId, singleWriterProcess: true }
+  }
   const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
   let agent: Agent
   let catalog: CatalogService | undefined
@@ -105,7 +123,8 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     mainBinding = catalog?.bind(world.mainAgent.agentId)
     agent = await createWorldInitializationAgentWithWorkspaceInternal({ viewRoot: world.readRoot, draftRoot: world.mainAgent.writableRoot,
       confirmedRoot: world.confirmedRoot }, creator, mainBinding, mainBinding ? world.mainAgent.agentId : undefined, mainSession,
-      basics, catalog && basics ? () => catalog!.bind(basics!.agentId) : undefined)
+      basics, catalog && basics ? () => catalog!.bind(basics!.agentId) : undefined,
+      mapConfig, catalog && mapConfig ? () => catalog!.bind(mapConfig!.agentId) : undefined)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
       try { await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
@@ -163,7 +182,8 @@ export async function createWorldInitializationAgentWithWorkspace(workspace: Wor
 
 async function createWorldInitializationAgentWithWorkspaceInternal(workspace: WorldInitializationWorkspace, characterCreator?: CharacterCreatorConfig,
   catalogBinding?: CatalogBinding, catalogMainOwner?: string, mainSession?: { root: string; id: string; mode: 'create' | 'resume' },
-  basicsConfig?: WorldBasicsConfig, createBasicsCatalogBinding?: () => CatalogBinding): Promise<Agent> {
+  basicsConfig?: WorldBasicsConfig, createBasicsCatalogBinding?: () => CatalogBinding,
+  mapConfig?: MapAgentConfig, createMapCatalogBinding?: () => CatalogBinding): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -200,7 +220,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     { pluginId: 'sandbox-policy' }, { pluginId: 'world-initialization-draft-fs' }, { pluginId: 'fs-observation-policy' },
     { pluginId: 'subprocess-local' }, { pluginId: 'tool-fs' }, { pluginId: 'tool-fs-search' },
     { pluginId: 'subagent' }, { pluginId: 'subagent-spawn-in-process' }, { pluginId: 'tool-subagent' },
-    ...(creatorConfig || basicsConfig ? [{ pluginId: 'subagent-persistent-in-process' }] : []),
+    ...(creatorConfig || basicsConfig || mapConfig ? [{ pluginId: 'subagent-persistent-in-process' }] : []),
   ] })
   const modelConfig = { adapters: [{ providers: [provider], adapter }] }
   const loopConfig = { provider, model, workingDirectory: roots.viewRoot }
@@ -219,8 +239,13 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
       const child = await createWorldBasicsAgentWithCatalogBinding({ ...basicsConfig, sessionMode }, createBasicsCatalogBinding)
       return { agent: child, dispose: () => child.dispose() }
     } })
-  const routes = { ...(characterCreate ? { 'character-creator': characterCreate } : {}), ...(basicsCreate ? { 'world-basics': basicsCreate } : {}) }
-  const persistentCreate = characterCreate || basicsCreate ? createPersistentAgentRouter(routes) : undefined
+  const mapCreate = mapConfig && createPersistentAgentCreator({ presetId: 'map-agent', sessionMode: mapConfig.sessionMode,
+    async create({ sessionMode }) {
+      const child = await createMapAgentWithCatalogBinding({ ...mapConfig, sessionMode }, createMapCatalogBinding)
+      return { agent: child, dispose: () => child.dispose() }
+    } })
+  const routes = { ...(characterCreate ? { 'character-creator': characterCreate } : {}), ...(basicsCreate ? { 'world-basics': basicsCreate } : {}), ...(mapCreate ? { 'map-agent': mapCreate } : {}) }
+  const persistentCreate = characterCreate || basicsCreate || mapCreate ? createPersistentAgentRouter(routes) : undefined
   let backend: ReturnType<typeof framework.context.plugin> | undefined
   let agent: Agent | undefined
   try {
@@ -232,15 +257,16 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     'agent-loop-runtime': { ...loopConfig, ...(mainSession && (mainSession.mode === 'create' ? { sessionId: mainSession.id } : { resumeSessionId: mainSession.id })) }, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
     'sandbox-policy': { mode: 'workspace-write', workspaceRoot: roots.draftRoot },
     'world-initialization-draft-fs': { cwd: roots.viewRoot, draftRoot: roots.draftRoot },
-    'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write', worldBasics: Boolean(basicsConfig), ...(catalogBinding && catalogMainOwner ? { catalog: {
+    'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write', worldBasics: Boolean(basicsConfig), mapAgent: Boolean(mapConfig), ...(catalogBinding && catalogMainOwner ? { catalog: {
       mainOwner: catalogMainOwner, delegates: [...(creatorConfig ? [{ owner: creatorConfig.agentId, tool: 'delegate_character_creator' }] : []),
-        ...(basicsConfig ? [{ owner: basicsConfig.agentId, tool: 'delegate_world_basics' }] : [])],
+        ...(basicsConfig ? [{ owner: basicsConfig.agentId, tool: 'delegate_world_basics' }] : []), ...(mapConfig ? [{ owner: mapConfig.agentId, tool: 'delegate_map' }] : [])],
     } } : {}) },
     'tool-fs': { applyPatch: true }, 'subagent-spawn-in-process': { create }, 'tool-subagent': { presetId: fileChildId },
     ...(persistentCreate ? { 'subagent-persistent-in-process': { create: persistentCreate } } : {}),
     } })
     if (creatorConfig) agent.context.tools.register(createCharacterCreatorDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (basicsConfig) agent.context.tools.register(createWorldBasicsDelegationTool(agent.context.subagents, agent.info.identity.id))
+    if (mapConfig) agent.context.tools.register(createMapDelegationTool(agent.context.subagents, agent.info.identity.id))
     const createdAgent = agent
     const draftRelative = relative(roots.viewRoot, roots.draftRoot).split(sep).join('/')
     agent.context.tools.register(defineTool({

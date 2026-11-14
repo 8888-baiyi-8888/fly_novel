@@ -1,6 +1,6 @@
 # 地图与空间模块首版数据和工具契约
 
-本文细化[地图与空间开发计划](world-initialization-stage-6a-map-space-plan.md)的首版数据和工具设计。JSON 格式、存储、查询和工具的实际能力及限制见[地图包说明](../../../src/agents/plugins/map/README.md)；Agent 装配属于后续步骤。示例仅用于说明，不是实际世界资料。世界、目录和权限由可信应用绑定，不接受模型通过工具参数指定。
+本文细化[地图与空间开发计划](world-initialization-stage-6a-map-space-plan.md)的首版数据和工具设计。JSON 格式、存储、查询和工具的实际能力及限制见[地图包说明](../../../src/agents/plugins/map/README.md)，地图 Agent 的装配见[应用说明](../../../src/app/README.md)。示例仅用于说明，不是实际世界资料。世界、目录和权限由可信应用绑定，不接受模型通过工具参数指定。
 
 ## 一、数据范围和文件归属
 
@@ -167,4 +167,4 @@
 3. 对工具和装配检查只读 / 写权限、跨世界拒绝、目录未配置、版本冲突、文件变化、取消、身份占用和部分成功；确认写入结果不确定时返回可核查线索，不删除现有用户数据。
 4. 用固定模型替身验证调用与文件状态；真实模型验证 Agent 是否按场景创建地图、保留留白和正确使用工具，报告实际质量与平台限制。两者不能互相替代。
 
-格式、受控存储和查询工具以[地图包说明](../../../src/agents/plugins/map/README.md)为准；专用 Agent 及主 Agent 委派按[地图开发计划](world-initialization-stage-6a-map-space-plan.md#开发步骤与验收)装配。完整地图模块尚未完成用户验收。
+格式、受控存储和查询工具以[地图包说明](../../../src/agents/plugins/map/README.md)为准，Agent 配置与主 Agent 委派见[应用说明](../../../src/app/README.md)。完整地图模块尚未完成用户验收。

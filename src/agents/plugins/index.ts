@@ -20,6 +20,7 @@ import { persistentInProcessPluginDefinition } from '@fly-novel/subagent-persist
 import { forkInProcessPluginDefinition } from '@fly-novel/subagent-fork-in-process'
 import { genericSubagentSystemPromptDefinition } from '../generic-subagent/system-prompt.js'
 import { toolSubagentPluginDefinition } from '@fly-novel/tool-subagent'
+import { mapAgentSystemPromptPluginDefinition } from '../map-agent/system-prompt.js'
 
 /** 启动时可用的内置插件定义；具体 Agent 由各自 Preset 选择。 */
 export const builtInPlugins: AgentPluginDefinition[] = [
@@ -41,6 +42,7 @@ export const builtInPlugins: AgentPluginDefinition[] = [
   ...characterPluginDefinitions,
   characterCreatorSystemPromptPluginDefinition,
   worldBasicsSystemPromptPluginDefinition,
+  mapAgentSystemPromptPluginDefinition,
   directorSystemPromptPluginDefinition,
   writerSystemPromptPluginDefinition,
   worldInitializationSystemPromptPluginDefinition,

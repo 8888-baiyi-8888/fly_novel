@@ -409,9 +409,15 @@ importers:
 
   src/agents/plugins/map:
     dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
       '@fly-novel/fs':
         specifier: workspace:*
         version: link:../fs/fs
+      '@fly-novel/subagent':
+        specifier: workspace:*
+        version: link:../subagent/subagent
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:../tools
