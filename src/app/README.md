@@ -18,6 +18,8 @@
 
 世界入口的部署配置可提供 `mapAgent`，字段为 `agentId`、`sessionId`、`sessionMode`、`sessionRoot`、`provider`、`model`、`adapter`；从该身份的世界配置取得地图根，不能与角色创建或基础信息 Agent 使用相同身份。配置后主 Agent 获得 `delegate_map`，地图 Agent 通过地图插件执行读写；未配置时不注册该委派。启用目录时共享世界目录服务，地图 Agent 使用独立绑定；父 Agent 关闭时取消并等待子运行释放。Session 恢复对话历史，不证明地图任务已完成。提示词指导模型核实成果和遵守留白，但不能保证模型实际遵循。
 
+地图模块的固定替身双世界走查与可选真实模型检查见[地图 Agent 验证指南](../../docs/cookbook/map-agent-validation.md)。真实模型检查使用隔离的临时世界，仅检验指定样例，不等于完整业务验收。
+
 [基础信息端到端测试](tests/world-basics-e2e.test.ts)使用固定模型替身分别走查修仙世界和城邦群的主 Agent 委派、专用 Agent 保存及主 Agent 读取实际待审成果；目录登记、Session 恢复和失败处理分别由[委派测试](tests/world-basics-delegation.test.ts)与[独立入口测试](tests/world-basics.test.ts)覆盖。固定替身验证预设执行路径和状态，不证明真实模型正确规划、辨别来源或遵循留白。
 
 `createWorldInitializationAgentWithWorkspace(workspace, characterCreator)` 可选接收可信角色创建配置，为主 Agent 装配 `delegate_character_creator`，通过 `persistent` Provider 委派；原有只读子 Agent 的 `delegate` 继续使用 `spawn`。角色读取根必须与主 Agent 读取视图一致，角色根必须位于视图内且与草稿根和已确认根不重叠，Session 根不能与读取视图重叠。首次成功启动按配置选择创建或恢复，后续委派恢复同一 Session。父 Agent 销毁会取消运行并等待子 Agent 清理。角色目录或 Session 初始化失败时保留已创建数据，调用方按实际状态重新配置；该入口不等于完整共享工作区隔离。

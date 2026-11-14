@@ -140,3 +140,13 @@ test('地图目录缺失或身份冲突时拒绝装配，不占用 Agent 身份'
   const agent = await createMapAgent({ ...base, workspaces: [world], worldId: world.worldId, singleWriterProcess: true })
   await agent.dispose()
 })
+
+test('资料目录不可用时地图 Agent 拒绝启动，修复配置后可启动', async t => {
+  const { world, sessionRoot } = await setup(t)
+  const config = { workspaces: [world], worldId: world.worldId, agentId: 'map', sessionId: 'catalog', sessionMode: 'create' as const,
+    sessionRoot, provider: 'test', model: 'test', adapter: new ScriptAdapter(), singleWriterProcess: true as const, catalog: {} }
+  await assert.rejects(createMapAgent(config))
+  await initializeCatalog(world.catalogRoot, world.worldId)
+  const agent = await createMapAgent(config)
+  await agent.dispose()
+})

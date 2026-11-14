@@ -162,7 +162,7 @@ export class MapQueries {
   async coordinates(input: z.infer<typeof coordinateSchema>, signal?: AbortSignal) {
     const q = coordinateSchema.parse(input); const s = await this.store.snapshot(signal)
     const converted = convert(s, q)
-    return { ...converted, consistency: compareFrames(s, q.id, q.layerId, q.path[q.path.length - 1], signal), version: s.version }
+    return { ...converted, targetCanvas: q.path[q.path.length - 1], consistency: compareFrames(s, q.id, q.layerId, q.path[q.path.length - 1], signal), version: s.version }
   }
 
   async connections(input: z.infer<typeof connectionSearchSchema>, signal?: AbortSignal) {

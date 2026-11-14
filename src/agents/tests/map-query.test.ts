@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test, type TestContext } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
@@ -23,7 +23,7 @@ async function setup(t: TestContext) {
     { layerId: 'city', parent: { kind: 'place', id: a.id }, localBoxes: [[800, 200, 1000, 600]], frameBox: [800, 200, 1200, 600], coverage: 'complete' },
     { layerId: 'city', parent: { kind: 'place', id: b.id }, localBoxes: [[0, 200, 200, 600]], frameBox: [-200, 200, 200, 600], coverage: 'complete' },
   ])
-  return { store, queries: new MapQueries(store), a, b, city }
+  return { root, fs: ctx.fs as LocalFileSystem, store, queries: new MapQueries(store), a, b, city }
 }
 
 test('多父级地点查询和逐层坐标保留同一 ID 与其他父级', async t => {
@@ -32,12 +32,14 @@ test('多父级地点查询和逐层坐标保留同一 ID 与其他父级', asyn
   assert.equal(result.items[0].id, city.id)
   assert.equal(result.items[0].parents.length, 2)
   const point = await queries.coordinates({ id: city.id, layerId: 'city', path: [a.id, 'world'], mode: 'coverage' })
+  assert.equal(point.targetCanvas, 'world')
   assert.deepEqual(point.boxes, [[400, 200, 500, 600]])
   assert.ok('physicalBoxes' in point)
   assert.deepEqual(point.physicalBoxes, [[4000, 800, 5000, 2400]])
   assert.equal(point.consistency, 'consistent')
   const other = await queries.coordinates({ id: city.id, layerId: 'city', path: [b.id, 'world'], mode: 'coverage' })
   assert.deepEqual(other.boxes, [[500, 200, 600, 600]])
+  assert.equal((await queries.coordinates({ id: city.id, layerId: 'city', path: [a.id], mode: 'coverage' })).targetCanvas, a.id)
   const ancestors = await queries.ancestors({ id: city.id, layerId: 'city', depth: 2, offset: 0, limit: 20 })
   assert.equal(ancestors.items.filter(item => item.id === 'world').length, 2)
 })
@@ -92,6 +94,22 @@ test('工具服务注册地图工具并通过真实调用读取资料', async t 
   if (result.isError || !result.value || typeof result.value !== 'object' || Array.isArray(result.value)) throw new Error('读取结果无效')
   assert.equal(typeof result.value.document, 'object')
   assert.equal((await call({ id: city.id, worldId: 'other' })).isError, true)
+})
+
+test('地图工具发布结果不确定时返回可核查路径，不重复创建', async t => {
+  const { root, fs, store, a } = await setup(t)
+  const write = fs.writeText.bind(fs)
+  t.mock.method(fs, 'writeText', async (...args: Parameters<typeof write>) => { await write(...args); throw new Error('模拟提交后异常') })
+  const service = new ToolsService({ id: 'map-agent', name: '地图', role: 'map' })
+  t.after(() => service.dispose())
+  assert.ok(service.agent)
+  for (const tool of createMapTools(store, service.agent, 'read-write')) service.register(tool)
+  const input = { name: '核查地点', aliases: [], description: '', detailLevel: 'overview', parents: [{ layerId: 'city', parent: { kind: 'place', id: a.id }, localBoxes: [[0, 0, 20, 20]], frameBox: [0, 0, 20, 20], coverage: 'complete' }], reserved: [] }
+  const result = (await service.execute({ calls: [{ type: 'tool-call', id: 'create' as ToolCallId, name: 'map_place_create', arguments: JSON.stringify(input) }], workingDirectory: root, signal: new AbortController().signal })).results[0].result
+  assert.equal(result.isError, false)
+  if (result.isError || !result.value || typeof result.value !== 'object' || Array.isArray(result.value)) throw new Error('结果无效')
+  assert.equal(result.value.status, 'unknown'); assert.equal(typeof result.value.path, 'string')
+  assert.match(await readFile(join(root, String(result.value.path)), 'utf8'), /核查地点/)
 })
 
 test('分离矩形的空隙不命中，边缘接触单独报告', async t => {
