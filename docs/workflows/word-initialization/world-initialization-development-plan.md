@@ -124,7 +124,7 @@ Harness 提供 Agent 装配、Loop、工具执行、Session 和子 Agent 委派�
 
 ### 6A. 世界内容模块与专用子 Agent 设计
 
-- 内容边界见[十个内容模块与子 Agent 设计讨论稿](world-initialization-content-modules-design.md)，逐项实施见[内容模块开发计划](world-initialization-content-modules-development-plan.md)。
+- 内容边界见[十个内容模块与子 Agent 设计讨论稿](world-initialization-stage-6a-content-modules-design.md)，逐项实施见[内容模块开发计划](world-initialization-stage-6a-content-modules-plan.md)。
 - **范围**：在第一版协作基础上明确十个内容模块的职责、输入输出、资料归属和关联，按实际需要设计专用子 Agent 与可信装配；不要求十个模块对应十个 Agent。
 - **验收**：用户确认成长蓝图与成长线等业务边界；以不同世界示例验证内容归属及扩展方式，再逐项实施。不提前实现故事级工作流或世界运行。
 

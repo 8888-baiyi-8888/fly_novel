@@ -1,6 +1,6 @@
 # 世界基础信息专用 Agent 开发计划
 
-本计划细化[内容模块逐项开发计划](world-initialization-content-modules-development-plan.md#1-世界基础信息)的首个模块。计划中的新增入口和工具均为待实施方案；两个世界样例和未决业务问题见[内容模块讨论稿](world-initialization-content-modules-design.md#边界示例)。
+本计划细化[内容模块逐项开发计划](world-initialization-stage-6a-content-modules-plan.md#1-世界基础信息)的首个模块。计划中的新增入口和工具均为待实施方案；两个世界样例和未决业务问题见[内容模块讨论稿](world-initialization-stage-6a-content-modules-design.md#边界示例)。
 
 ## 目标与职责
 
