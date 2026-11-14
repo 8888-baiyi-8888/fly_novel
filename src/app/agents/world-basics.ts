@@ -46,6 +46,11 @@ export interface WorldBasicsAgent {
  * @throws 配置无效、身份占用或启动失败时拒绝，不删除已有成果。
  */
 export async function createWorldBasicsAgent(config: WorldBasicsConfig): Promise<WorldBasicsAgent> {
+  return createWorldBasicsAgentWithCatalogBinding(config)
+}
+
+/** 由拥有世界目录服务的可信装配方提供绑定；调用方负责该服务的生命周期。 */
+export async function createWorldBasicsAgentWithCatalogBinding(config: WorldBasicsConfig, createCatalogBinding?: () => CatalogBinding): Promise<WorldBasicsAgent> {
   if (config?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   for (const value of [config.worldId, config.agentId, config.sessionId, config.provider, config.model]) {
     if (typeof value !== 'string' || !value || value.trim() !== value) throw new Error('世界基础信息 Agent 身份和模型配置必须非空且无首尾空白')
@@ -68,6 +73,7 @@ export async function createWorldBasicsAgent(config: WorldBasicsConfig): Promise
   let catalog: CatalogService | undefined
   let binding: CatalogBinding | undefined
   try {
+    if (createCatalogBinding && config.catalog) throw new Error('不能同时提供目录服务与目录绑定')
     if (config.catalog) catalog = await CatalogService.open(world, { singleWriterProcess: true, ...config.catalog })
     const framework = await bootstrapAgents()
     for (const definition of [sandboxPolicyPluginDefinition, worldInitializationDraftFsPluginDefinition, fsObservationPolicyPluginDefinition,
@@ -110,8 +116,9 @@ export async function createWorldBasicsAgent(config: WorldBasicsConfig): Promise
         }
       },
     }))
-    if (catalog) {
-      binding = catalog.bind(owner.agentId)
+    if (catalog || createCatalogBinding) {
+      binding = catalog ? catalog.bind(owner.agentId) : createCatalogBinding?.()
+      if (!binding) throw new Error('世界基础信息目录绑定不可用')
       const identity = agent.context.tools.agent
       if (!identity) throw new Error('世界基础信息 Agent 的目录工具缺少身份')
       for (const tool of createCatalogTools(binding, identity)) agent.context.tools.register(tool)

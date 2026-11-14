@@ -34,6 +34,7 @@ src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
 src/tools/         具体工具实现，测试放在 src/tools/tests/
 src/tools/character/ 角色专用工具实现
 src/tools/catalog/ 世界工作区资料目录专用工具实现
+src/tools/world-basics/ 世界基础信息 Agent 的专用委派工具
 src/tools/character/delegate-character-creator.ts 角色创建 Agent 的专用委派工具
 src/agents/plugins/fs/ 文件系统能力工作区包目录，包含基础库、服务、后端与工具插件
 src/agents/plugins/fs/fs/ `@fly-novel/fs` 独立工作区包，定义文件系统服务契约和事件

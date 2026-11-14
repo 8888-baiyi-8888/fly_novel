@@ -10,7 +10,9 @@
 
 `createCharacterCreator` 创建独立角色设定创建 Agent。可信应用显式提供世界和 Agent 身份、Session ID 及新建或恢复模式、现有的读取根、角色资料根、Session 根、模型适配器与默认生成数量；应用须在重新创建时提供相同的世界、Agent 和 Session ID。入口由三者派生存储用 Session ID，避免不同身份复用同名会话。角色根必须位于读取根内，Session 根与读取根不得重叠；角色根仅在明确指定初始化且为空时创建索引。Agent 注册角色资料工具及授权范围内的只读文件和搜索工具，返回的句柄负责运行、取消和等待释放。调用方必须 `await dispose()`，并确保同一世界没有其他进程同时写入；进程内相同身份或 Session 不允许并发启动。该独立入口不验证其他 Agent 的目录关系。
 
-`createWorldBasicsAgent` 使用可信调用方提供的全部世界配置、世界 ID 和特殊 Agent ID 绑定世界基础信息 Agent 的读取根与专属目录；Session 根不得与任何传入世界读取根重叠。调用方提供模型、持久 Session 及单可信写入进程保证，使用后必须等待 `dispose()`；同世界相同身份在进程内独占。只读文件和搜索工具用于读取世界资料；`save_world_basics` 在专属目录以独立名称和 `createIfAbsent` 保存待审 Markdown，结果为 `unknown` 时按返回路径核查。可选目录服务须预先初始化，独立入口自行持有服务，同世界已有目录服务打开时不能再次打开；目录工具独立报告登记结果，保存和登记都不确认事实。恢复 Session 不证明业务任务完成；路径检查不提供跨进程锁或系统级隔离。此入口尚不装配主 Agent 委派。
+`createWorldBasicsAgent` 使用可信调用方提供的全部世界配置、世界 ID 和特殊 Agent ID 绑定世界基础信息 Agent 的读取根与专属目录；Session 根不得与任何传入世界读取根重叠。调用方提供模型、持久 Session 及单可信写入进程保证，使用后必须等待 `dispose()`；同世界相同身份在进程内独占。只读文件和搜索工具用于读取世界资料；`save_world_basics` 在专属目录以独立名称和 `createIfAbsent` 保存待审 Markdown，结果为 `unknown` 时按返回路径核查。可选目录服务须预先初始化，独立入口自行持有服务，同世界已有目录服务打开时不能再次打开；目录工具独立报告登记结果，保存和登记都不确认事实。恢复 Session 不证明业务任务完成；路径检查不提供跨进程锁或系统级隔离。
+
+世界入口的部署配置可提供 `worldBasics`，以特殊 Agent 身份、Session 和模型配置装配 `delegate_world_basics`。主 Agent 提供任务和必要背景，世界、身份、目录与权限由工作区绑定；首次运行使用配置的 Session 模式，后续委派恢复同一 Session。角色创建与基础信息委派可同时装配并使用各自身份；启用目录时共享世界目录服务，各子运行使用独立绑定。父 Agent 关闭时取消并等待子运行释放；未配置时不注册该工具。主 Agent 的工作区提示词指导其将基础信息开发交给专用 Agent，并保留十模块之外的主动补充；提示词不保证真实模型遵循。
 
 `createWorldInitializationAgentWithWorkspace(workspace, characterCreator)` 可选接收可信角色创建配置，为主 Agent 装配 `delegate_character_creator`，通过 `persistent` Provider 委派；原有只读子 Agent 的 `delegate` 继续使用 `spawn`。角色读取根必须与主 Agent 读取视图一致，角色根必须位于视图内且与草稿根和已确认根不重叠，Session 根不能与读取视图重叠。首次成功启动按配置选择创建或恢复，后续委派恢复同一 Session。父 Agent 销毁会取消运行并等待子 Agent 清理。角色目录或 Session 初始化失败时保留已创建数据，调用方按实际状态重新配置；该入口不等于完整共享工作区隔离。
 

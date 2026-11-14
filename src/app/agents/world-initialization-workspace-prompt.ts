@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@fly-novel/system-prompt'
 import type { WorldInitializationWorkspace } from './world-initialization-workspace.js'
 
-type WorkspacePromptConfig = WorldInitializationWorkspace & { readonly mode: 'draft-write' | 'read-only'; readonly catalog?: {
+type WorkspacePromptConfig = WorldInitializationWorkspace & { readonly mode: 'draft-write' | 'read-only'; readonly worldBasics?: boolean; readonly catalog?: {
   readonly mainOwner: string; readonly delegates: readonly { readonly owner: string; readonly tool: string }[]
 } }
 
@@ -19,6 +19,10 @@ export const worldInitializationWorkspacePromptPlugin = Object.assign(function w
   ctx.effect(() => ctx.systemPrompt.section({
     name: 'world-initialization:workspace', order: 10, interpolate: false,
     text: `文件工作区：\n读取和搜索范围：${view}。\n相对路径以该工作区根目录为基准。\n${permission}`,
+  }))
+  if (config.worldBasics && config.mode === 'draft-write') ctx.effect(() => ctx.systemPrompt.section({
+    name: 'world-initialization:world-basics', order: 12, interpolate: false,
+    text: '需要开发世界基础信息时，使用 delegate_world_basics 委派专用 Agent，提供用户要求和必要背景；读取并核对实际成果后再整合，不自行代写该模块。其他模块按已装配能力处理；十个模块之外世界构想需要的内容仍可主动补充。',
   }))
   if (config.catalog && config.mode === 'draft-write') {
     const catalog = config.catalog

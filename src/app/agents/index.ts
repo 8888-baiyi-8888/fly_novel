@@ -1,4 +1,4 @@
-export { createWorldInitializationAgent, createWorldInitializationAgentWithWorkspace, createWorldInitializationAgentWithWorldWorkspaces, type WorkspaceCharacterCreatorConfig, type WorldInitializationSessionConfig } from './world-initialization.js'
+export { createWorldInitializationAgent, createWorldInitializationAgentWithWorkspace, createWorldInitializationAgentWithWorldWorkspaces, type WorkspaceCharacterCreatorConfig, type WorkspaceWorldBasicsConfig, type WorldInitializationSessionConfig } from './world-initialization.js'
 export type { WorldInitializationWorkspace } from './world-initialization-workspace.js'
 export { createCharacterAgent } from './character.js'
 export { createCharacterCreator, type CharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
