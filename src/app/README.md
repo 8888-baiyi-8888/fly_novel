@@ -8,6 +8,8 @@
 
 世界入口的部署配置可提供 `organizationAgent`，字段为 `agentId`、`sessionId`、`sessionMode`、`sessionRoot`、`provider`、`model`、`adapter` 及可选 `references`。组织身份不能与其他专用 Agent 相同；配置后主 Agent 获得 `delegate_organization`，组织写工具由组织 Agent 持有。启用目录时共用世界目录服务并绑定组织身份；父 Agent 关闭时取消并等待子运行释放。提示词指导职责和成果核查，不能保证真实模型遵循。
 
+组织 Agent 的双世界固定替身走查和真实模型检查见[组织 Agent 验证指南](../../docs/cookbook/organization-agent-validation.md)。
+
 `agents/` 分别提供世界初始化主 Agent、角色 Agent、导演 Agent 和写作 Agent 的创建函数。各创建函数从本机 DeepSeek 配置创建适配器，以当前工作目录为授权目录，并按各自工具列表逐项注册；单项失败时记录错误并继续创建。每次创建独立实例，调用方使用完毕后调用返回的 `agent.dispose()`。世界初始化主 Agent 使用当前目录下 `src/agents/world-initialization-main-agent/skills`，要求以仓库根目录启动；Skill 样例不随构建自动复制。
 
 `createWorldInitializationAgentWithWorkspace` 接收可信应用显式指定的现有 `viewRoot`、`draftRoot` 和 `confirmedRoot` 绝对目录；创建前校验其真实路径与可写范围。它注册文件、搜索和委派工具，主 Agent 只能修改草稿根，通用子 Agent 只读；可选的角色创建 Agent 使用下文所述角色资料服务。已确认根不能与上游平台临时可写根重叠。内置 Skill 来源单独授权，Skill 正文可加载，但其资源路径不会因此自动成为文件工具的读取范围。该入口要求以仓库根目录启动，并适用于可信本地工作区；路径检查不能抵御恶意并发替换或硬链接。它不实现世界资料确认和持久化流程。
