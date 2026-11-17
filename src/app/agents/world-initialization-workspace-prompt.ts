@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@fly-novel/system-prompt'
 import type { WorldInitializationWorkspace } from './world-initialization-workspace.js'
 
-type WorkspacePromptConfig = WorldInitializationWorkspace & { readonly mode: 'draft-write' | 'read-only'; readonly worldBasics?: boolean; readonly mapAgent?: boolean; readonly catalog?: {
+type WorkspacePromptConfig = WorldInitializationWorkspace & { readonly mode: 'draft-write' | 'read-only'; readonly worldBasics?: boolean; readonly mapAgent?: boolean; readonly organizationAgent?: boolean; readonly catalog?: {
   readonly mainOwner: string; readonly delegates: readonly { readonly owner: string; readonly tool: string }[]
 } }
 
@@ -27,6 +27,10 @@ export const worldInitializationWorkspacePromptPlugin = Object.assign(function w
   if (config.mapAgent && config.mode === 'draft-write') ctx.effect(() => ctx.systemPrompt.section({
     name: 'world-initialization:map-agent', order: 13, interpolate: false,
     text: '需要开发地图与空间资料时，使用 delegate_map 委派地图专用 Agent，提供用户要求、近期故事需要和已有资料线索；核对实际成果和状态后再整合。地图之外的世界构想仍按实际需要协调或补充。',
+  }))
+  if (config.organizationAgent && config.mode === 'draft-write') ctx.effect(() => ctx.systemPrompt.section({
+    name: 'world-initialization:organization-agent', order: 14, interpolate: false,
+    text: '需要开发组织、组织关系或成员关系时，使用 delegate_organization 委派组织专用 Agent，提供用户要求和必要背景；核对实际成果和状态后再整合，不自行代写组织模块。其他世界构想仍按实际需要协调或补充。',
   }))
   if (config.catalog && config.mode === 'draft-write') {
     const catalog = config.catalog
