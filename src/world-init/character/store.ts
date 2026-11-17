@@ -38,6 +38,9 @@ export class CharacterStore {
   private closed = false
   private constructor(private readonly root: string) {}
 
+  /** 供可信应用校验角色服务与世界目录的绑定。 */
+  get rootDirectory(): string { return this.root }
+
   /** 打开现有真实目录；空目录可显式初始化，非空目录不会自动创建索引。 */
   static async open(root: string, initialize = false, recovery = false): Promise<CharacterStore> {
     if (!isAbsolute(root) || await realpath(root) !== resolve(root) || !(await lstat(root)).isDirectory()) throw new Error('角色根必须是现有真实绝对目录')

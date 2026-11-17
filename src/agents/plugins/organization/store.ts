@@ -6,7 +6,7 @@ import { formatOrganizationDocument, organizationIdSchema, organizationMembershi
   type Organization, type OrganizationDocument, type OrganizationMembership, type OrganizationRelation } from './format.js'
 
 export type OrganizationStoreErrorCode = 'ORG_INVALID_CONFIG' | 'ORG_BUSY' | 'ORG_CLOSED' | 'ORG_FORBIDDEN' | 'ORG_NOT_FOUND' |
-  'ORG_INVALID_DOCUMENT' | 'ORG_CONFLICT' | 'ORG_LIMIT' | 'ORG_COMMIT_UNKNOWN' | 'ORG_REFERENCE_UNAVAILABLE'
+  'ORG_INVALID_DOCUMENT' | 'ORG_CONFLICT' | 'ORG_LIMIT' | 'ORG_COMMIT_UNKNOWN' | 'ORG_REFERENCE_UNAVAILABLE' | 'ORG_QUERY_UNAVAILABLE'
 
 /** 不确定写入结果携带相对路径；调用方须先核查，不盲目重试。 */
 export class OrganizationStoreError extends Error {
@@ -32,6 +32,12 @@ export interface OrganizationStoreConfig {
 }
 export interface StoredOrganizationDocument<T> { document: T; path: string; version: FsVersion }
 export interface CreatedOrganizationDocument { id: string; path: string; version: FsVersion }
+/** 仅供可信查询层使用的完整扫描；不能直接暴露给故事角色。 */
+export interface OrganizationSnapshot {
+  organizations: StoredOrganizationDocument<Organization>[]
+  relations: StoredOrganizationDocument<OrganizationRelation>[]
+  memberships: StoredOrganizationDocument<OrganizationMembership>[]
+}
 type Directory = 'organizations' | 'relations' | 'memberships'
 type OrganizationInput = Omit<Organization, 'formatVersion' | 'worldId' | 'id' | 'reviewStatus'>
 type RelationInput = Omit<OrganizationRelation, 'formatVersion' | 'worldId' | 'id'>
@@ -45,6 +51,11 @@ export class OrganizationStore {
   private closing?: Promise<void>
   private constructor(private readonly config: OrganizationStoreConfig, private readonly rootPath: string, private readonly root: FsTarget,
     private readonly maxDocumentBytes: number, private readonly maxDocuments: number) {}
+
+  /** 由可信应用绑定，不由工具参数选择。 */
+  get worldId(): string { return this.config.worldId }
+  /** 表明该句柄允许写入；查询授权由调用方单独绑定。 */
+  get writable(): boolean { return this.config.access === 'read-write' }
 
   /** 打开已有真实目录；不创建目录，不启动角色权限或世界演化流程。 */
   static async open(config: OrganizationStoreConfig): Promise<OrganizationStore> {
@@ -243,6 +254,40 @@ export class OrganizationStore {
       if (version !== current.version) throw new OrganizationStoreError('成员关系版本已变化', 'ORG_CONFLICT', current.path)
       const value = organizationMembershipSchema.parse({ ...input, id, formatVersion: 1, worldId: this.config.worldId })
       await this.verifyMembership(value, signal); return this.updated('memberships', value, current.version, signal)
+    })
+  }
+  /** 可信查询层扫描并复核文件版本；不提供跨进程原子快照。 */
+  snapshot(signal?: AbortSignal): Promise<OrganizationSnapshot> {
+    return this.enqueue(async () => {
+      const orgs = await this.scan('organizations', parseOrganization, signal)
+      const relations = await this.scan('relations', parseOrganizationRelation, signal)
+      const members = await this.scan('memberships', parseOrganizationMembership, signal)
+      this.validateRelations(orgs, Array.from(relations.values(), entry => entry.document))
+      for (const { document } of members.values()) if (!orgs.has(document.organizationId)) throw new OrganizationStoreError('成员关系所属组织不存在', 'ORG_INVALID_DOCUMENT')
+      const sort = <T>(values: Iterable<StoredOrganizationDocument<T>>) => Array.from(values).sort((a, b) => a.path.localeCompare(b.path))
+      const organizations = sort(orgs.values()); const allRelations = sort(relations.values()); const memberships = sort(members.values())
+      for (const [name, entries] of [['organizations', organizations], ['relations', allRelations], ['memberships', memberships]] as const) {
+        for (const item of entries) {
+          signal?.throwIfAborted()
+          const target = await this.target(name, item.document.id)
+          if ((await this.config.fs.stat(target, signal))?.version !== item.version) throw new OrganizationStoreError('扫描期间组织文档发生变化', 'ORG_CONFLICT')
+        }
+        const names = (await this.config.fs.listDir(await this.directory(name), signal)).filter(item => item.name.endsWith('.json')).map(item => item.name).sort()
+        if (JSON.stringify(names) !== JSON.stringify(entries.map(item => `${item.document.id}.json`).sort())) throw new OrganizationStoreError('扫描期间组织目录发生变化', 'ORG_CONFLICT')
+      }
+      return { organizations, relations: allRelations, memberships }
+    })
+  }
+  /** 按可信世界重新核实外部引用；未装配或解析器错误保持显式失败。 */
+  checkReference(kind: 'person' | 'place', id: string, signal?: AbortSignal): Promise<{ status: 'verified' | 'not_found' | 'mismatch' }> {
+    return this.enqueue(async () => {
+      organizationIdSchema.parse(id)
+      const resolver = kind === 'person' ? this.config.resolvePerson : this.config.resolvePlace
+      if (!resolver) throw new OrganizationStoreError('可信跨模块引用解析器未装配', 'ORG_REFERENCE_UNAVAILABLE')
+      signal?.throwIfAborted(); const result = await resolver(id, signal); signal?.throwIfAborted()
+      if (!result) return { status: 'not_found' }
+      if (result.id !== id || result.worldId !== this.config.worldId) return { status: 'mismatch' }
+      return { status: 'verified' }
     })
   }
   /** 拒绝新操作并等待已受理工作，释放进程内占用。 */

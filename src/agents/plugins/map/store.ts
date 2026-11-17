@@ -52,6 +52,9 @@ export class MapStore {
 
   /** 此句柄是否允许写入；只读工具可绑定到读写句柄。 */
   get writable(): boolean { return this.access === 'read-write' }
+  /** 供可信应用核对装配的世界和目录；不提供给模型选择。 */
+  get boundWorldId(): string { return this.worldId }
+  get rootDirectory(): string { return this.rootPath }
 
   /**
    * 打开现有真实地图根及 places、connections 子目录，不初始化或修改资料。
