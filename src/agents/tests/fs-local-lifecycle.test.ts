@@ -48,3 +48,15 @@ test('真实本机后端配置错误时 Agent 创建失败且不留下服务', a
     await framework.manager.disposeAll()
   }
 })
+
+test('Windows 替换重试间隔可配置并拒绝无效值', async () => {
+  const framework = await bootstrapAgents()
+  const scope = framework.context.plugin(LocalFileSystem, { windowsReplaceRetryDelayMs: 0 })
+  await scope
+  assert.equal((framework.context.fs as LocalFileSystem).config.windowsReplaceRetryDelayMs, 0)
+  await scope.dispose()
+  for (const value of [-1, 1001, 0.5]) {
+    const invalid = framework.context.plugin(LocalFileSystem, { windowsReplaceRetryDelayMs: value })
+    await assert.rejects(Promise.resolve(invalid), /windowsReplaceRetryDelayMs/)
+  }
+})

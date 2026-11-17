@@ -12,6 +12,7 @@ import type { BigIntStats, Dirent, Stats } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { TextDecoder, promisify } from 'node:util'
 import { homedir } from 'node:os'
+import { setTimeout as delay } from 'node:timers/promises'
 import { FsError, FsTargetKey, FsVersion } from '@fly-novel/fs'
 import { copyFileDaclWin32, replaceFileWin32 } from './win32.ts'
 
@@ -613,7 +614,8 @@ function writeIoError(path: string, error: unknown): unknown {
  * `createIfAbsent` publishes with a hard-link no-replace primitive, so a concurrent creator's
  * file is preserved and this write is rejected with `FS_NOT_OBSERVED`; `existingDestination`
  * states whether Windows must preserve destination security and defaults to mode presence,
- * while moves pass destination presence separately from the source mode.
+ * while moves pass destination presence separately from the source mode. `windowsReplaceRetryDelayMs`
+ * controls the delay between up to three retries after Win32 1175; changed files reject the retry.
  */
 export async function writeFileAtomic(
   absolutePath: string,
@@ -621,7 +623,7 @@ export async function writeFileAtomic(
   mode: number | undefined,
   signal: AbortSignal | undefined,
   internals: FsIoInternals = {},
-  options: { displayPath?: string; createIfAbsent?: boolean; existingDestination?: boolean } = {},
+  options: { displayPath?: string; createIfAbsent?: boolean; existingDestination?: boolean; windowsReplaceRetryDelayMs?: number } = {},
 ): Promise<void> {
   const displayPath = options.displayPath ?? absolutePath
   const existingDestination = options.existingDestination ?? mode !== undefined
@@ -669,13 +671,33 @@ export async function writeFileAtomic(
         await throwGuardedCreateFailure(error, absolutePath, displayPath, inspectPublicationTarget)
       }
     } else if (platform === 'win32' && existingDestination) {
-      try {
-        await replaceFile(absolutePath, tempPath)
-      } catch (error: unknown) {
-        // If the observed target disappears during staging, the protected DACL
-        // already copied to the temp remains authoritative for recreation.
-        if (!isENOENT(error)) throw error
-        await rename(tempPath, absolutePath)
+      {
+        const original = await probeNoFollow(absolutePath)
+        const staged = await lstat(tempPath, { bigint: true })
+        for (let attempt = 0; ; attempt++) {
+          try { await replaceFile(absolutePath, tempPath); break } catch (error) {
+            // Preserve the original missing-destination behavior only at the native publication boundary.
+            if (isENOENT(error) && attempt === 0) { await rename(tempPath, absolutePath); break }
+            if (!(error instanceof Error && 'win32Code' in error && error.win32Code === 1175) || attempt >= 3) throw error
+            await delay(options.windowsReplaceRetryDelayMs ?? 50, undefined, signal ? { signal } : undefined)
+            throwIfAborted(signal, 'write')
+            const [current, currentStaged] = await Promise.all([probeNoFollow(absolutePath), lstat(tempPath, { bigint: true })])
+            if (!original || !current || current.type !== 'file' || current.version !== original.version || !currentStaged.isFile() ||
+                currentStaged.dev !== staged.dev || currentStaged.ino !== staged.ino || currentStaged.size !== staged.size || currentStaged.mtimeNs !== staged.mtimeNs) {
+              throw new FsError(`cannot write "${displayPath}": file changed before retry`, 'FS_STALE_VERSION')
+            }
+            // ReplaceFileW can update the staging file's ctime even on 1175; validate its content and stability instead.
+            const stagedContent = await readFile(tempPath)
+            const afterRead = await lstat(tempPath, { bigint: true })
+            if (!stagedContent.equals(Buffer.from(content, 'utf8')) || versionOf(afterRead) !== versionOf(currentStaged)) {
+              throw new FsError(`cannot write "${displayPath}": staging file changed before retry`, 'FS_STALE_VERSION')
+            }
+            if ((await probeNoFollow(absolutePath))?.version !== original.version) {
+              throw new FsError(`cannot write "${displayPath}": file changed before retry`, 'FS_STALE_VERSION')
+            }
+            throwIfAborted(signal, 'write')
+          }
+        }
       }
     } else {
       await rename(tempPath, absolutePath)

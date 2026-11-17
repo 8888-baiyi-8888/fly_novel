@@ -56,6 +56,8 @@ export interface Config {
    * runtime's safe allocation/decode maximum. Defaults to 10 MiB.
    */
   diffBasisMaxBytes?: number
+  /** Delay in milliseconds between retries after Win32 replacement error 1175. */
+  windowsReplaceRetryDelayMs?: number
 }
 
 type ResolvedConfig = Required<Config>
@@ -98,6 +100,7 @@ export class LocalFileSystem extends FileSystem {
   static Config: z<Config> = z.object({
     cwd: z.string().default(process.cwd()),
     diffBasisMaxBytes: z.number().default(DEFAULT_DIFF_BASIS_MAX_BYTES),
+    windowsReplaceRetryDelayMs: z.number().default(50),
   })
 
   /** Validated config (schemastery applied the defaults before construction). */
@@ -116,6 +119,9 @@ export class LocalFileSystem extends FileSystem {
       || resolved.diffBasisMaxBytes <= 0
       || resolved.diffBasisMaxBytes > MAX_DIFF_BASIS_BYTES) {
       throw new Error(`fs-local: diffBasisMaxBytes must be a positive safe integer no greater than ${MAX_DIFF_BASIS_BYTES}`)
+    }
+    if (!Number.isSafeInteger(resolved.windowsReplaceRetryDelayMs) || resolved.windowsReplaceRetryDelayMs < 0 || resolved.windowsReplaceRetryDelayMs > 1000) {
+      throw new Error('fs-local: windowsReplaceRetryDelayMs must be an integer between 0 and 1000')
     }
     this.config = resolved
   }
@@ -233,7 +239,7 @@ export class LocalFileSystem extends FileSystem {
         ? await readTextForDiff(target.targetKey, this.config.diffBasisMaxBytes, signal)
         : null
       await writeFileAtomic(target.targetKey, content, existing?.mode, signal, this.internals,
-        { displayPath: target.displayPath, createIfAbsent: expected?.kind === 'createIfAbsent' })
+        { displayPath: target.displayPath, createIfAbsent: expected?.kind === 'createIfAbsent', windowsReplaceRetryDelayMs: this.config.windowsReplaceRetryDelayMs })
       const after = await probe(target.targetKey)
       return {
         operation: existing ? 'update' : 'create',
@@ -270,7 +276,7 @@ export class LocalFileSystem extends FileSystem {
       const original = await readForEdit(target.targetKey, target.displayPath, signal)
       const edited = applyLiteralEdit(original.content, edit.oldString, edit.newString, edit.replaceAll, target.displayPath)
       const content = restoreLineEndings(edited.content, original.lineEndings)
-      await writeFileAtomic(target.targetKey, content, existing.mode, signal, this.internals, { displayPath: target.displayPath })
+    await writeFileAtomic(target.targetKey, content, existing.mode, signal, this.internals, { displayPath: target.displayPath, windowsReplaceRetryDelayMs: this.config.windowsReplaceRetryDelayMs })
 
       const after = await probe(target.targetKey)
       return {
@@ -291,7 +297,7 @@ export class LocalFileSystem extends FileSystem {
       const original = await readForEdit(target.targetKey, target.displayPath, signal)
       const after = this.patchContent(target, original.content, hunks)
       await writeFileAtomic(target.targetKey, restoreLineEndings(after, original.lineEndings), existing.mode, signal, this.internals,
-        { displayPath: target.displayPath })
+        { displayPath: target.displayPath, windowsReplaceRetryDelayMs: this.config.windowsReplaceRetryDelayMs })
       return { version: this.versionAfterWrite(await probe(target.targetKey), target), before: original.content, after }
     })
   }
@@ -328,6 +334,7 @@ export class LocalFileSystem extends FileSystem {
         displayPath: destination.displayPath,
         createIfAbsent: options.expectedDestination?.kind === 'createIfAbsent',
         existingDestination: existing !== null,
+        windowsReplaceRetryDelayMs: this.config.windowsReplaceRetryDelayMs,
       })
       const outcome: FsWriteOutcome = {
         operation: existing ? 'update' : 'create',

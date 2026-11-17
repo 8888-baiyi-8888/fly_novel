@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test, { type TestContext } from 'node:test'
@@ -28,6 +28,58 @@ function gate() {
   const wait = new Promise<void>(resolve => { release = resolve })
   return { wait, release }
 }
+
+test('Windows 1175 在文件未变化时有限重试并发布原暂存内容', async t => {
+  const { dir, fs } = await setup(t)
+  const path = join(dir, 'file'); await writeFile(path, 'old')
+  const target = await fs.resolve('file'); const original = await fs.stat(target); assert.ok(original)
+  fs.internals.platform = 'win32'; fs.internals.copyFileDacl = async () => {}
+  let attempts = 0
+  fs.internals.replaceFile = async (destination, source) => {
+    attempts++
+    if (attempts < 3) {
+      await chmod(source, 0o400); await chmod(source, 0o600)
+      throw Object.assign(new Error('simulated 1175'), { code: 'EIO', win32Code: 1175 })
+    }
+    await rename(source, destination)
+  }
+  await fs.writeText(target, 'new', { kind: 'replaceIfVersion', version: original.version })
+  assert.equal(attempts, 3); assert.equal(await readFile(path, 'utf8'), 'new'); assert.deepEqual(await readdir(dir), ['file'])
+})
+
+test('Windows 1175 持续失败或其他错误时保留原文件', async t => {
+  const { dir, fs } = await setup(t); const path = join(dir, 'file'); await writeFile(path, 'old')
+  const target = await fs.resolve('file'); fs.internals.platform = 'win32'; fs.internals.copyFileDacl = async () => {}
+  let attempts = 0
+  fs.internals.replaceFile = async () => { attempts++; throw Object.assign(new Error('simulated 1175'), { code: 'EIO', win32Code: 1175 }) }
+  await assert.rejects(fs.writeText(target, 'new'), { code: 'FS_IO_ERROR' }); assert.equal(attempts, 4)
+  assert.equal(await readFile(path, 'utf8'), 'old'); assert.deepEqual(await readdir(dir), ['file'])
+  attempts = 0
+  fs.internals.replaceFile = async () => { attempts++; throw Object.assign(new Error('other failure'), { code: 'EIO', win32Code: 1176 }) }
+  await assert.rejects(fs.writeText(target, 'new'), { code: 'FS_IO_ERROR' }); assert.equal(attempts, 1)
+})
+
+test('Windows 1175 重试前拒绝外部修改并响应取消', async t => {
+  const { dir, fs } = await setup(t); const path = join(dir, 'file'); await writeFile(path, 'old')
+  const target = await fs.resolve('file'); fs.internals.platform = 'win32'; fs.internals.copyFileDacl = async () => {}
+  let attempts = 0
+  fs.internals.replaceFile = async () => { attempts++; await writeFile(path, 'external change'); throw Object.assign(new Error('simulated 1175'), { code: 'EIO', win32Code: 1175 }) }
+  await assert.rejects(fs.writeText(target, 'new'), { code: 'FS_STALE_VERSION' }); assert.equal(attempts, 1)
+  assert.equal(await readFile(path, 'utf8'), 'external change')
+  const abort = new AbortController(); attempts = 0
+  fs.internals.replaceFile = async () => { attempts++; abort.abort(); throw Object.assign(new Error('simulated 1175'), { code: 'EIO', win32Code: 1175 }) }
+  await assert.rejects(fs.writeText(target, 'new', undefined, abort.signal), { code: 'FS_ABORTED' }); assert.equal(attempts, 1)
+  assert.equal(await readFile(path, 'utf8'), 'external change'); assert.deepEqual(await readdir(dir), ['file'])
+})
+
+test('Windows 1175 重试前拒绝变化的暂存内容', async t => {
+  const { dir, fs } = await setup(t); const path = join(dir, 'file'); await writeFile(path, 'old')
+  const target = await fs.resolve('file'); fs.internals.platform = 'win32'; fs.internals.copyFileDacl = async () => {}
+  let attempts = 0
+  fs.internals.replaceFile = async (_destination, staged) => { attempts++; await writeFile(staged, 'tampered'); throw Object.assign(new Error('simulated 1175'), { code: 'EIO', win32Code: 1175 }) }
+  await assert.rejects(fs.writeText(target, 'new'), { code: 'FS_STALE_VERSION' }); assert.equal(attempts, 1)
+  assert.equal(await readFile(path, 'utf8'), 'old'); assert.deepEqual(await readdir(dir), ['file'])
+})
 
 test('创建、覆盖与版本保护返回实际结果', async t => {
   const { dir, fs } = await setup(t)
