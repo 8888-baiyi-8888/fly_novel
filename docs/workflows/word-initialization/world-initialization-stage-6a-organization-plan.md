@@ -109,7 +109,7 @@
 
 ### 目录及格式
 
-**用户已确定：组织模块需要独立的专用插件。** 组织资料、组织关系、成员关系、受控存取、查询和组织 Agent 使用的工具定义及 Cordis 注册集中在 `src/agents/plugins/organization/`。主 Agent 使用的组织专用委派工具定义放在 `src/tools/organization/`，与角色创建 Agent 的委派工具归属一致。专用 Agent 的 Preset、职责提示词和应用装配按现有 Agent 结构单独组织，由可信应用为 Agent 装配插件。
+**用户已确定：组织模块需要独立的专用插件。** 组织资料、组织关系、成员关系、受控存取、查询和组织 Agent 使用的工具定义及 Cordis 注册集中在 `src/agents/plugins/organization/`。主 Agent 使用的组织专用委派工具定义放在 `src/tools/subagent-organization/`。专用 Agent 的 Preset、职责提示词和应用装配按现有 Agent 结构单独组织，由可信应用为 Agent 装配插件。
 
 下图仅展示建议的文档布局，实际根目录由可信应用从组织负责人配置绑定：
 

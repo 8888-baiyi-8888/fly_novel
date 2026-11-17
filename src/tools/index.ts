@@ -3,4 +3,4 @@ export { createCharacterDelegationTool } from './character/delegate-character.js
 export { createCharacterTools } from './character/character-tools.js'
 export { createCharacterCreatorDelegationTool } from './character/delegate-character-creator.js'
 export { createCatalogTools } from './catalog/catalog-tools.js'
-export { createOrganizationDelegationTool } from './organization/delegate-organization.js'
+export { createOrganizationDelegationTool } from './subagent-organization/delegate-organization.js'

@@ -4,7 +4,7 @@
 
 ## 一、已确认的方向与实际起点
 
-1. 组织数据、关系、查询和组织资料工具由 `src/agents/plugins/organization/` 提供；主 Agent 的专用委派工具位于 `src/tools/organization/`，组织 Agent 由可信应用独立或受主 Agent 委派装配。
+1. 组织数据、关系、查询和组织资料工具由 `src/agents/plugins/organization/` 提供；主 Agent 的专用委派工具位于 `src/tools/subagent-organization/`，组织 Agent 由可信应用独立或受主 Agent 委派装配。
 2. 每个组织和每条组织关系、成员关系各使用独立 JSON；组织资料分为未展开、概况、详细。成员关系由组织模块维护一份，人物侧按授权查询展示。
 3. 初始化时组织资料和关系按实际读取的版本直接覆盖；世界演化后还要保留先前信息。初始化成果及第一版供用户整体审阅，文件保存不等于整个世界已确认。
 4. 组织 Agent 与世界规划者可读取秘密成员关系；故事角色通过可信应用绑定自身身份，按该角色在相应组织的权限等级查询。等级从 0 到 4 的推荐含义见[详细计划](world-initialization-stage-6a-organization-plan.md#角色查询权限等级)，具体授权记录和工具格式仍待实现设计。
