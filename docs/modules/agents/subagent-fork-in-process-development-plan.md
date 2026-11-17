@@ -25,7 +25,7 @@ Spawn 适合任务说明本身包含所需上下文的子任务；Fork 面向需
 
 [Session](../../../src/agents/plugins/session/session.ts) 和 [Session Manager](../../../src/agents/plugins/session/session-manager.ts)提供 seed 相关能力；[Agent Loop](../../../src/agents/plugins/loop/agent-loop-runtime.ts)内部的持久化恢复路径使用 seed，但公开的 Agent 创建和普通 Loop 配置尚没有可直接用于 Fork 的历史注入契约。需要核实事件验证、序号、轮次、消息投影、系统提示词与持久化，不把内部 seed 等同于可用的 Fork 功能。
 
-当前[通用委派工具](../../../src/agents/plugins/subagent/tool-subagent/index.ts)和[角色委派工具](../../../src/tools/character/delegate-character.ts)都固定选择 `spawn`；角色工具传递 `characterId`，角色 Agent 尚未按 ID 检索资料。新增 Fork Provider 本身不会让这两个工具自动改用 Fork，也不能把 Provider 注册当成模型已经可以选择 Fork。
+当前[通用委派工具](../../../src/agents/plugins/subagent/tool-subagent/index.ts)和[角色委派工具](../../../src/tools/subagent-character/delegate-character.ts)都固定选择 `spawn`；角色工具传递 `characterId`，角色 Agent 尚未按 ID 检索资料。新增 Fork Provider 本身不会让这两个工具自动改用 Fork，也不能把 Provider 注册当成模型已经可以选择 Fork。
 
 ## 三、设计边界
 

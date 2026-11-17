@@ -1,12 +1,12 @@
 # 具体工具
 
-`character/delegate-character.ts` 提供角色专用工具 `createCharacterDelegationTool`。可信调用方使用同一父 Agent 的 SubAgent 服务和身份创建工具，并负责将其注册到该 Agent 的 Tools 服务；它直接使用 SubAgent 底层，不依赖通用委派工具包。模型提供任务和角色 ID，工具选择 `character-agent`，把 ID 作为创建参数交给子 Agent，前台等待结果并释放运行。角色 Agent 当前不会根据 ID 检索资料，模型所需的角色资料仍由调用方在任务中提供。
+`subagent-character/delegate-character.ts` 提供角色专用工具 `createCharacterDelegationTool`。可信调用方使用同一父 Agent 的 SubAgent 服务和身份创建工具，并负责将其注册到该 Agent 的 Tools 服务；它直接使用 SubAgent 底层，不依赖通用委派工具包。模型提供任务和角色 ID，工具选择 `character-agent`，把 ID 作为创建参数交给子 Agent，前台等待结果并释放运行。角色 Agent 当前不会根据 ID 检索资料，模型所需的角色资料仍由调用方在任务中提供。
 
 `index.ts` 是普通具体工具的统一导出入口，应用可以从该入口导入 `readFileTool` 和 `createCharacterDelegationTool`。Skill 工具使用其独立工作区包入口。
 
-`character/character-tools.ts` 基于可信应用提供的角色资料服务创建角色资料工具；调用方负责注册与注销。工具提供角色创建、名称和分类查询、单个及批量读取、待审修改和需求清单读写；模型不能通过工具确认提交。角色资料服务与权限限制见[世界初始化模块说明](../world-init/README.md)。
+`subagent-character/character-tools.ts` 基于可信应用提供的角色资料服务创建角色资料工具；调用方负责注册与注销。工具提供角色创建、名称和分类查询、单个及批量读取、待审修改和需求清单读写；模型不能通过工具确认提交。角色资料服务与权限限制见[世界初始化模块说明](../world-init/README.md)。
 
-`character/delegate-character-creator.ts` 创建角色设定专用委派工具 `delegate_character_creator`。可信调用方提供父 Agent 的 SubAgent 服务和身份并负责注册；模型只提供任务与背景，工具通过 `persistent` Provider 等待结果并释放运行。该工具与面向角色扮演的 `delegate_character` 不同。
+`subagent-character/delegate-character-creator.ts` 创建角色设定专用委派工具 `delegate_character_creator`。可信调用方提供父 Agent 的 SubAgent 服务和身份并负责注册；模型只提供任务与背景，工具通过 `persistent` Provider 等待结果并释放运行。该工具与面向角色扮演的 `delegate_character` 不同。
 
 `subagent-organization/delegate-organization.ts` 创建组织专用委派工具 `delegate_organization`。可信调用方绑定父 Agent 身份和 SubAgent 服务；模型只提供任务及必要背景，工具通过 `persistent` Provider 等待结果并释放运行。组织资料读写工具由[组织插件](../agents/plugins/organization/README.md)提供。
 

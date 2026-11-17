@@ -30,7 +30,7 @@
 | --- | --- | --- |
 | 主 Agent | [受控入口](../../../src/app/agents/world-initialization.ts)将 `viewRoot` 作为可信工作目录；文件读取和搜索由文件后端解析并检查读取根。 | `tool-fs` 经[草稿后端](../../../src/app/agents/world-initialization-draft-fs.ts)修改 `draftRoot`；写入、编辑、补丁、删除分别检查目标，移动检查源和目标。 |
 | 通用只读子 Agent | 同一入口用 `spawn` 装配相同的 `viewRoot`、只读文件工具和搜索工具。 | 文件后端使用只读策略；没有装配普通修改工具。 |
-| 角色创建 Agent | [独立入口](../../../src/app/agents/character-creator.ts)从可信配置取得 `readRoot`；当前 `read_file` 是[直接读取实现](../../../src/tools/filesystem/read-file.ts)，自行检查相对路径和真实路径，不经过第四阶段文件观察策略；当前入口没有装配搜索工具。 | [角色工具](../../../src/tools/character/character-tools.ts)绑定 `CharacterStore`，由服务直接操作可信 `characterRoot`，不经过草稿后端或普通文件工具的观察策略；模型不能传入授权根。 |
+| 角色创建 Agent | [独立入口](../../../src/app/agents/character-creator.ts)从可信配置取得 `readRoot`；当前 `read_file` 是[直接读取实现](../../../src/tools/filesystem/read-file.ts)，自行检查相对路径和真实路径，不经过第四阶段文件观察策略；当前入口没有装配搜索工具。 | [角色工具](../../../src/tools/subagent-character/character-tools.ts)绑定 `CharacterStore`，由服务直接操作可信 `characterRoot`，不经过草稿后端或普通文件工具的观察策略；模型不能传入授权根。 |
 | 第二个特殊子 Agent | 当前没有该工作区测试装配。 | 后续使用通用机制和真实文件工具建立测试实例，不能把只读子 Agent 当作第二个可写实例。 |
 
 角色资料服务在角色根下直接维护 `index.json`、`requirements.md`、角色 ID 目录中的 `profile.md`、`pending.md` 和 `pending.json`；可信确认、恢复和重建还会使用 `backup.md`、`operation.json`、索引备份以及同目录临时文件。服务使用程序生成的角色 ID，按根目录在进程内排他并串行执行操作；确认提交和恢复不是模型工具。其直接文件访问必须与普通文件工具一起纳入后续边界验证，不能仅检查工具参数。

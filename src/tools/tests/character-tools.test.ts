@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import type { ToolCallId } from '@fly-novel/llm'
 import { ToolsService } from '@fly-novel/tools'
 import { CharacterStore } from '../../world-init/character/store.js'
-import { createCharacterTools } from '../character/character-tools.js'
+import { createCharacterTools } from '../subagent-character/character-tools.js'
 
 test('工具通过服务创建、查找和准备待审修改，不能由模型提交确认', async t => {
   const root = await mkdtemp(join(tmpdir(), 'character-tools-'))

@@ -5,7 +5,7 @@ import { SubagentRuntime, subagentRunId } from '@fly-novel/subagent'
 import { createPersistentAgentCreator, createPersistentAgentRouter } from '@fly-novel/subagent-persistent-in-process'
 import { startInProcessRun } from '@fly-novel/subagent-in-process-driver'
 import { defineTool } from '@fly-novel/tools'
-import { createCharacterCreatorDelegationTool } from '../character/delegate-character-creator.js'
+import { createCharacterCreatorDelegationTool } from '../subagent-character/delegate-character-creator.js'
 
 const exec = { callId: 'call' as ToolCallId, name: 'delegate_character_creator',
   agent: { id: 'parent', name: 'parent', role: 'general' }, workingDirectory: process.cwd(), signal: new AbortController().signal }

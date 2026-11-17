@@ -7,7 +7,7 @@
 - [资料目录服务](../../../src/world-init/workspace/catalog/service.ts)按文件实际字节计算 SHA-256；查询或读取记录时返回 `current`、`stale`、`missing`、`unreadable`、`changing` 或 `forbidden`。`catalog_read` 的 `not_registered` 是请求路径没有登记，不等于成果文件缺失；当前没有自动发现所有未登记成果的能力。
 - 目录记录含负责人、世界相对路径、简介、`contentSha256` 和记录 `revision`；目录分页使用整个目录文件的版本。三种版本用途不同：内容摘要描述成果字节，记录 revision 控制记录更新冲突，分页版本固定目录记录快照。状态检查和登记不会确认世界事实。
 - [目录工具](../../../src/tools/catalog/catalog-tools.ts)只允许负责人更新或删除自己的记录，主 Agent 可查询其他 Agent 的记录但不能代改。`catalog_update` 要求负责人先完整读取成果并提交实例绑定的一次性凭据；服务重新核对文件摘要，但不能证明简介的语义正确。
-- [世界入口](../../../src/app/agents/world-initialization.ts)可装配主 Agent、角色创建 Agent 和一个共享目录服务；现有 [角色委派工具](../../../src/tools/character/delegate-character-creator.ts)固定指向角色创建职责。`persistent` 支持可信创建绑定和路由，但当前生产装配并不提供按任意负责人选择的通用特殊 Agent 工具；第二个特殊 Agent 仅有测试装配。不能把配置中的任意 ID 假定为可调用 Agent。
+- [世界入口](../../../src/app/agents/world-initialization.ts)可装配主 Agent、角色创建 Agent 和一个共享目录服务；现有 [角色委派工具](../../../src/tools/subagent-character/delegate-character-creator.ts)固定指向角色创建职责。`persistent` 支持可信创建绑定和路由，但当前生产装配并不提供按任意负责人选择的通用特殊 Agent 工具；第二个特殊 Agent 仅有测试装配。不能把配置中的任意 ID 假定为可调用 Agent。
 - 角色 Agent 的资料由专用工具和直接文件访问维护；不能依靠普通文件观察事件捕捉所有成果变化。已有 Session 按可信配置恢复对话历史，长期记忆、自动压缩和跨进程写锁不在本步实现。
 
 ## 首版处理设计
@@ -63,7 +63,7 @@
 | --- | --- | --- |
 | 发现 | [目录服务](../../../src/world-init/workspace/catalog/service.ts)的 `search` 每页读取目录快照并逐条计算状态；`catalog_search` 暴露分页。记录顺序按路径排序，第二页需携带目录文件摘要版本。 | 增加显式检查入口，保留各条状态、扫描版本和覆盖范围；当前 `search` 中途取消会抛错，不能直接声称保留了本页已检查结果。 |
 | 读取 | [普通 `read`](../../../src/agents/plugins/fs/tool-fs/read.ts)每次最多 2000 行、50 KiB 输出，单行也可能截断；[旧 `read_file`](../../../src/tools/filesystem/read-file.ts)最多 1 MiB，完整读取但不返回文件摘要或版本。 | 使用目录服务的原始字节读取、目标及前后版本检查提供完整文本和凭据；不能把截断的普通读取或旧 `read_file` 当作完整读取证明。 |
-| 委派 | [角色委派工具](../../../src/tools/character/delegate-character-creator.ts)只接收 `task`，固定 `character-creator`；通用 `delegate` 使用 `spawn` 和固定只读 Preset。`persistent` 路由接受可信绑定，模型参数不能指定创建配置。 | 世界入口从可信配置注册负责人和其专用工具的对应关系；保持角色专用工具职责，另一个负责人使用测试工具与绑定，不能把通用只读 `delegate` 当作负责人更新工具。 |
+| 委派 | [角色委派工具](../../../src/tools/subagent-character/delegate-character-creator.ts)只接收 `task`，固定 `character-creator`；通用 `delegate` 使用 `spawn` 和固定只读 Preset。`persistent` 路由接受可信绑定，模型参数不能指定创建配置。 | 世界入口从可信配置注册负责人和其专用工具的对应关系；保持角色专用工具职责，另一个负责人使用测试工具与绑定，不能把通用只读 `delegate` 当作负责人更新工具。 |
 | 更新与复查 | `catalog_update` 输入只有 `path`、`summary`、`revision`；服务在内部两次计算文件摘要，发布后返回 `fileStatus`。 | 增加实例绑定的读取凭据，核验所读摘要与提交时内容；主 Agent 在委派返回后再调用 `catalog_read`，而不是把子 Agent 文本回复视为对齐证明。 |
 | 生命周期 | 世界入口持有目录服务；主 Agent 释放后关闭服务。角色 Agent 独立创建与销毁，但当前入口在创建子实例前就调用一次 `catalog.bind(creator.agentId)` 并把同一绑定复用于后续实例。 | 每次子实例创建时新建受限绑定；关闭该实例时撤销其凭据，世界服务及其他身份的绑定继续可用。不能以当前复用绑定直接满足“实例关闭即撤销”。 |
 

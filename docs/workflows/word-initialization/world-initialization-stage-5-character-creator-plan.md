@@ -27,7 +27,7 @@ Agent 可在获授权的共享范围内读取所需资料；作为子 Agent 时�
 - [通用子 Agent Preset](../../../src/agents/generic-subagent/preset.ts)装配标准 Loop、SystemPrompt、LLM 和独立 Session；[通用职责提示词](../../../src/agents/generic-subagent/system-prompt.ts)只要求完成任务并返回结果。角色创建需要明确的专有职责，不能只改工具名称就声称已有角色创建能力。
 - [通用委派工具](../../../src/agents/plugins/subagent/tool-subagent/index.ts)接收非空任务，可信装配选择 Preset，模型不能选择 Preset；工具等待结果和释放，并保留任务与清理同时失败的原因。[测试](../../../src/agents/tests/tool-subagent.test.ts)覆盖可配置 Preset、父 Agent 作用域、失败和取消。
 - [Spawn Provider](../../../src/agents/plugins/subagent/subagent-spawn-in-process/index.ts)接收可信创建函数；[通用创建器](../../../src/agents/runtime/subagent-in-process-creator.ts)按允许的 Preset 提供插件配置，每次创建独立实例和运行 ID，不允许通过现有配置指定持久化 Session ID。[运行驱动](../../../src/agents/plugins/subagent/subagent-in-process-driver/run.ts)负责执行、取消和等待释放。这些机制可复用，但本身不提供持续业务身份或记忆恢复。
-- 现有 [角色 Agent Preset](../../../src/agents/character/preset.ts)及[角色提示词](../../../src/agents/character/plugins/system-prompt/plugin.ts)面向根据角色资料和场景进行角色扮演；[角色委派工具](../../../src/tools/character/delegate-character.ts)接收已有角色的 `characterId` 并选择该 Preset，当前也不会按 ID 加载角色资料。它们与创建角色设定的职责不同，不能直接当作角色创建功能使用。
+- 现有 [角色 Agent Preset](../../../src/agents/character/preset.ts)及[角色提示词](../../../src/agents/character/plugins/system-prompt/plugin.ts)面向根据角色资料和场景进行角色扮演；[角色委派工具](../../../src/tools/subagent-character/delegate-character.ts)接收已有角色的 `characterId` 并选择该 Preset，当前也不会按 ID 加载角色资料。它们与创建角色设定的职责不同，不能直接当作角色创建功能使用。
 - [世界初始化受控入口](../../../src/app/agents/world-initialization.ts)将通用 `delegate` 绑定到只读子 Agent；可选装配的 `delegate_character_creator` 使用 [`persistent` Provider](../../../src/agents/plugins/subagent/subagent-persistent-in-process/README.md)及角色创建 Agent 的持续 Session。读取范围与角色目录由可信应用指定，完整共享工作区隔离仍须后续验证。
 
 ## 待商议的业务契约

@@ -192,7 +192,7 @@ Agent Factory 为实例提供的插件服务建立隔离作用域；在同一父
 
 #### 第 5 步实现与验证
 
-用户明确角色 Agent 后续会根据角色 ID 检索资料，本步不实现检索。角色专用工具位于 [src/tools/character](../../../src/tools/character/delegate-character.ts)，不依赖通用工具包；可信应用在需要的父 Agent 注册它。工具接收任务和角色 ID，直接通过 SubAgent 服务选择 `character-agent`，把 ID 作为每次创建参数传入 `Agent.info.parameters.characterId`，等待结果并释放运行。角色 Agent 目前不读取该 ID，调用方需在任务中提供当前模型所需的角色资料。
+用户明确角色 Agent 后续会根据角色 ID 检索资料，本步不实现检索。角色专用工具位于 [src/tools/subagent-character](../../../src/tools/subagent-character/delegate-character.ts)，不依赖通用工具包；可信应用在需要的父 Agent 注册它。工具接收任务和角色 ID，直接通过 SubAgent 服务选择 `character-agent`，把 ID 作为每次创建参数传入 `Agent.info.parameters.characterId`，等待结果并释放运行。角色 Agent 目前不读取该 ID，调用方需在任务中提供当前模型所需的角色资料。
 
 [角色工具测试](../../../src/tools/tests/character-delegation.test.ts)以固定模型替身验证父 Agent 工具调用、两个 ID 对应的独立实例、任务原文、输入拒绝、取消及释放；测试不代表角色资料已被查询或角色行为已按 ID 区分。`parameters` 在 Spawn 创建方验证为无损 JSON 并复制，未声明支持参数的 Provider 会拒绝请求。
 

@@ -13,7 +13,7 @@
 ## 现有能力与待开发部分
 
 - [世界入口](../../../src/app/agents/world-initialization.ts)可配置共享读取、主 Agent 草稿目录、角色创建 Agent、基础信息 Agent、可选目录与 Session；基础信息也可通过[独立入口](../../../src/app/agents/world-basics.ts)运行。
-- [角色创建入口](../../../src/app/agents/character-creator.ts)及[角色创建委派工具](../../../src/tools/character/delegate-character-creator.ts)可作为可信身份、独立 Session、持久委派和释放的参考。角色资料格式及工具服务于角色，不直接作为基础信息契约。
+- [角色创建入口](../../../src/app/agents/character-creator.ts)及[角色创建委派工具](../../../src/tools/subagent-character/delegate-character-creator.ts)可作为可信身份、独立 Session、持久委派和释放的参考。角色资料格式及工具服务于角色，不直接作为基础信息契约。
 - [资料目录与共享读取](../../../src/world-init/README.md)可按世界和负责人登记文件并读取已登记成果正文；目录简介是导航线索，目录可以不装配，也不提供跨文件快照。现有草稿文件与独立总览保存能力不等于已有基础信息专用存储。
 - [主 Agent 基础提示词](../../../src/agents/world-initialization-main-agent/plugins/system-prompt/plugin.ts)包含一般规划指引；装配基础信息专用 Agent 时，[工作区提示词](../../../src/app/agents/world-initialization-workspace-prompt.ts)补充该模块的委派分工。提示词不保证真实模型遵循。
 
