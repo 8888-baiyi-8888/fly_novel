@@ -9,6 +9,7 @@
       "@fly-novel/subagent-persistent-in-process": ["./plugins/subagent/subagent-persistent-in-process/index.ts"],
       "@fly-novel/system-prompt": ["./plugins/system-prompt/index.ts"],
       "@fly-novel/map": ["./plugins/map/index.ts"],
+      "@fly-novel/organization": ["./plugins/organization/index.ts"],
       "@fly-novel/character-system-prompt": ["./character/plugins/system-prompt/index.ts"],
       "@fly-novel/character-creator-system-prompt": ["./character-creator/plugins/system-prompt/index.ts"],
       "@fly-novel/world-basics-system-prompt": ["./world-basics/plugins/system-prompt/index.ts"],
@@ -17,5 +18,5 @@
     }
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "plugins/sandbox", "plugins/subprocess", "plugins/session", "plugins/session-persistence", "plugins/system-prompt", "plugins/tools", "plugins/subagent", "plugins/skill", "plugins/skill-filesystem", "plugins/tool-skill", "plugins/map", "character/plugins/system-prompt", "character-creator/plugins/system-prompt", "world-basics/plugins/system-prompt", "director/plugins/system-prompt", "world-initialization-main-agent/plugins/system-prompt"]
+  "exclude": ["node_modules", "dist", "plugins/sandbox", "plugins/subprocess", "plugins/session", "plugins/session-persistence", "plugins/system-prompt", "plugins/tools", "plugins/subagent", "plugins/skill", "plugins/skill-filesystem", "plugins/tool-skill", "plugins/map", "plugins/organization", "character/plugins/system-prompt", "character-creator/plugins/system-prompt", "world-basics/plugins/system-prompt", "director/plugins/system-prompt", "world-initialization-main-agent/plugins/system-prompt"]
 }

@@ -30,6 +30,7 @@ Spawn 请求的可选 `parameters` 由可信创建函数校验并复制，作为
 - `generic-subagent/`：通用子 Agent 的 Preset 与职责提示词插件。
 - `plugins/skill/`、`plugins/skill-filesystem/`：独立工作区包，分别提供 Skill 注册查询服务和文件系统来源；各自包含 Cordis 插件及 Harness 注册定义。
 - `plugins/map/`：独立工作区包，提供[地图 JSON、受控存储、查询与模型工具定义](plugins/map/README.md)；由可信调用方装配工具和 Agent。
+- `plugins/organization/`：独立工作区包，提供[组织及关系 JSON 和初始化受控存储](plugins/organization/README.md)；查询工具及 Agent 装配另行开发。
 - `map-agent/`：地图与空间专用 Agent 的 Preset 和职责提示词；[应用入口](../app/README.md)绑定地图插件、目录与会话。
 - `plugins/tool-skill/`：独立工作区包，注册 Skill 加载工具并发布模型可见目录。
 - `character/`、`director/`、`writer/`：各 Agent 的业务实现与专属类型；`character/` 另含 Harness 角色插件样例和定义列表。

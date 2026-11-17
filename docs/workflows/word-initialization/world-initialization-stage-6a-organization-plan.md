@@ -1,6 +1,6 @@
 # 第 6A 阶段：组织模块详细开发计划
 
-本文细化[内容模块逐项开发计划的组织步骤](world-initialization-stage-6a-content-modules-plan.md#3-组织)，为后续设计、实现和验收提供依据。除明确标为用户已确认的业务方向外，文件格式、字段、工具名和实施顺序均为建议，不能因为写入本文就视为最终契约或已有能力。本文不实现组织模块，也不预先进入人物关系、历史或世界运行工作流。
+本文细化[内容模块逐项开发计划的组织步骤](world-initialization-stage-6a-content-modules-plan.md#3-组织)，为后续设计、实现和验收提供依据。组织 JSON 与初始化存储的实际格式见[组织数据契约](world-initialization-stage-6a-organization-contract.md)和[组织包说明](../../../src/agents/plugins/organization/README.md)；查询工具、角色权限视图和 Agent 仍属后续计划。本文不实现人物关系、历史或世界运行工作流。
 
 ## 目标与边界
 
