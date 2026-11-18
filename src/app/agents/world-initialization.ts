@@ -32,7 +32,7 @@ import { CatalogService, type CatalogBinding } from '../../world-init/workspace/
 const worldInitializationTools = [readFileTool] as const
 
 /** 角色创建 Agent 的非授权配置；世界和目录由工作区绑定。 */
-export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worldId' | 'readRoot' | 'characterRoot' | 'createCatalogBinding'>
+export type WorkspaceCharacterCreatorConfig = Omit<CharacterCreatorConfig, 'worldId' | 'readRoot' | 'characterRoot' | 'createCatalogBinding' | 'workspaces'>
 
 /** 基础信息 Agent 的非授权配置；世界和目录由工作区绑定。 */
 export type WorkspaceWorldBasicsConfig = Omit<WorldBasicsConfig, 'workspaces' | 'worldId' | 'singleWriterProcess' | 'catalog'>
@@ -87,7 +87,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
         throw new Error('角色 Session 目录不能与任何世界读取根重叠')
       }
     }
-    creator = { ...characterCreator, worldId: world.worldId, readRoot: world.readRoot, characterRoot: owner.writableRoot, createCatalogBinding: undefined }
+    creator = { ...characterCreator, worldId: world.worldId, readRoot: world.readRoot, characterRoot: owner.writableRoot, workspaces: worlds, createCatalogBinding: undefined }
   }
   let basics: WorldBasicsConfig | undefined
   if (deployment.worldBasics) {

@@ -1,6 +1,6 @@
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
-import { realpath, stat } from 'node:fs/promises'
+import { mkdir, realpath, stat } from 'node:fs/promises'
 import { bootstrapAgents, jsonlSessionPersistencePlugin, type Agent } from '@fly-novel/agents'
 import type { AgentLoopInput, AgentLoopResult } from '@fly-novel/agent-loop'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
@@ -13,8 +13,11 @@ import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import type { LlmAdapter } from '@fly-novel/llm'
 import { createCatalogTools, readFileTool } from '../../tools/index.js'
 import type { CatalogBinding } from '../../world-init/workspace/catalog/service.js'
-import { CharacterStore, characterToolsPluginDefinition } from '@fly-novel/character'
+import { CharacterStore, CharacterRelationshipStore, characterToolsPluginDefinition } from '@fly-novel/character'
+import { createMapTools, type MapStore } from '@fly-novel/map'
+import { createOrganizationTools, type OrganizationStore } from '@fly-novel/organization'
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
 
 /** 由可信应用提供身份、存储及模型路由。所有目录必须已经存在。 */
 export interface CharacterCreatorConfig {
@@ -30,6 +33,9 @@ export interface CharacterCreatorConfig {
   model: string
   adapter: LlmAdapter
   defaultCharacterCount: number
+  /** 可选共享引用；句柄由可信调用方持有，须提供其世界配置。 */
+  references?: { map?: { agentId: string; store: MapStore }; organization?: { agentId: string; store: OrganizationStore } }
+  workspaces?: readonly WorldWorkspaceConfig[]
   /** 可选的可信目录能力；仅由应用装配。 */
   createCatalogBinding?: () => CatalogBinding
 }
@@ -67,6 +73,15 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
   ])
   if (!await isPathUnder(characterRoot, readRoot)) throw new Error('角色目录必须位于读取范围内')
   if (await isPathUnder(sessionRoot, readRoot) || await isPathUnder(readRoot, sessionRoot)) throw new Error('Session 目录不能与读取范围重叠')
+  if (config.references) {
+    if (!config.workspaces) throw new Error('共享引用需要可信世界配置')
+    const worlds = await validateWorldWorkspaceConfigs(config.workspaces)
+    const world = worlds.find(value => value.worldId === config.worldId)
+    if (!world || world.readRoot !== readRoot || !world.agents.some(value => value.agentId === config.agentId && value.writableRoot === characterRoot)) throw new Error('人物服务与可信世界配置不匹配')
+    const map = config.references.map; const organization = config.references.organization
+    if (map && (map.store.boundWorldId !== world.worldId || !world.agents.some(value => value.agentId === map.agentId && value.writableRoot === map.store.rootDirectory))) throw new Error('地图引用与可信世界或负责人目录不匹配')
+    if (organization && (organization.store.worldId !== world.worldId || !world.agents.some(value => value.agentId === organization.agentId && value.writableRoot === organization.store.rootDirectory))) throw new Error('组织引用与可信世界或负责人目录不匹配')
+  }
   const storageSessionId = `character-creator-${createHash('sha256').update(JSON.stringify([config.worldId, config.agentId, config.sessionId])).digest('hex')}`
   const sessionKey = JSON.stringify([sessionRoot, storageSessionId])
   if (sessions.has(sessionKey)) throw new Error('角色创建 Agent Session 正在使用')
@@ -74,11 +89,25 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
   sessions.add(sessionKey)
   const unlock = () => { releaseIdentity(); sessions.delete(sessionKey) }
   let store: CharacterStore | undefined
+  let relationships: CharacterRelationshipStore | undefined
   let agent: Agent | undefined
   let disposeFramework: (() => Promise<void>) | undefined
   let catalogBinding: CatalogBinding | undefined
   try {
     store = await CharacterStore.open(characterRoot, config.initializeCharacters)
+    const relationshipRoot = join(characterRoot, 'relationships')
+    await mkdir(relationshipRoot, { recursive: true })
+    const characters = store
+    const resolvePerson = async (id: string, signal?: AbortSignal) => {
+      signal?.throwIfAborted()
+      const records = await characters.query({})
+      signal?.throwIfAborted()
+      if (!records.some(value => value.id === id)) return null
+      const value = await characters.read(id)
+      signal?.throwIfAborted()
+      return { id: value.metadata.id, worldId: config.worldId, name: value.metadata.name }
+    }
+    relationships = await CharacterRelationshipStore.open({ root: relationshipRoot, worldId: config.worldId, phase: 'initialization', singleWriterProcess: true, resolvePerson })
     const framework = await bootstrapAgents()
     for (const definition of [sandboxPolicyPluginDefinition, fsSandboxPluginDefinition, fsObservationPolicyPluginDefinition,
       toolFsReadPluginDefinition, toolFsSearchPluginDefinition, localSubprocessPluginDefinition, characterToolsPluginDefinition]) framework.plugins.register(definition)
@@ -100,17 +129,20 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
       'sandbox-policy': { mode: 'read-only', workspaceRoot: readRoot }, 'fs-sandbox': { cwd: readRoot },
       llm: { adapters: [{ providers: [config.provider], adapter: config.adapter }] },
       'character-creator-system-prompt': { defaultCharacterCount: config.defaultCharacterCount },
-      'character-tools': { store },
+      'character-tools': { store, initialization: true, relationship: { store: relationships, worldId: config.worldId, resolvePerson } },
     } })
     agent.context.tools.register(readFileTool)
+    const identity = agent.context.tools.agent
+    if (!identity) throw new Error('角色 Agent 工具缺少身份')
+    if (config.references?.map) for (const tool of createMapTools(config.references.map.store, identity, 'read-only')) agent.context.tools.register(tool)
+    if (config.references?.organization) for (const tool of createOrganizationTools(config.references.organization.store, identity, { kind: 'planner', worldId: config.worldId }, 'read-only')) agent.context.tools.register(tool)
     if (config.createCatalogBinding) {
       catalogBinding = config.createCatalogBinding()
-      const identity = agent.context.tools.agent
-      if (!identity) throw new Error('角色 Agent 的目录工具缺少身份')
       for (const tool of createCatalogTools(catalogBinding, identity)) agent.context.tools.register(tool)
     }
     const current = agent
     const ownedStore = store
+    const ownedRelationships = relationships
     const disposeOwnedFramework = disposeFramework
     let disposal: Promise<void> | undefined
     return {
@@ -119,6 +151,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
       dispose: () => disposal ??= (async () => {
         await disposeOwnedFramework()
         await catalogBinding?.close()
+        await ownedRelationships.close()
         await ownedStore.close()
         unlock()
       })(),
@@ -127,6 +160,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
     try {
       await disposeFramework?.()
       await catalogBinding?.close()
+      await relationships?.close()
       await store?.close()
       if (!(error instanceof AggregateError)) unlock()
     } catch (cleanup) {

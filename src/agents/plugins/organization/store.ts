@@ -54,6 +54,8 @@ export class OrganizationStore {
 
   /** 由可信应用绑定，不由工具参数选择。 */
   get worldId(): string { return this.config.worldId }
+  /** 供可信应用核对组织负责人目录。 */
+  get rootDirectory(): string { return this.rootPath }
   /** 表明该句柄允许写入；查询授权由调用方单独绑定。 */
   get writable(): boolean { return this.config.access === 'read-write' }
 
