@@ -35,6 +35,7 @@ src/tools/subagent-character/ 角色专用工具实现
 src/tools/catalog/ 世界工作区资料目录专用工具实现
 src/tools/subagent-world-basics/ 世界基础信息 Agent 的专用委派工具
 src/tools/subagent-organization/ 组织 Agent 的专用委派工具
+src/tools/subagent-history/ 历史 Agent 的专用委派工具
 src/tools/subagent-character/delegate-character-creator.ts 角色创建 Agent 的专用委派工具
 src/agents/plugins/fs/ 文件系统能力工作区包目录，包含基础库、服务、后端与工具插件
 src/agents/plugins/fs/fs/ `@fly-novel/fs` 独立工作区包，定义文件系统服务契约和事件
@@ -57,6 +58,7 @@ src/agents/world-initialization-main-agent/plugins/system-prompt/ 世界初始�
 src/agents/world-initialization-main-agent/skills/ 世界初始化主 Agent 的专属 Skill 内容
 src/agents/map-agent/ 地图与空间专用 Agent 的 Preset 和职责提示词
 src/agents/organization-agent/ 组织专用 Agent 的 Preset 和职责提示词
+src/agents/history-agent/ 历史专用 Agent 的 Preset 和职责提示词
 src/agents/character/plugins/system-prompt/、src/agents/director/plugins/system-prompt/ 角色和导演的专有提示词插件独立工作区包
 src/agents/character-creator/plugins/system-prompt/ 角色设定创建专有提示词插件独立工作区包
 src/agents/character-creator/preset.ts 角色创建 Agent 的 Harness Preset
@@ -64,6 +66,8 @@ src/agents/world-basics/ 世界基础信息 Agent 的 Harness Preset 与专有�
 src/app/agents/character-creator.ts 角色创建 Agent 的独立应用装配与生命周期入口
 src/app/agents/map-agent.ts 地图 Agent 的独立应用装配与生命周期入口
 src/app/agents/organization-agent.ts 组织 Agent 的独立应用装配与生命周期入口
+src/app/agents/history-agent.ts 历史 Agent 的独立应用装配与生命周期入口
+src/app/agents/history-references.ts 历史对同世界人物、地图和组织的可信引用解析
 src/app/agents/world-basics.ts 世界基础信息 Agent 的独立应用装配与受控成果保存入口
 src/agents/generic-subagent/ 通用子 Agent 的 Preset 和职责提示词插件
 src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理

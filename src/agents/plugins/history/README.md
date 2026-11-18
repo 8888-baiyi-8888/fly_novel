@@ -1,6 +1,6 @@
 # @fly-novel/history
 
-历史事件版本 1 格式、受控存储、事件查询和 Agent 工具工作区包。字段、世界时间及兼容策略见[历史资料契约](../../../../docs/workflows/word-initialization/world-initialization-stage-6a-history-contract.md)。本包不创建历史 Agent 或实现角色认知。
+历史事件版本 1 格式、受控存储、事件查询和 Agent 工具工作区包。字段、世界时间及兼容策略见[历史资料契约](../../../../docs/workflows/word-initialization/world-initialization-stage-6a-history-contract.md)。历史 Agent 的可信装配见[应用说明](../../../app/README.md)；本包不实现角色认知。
 
 `parseHistoryEvent` 和 `formatHistoryEvent` 校验单份 JSON；`validateHistoryEventGraph` 针对调用方提供的完整同世界事件集合校验上级及事件关系目标存在、事件 ID 唯一和上级无环。该检查不读取文件，不核验人物、组织和地点引用，也不推断时间或因果。
 

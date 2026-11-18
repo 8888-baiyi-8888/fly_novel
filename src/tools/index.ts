@@ -3,3 +3,4 @@ export { createCharacterDelegationTool } from './subagent-character/delegate-cha
 export { createCharacterCreatorDelegationTool } from './subagent-character/delegate-character-creator.js'
 export { createCatalogTools } from './catalog/catalog-tools.js'
 export { createOrganizationDelegationTool } from './subagent-organization/delegate-organization.js'
+export { createHistoryDelegationTool } from './subagent-history/delegate-history.js'
