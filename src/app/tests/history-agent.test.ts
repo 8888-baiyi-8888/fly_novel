@@ -71,3 +71,29 @@ test('缺失历史目录启动失败后释放身份，修复后可以启动', as
   await assert.rejects(createHistoryAgent(config)); await mkdir(join(world.readRoot, 'history', 'candidates'))
   const agent = await createHistoryAgent(config); await agent.dispose()
 })
+
+test('关闭主 Agent 取消历史任务并释放身份', { timeout: 10000 }, async t => {
+  const { world, sessionRoot } = await setup(t)
+  class ParentAdapter extends LlmAdapter {
+    override async *stream(): AsyncIterable<StreamChunk> {
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'delegate' as ToolCallId, name: 'delegate_history', arguments: JSON.stringify({ task: '规划历史' }) } }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+    }
+  }
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new ParentAdapter() }))
+  let entered!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve })
+  class WaitAdapter extends LlmAdapter {
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      entered()
+      if (!options.signal?.aborted) await new Promise<void>(resolve => options.signal?.addEventListener('abort', () => resolve(), { once: true }))
+      yield { type: 'finish', reason: { kind: 'aborted', failure: { message: '取消', code: 'ABORTED' } } }
+    }
+  }
+  const history = { agentId: 'history', sessionId: 'cancel', sessionMode: 'create' as const, sessionRoot, provider: 'test', model: 'test', adapter: new WaitAdapter() }
+  const parent = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true, historyAgent: history })
+  const pending = parent.run({ prompt: '规划' }); const rejected = assert.rejects(pending)
+  await started; await parent.dispose(); await rejected
+  const resumed = await createHistoryAgent({ ...history, adapter: new Script(), sessionMode: 'resume', workspaces: [world], worldId: world.worldId, singleWriterProcess: true })
+  await resumed.dispose()
+})
