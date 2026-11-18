@@ -8,5 +8,5 @@
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
   "files": ["dist", "README.md"],
   "scripts": { "typecheck": "tsc -p tsconfig.json", "build": "tsc -p tsconfig.build.json" },
-  "dependencies": { "yaml": "^2.9.1", "zod": "^4.6.5" }
+  "dependencies": { "@deepseek-ai/cordis": "^4.0.2", "@fly-novel/fs": "workspace:*", "@fly-novel/tools": "workspace:*", "yaml": "^2.9.1", "zod": "^4.6.5" }
 }

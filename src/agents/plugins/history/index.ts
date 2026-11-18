@@ -1,1 +1,5 @@
 export { historyIdSchema, historyEventSchema, parseHistoryEvent, formatHistoryEvent, validateHistoryEventGraph, type HistoryEvent } from './format.js'
+export { HistoryStore, HistoryError, type HistoryErrorCode, type HistoryEventInput, type HistoryReferenceResolver, type HistoryStoreConfig, type StoredHistoryEvent, type HistorySnapshot } from './store.js'
+export { HistoryQueries } from './query.js'
+export { createHistoryTools } from './tools.js'
+export { historyToolsPlugin, historyToolsPluginDefinition, type HistoryToolsPluginConfig } from './plugin.js'
