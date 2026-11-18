@@ -6,9 +6,9 @@ import { test } from 'node:test'
 import fsPromises = require('node:fs/promises')
 import type { ToolCallId } from '@fly-novel/llm'
 import { ToolsService } from '@fly-novel/tools'
-import { CharacterStore } from '../../world-init/character/store.js'
-import { CharacterRelationshipStore } from '../../world-init/character/relationship-store.js'
-import { createCharacterRelationshipTools } from '../subagent-character/relationship-tools.js'
+import { CharacterStore } from '@fly-novel/character'
+import { CharacterRelationshipStore } from '@fly-novel/character'
+import { createCharacterRelationshipTools } from '@fly-novel/character'
 
 test('人物关系工具按双端和方向查询、显示当前姓名并保护版本与引用', async t => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'character-relation-tools-')))

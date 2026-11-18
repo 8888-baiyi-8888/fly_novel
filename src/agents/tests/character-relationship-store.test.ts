@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { test } from 'node:test'
 import fsPromises = require('node:fs/promises')
-import { CharacterStore } from '../character/store.js'
-import { CharacterRelationshipStore } from '../character/relationship-store.js'
+import { CharacterStore } from '@fly-novel/character'
+import { CharacterRelationshipStore } from '@fly-novel/character'
 
 test('关系存储复用真实角色 ID，保护无序配对、线索和旧角色资料', async t => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'character-relations-'))); t.after(() => rm(root, { recursive: true, force: true }))

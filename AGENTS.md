@@ -27,7 +27,6 @@ src/world-init/    世界初始化业务能力目录，测试放在 src/world-in
 src/world-init/workspace/ 多世界工作区配置校验、Agent 身份占用及资料目录
 src/world-init/workspace/catalog/ 资料目录格式、持久化与成果路径校验
 src/world-init/workspace/catalog/service.ts 世界级资料目录服务与可信身份绑定
-src/world-init/character/ 角色资料格式、索引及待审修改的受控文件服务
 src/app/world-initialization-files-debug.ts 世界初始化受控文件工具的真实模型交互调试入口
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
@@ -75,6 +74,7 @@ src/agents/plugins/subagent/subagent-persistent-in-process/ `@fly-novel/subagent
 src/agents/plugins/subagent/subagent-fork-in-process/ 进程内 Fork Provider，继承父会话已结束轮次
 src/agents/plugins/skill/ `@fly-novel/skill` 独立工作区包，提供 Skill 来源注册、查询与 Cordis 服务插件
 src/agents/plugins/map/ `@fly-novel/map` 独立工作区包，提供地图 JSON 格式、受控文档存储、查询及工具定义
+src/agents/plugins/character/ `@fly-novel/character` 独立工作区包，提供人物及关系格式、受控存储、查询和工具
 src/agents/plugins/organization/ `@fly-novel/organization` 独立工作区包，提供组织 JSON 存储、身份绑定查询和工具
 src/agents/plugins/organization/ `@fly-novel/organization` 独立工作区包，提供组织与关系 JSON 格式和受控文档存储
 src/agents/plugins/skill-filesystem/ `@fly-novel/skill-filesystem` 独立工作区包，提供文件系统 Skill 来源及插件

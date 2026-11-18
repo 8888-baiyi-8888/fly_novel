@@ -7,7 +7,7 @@ import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
 import { parseOrganization, parseOrganizationMembership, parseOrganizationRelation } from '@fly-novel/organization'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
-import { CharacterStore } from '../../world-init/character/store.js'
+import { CharacterStore } from '@fly-novel/character'
 import { initializeCatalog } from '../../world-init/workspace/catalog/format.js'
 import type { WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
 import configured = require('../call-llm.js')

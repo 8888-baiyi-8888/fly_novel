@@ -1,6 +1,6 @@
 import { MapStore, MapStoreError } from '@fly-novel/map'
 import type { OrganizationReferenceResolver } from '@fly-novel/organization'
-import { CharacterStore } from '../../world-init/character/store.js'
+import { CharacterStore } from '@fly-novel/character'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
 
 /** 仅从已拥有的同世界服务提供组织引用核验，不重复打开服务或转交写入能力。 */

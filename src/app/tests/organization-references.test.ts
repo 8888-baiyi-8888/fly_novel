@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
 import { OrganizationStore } from '@fly-novel/organization'
-import { CharacterStore } from '../../world-init/character/store.js'
+import { CharacterStore } from '@fly-novel/character'
 import { createOrganizationReferenceResolvers } from '../agents/organization-references.js'
 
 test('组织引用复用同世界真实地图和角色服务，并拒绝跨世界绑定', async t => {

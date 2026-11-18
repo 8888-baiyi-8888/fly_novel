@@ -4,9 +4,7 @@
 
 `index.ts` 是普通具体工具的统一导出入口，应用可以从该入口导入 `readFileTool` 和 `createCharacterDelegationTool`。Skill 工具使用其独立工作区包入口。
 
-`subagent-character/character-tools.ts` 基于可信应用提供的角色资料服务创建角色资料工具；调用方负责注册与注销。工具提供角色创建、名称和分类查询、单个及批量读取、待审修改和需求清单读写；模型不能通过工具确认提交。角色资料服务与权限限制见[世界初始化模块说明](../world-init/README.md)。
 
-`subagent-character/character-tools.ts` 的初始化工具工厂供可信应用在初始化阶段单独注册，提供角色版本读取和未确认资料更新。`subagent-character/relationship-tools.ts` 提供关系创建、读取、按人物查询及版本更新；调用方绑定世界、同世界人物名称解析器和存储，并负责生命周期。查询显示当前姓名；未建档线索和已关联但无法解析的人物分别标识，解析错误不伪装成不存在。工具面向有权读取完整资料的规划者，不能作为角色视角授权或替代普通文件读取隔离；尚未装配进 Agent。
 
 `subagent-character/delegate-character-creator.ts` 创建角色设定专用委派工具 `delegate_character_creator`。可信调用方提供父 Agent 的 SubAgent 服务和身份并负责注册；模型只提供任务与背景，工具通过 `persistent` Provider 等待结果并释放运行。该工具与面向角色扮演的 `delegate_character` 不同。
 
@@ -31,3 +29,5 @@ Skill 服务、文件系统提供方和工具分别参考 [DeepSeek Harness Skil
 当前构建不会复制 `src/agents/world-initialization-main-agent/skills/` 的样例到 `dist/`，世界初始化主 Agent 的 Preset 由应用提供 `skill-filesystem.root`，不会自动定位源码目录。构建产物需要可信应用提供已经部署的 Skill 根目录，并将其置于授权工作目录内；不能假定部署环境存在源码目录。如果应用需要随产物分发该样例，应同时确定资源复制、部署位置和定位方式，并验证干净构建后的加载。
 
 `defineTool` 将参数声明转换为模型可见的 JSON Schema，执行前校验参数，并声明规范输出与模型内容投影。服务执行工具后校验输出 schema，返回规范值与模型可见内容。schema 编译和校验的来源及许可证见[工具插件说明](../agents/plugins/tools/README.md)；模型可见 schema 不包含 `output` 和 `execute`。工具可直接调用，也可显式注册到 Agent 的 `tools` 服务。逐步调试见[工具调试指南](../../docs/cookbook/tool-debug.md)。
+
+??????????[????](../agents/plugins/character/README.md)????? Agent ????????????

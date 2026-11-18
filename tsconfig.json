@@ -53,6 +53,9 @@
       "@fly-novel/map": [
         "./src/agents/plugins/map/index.ts"
       ],
+      "@fly-novel/character": [
+        "./src/agents/plugins/character/index.ts"
+      ],
       "@fly-novel/organization": [
         "./src/agents/plugins/organization/index.ts"
       ],

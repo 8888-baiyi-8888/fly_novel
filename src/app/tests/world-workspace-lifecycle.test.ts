@@ -6,7 +6,7 @@ import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } f
 import configured = require('../call-llm.js')
 import { createCharacterCreator, createWorldInitializationAgentWithWorldWorkspaces } from '../agents/index.js'
 import type { WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
-import { CharacterStore } from '../../world-init/character/store.js'
+import { CharacterStore } from '@fly-novel/character'
 
 class FixedAdapter extends LlmAdapter {
   override async *stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {

@@ -5,7 +5,7 @@ import test from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../call-llm.js')
 import { createWorldInitializationAgentWithWorldWorkspaces } from '../agents/index.js'
-import { CharacterStore } from '../../world-init/character/store.js'
+import { CharacterStore } from '@fly-novel/character'
 import { initializeCatalog } from '../../world-init/workspace/catalog/format.js'
 import { CatalogService } from '../../world-init/workspace/catalog/service.js'
 import type { WorldWorkspaceConfig } from '../../world-init/workspace/config.js'

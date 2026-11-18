@@ -11,9 +11,9 @@ import { toolFsReadPluginDefinition } from '@fly-novel/tool-fs'
 import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
 import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import type { LlmAdapter } from '@fly-novel/llm'
-import { createCatalogTools, createCharacterTools, readFileTool } from '../../tools/index.js'
+import { createCatalogTools, readFileTool } from '../../tools/index.js'
 import type { CatalogBinding } from '../../world-init/workspace/catalog/service.js'
-import { CharacterStore } from '../../world-init/character/store.js'
+import { CharacterStore, characterToolsPluginDefinition } from '@fly-novel/character'
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 
 /** 由可信应用提供身份、存储及模型路由。所有目录必须已经存在。 */
@@ -81,12 +81,12 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
     store = await CharacterStore.open(characterRoot, config.initializeCharacters)
     const framework = await bootstrapAgents()
     for (const definition of [sandboxPolicyPluginDefinition, fsSandboxPluginDefinition, fsObservationPolicyPluginDefinition,
-      toolFsReadPluginDefinition, toolFsSearchPluginDefinition, localSubprocessPluginDefinition]) framework.plugins.register(definition)
+      toolFsReadPluginDefinition, toolFsSearchPluginDefinition, localSubprocessPluginDefinition, characterToolsPluginDefinition]) framework.plugins.register(definition)
     const base = framework.presets.get('character-creator')
     const presetId = 'character-creator-world-read'
     framework.presets.register({ ...base, id: presetId, plugins: [...base.plugins,
       { pluginId: 'sandbox-policy' }, { pluginId: 'fs-sandbox' }, { pluginId: 'fs-observation-policy' },
-      { pluginId: 'subprocess-local' }, { pluginId: 'tool-fs-read' }, { pluginId: 'tool-fs-search' },
+      { pluginId: 'subprocess-local' }, { pluginId: 'tool-fs-read' }, { pluginId: 'tool-fs-search' }, { pluginId: 'character-tools' },
     ] })
     const backend = framework.context.plugin(jsonlSessionPersistencePlugin, { root: sessionRoot })
     disposeFramework = async () => {
@@ -100,8 +100,9 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
       'sandbox-policy': { mode: 'read-only', workspaceRoot: readRoot }, 'fs-sandbox': { cwd: readRoot },
       llm: { adapters: [{ providers: [config.provider], adapter: config.adapter }] },
       'character-creator-system-prompt': { defaultCharacterCount: config.defaultCharacterCount },
+      'character-tools': { store },
     } })
-    for (const tool of [...createCharacterTools(store), readFileTool]) agent.context.tools.register(tool)
+    agent.context.tools.register(readFileTool)
     if (config.createCatalogBinding) {
       catalogBinding = config.createCatalogBinding()
       const identity = agent.context.tools.agent

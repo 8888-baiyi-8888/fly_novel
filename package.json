@@ -45,6 +45,7 @@
   "dependencies": {
     "@fly-novel/fs": "workspace:*",
     "@fly-novel/map": "workspace:*",
+    "@fly-novel/character": "workspace:*",
     "@fly-novel/organization": "workspace:*",
     "@fly-novel/fs-sandbox": "workspace:*",
     "@fly-novel/sandbox": "workspace:*",

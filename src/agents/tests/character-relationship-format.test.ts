@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { formatCharacterRelationship, parseCharacterRelationship } from '../character/relationship-format.js'
+import { formatCharacterRelationship, parseCharacterRelationship } from '@fly-novel/character'
 
 const a = '2e59b48c-2c7c-4abc-b232-97dc06111001'
 const b = 'a903f138-ccaf-4ef4-b89f-04d89c3c1ab2'

@@ -4,8 +4,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CharacterStore } from '../character/store.js'
-import { formatCharacterDocument } from '../character/format.js'
+import { CharacterStore } from '@fly-novel/character'
+import { formatCharacterDocument } from '@fly-novel/character'
 import fsPromises = require('node:fs/promises')
 
 const character = { name: '林岚', summary: '长老', categories: { faction: [{ id: 'a', name: '宗门' }] }, body: '原始资料' }

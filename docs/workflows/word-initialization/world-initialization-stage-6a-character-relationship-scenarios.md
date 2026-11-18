@@ -6,15 +6,15 @@
 
 | 能力 | 实际行为与复用边界 |
 |---|---|
-| 角色资料 | [角色格式](../../../src/world-init/character/format.ts)使用版本 1 YAML 元数据和 Markdown 正文；元数据含 ID、名称、简介、内容状态与分类，正文不强制固定栏目。角色目录和 ID 的实际布局见[资料设计](character-information-design.md)。 |
-| 存储和索引 | [角色存储](../../../src/world-init/character/store.ts)创建 UUID 角色目录及 `profile.md`，以 `index.json` 按名称或分类查询；同名可有多个结果。索引与实际元数据不一致时拒绝读取；受控恢复可重建索引并保留备份。人物文件不自带世界 ID，世界由可信应用和角色根绑定，不能仅凭角色 UUID 宣称已核实世界。 |
+| 角色资料 | [角色格式](../../../src/agents/plugins/character/format.ts)使用版本 1 YAML 元数据和 Markdown 正文；元数据含 ID、名称、简介、内容状态与分类，正文不强制固定栏目。角色目录和 ID 的实际布局见[资料设计](character-information-design.md)。 |
+| 存储和索引 | [角色存储](../../../src/agents/plugins/character/store.ts)创建 UUID 角色目录及 `profile.md`，以 `index.json` 按名称或分类查询；同名可有多个结果。索引与实际元数据不一致时拒绝读取；受控恢复可重建索引并保留备份。人物文件不自带世界 ID，世界由可信应用和角色根绑定，不能仅凭角色 UUID 宣称已核实世界。 |
 | 修改和恢复 | `create` 保存 `suggested`；`prepare` 创建候选及摘要基线，可信 `commit` 核验后提交。初始化期间对现有未确认角色直接按版本更新尚无专用入口；已有候选、提交状态和备份必须保留，不能用初始化覆盖绕过恢复。 |
 | 创建 Agent 和工具 | [角色创建入口](../../../src/app/agents/character-creator.ts)提供独立运行、持久 Session 和角色工具；世界入口可通过 `delegate_character_creator` 委派。工具提供创建、按名称和分类查询、读取、准备候选和需求清单，不提供人物关系存储或初始化直接更新。Session 恢复对话，不证明业务完成。 |
 | 角色 Agent 样例 | [角色 Preset](../../../src/agents/character/preset.ts)和[提示词](../../../src/agents/character/plugins/system-prompt/README.md)提供角色视角示例；角色资料由输入提供，尚不按 ID 自动加载；记忆插件是实例内样例，不代表长期记忆。 |
 | 组织成员 | [组织查询](../../../src/agents/plugins/organization/README.md)按组织或已关联人物 ID 查询同一份成员记录，并提供受可信授权绑定的角色视图。当前角色创建入口没有自动装配该查询；`faction` 分类不会自动同步为成员关系。 |
 | 地点与人物引用 | [组织引用装配](../../../src/app/agents/organization-references.ts)可复用由可信应用持有的同世界地图与角色存储校验引用；调用方负责句柄生命周期。此能力不等于已有通用人物关系读取接口。 |
 
-现有[角色存储测试](../../../src/world-init/tests/character-store.test.ts)覆盖同名、候选、索引和恢复；[角色创建集成测试](../../../src/app/tests/character-creator-integration.test.ts)覆盖委派、Session 和角色工具；[组织引用测试](../../../src/app/tests/organization-references.test.ts)覆盖同世界校验。它们不能证明人物关系服务、初始化直接覆盖或角色认知隔离已经存在。
+现有[角色存储测试](../../../src/agents/tests/character-store.test.ts)覆盖同名、候选、索引和恢复；[角色创建集成测试](../../../src/app/tests/character-creator-integration.test.ts)覆盖委派、Session 和角色工具；[组织引用测试](../../../src/app/tests/organization-references.test.ts)覆盖同世界校验。它们不能证明人物关系服务、初始化直接覆盖或角色认知隔离已经存在。
 
 ## 初始化场景
 

@@ -1,7 +1,7 @@
 import { defineTool } from '@fly-novel/tools'
 import { z } from 'zod'
-import { characterRelationshipSchema, type CharacterRelationship } from '../../world-init/character/relationship-format.js'
-import type { CharacterRelationshipStore } from '../../world-init/character/relationship-store.js'
+import { characterRelationshipSchema, type CharacterRelationship } from './relationship-format.js'
+import type { CharacterRelationshipStore } from './relationship-store.js'
 
 const participant = z.discriminatedUnion('kind', [z.object({ kind: z.literal('linked'), id: z.string() }).strict(),
   z.object({ kind: z.literal('unresolved'), description: z.string() }).strict()])
