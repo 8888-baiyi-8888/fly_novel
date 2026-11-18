@@ -39,7 +39,7 @@ export function createCharacterRelationshipTools(store: CharacterRelationshipSto
   }
   return [
     defineTool({ name: 'character_relationship_create', description: '创建初始化时已存在的人物关系；ID 由服务生成。', reportOnAbort: true,
-      parameters: { relationship: { type: 'json', required: true, description: '包含两个 participants 和 relations；未建档人物以 unresolved 线索表示。' } }, output,
+      parameters: { relationship: { type: 'json', required: true, description: '格式示例：{"participants":[{"kind":"linked","id":"人物A的ID"},{"kind":"linked","id":"人物B的ID"}],"relations":[{"name":"师徒","direction":"a-to-b","description":"A是B的师父"}]}。未建档端点用 {"kind":"unresolved","description":"线索"}；direction 只能为 a-to-b、b-to-a 或 two-way，方向以数组中的 A、B 顺序为准。' } }, output,
       async execute({ relationship }, exec) { return JSON.stringify(await store.create(creation.parse(relationship), exec.signal)) } }),
     defineTool({ name: 'character_relationship_read', description: '按关系 ID 读取公共关系及当前人物名称。',
       parameters: { id: { type: 'string', required: true, description: '关系文档 ID。' } }, output,

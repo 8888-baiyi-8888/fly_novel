@@ -12,7 +12,7 @@ export function createCharacterTools(store: CharacterStore) {
   const output = { schema: { type: 'string' as const }, render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }] }
   return [
     defineTool({ name: 'character_create', description: '创建一份角色建议；角色 ID 由程序生成。', reportOnAbort: true,
-      parameters: { character: { type: 'json', required: true, description: '包含 name、summary、categories 和 body 的角色资料。' } }, output,
+      parameters: { character: { type: 'json', required: true, description: '完整资料：{"name":"姓名","summary":"简介","categories":{},"body":"正文"}。categories 是对象，键为小写英文分类名，值为含 id 和 name 的对象数组；无需分类时使用 {}。' } }, output,
       async execute({ character }, exec) { exec.signal.throwIfAborted(); return JSON.stringify(await store.create(inputSchema.parse(character))) } }),
     defineTool({ name: 'character_search', description: '按名称或分类分页查询角色；同名返回多个候选。',
       parameters: { filter: { type: 'json', required: true, description: '包含可选 name 和 categories 的查询条件。' },
@@ -36,7 +36,7 @@ export function createCharacterTools(store: CharacterStore) {
       async execute({ ids }, exec) { exec.signal.throwIfAborted(); return JSON.stringify(await store.readMany(ids)) } }),
     defineTool({ name: 'character_prepare', description: '为选定角色保存待审修改，不确认或覆盖当前资料。', reportOnAbort: true,
       parameters: { id: { type: 'string', required: true, description: '现有角色 ID。' },
-        character: { type: 'json', required: true, description: '包含 name、summary、categories 和 body 的完整修改建议。' } }, output,
+        character: { type: 'json', required: true, description: '完整修改：包含 name、summary、body 和 categories 对象；无分类使用 {}，分类值为含 id 和 name 的对象数组。' } }, output,
       async execute({ id, character }, exec) { exec.signal.throwIfAborted(); return JSON.stringify(await store.prepare(id, inputSchema.parse(character))) } }),
     defineTool({ name: 'character_pending_read', description: '读取角色待审修改及基线。',
       parameters: { id: { type: 'string', required: true, description: '现有角色 ID。' } }, output,
@@ -59,7 +59,7 @@ export function createCharacterInitializationTools(store: CharacterStore) {
       async execute({ id }, exec) { exec.signal.throwIfAborted(); return JSON.stringify(await store.readVersioned(id)) } }),
     defineTool({ name: 'character_initialization_update', description: '按版本更新初始化中未确认的完整角色资料。', reportOnAbort: true,
       parameters: { id: { type: 'string', required: true, description: '角色 ID。' }, version: { type: 'string', required: true, description: '读取所得版本。' },
-        character: { type: 'json', required: true, description: '包含 name、summary、categories 和 body 的完整资料。' } }, output,
+        character: { type: 'json', required: true, description: '完整资料：包含 name、summary、body 和 categories 对象；无分类使用 {}，分类值为含 id 和 name 的对象数组。' } }, output,
       async execute({ id, version, character }, exec) { return JSON.stringify(await store.updateInitialization(id, version, inputSchema.parse(character), 'initialization', exec.signal)) } }),
   ] as const
 }

@@ -22,6 +22,8 @@ class Script extends LlmAdapter {
     const n = this.requests.length
     const names = options.tools?.map(tool => tool.name) ?? []
     for (const name of ['character_relationship_create', 'character_relationship_search', 'character_initialization_update', ...(this.cross ? ['map_overview_read', 'organization_memberships_read'] : [])]) assert.ok(names.includes(name), name)
+    assert.match(JSON.stringify(options.tools?.find(tool => tool.name === 'character_create')), /categories.*id.*name/)
+    assert.match(JSON.stringify(options.tools?.find(tool => tool.name === 'character_relationship_create')), /a-to-b.*b-to-a.*two-way/)
     assert.ok(!names.includes('map_place_create')); assert.ok(!names.includes('organization_create'))
     const result = (id: string) => {
       const block = options.messages.flatMap(message => message.content).find(value => value.type === 'tool-result' && value.toolCallId === id)
