@@ -38,6 +38,9 @@ importers:
       '@fly-novel/fs-sandbox':
         specifier: workspace:*
         version: link:src/agents/plugins/fs/fs-sandbox
+      '@fly-novel/history':
+        specifier: workspace:*
+        version: link:src/agents/plugins/history
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:src/llm
@@ -399,6 +402,15 @@ importers:
       '@vscode/ripgrep':
         specifier: 1.18.0
         version: 1.18.0
+
+  src/agents/plugins/history:
+    dependencies:
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   src/agents/plugins/loop:
     dependencies:

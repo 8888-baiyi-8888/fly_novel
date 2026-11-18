@@ -13,6 +13,7 @@ packages:
   - 'src/agents/plugins/subagent/tool-subagent'
   - 'src/agents/plugins/skill'
   - 'src/agents/plugins/map'
+  - 'src/agents/plugins/history'
   - 'src/agents/plugins/character'
   - 'src/agents/plugins/organization'
   - 'src/agents/plugins/skill-filesystem'
