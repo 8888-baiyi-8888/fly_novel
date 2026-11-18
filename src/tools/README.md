@@ -30,4 +30,4 @@ Skill 服务、文件系统提供方和工具分别参考 [DeepSeek Harness Skil
 
 `defineTool` 将参数声明转换为模型可见的 JSON Schema，执行前校验参数，并声明规范输出与模型内容投影。服务执行工具后校验输出 schema，返回规范值与模型可见内容。schema 编译和校验的来源及许可证见[工具插件说明](../agents/plugins/tools/README.md)；模型可见 schema 不包含 `output` 和 `execute`。工具可直接调用，也可显式注册到 Agent 的 `tools` 服务。逐步调试见[工具调试指南](../../docs/cookbook/tool-debug.md)。
 
-??????????[????](../agents/plugins/character/README.md)????? Agent ????????????
+人物资料和关系工具由[人物插件](../agents/plugins/character/README.md)提供；角色 Agent 的委派工具位于本目录。
