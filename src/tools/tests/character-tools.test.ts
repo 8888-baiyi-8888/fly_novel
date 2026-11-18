@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import type { ToolCallId } from '@fly-novel/llm'
 import { ToolsService } from '@fly-novel/tools'
 import { CharacterStore } from '../../world-init/character/store.js'
-import { createCharacterTools } from '../subagent-character/character-tools.js'
+import { createCharacterInitializationTools, createCharacterTools } from '../subagent-character/character-tools.js'
 
 test('工具通过服务创建、查找和准备待审修改，不能由模型提交确认', async t => {
   const root = await mkdtemp(join(tmpdir(), 'character-tools-'))
@@ -48,4 +48,23 @@ test('工具通过服务创建、查找和准备待审修改，不能由模型�
   assert.equal(prepared.isError, false)
   assert.equal((await store.read(id)).body, '原设定\n')
   assert.equal((await store.readPending(id)).document.body, '修改建议\n')
+})
+
+test('可信初始化工具按版本更新并保护已有待审候选', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'character-initialization-tools-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const store = await CharacterStore.open(root, true); t.after(() => store.close())
+  const input = { name: '林岚', summary: '', categories: {}, body: '原资料' }
+  const person = await store.create(input)
+  const tools = new ToolsService(); for (const tool of createCharacterInitializationTools(store)) tools.register(tool)
+  const call = async (name: string, args: object) => (await tools.execute({ calls: [{ type: 'tool-call', id: 'test' as ToolCallId, name, arguments: JSON.stringify(args) }], signal: new AbortController().signal, workingDirectory: root })).results[0]!.result
+  const read = await call('character_initialization_read', { id: person.id })
+  if (read.isError || typeof read.value !== 'string') throw new Error('读取失败')
+  const version: string = JSON.parse(read.value).version
+  assert.equal((await call('character_initialization_update', { id: person.id, version, character: { ...input, body: '新资料' } })).isError, false)
+  assert.equal((await call('character_initialization_update', { id: person.id, version, character: input })).isError, true)
+  await store.prepare(person.id, { ...input, body: '候选' })
+  const latest = await store.readVersioned(person.id)
+  assert.equal((await call('character_initialization_update', { id: person.id, version: latest.version, character: input })).isError, true)
+  assert.equal((await store.readPending(person.id)).document.body, '候选\n')
 })

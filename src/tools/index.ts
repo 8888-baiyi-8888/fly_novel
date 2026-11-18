@@ -1,6 +1,7 @@
 export { readFileTool } from './filesystem/read-file.js'
 export { createCharacterDelegationTool } from './subagent-character/delegate-character.js'
-export { createCharacterTools } from './subagent-character/character-tools.js'
+export { createCharacterInitializationTools, createCharacterTools } from './subagent-character/character-tools.js'
+export { createCharacterRelationshipTools } from './subagent-character/relationship-tools.js'
 export { createCharacterCreatorDelegationTool } from './subagent-character/delegate-character-creator.js'
 export { createCatalogTools } from './catalog/catalog-tools.js'
 export { createOrganizationDelegationTool } from './subagent-organization/delegate-organization.js'

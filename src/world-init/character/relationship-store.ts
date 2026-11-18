@@ -10,13 +10,13 @@ const occupiedRoots = new Set<string>()
 const digest = (value: string) => createHash('sha256').update(value).digest('hex')
 type ParticipantInput = { kind: 'linked'; id: string } | { kind: 'unresolved'; description: string }
 type RelationInput = { name: string; direction: 'a-to-b' | 'b-to-a' | 'two-way'; description: string }
-type Content = Pick<CharacterRelationship, 'participants' | 'relations'>
+type Content = { participants: CharacterRelationship['participants']; relations: (Omit<CharacterRelationship['relations'][number], 'id'> & { id?: string })[] }
 type Stored = { document: CharacterRelationship; version: string; path: string }
 
 /** 发布结果不确定时保留目标路径，调用方须先核查。 */
 export class CharacterRelationshipCommitUnknownError extends Error {
   readonly code = 'CHARACTER_RELATIONSHIP_COMMIT_UNKNOWN'
-  constructor(readonly path: string, cause: unknown) { super('人物关系发布结果不确定，请核查目标文件', { cause }); this.name = 'CharacterRelationshipCommitUnknownError' }
+  constructor(readonly path: string, cause: unknown) { super(`人物关系发布结果不确定，请核查目标文件 ${path}`, { cause }); this.name = 'CharacterRelationshipCommitUnknownError' }
 }
 
 /** 可信应用提供同世界人物解析；模型不能提供世界、目录或授权。 */
@@ -35,6 +35,9 @@ export class CharacterRelationshipStore {
   private closing?: Promise<void>
   private closed = false
   private constructor(private readonly config: CharacterRelationshipStoreConfig, private readonly limit: number) {}
+
+  /** 提供给可信装配以核对读取绑定。 */
+  get worldId(): string { return this.config.worldId }
 
   /** 打开预先创建的真实目录；不初始化或迁移现有角色资料。 */
   static async open(config: CharacterRelationshipStoreConfig): Promise<CharacterRelationshipStore> {
@@ -114,6 +117,31 @@ export class CharacterRelationshipStore {
   read(id: string, signal?: AbortSignal): Promise<Stored> {
     return this.run(async () => { const all = await this.scan(signal); const value = all.find(item => item.document.id === id); if (!value) throw new Error('人物关系不存在'); return value })
   }
+  /** 按人物及相对方向查询完整关系文档；分页版本反映关系文件而非人物姓名。 */
+  query(input: { personId: string; direction?: 'outgoing' | 'incoming' | 'two-way'; keyword?: string; offset?: number; limit?: number; version?: string }, signal?: AbortSignal): Promise<{ items: Stored[]; total: number; offset: number; nextOffset: number | null; version: string }> {
+    return this.run(async () => {
+      const personId = uuid.parse(input.personId)
+      const offset = z.number().int().nonnegative().parse(input.offset ?? 0)
+      const limit = z.number().int().min(1).max(100).parse(input.limit ?? 50)
+      const direction = z.enum(['outgoing', 'incoming', 'two-way']).optional().parse(input.direction)
+      const keyword = z.string().trim().min(1).optional().parse(input.keyword)
+      const all = await this.scan(signal)
+      const matches = all.filter(({ document }) => {
+        const side = document.participants.findIndex(participant => participant.kind === 'linked' && participant.id === personId)
+        if (side < 0) return false
+        if (!direction && !keyword) return true
+        return document.relations.some(relation => {
+          const relative = relation.direction === 'two-way' ? 'two-way' : (relation.direction === 'a-to-b') === (side === 0) ? 'outgoing' : 'incoming'
+          return (!direction || relative === direction) && (!keyword || `${relation.name}\n${relation.description}`.includes(keyword))
+        })
+      })
+      const version = digest(JSON.stringify(matches.map(item => [item.document.id, item.version])))
+      if (input.version !== undefined && input.version !== version) throw new Error('人物关系查询结果已变化，请重新查询')
+      signal?.throwIfAborted()
+      const items = matches.slice(offset, offset + limit)
+      return { items, total: matches.length, offset, nextOffset: offset + items.length < matches.length ? offset + items.length : null, version }
+    })
+  }
   /** 更新初始化方案；旧摘要、确认状态和配对冲突均拒绝覆盖。 */
   update(id: string, version: string, content: Content, signal?: AbortSignal): Promise<Stored> {
     return this.run(async () => {
@@ -121,7 +149,10 @@ export class CharacterRelationshipStore {
       if (!old) throw new Error('人物关系不存在')
       if (old.version !== version) throw new Error('人物关系版本已变化')
       if (old.document.contentStatus !== 'suggested') throw new Error('已确认关系不能直接覆盖')
-      const document = characterRelationshipSchema.parse({ ...old.document, ...content })
+      const oldIds = new Set(old.document.relations.map(item => item.id))
+      if (content.relations.some(item => item.id !== undefined && !oldIds.has(item.id))) throw new Error('新关系条目不能指定 ID')
+      const document = characterRelationshipSchema.parse({ ...old.document, ...content,
+        relations: content.relations.map(item => ({ ...item, id: item.id ?? randomUUID() })) })
       for (let i = 0; i < 2; i++) {
         const previous = old.document.participants[i]; const next = document.participants[i]
         if (previous.kind === 'linked' && (next.kind !== 'linked' || next.id !== previous.id)) throw new Error('已关联人物不能直接替换')

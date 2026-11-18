@@ -6,6 +6,8 @@
 
 `subagent-character/character-tools.ts` 基于可信应用提供的角色资料服务创建角色资料工具；调用方负责注册与注销。工具提供角色创建、名称和分类查询、单个及批量读取、待审修改和需求清单读写；模型不能通过工具确认提交。角色资料服务与权限限制见[世界初始化模块说明](../world-init/README.md)。
 
+`subagent-character/character-tools.ts` 的初始化工具工厂供可信应用在初始化阶段单独注册，提供角色版本读取和未确认资料更新。`subagent-character/relationship-tools.ts` 提供关系创建、读取、按人物查询及版本更新；调用方绑定世界、同世界人物名称解析器和存储，并负责生命周期。查询显示当前姓名；未建档线索和已关联但无法解析的人物分别标识，解析错误不伪装成不存在。工具面向有权读取完整资料的规划者，不能作为角色视角授权或替代普通文件读取隔离；尚未装配进 Agent。
+
 `subagent-character/delegate-character-creator.ts` 创建角色设定专用委派工具 `delegate_character_creator`。可信调用方提供父 Agent 的 SubAgent 服务和身份并负责注册；模型只提供任务与背景，工具通过 `persistent` Provider 等待结果并释放运行。该工具与面向角色扮演的 `delegate_character` 不同。
 
 `subagent-organization/delegate-organization.ts` 创建组织专用委派工具 `delegate_organization`。可信调用方绑定父 Agent 身份和 SubAgent 服务；模型只提供任务及必要背景，工具通过 `persistent` Provider 等待结果并释放运行。组织资料读写工具由[组织插件](../agents/plugins/organization/README.md)提供。

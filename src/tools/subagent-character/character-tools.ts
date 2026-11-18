@@ -49,3 +49,17 @@ export function createCharacterTools(store: CharacterStore) {
       async execute({ data, body, version }, exec) { exec.signal.throwIfAborted(); return JSON.stringify({ version: await store.saveRequirements(requirementsSchema.parse(data), body, version) }) } }),
   ] as const
 }
+
+/** 仅由可信应用在初始化阶段注册；不会为已确认角色绕过待审修改。 */
+export function createCharacterInitializationTools(store: CharacterStore) {
+  const output = { schema: { type: 'string' as const }, render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }] }
+  return [
+    defineTool({ name: 'character_initialization_read', description: '读取角色当前资料及初始化更新所需版本。',
+      parameters: { id: { type: 'string', required: true, description: '角色 ID。' } }, output,
+      async execute({ id }, exec) { exec.signal.throwIfAborted(); return JSON.stringify(await store.readVersioned(id)) } }),
+    defineTool({ name: 'character_initialization_update', description: '按版本更新初始化中未确认的完整角色资料。', reportOnAbort: true,
+      parameters: { id: { type: 'string', required: true, description: '角色 ID。' }, version: { type: 'string', required: true, description: '读取所得版本。' },
+        character: { type: 'json', required: true, description: '包含 name、summary、categories 和 body 的完整资料。' } }, output,
+      async execute({ id, version, character }, exec) { return JSON.stringify(await store.updateInitialization(id, version, inputSchema.parse(character), 'initialization', exec.signal)) } }),
+  ] as const
+}

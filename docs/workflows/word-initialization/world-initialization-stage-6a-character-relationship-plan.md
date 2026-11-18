@@ -13,7 +13,7 @@
 | 现有能力 | 可借鉴或复用 | 约束和待评估 |
 |---|---|---|
 | [角色资料与存储](../../../src/world-init/README.md) | UUID、Markdown 与版本化 YAML 元数据、名称及分类索引、需求清单、待审修改、摘要校验和失败恢复。 | 版本 1 的正文是自由文本；现有分类不自动等于人物关系或组织成员记录。格式变化须先设计版本和迁移或拒绝策略。 |
-| [角色创建 Agent](../../../src/app/agents/character-creator.ts)及[专有提示词](../../../src/agents/character-creator/plugins/system-prompt/plugin.ts) | 独立运行、主 Agent 专用委派、持久 Session、人物数量配置和现有角色工具。 | 角色之间的结构化关系查询尚未提供；提示词要求考虑关系，不等于已有关系服务。 |
+| [角色创建 Agent](../../../src/app/agents/character-creator.ts)及[专有提示词](../../../src/agents/character-creator/plugins/system-prompt/plugin.ts) | 独立运行、主 Agent 专用委派、持久 Session、人物数量配置和现有角色工具。 | 人物关系查询工具尚未装配到该 Agent；提示词要求考虑关系不等于 Agent 已使用关系服务。 |
 | [角色 Agent 样例](../../../src/agents/character/preset.ts) | 角色视角、提示词与独立实例可作为将来消费人物资料的参考。 | 当前不按角色 ID 自动加载档案；示例记忆仅为实例内样例，Session 不是长期记忆。不能据此声称角色已有认知隔离或自主行动。 |
 | [组织插件](../../../src/agents/plugins/organization/README.md) | 组织成员的单份记录、未关联线索、双向查询和角色视图可作为接口与安全边界参考。 | 查询过滤只保护对应工具，必须隔离普通文件及目录旁路；组织等级不能自动等同于人物关系可见性。 |
 | [地图插件](../../../src/agents/plugins/map/README.md) | 同世界地点 ID、可信引用核验和复用已打开服务的经验。 | 路径和目录简介不能代替正文；跨模块读取的授权与生命周期须由应用明确绑定。 |
