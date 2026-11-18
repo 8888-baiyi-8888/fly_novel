@@ -13,6 +13,8 @@ const indexSchema = z.object({ formatVersion: z.literal(1), characters: z.array(
 const operationSchema = z.object({ formatVersion: z.literal(1), id: idSchema, baseline: z.string().regex(/^[0-9a-f]{64}$/),
   candidate: z.string().regex(/^[0-9a-f]{64}$/), phase: z.enum(['prepared', 'backup-ready', 'profile-written', 'index-written']) }).strict()
 const pendingSchema = z.object({ formatVersion: z.literal(1), baseline: z.string().regex(/^[0-9a-f]{64}$/) }).strict()
+const initializationOperationSchema = z.object({ formatVersion: z.literal(1), id: idSchema, baseline: z.string().regex(/^[0-9a-f]{64}$/),
+  candidate: z.string().regex(/^[0-9a-f]{64}$/), phase: z.enum(['prepared', 'index-written']) }).strict()
 const occupied = new Set<string>()
 const digest = (text: string) => createHash('sha256').update(text).digest('hex')
 
@@ -84,7 +86,9 @@ export class CharacterStore {
     const index = indexSchema.parse(JSON.parse(await regularFile(join(this.root, 'index.json'))))
     for (const item of index.characters) {
       const dir = await this.directory(item.id)
-      try { await lstat(join(dir, 'operation.json')); throw new Error('角色存在未完成的提交') } catch (error) { if (!missing(error)) throw error }
+      for (const name of ['operation.json', 'initialization-operation.json', 'initialization-backup.md']) {
+        try { await lstat(join(dir, name)); throw new Error('角色存在未完成的提交或初始化更新') } catch (error) { if (!missing(error)) throw error }
+      }
       const actual = parseCharacterDocument(await regularFile(join(dir, 'profile.md'))).metadata
       if (JSON.stringify(actual) !== JSON.stringify(item)) throw new Error('角色索引与资料不一致')
     }
@@ -131,6 +135,89 @@ export class CharacterStore {
       const index = await this.loadIndex()
       if (!index.characters.some(item => item.id === id)) throw new Error('角色不存在')
       return parseCharacterDocument(await regularFile(join(await this.directory(id), 'profile.md')))
+    })
+  }
+
+  /** 读取当前角色及原始文件摘要，供可信初始化更新使用。 */
+  readVersioned(id: string): Promise<{ document: CharacterDocument; version: string }> {
+    return this.run(async () => {
+      const index = await this.loadIndex()
+      if (!index.characters.some(item => item.id === id)) throw new Error('角色不存在')
+      const text = await regularFile(join(await this.directory(id), 'profile.md'))
+      return { document: parseCharacterDocument(text), version: digest(text) }
+    })
+  }
+
+  /** 可信初始化入口按摘要更新未确认角色；失败保留恢复依据。 */
+  updateInitialization(id: string, expected: string, input: Omit<CharacterMetadata, 'formatVersion' | 'id' | 'contentStatus'> & { body: string }, phase: 'initialization', signal?: AbortSignal): Promise<{ version: string }> {
+    return this.run(async () => {
+      signal?.throwIfAborted()
+      if (phase !== 'initialization') throw new Error('只能在初始化阶段更新角色方案')
+      const index = await this.loadIndex(); const item = index.characters.find(value => value.id === id)
+      if (!item) throw new Error('角色不存在')
+      if (item.contentStatus !== 'suggested') throw new Error('已确认角色不能直接覆盖')
+      const dir = await this.directory(id)
+      for (const name of ['pending.md', 'pending.json', 'backup.md', 'operation.json', 'initialization-backup.md', 'initialization-operation.json']) {
+        try { await lstat(join(dir, name)); throw new Error('角色存在待审或未完成资料') } catch (error) { if (!missing(error)) throw error }
+      }
+      const original = await regularFile(join(dir, 'profile.md'))
+      if (digest(original) !== expected) throw new Error('角色资料已变化')
+      const { body, ...fields } = input
+      const metadata = characterMetadataSchema.parse({ ...fields, formatVersion: 1, id, contentStatus: 'suggested' })
+      const candidate = formatCharacterDocument({ metadata, body })
+      const operation = initializationOperationSchema.parse({ formatVersion: 1, id, baseline: digest(original), candidate: digest(candidate), phase: 'prepared' })
+      const operationPath = join(dir, 'initialization-operation.json'); const backupPath = join(dir, 'initialization-backup.md')
+      signal?.throwIfAborted()
+      await writeFile(operationPath, JSON.stringify(operation) + '\n', { flag: 'wx' })
+      await writeFile(backupPath, original, { flag: 'wx' })
+      signal?.throwIfAborted()
+      await writeAtomic(join(dir, 'profile.md'), candidate)
+      await this.saveIndex(index.characters.map(value => value.id === id ? metadata : value))
+      await writeAtomic(operationPath, JSON.stringify({ ...operation, phase: 'index-written' }) + '\n')
+      await rm(backupPath); await rm(operationPath)
+      return { version: digest(candidate) }
+    })
+  }
+
+  /** 检查实际摘要并恢复中断的初始化更新；不修改无法识别的内容。 */
+  recoverInitialization(id: string): Promise<'retry' | 'completed'> {
+    return this.run(async () => {
+      const dir = await this.directory(id); const operationPath = join(dir, 'initialization-operation.json'); const backupPath = join(dir, 'initialization-backup.md')
+      const operation = initializationOperationSchema.parse(JSON.parse(await regularFile(operationPath)))
+      if (operation.id !== id) throw new Error('初始化恢复身份不一致')
+      const profile = await regularFile(join(dir, 'profile.md')); const current = digest(profile)
+      let backup: string | undefined
+      try { backup = await regularFile(backupPath) } catch (error) { if (!missing(error)) throw error }
+      if (backup !== undefined && digest(backup) !== operation.baseline) throw new Error('初始化备份与基线不一致')
+      if (current === operation.baseline) {
+        if (operation.phase !== 'prepared') throw new Error('初始化恢复状态不一致')
+        const index = indexSchema.parse(JSON.parse(await regularFile(join(this.root, 'index.json'))))
+        const metadata = parseCharacterDocument(profile).metadata
+        if (JSON.stringify(index.characters.find(value => value.id === id)) !== JSON.stringify(metadata)) throw new Error('初始化恢复时索引不一致')
+        if (backup !== undefined) await rm(backupPath)
+        await rm(operationPath); return 'retry'
+      }
+      if (current !== operation.candidate || (backup === undefined && operation.phase !== 'index-written')) throw new Error('初始化恢复文件与记录不一致')
+      const index = indexSchema.parse(JSON.parse(await regularFile(join(this.root, 'index.json'))))
+      const ids = (await readdir(this.root)).filter(name => idSchema.safeParse(name).success)
+      if (ids.length !== index.characters.length || ids.some(name => !index.characters.some(item => item.id === name))) throw new Error('初始化恢复时索引不完整')
+      const candidateMetadata = parseCharacterDocument(profile).metadata
+      const baselineMetadata = backup === undefined ? undefined : parseCharacterDocument(backup).metadata
+      for (const name of ids) {
+        const other = await this.directory(name)
+        const indexed = index.characters.find(item => item.id === name)
+        if (name === id) {
+          if (JSON.stringify(indexed) !== JSON.stringify(candidateMetadata) && JSON.stringify(indexed) !== JSON.stringify(baselineMetadata)) throw new Error('初始化恢复时角色索引不一致')
+          continue
+        }
+        for (const marker of ['operation.json', 'initialization-operation.json', 'initialization-backup.md']) {
+          try { await lstat(join(other, marker)); throw new Error('其他角色存在未完成的操作') } catch (error) { if (!missing(error)) throw error }
+        }
+        if (JSON.stringify(indexed) !== JSON.stringify(parseCharacterDocument(await regularFile(join(other, 'profile.md'))).metadata)) throw new Error('初始化恢复时其他角色索引不一致')
+      }
+      await this.saveIndex(index.characters.map(item => item.id === id ? candidateMetadata : item))
+      if (backup !== undefined) await rm(backupPath)
+      await rm(operationPath); return 'completed'
     })
   }
 
@@ -271,7 +358,10 @@ export class CharacterStore {
       await this.assertIndexVersion()
       for (const name of await readdir(this.root)) {
         if (!idSchema.safeParse(name).success) continue
-        try { await lstat(join(await this.directory(name), 'operation.json')); throw new Error('角色存在未完成的提交') } catch (error) { if (!missing(error)) throw error }
+        const dir = await this.directory(name)
+        for (const marker of ['operation.json', 'initialization-operation.json', 'initialization-backup.md']) {
+          try { await lstat(join(dir, marker)); throw new Error('角色存在未完成的提交或初始化更新') } catch (error) { if (!missing(error)) throw error }
+        }
       }
       try {
         const previous = await regularFile(join(this.root, 'index.json'))
