@@ -51,7 +51,7 @@ export function createWorldStorage(worlds: readonly WorldWorkspaceConfig[], worl
     const owner = world.agents.find(item => item.agentId === historyConfig!.agentId)!
     const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
     const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
-    const characters = sharedCharacters && creator ? { agentId: creator.agentId, store: (await sharedCharacters.get()).store } : undefined
+    const characters = sharedCharacters && creator ? { agentId: creator.agentId, store: sharedCharacters.reader() } : undefined
     const references = await createHistoryReferenceResolvers({ ...historyConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters } : {}), workspaces: worlds, worldId: world.worldId })
     return HistoryStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, ...references })
   }) : undefined
@@ -60,9 +60,9 @@ export function createWorldStorage(worlds: readonly WorldWorkspaceConfig[], worl
     const owner = world.agents.find(item => item.agentId === situationConfig!.agentId)!
     const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
     const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
-    const person = sharedCharacters && creator ? await sharedCharacters.get() : undefined
-    const characters = person && creator ? { agentId: creator.agentId, store: person.store } : undefined
-    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationships } : undefined
+    const person = sharedCharacters && creator ? sharedCharacters : undefined
+    const characters = person && creator ? { agentId: creator.agentId, store: person.reader() } : undefined
+    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationshipReader() } : undefined
     const history = sharedHistory && historyConfig ? { agentId: historyConfig.agentId, store: await sharedHistory.get() } : undefined
     const resolveReference = await createSituationReferenceResolver({ ...situationConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters, relationships } : {}), ...(history ? { history } : {}), workspaces: worlds, worldId: world.worldId })
     return SituationStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, resolveReference })
@@ -72,9 +72,9 @@ export function createWorldStorage(worlds: readonly WorldWorkspaceConfig[], worl
     const owner = world.agents.find(item => item.agentId === developmentConfig!.agentId)!
     const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
     const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
-    const person = sharedCharacters && creator ? await sharedCharacters.get() : undefined
-    const characters = person && creator ? { agentId: creator.agentId, store: person.store } : undefined
-    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationships } : undefined
+    const person = sharedCharacters && creator ? sharedCharacters : undefined
+    const characters = person && creator ? { agentId: creator.agentId, store: person.reader() } : undefined
+    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationshipReader() } : undefined
     const history = sharedHistory && historyConfig ? { agentId: historyConfig.agentId, store: await sharedHistory.get() } : undefined
     const situation = sharedSituation && situationConfig ? { agentId: situationConfig.agentId, store: await sharedSituation.get() } : undefined
     const references = await createWorldDevelopmentResolvers({ ...developmentConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters, relationships } : {}), ...(history ? { history } : {}), ...(situation ? { situation } : {}), workspaces: worlds, worldId: world.worldId })
@@ -85,9 +85,9 @@ export function createWorldStorage(worlds: readonly WorldWorkspaceConfig[], worl
     if (!owner) throw new Error('专有内容负责人不属于该世界')
     const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
     const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
-    const person = sharedCharacters && creator ? await sharedCharacters.get() : undefined
-    const characters = person && creator ? { agentId: creator.agentId, store: person.store } : undefined
-    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationships } : undefined
+    const person = sharedCharacters && creator ? sharedCharacters : undefined
+    const characters = person && creator ? { agentId: creator.agentId, store: person.reader() } : undefined
+    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationshipReader() } : undefined
     const history = sharedHistory && historyConfig ? { agentId: historyConfig.agentId, store: await sharedHistory.get() } : undefined
     const situation = sharedSituation && situationConfig ? { agentId: situationConfig.agentId, store: await sharedSituation.get() } : undefined
     const development = sharedDevelopment && developmentConfig ? { agentId: developmentConfig.agentId, store: await sharedDevelopment.get() } : undefined

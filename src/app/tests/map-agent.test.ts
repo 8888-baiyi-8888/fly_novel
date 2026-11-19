@@ -10,6 +10,7 @@ import configured = require('../call-llm.js')
 import { createMapAgent, createWorldInitializationAgentWithWorldWorkspaces } from '../agents/index.js'
 import { initializeCatalog } from '../../world-init/workspace/catalog/format.js'
 import { SharedMapStorage } from '../../world-init/storage/map.js'
+import { SharedCharacterStorage } from '../../world-init/storage/character.js'
 import { createMapAgentWithCatalogBinding } from '../agents/map-agent.js'
 
 class ScriptAdapter extends LlmAdapter {
@@ -118,6 +119,40 @@ test('不同世界共享地图互不占用，关闭后可重新打开', async t 
     const reopened = new SharedMapStorage(first.world, 'map')
     try { assert.equal((await (await reopened.get()).readOverview()).document.name, '河谷') } finally { await reopened.close() }
   } finally { await a.close(); await b.close() }
+})
+
+test('跨模块任务不读取人物资料时不依赖尚未初始化的人物存储', async t => {
+  const { world, sessionRoot } = await setup(t)
+  const dirs: Record<string, string[]> = { history: ['events', 'candidates'], situation: ['overviews', 'situations', 'candidates'],
+    development: ['macro-development/blueprints', 'macro-development/directions', 'macro-development/proposals', 'storylines/stories', 'storylines/growth-lines', 'character-growth/blueprints', 'character-growth/items', 'candidates'], specific: ['topics', 'items', 'candidates'] }
+  for (const [owner, names] of Object.entries(dirs)) for (const name of names) await mkdir(join(world.readRoot, owner, name), { recursive: true })
+  const configuredWorld = { ...world, agents: [...world.agents, ...Object.keys(dirs).map(agentId => ({ agentId, writableRoot: join(world.readRoot, agentId) }))] }
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new ScriptAdapter() }))
+  const common = { sessionRoot, sessionMode: 'create' as const, provider: 'test', model: 'test' }
+  const parent = await createWorldInitializationAgentWithWorldWorkspaces([configuredWorld], world.worldId,
+    { ...common, agentId: 'creator', sessionId: 'creator', adapter: new ScriptAdapter(), initializeCharacters: false, defaultCharacterCount: 1 },
+    { singleWriterProcess: true, historyAgent: { ...common, agentId: 'history', sessionId: 'history', adapter: new ScriptAdapter() },
+      initialSituationAgent: { ...common, agentId: 'situation', sessionId: 'situation', adapter: new ScriptAdapter() },
+      worldDevelopmentAgent: { ...common, agentId: 'development', sessionId: 'development', adapter: new ScriptAdapter() },
+      worldSpecificAgent: { ...common, agentId: 'specific', sessionId: 'specific', adapter: new ScriptAdapter() } })
+  try {
+    for (const name of ['delegate_history', 'delegate_initial_situation', 'delegate_world_development', 'delegate_world_specific']) {
+      const result = await parent.context.tools.execute({ calls: [{ type: 'tool-call', id: name as ToolCallId, name, arguments: JSON.stringify({ task: '只整理已有线索，不读取人物' }) }],
+        workingDirectory: world.readRoot, session: parent.context.sessions.list()[0]!, signal: new AbortController().signal })
+      assert.equal(result.results[0].result.isError, false, JSON.stringify(result.results[0].result))
+    }
+    assert.deepEqual(await readdir(join(world.readRoot, 'characters')), [])
+  } finally { await parent.dispose() }
+})
+
+test('实际读取未初始化的人物或关系时报告错误，不返回空结果', async t => {
+  const { world } = await setup(t)
+  const shared = new SharedCharacterStorage(world, 'creator', false)
+  try {
+    await assert.rejects(shared.reader().query({}), /index\.json|ENOENT/)
+    await assert.rejects(shared.relationshipReader().read('11111111-1111-4111-8111-111111111111'), /index\.json|ENOENT/)
+    assert.deepEqual(await readdir(join(world.readRoot, 'characters')), [])
+  } finally { await shared.close() }
 })
 
 test('主 Agent 委派地图、组织和人物时共用地图并只暴露查询工具', async t => {

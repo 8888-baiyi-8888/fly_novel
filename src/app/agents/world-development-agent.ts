@@ -14,7 +14,7 @@ import { createSituationTools } from '@fly-novel/initial-situation'
 import { createHistoryTools } from '@fly-novel/history'
 import { createMapTools } from '@fly-novel/map'
 import { createOrganizationTools } from '@fly-novel/organization'
-import { createCharacterTools, createCharacterRelationshipTools } from '@fly-novel/character'
+import { createCharacterReadTools, createCharacterRelationshipReadTools } from '@fly-novel/character'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import type { LlmAdapter } from '@fly-novel/llm'
@@ -90,12 +90,12 @@ export async function createWorldDevelopmentAgentWithCatalogBinding(config: Worl
     if (config.references?.map) for (const tool of createMapTools(config.references.map.store, identity, 'read-only')) agent.context.tools.register(tool)
     if (config.references?.organization) for (const tool of createOrganizationTools(config.references.organization.store, identity, { kind: 'planner', worldId: world.worldId }, 'read-only')) agent.context.tools.register(tool)
     if (config.references?.history) for (const tool of createHistoryTools(config.references.history.store, identity, 'read-only')) agent.context.tools.register(tool)
-    if (config.references?.characters) for (const tool of createCharacterTools(config.references.characters.store)) {
+    if (config.references?.characters) for (const tool of createCharacterReadTools(config.references.characters.store)) {
       if (['character_search', 'character_read', 'character_read_many'].includes(tool.name)) agent.context.tools.register(tool)
     }
     if (config.references?.relationships && config.references.characters) {
       const characters = config.references.characters.store
-      for (const tool of createCharacterRelationshipTools(config.references.relationships.store, { worldId: world.worldId, async resolvePerson(id, signal) {
+      for (const tool of createCharacterRelationshipReadTools(config.references.relationships.store, { worldId: world.worldId, async resolvePerson(id, signal) {
         signal.throwIfAborted(); const records = await characters.query({}); if (!records.some(item => item.id === id)) return null
         const value = await characters.read(id); signal.throwIfAborted(); return { id: value.metadata.id, name: value.metadata.name, worldId: world.worldId }
       } })) if (['character_relationship_read', 'character_relationship_search'].includes(tool.name)) agent.context.tools.register(tool)

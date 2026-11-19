@@ -17,6 +17,30 @@ export class SharedCharacterStorage {
 
   constructor(private readonly world: WorldWorkspaceConfig, private readonly ownerId: string, private readonly initialize: boolean) {}
 
+  /** 构建只读能力；只有实际查询时才打开人物存储。 */
+  reader(): Pick<CharacterStore, 'rootDirectory' | 'query' | 'read' | 'readMany' | 'readVersioned'> {
+    const owner = this.world.agents.find(item => item.agentId === this.ownerId)
+    if (!owner) throw new Error('人物负责人不属于该世界')
+    return {
+      rootDirectory: owner.writableRoot,
+      query: async input => (await this.get()).store.query(input),
+      read: async id => (await this.get()).store.read(id),
+      readMany: async ids => (await this.get()).store.readMany(ids),
+      readVersioned: async id => (await this.get()).store.readVersioned(id),
+    }
+  }
+
+  relationshipReader(): Pick<CharacterRelationshipStore, 'worldId' | 'rootDirectory' | 'read' | 'query'> {
+    const owner = this.world.agents.find(item => item.agentId === this.ownerId)
+    if (!owner) throw new Error('人物负责人不属于该世界')
+    return {
+      worldId: this.world.worldId,
+      rootDirectory: join(owner.writableRoot, 'relationships'),
+      read: async (id, signal) => (await this.get()).relationships.read(id, signal),
+      query: async (input, signal) => (await this.get()).relationships.query(input, signal),
+    }
+  }
+
   get(): Promise<SharedCharacterHandles> {
     if (this.closed) return Promise.reject(new Error('共享人物存储已关闭'))
     if (!this.opening) {

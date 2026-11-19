@@ -12,7 +12,7 @@ import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import { HistoryStore, historyToolsPluginDefinition } from '@fly-novel/history'
 import { createMapTools } from '@fly-novel/map'
 import { createOrganizationTools } from '@fly-novel/organization'
-import { createCharacterTools } from '@fly-novel/character'
+import { createCharacterReadTools } from '@fly-novel/character'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import type { LlmAdapter } from '@fly-novel/llm'
@@ -86,7 +86,7 @@ export async function createHistoryAgentWithCatalogBinding(config: HistoryAgentC
     agent.context.tools.register(readFileTool)
     if (config.references?.map) for (const tool of createMapTools(config.references.map.store, identity, 'read-only')) agent.context.tools.register(tool)
     if (config.references?.organization) for (const tool of createOrganizationTools(config.references.organization.store, identity, { kind: 'planner', worldId: world.worldId }, 'read-only')) agent.context.tools.register(tool)
-    if (config.references?.characters) for (const tool of createCharacterTools(config.references.characters.store)) {
+    if (config.references?.characters) for (const tool of createCharacterReadTools(config.references.characters.store)) {
       if (['character_search', 'character_read', 'character_read_many'].includes(tool.name)) agent.context.tools.register(tool)
     }
     const prefix = relative(world.readRoot, owner.writableRoot).split(sep).join('/')

@@ -7,7 +7,7 @@ import type { SituationReferenceResolver } from '@fly-novel/initial-situation'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 
 type Bound<T> = { agentId: string; store: T }
-export interface SituationReferences { map?: Bound<MapStore>; organization?: Bound<OrganizationStore>; history?: Bound<HistoryStore>; characters?: Bound<CharacterStore>; relationships?: Bound<CharacterRelationshipStore> }
+export interface SituationReferences { map?: Bound<MapStore>; organization?: Bound<OrganizationStore>; history?: Bound<HistoryStore>; characters?: Bound<Pick<CharacterStore, 'rootDirectory' | 'query' | 'read' | 'readMany' | 'readVersioned'>>; relationships?: Bound<Pick<CharacterRelationshipStore, 'worldId' | 'rootDirectory' | 'read' | 'query'>> }
 
 /** 借用同世界及负责人目录的存储；调用方负责句柄生命周期。 */
 export async function createSituationReferenceResolver(config: { workspaces: readonly WorldWorkspaceConfig[]; worldId: string } & SituationReferences): Promise<SituationReferenceResolver> {

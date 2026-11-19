@@ -8,7 +8,7 @@ export async function createOrganizationReferenceResolvers(config: {
   workspaces: readonly WorldWorkspaceConfig[]
   worldId: string
   map?: { agentId: string; store: MapStore }
-  characters?: { agentId: string; store: CharacterStore }
+  characters?: { agentId: string; store: Pick<CharacterStore, 'rootDirectory' | 'query' | 'read' | 'readMany' | 'readVersioned'> }
 }): Promise<{ resolvePlace?: OrganizationReferenceResolver; resolvePerson?: OrganizationReferenceResolver }> {
   const worlds = await validateWorldWorkspaceConfigs(config.workspaces)
   const world = worlds.find(item => item.worldId === config.worldId)

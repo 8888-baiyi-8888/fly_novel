@@ -13,7 +13,7 @@ const output = { schema: { type: 'string' as const }, render: (_args: unknown, v
 const idSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
 
 /** 由可信应用绑定规划者读取；此工具集不适合作为角色视角或未经授权的文件访问接口。 */
-export function createCharacterRelationshipTools(store: CharacterRelationshipStore, config: {
+export function createCharacterRelationshipReadTools(store: Pick<CharacterRelationshipStore, 'worldId' | 'read' | 'query'>, config: {
   worldId: string
   resolvePerson(id: string, signal: AbortSignal): Promise<{ id: string; worldId: string; name: string } | null>
 }) {
@@ -38,9 +38,6 @@ export function createCharacterRelationshipTools(store: CharacterRelationshipSto
     return people
   }
   return [
-    defineTool({ name: 'character_relationship_create', description: '创建初始化时已存在的人物关系；ID 由服务生成。', reportOnAbort: true,
-      parameters: { relationship: { type: 'json', required: true, description: '格式示例：{"participants":[{"kind":"linked","id":"人物A的ID"},{"kind":"linked","id":"人物B的ID"}],"relations":[{"name":"师徒","direction":"a-to-b","description":"A是B的师父"}]}。未建档端点用 {"kind":"unresolved","description":"线索"}；direction 只能为 a-to-b、b-to-a 或 two-way，方向以数组中的 A、B 顺序为准。' } }, output,
-      async execute({ relationship }, exec) { return JSON.stringify(await store.create(creation.parse(relationship), exec.signal)) } }),
     defineTool({ name: 'character_relationship_read', description: '按关系 ID 读取公共关系及当前人物名称。',
       parameters: { id: { type: 'string', required: true, description: '关系文档 ID。' } }, output,
       async execute({ id }, exec) { const value = await store.read(id, exec.signal); return JSON.stringify({ ...value, people: await display(value.document, exec.signal) }) } }),
@@ -55,6 +52,16 @@ export function createCharacterRelationshipTools(store: CharacterRelationshipSto
         for (const item of page.items) items.push({ ...item, people: await display(item.document, exec.signal) })
         return JSON.stringify({ ...page, items })
       } }),
+  ] as const
+}
+
+/** 初始化关系的完整工具集；只读调用方使用独立的读取工具。 */
+export function createCharacterRelationshipTools(store: CharacterRelationshipStore, config: Parameters<typeof createCharacterRelationshipReadTools>[1]) {
+  return [
+    defineTool({ name: 'character_relationship_create', description: '创建初始化时已存在的人物关系；ID 由服务生成。', reportOnAbort: true,
+      parameters: { relationship: { type: 'json', required: true, description: '格式示例：{"participants":[{"kind":"linked","id":"人物A的ID"},{"kind":"linked","id":"人物B的ID"}],"relations":[{"name":"师徒","direction":"a-to-b","description":"A是B的师父"}]}。未建档端点用 {"kind":"unresolved","description":"线索"}；direction 只能为 a-to-b、b-to-a 或 two-way，方向以数组中的 A、B 顺序为准。' } }, output,
+      async execute({ relationship }, exec) { return JSON.stringify(await store.create(creation.parse(relationship), exec.signal)) } }),
+    ...createCharacterRelationshipReadTools(store, config),
     defineTool({ name: 'character_relationship_update', description: '按读取版本替换未确认关系的完整内容；保留无需修改的条目。', reportOnAbort: true,
       parameters: { id: { type: 'string', required: true, description: '关系文档 ID。' }, version: { type: 'string', required: true, description: '读取获得的版本。' },
         content: { type: 'json', required: true, description: '包含完整 participants 和 relations；已有条目保留 ID，新条目省略 ID。' } }, output,

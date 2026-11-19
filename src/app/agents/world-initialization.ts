@@ -362,7 +362,8 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
   const sharedReferences = async () => ({
     ...(sharedMap && mapConfig ? { map: { agentId: mapConfig.agentId, store: await sharedMap.get() } } : {}),
     ...(sharedOrganization && organizationConfig ? { organization: { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } } : {}),
-    ...(sharedCharacters && creatorConfig ? { characters: { agentId: creatorConfig.agentId, store: (await sharedCharacters.get()).store }, relationships: { agentId: creatorConfig.agentId, store: (await sharedCharacters.get()).relationships } } : {}),
+    ...(sharedCharacters && creatorConfig ? { characters: { agentId: creatorConfig.agentId, store: sharedCharacters.reader() } } : {}),
+    ...(sharedCharacters && creatorConfig ? { relationships: { agentId: creatorConfig.agentId, store: sharedCharacters.relationshipReader() } } : {}),
   })
   const historyCreate = historyConfig && createPersistentAgentCreator({ presetId: 'history-agent', sessionMode: historyConfig.sessionMode,
     async create({ sessionMode }) { const child = await createHistoryAgentWithCatalogBinding({ ...historyConfig, references: { ...historyConfig.references, ...await sharedReferences() }, sessionMode }, createHistoryCatalogBinding, await sharedHistory?.get()); return { agent: child, dispose: () => child.dispose() } } })

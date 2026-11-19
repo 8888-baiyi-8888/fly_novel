@@ -7,13 +7,12 @@ import type { CharacterStore } from './store.js'
 const inputSchema = characterMetadataSchema.pick({ name: true, summary: true, categories: true }).extend({ body: z.string() }).strict()
 const querySchema = z.object({ name: z.string().optional(), categories: z.record(z.string(), z.array(z.string().min(1)).min(1)).optional() }).strict()
 
-/** 创建供可信调用方注册的角色资料工具；确认提交不向模型暴露。 */
-export function createCharacterTools(store: CharacterStore) {
+/** 只读角色工具使用的存储能力，可由可信应用延迟获取。 */
+export type CharacterReader = Pick<CharacterStore, 'query' | 'read' | 'readMany'>
+
+export function createCharacterReadTools(store: CharacterReader) {
   const output = { schema: { type: 'string' as const }, render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }] }
   return [
-    defineTool({ name: 'character_create', description: '创建一份角色建议；角色 ID 由程序生成。', reportOnAbort: true,
-      parameters: { character: { type: 'json', required: true, description: '完整资料：{"name":"姓名","summary":"简介","categories":{},"body":"正文"}。categories 是对象，键为小写英文分类名，值为含 id 和 name 的对象数组；无需分类时使用 {}。' } }, output,
-      async execute({ character }, exec) { exec.signal.throwIfAborted(); return JSON.stringify(await store.create(inputSchema.parse(character))) } }),
     defineTool({ name: 'character_search', description: '按名称或分类分页查询角色；同名返回多个候选。',
       parameters: { filter: { type: 'json', required: true, description: '包含可选 name 和 categories 的查询条件。' },
         offset: { type: 'integer', description: '从零开始的结果位置。' }, limit: { type: 'integer', description: '每页数量，最大 100。' },
@@ -34,6 +33,17 @@ export function createCharacterTools(store: CharacterStore) {
     defineTool({ name: 'character_read_many', description: '批量读取角色；逐项返回成功或错误。',
       parameters: { ids: { type: 'array', required: true, items: { type: 'string' }, description: '已选角色 ID 列表。' } }, output,
       async execute({ ids }, exec) { exec.signal.throwIfAborted(); return JSON.stringify(await store.readMany(ids)) } }),
+  ] as const
+}
+
+/** 创建供可信调用方注册的角色资料工具；确认提交不向模型暴露。 */
+export function createCharacterTools(store: CharacterStore) {
+  const output = { schema: { type: 'string' as const }, render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }] }
+  return [
+    defineTool({ name: 'character_create', description: '创建一份角色建议；角色 ID 由程序生成。', reportOnAbort: true,
+      parameters: { character: { type: 'json', required: true, description: '完整资料：{"name":"姓名","summary":"简介","categories":{},"body":"正文"}。categories 是对象，键为小写英文分类名，值为含 id 和 name 的对象数组；无需分类时使用 {}。' } }, output,
+      async execute({ character }, exec) { exec.signal.throwIfAborted(); return JSON.stringify(await store.create(inputSchema.parse(character))) } }),
+    ...createCharacterReadTools(store),
     defineTool({ name: 'character_prepare', description: '为选定角色保存待审修改，不确认或覆盖当前资料。', reportOnAbort: true,
       parameters: { id: { type: 'string', required: true, description: '现有角色 ID。' },
         character: { type: 'json', required: true, description: '完整修改：包含 name、summary、body 和 categories 对象；无分类使用 {}，分类值为含 id 和 name 的对象数组。' } }, output,

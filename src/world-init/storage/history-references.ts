@@ -8,7 +8,7 @@ import { createOrganizationReferenceResolvers } from './organization-references.
 /** 借用同世界负责人持有的存储，调用方负责保持句柄有效。 */
 export async function createHistoryReferenceResolvers(config: {
   workspaces: readonly WorldWorkspaceConfig[]; worldId: string
-  map?: { agentId: string; store: MapStore }; characters?: { agentId: string; store: CharacterStore }
+  map?: { agentId: string; store: MapStore }; characters?: { agentId: string; store: Pick<CharacterStore, 'rootDirectory' | 'query' | 'read' | 'readMany' | 'readVersioned'> }
   organization?: { agentId: string; store: OrganizationStore }
 }): Promise<{ resolvePlace?: HistoryReferenceResolver; resolvePerson?: HistoryReferenceResolver; resolveOrganization?: HistoryReferenceResolver }> {
   const worlds = await validateWorldWorkspaceConfigs(config.workspaces)

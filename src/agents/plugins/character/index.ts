@@ -3,6 +3,6 @@ export { characterMetadataSchema, requirementsSchema, parseCharacterDocument, fo
 export { CharacterStore } from './store.js'
 export { characterRelationshipSchema, parseCharacterRelationship, formatCharacterRelationship, type CharacterRelationship } from './relationship-format.js'
 export { CharacterRelationshipStore, CharacterRelationshipCommitUnknownError, type CharacterRelationshipStoreConfig } from './relationship-store.js'
-export { createCharacterTools, createCharacterInitializationTools } from './character-tools.js'
-export { createCharacterRelationshipTools } from './relationship-tools.js'
+export { createCharacterTools, createCharacterReadTools, createCharacterInitializationTools, type CharacterReader } from './character-tools.js'
+export { createCharacterRelationshipTools, createCharacterRelationshipReadTools } from './relationship-tools.js'
 export { characterToolsPlugin, characterToolsPluginDefinition, type CharacterToolsPluginConfig } from './plugin.js'
