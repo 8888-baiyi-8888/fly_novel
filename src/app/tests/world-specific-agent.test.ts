@@ -3,6 +3,9 @@ import { mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test, type TestContext } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
+import { Context } from '@deepseek-ai/cordis'
+import { LocalFileSystem } from '@fly-novel/fs-local'
+import { SpecificStore, specificContentSchema } from '@fly-novel/world-specific'
 import { initializeCatalog } from '../../world-init/workspace/catalog/format.js'
 import configured = require('../call-llm.js')
 import { createWorldSpecificAgent } from '../agents/world-specific-agent.js'
@@ -32,6 +35,21 @@ test('独立专有 Agent 创建主题，重建后恢复会话', async t => {
   assert.equal((await readdir(join(world.readRoot, 'specific/topics'))).length, 1)
   const resumedAdapter = new Script(); const resumed = await createWorldSpecificAgent({ ...config, sessionMode: 'resume', adapter: resumedAdapter })
   try { await resumed.run({ prompt: '继续' }); assert.match(JSON.stringify(resumedAdapter.requests[0]?.messages), /补充专有设定/) } finally { await resumed.dispose() }
+})
+test('读取现有主题后可以结束而不新建主题', async t => {
+  const { world, sessionRoot } = await setup(t); const adapter = new Script([{ name: 'world_specific_topic_search', args: {} }])
+  const agent = await createWorldSpecificAgent({ workspaces: [world], worldId: world.worldId, agentId: 'specific', sessionId: 'no-new', sessionRoot, sessionMode: 'create', provider: 'test', model: 'test', adapter, singleWriterProcess: true })
+  try { await agent.run({ prompt: '核对是否需要新增主题' }); assert.equal((await readdir(join(world.readRoot, 'specific/topics'))).length, 0) } finally { await agent.dispose() }
+})
+test('已有主题可以按版本继续完善，不新增重复主题', async t => {
+  const { world, sessionRoot } = await setup(t); const ctx = new Context(); const backend = await ctx.plugin(LocalFileSystem, { cwd: world.readRoot })
+  const store = await SpecificStore.open({ fs: ctx.fs, root: join(world.readRoot, 'specific'), worldId: world.worldId, phase: 'initialization', access: 'read-write', singleWriterProcess: true })
+  const created = await store.create('topic', specificContentSchema.parse(content)); await store.close(); await backend.dispose()
+  const adapter = new Script([{ name: 'world_specific_topic_search', args: { keyword: '修炼' } }, { name: 'world_specific_topic_update', args: { id: created.id, version: created.version, content: { ...content, summary: '继续完善' } } }])
+  const agent = await createWorldSpecificAgent({ workspaces: [world], worldId: world.worldId, agentId: 'specific', sessionId: 'continue', sessionRoot, sessionMode: 'create', provider: 'test', model: 'test', adapter, singleWriterProcess: true })
+  try { await agent.run({ prompt: '查询后继续完善修炼体系' }); assert.equal((await readdir(join(world.readRoot, 'specific/topics'))).length, 1) } finally { await agent.dispose() }
+  const ctx2 = new Context(); const fs = await ctx2.plugin(LocalFileSystem, { cwd: world.readRoot }); const check = await SpecificStore.open({ fs: ctx2.fs, root: join(world.readRoot, 'specific'), worldId: world.worldId, phase: 'initialization', access: 'read-only', singleWriterProcess: true })
+  try { assert.equal((await check.readDocument('topic', created.id)).document.summary, '继续完善') } finally { await check.close(); await fs.dispose() }
 })
 test('主 Agent 委派专有 Agent，主 Agent 不持有专有写工具', async t => {
   const { world, sessionRoot } = await setup(t); await initializeCatalog(world.catalogRoot, world.worldId)
