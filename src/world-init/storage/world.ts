@@ -1,6 +1,7 @@
 import { HistoryStore } from '@fly-novel/history'
 import { SituationStore } from '@fly-novel/initial-situation'
 import { DevelopmentStore } from '@fly-novel/world-development'
+import { SpecificStore } from '@fly-novel/world-specific'
 import type { WorldWorkspaceConfig } from '../workspace/config.js'
 import { SharedMapStorage } from './map.js'
 import { SharedOrganizationStorage } from './organization.js'
@@ -10,7 +11,7 @@ import { createOrganizationReferenceResolvers } from './organization-references.
 import { createHistoryReferenceResolvers } from './history-references.js'
 import { createSituationReferenceResolver, type SituationReferences } from './initial-situation-references.js'
 import { createWorldDevelopmentResolvers, type WorldDevelopmentReferences } from './world-development-references.js'
-import type { WorldSpecificReferences } from './world-specific-references.js'
+import { createWorldSpecificResolver, type WorldSpecificReferences } from './world-specific-references.js'
 
 type OrganizationRefs = Pick<Parameters<typeof createOrganizationReferenceResolvers>[0], 'map' | 'characters'>
 type HistoryRefs = Pick<Parameters<typeof createHistoryReferenceResolvers>[0], 'map' | 'characters' | 'organization'>
@@ -77,11 +78,25 @@ export function createWorldStorage(worlds: readonly WorldWorkspaceConfig[], worl
     const references = await createWorldDevelopmentResolvers({ ...developmentConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters, relationships } : {}), ...(history ? { history } : {}), ...(situation ? { situation } : {}), workspaces: worlds, worldId: world.worldId })
     return DevelopmentStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, ...references })
   }) : undefined
+  const sharedSpecific = specificConfig ? sharedLocalStore(world.readRoot, async fs => {
+    const owner = world.agents.find(item => item.agentId === specificConfig.agentId)
+    if (!owner) throw new Error('专有内容负责人不属于该世界')
+    const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
+    const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
+    const person = sharedCharacters && creator ? await sharedCharacters.get() : undefined
+    const characters = person && creator ? { agentId: creator.agentId, store: person.store } : undefined
+    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationships } : undefined
+    const history = sharedHistory && historyConfig ? { agentId: historyConfig.agentId, store: await sharedHistory.get() } : undefined
+    const situation = sharedSituation && situationConfig ? { agentId: situationConfig.agentId, store: await sharedSituation.get() } : undefined
+    const development = sharedDevelopment && developmentConfig ? { agentId: developmentConfig.agentId, store: await sharedDevelopment.get() } : undefined
+    const resolveReference = await createWorldSpecificResolver({ ...specificConfig.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters, relationships } : {}), ...(history ? { history } : {}), ...(situation ? { situation } : {}), ...(development ? { development } : {}), workspaces: worlds, worldId: world.worldId })
+    return SpecificStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, resolveReference })
+  }) : undefined
   let closing: Promise<void> | undefined
   return {
-    sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment,
+    sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment, sharedSpecific,
     close: () => closing ??= (async () => {
-      await sharedDevelopment?.close(); await sharedSituation?.close(); await sharedHistory?.close()
+      await sharedSpecific?.close(); await sharedDevelopment?.close(); await sharedSituation?.close(); await sharedHistory?.close()
       await sharedOrganization?.close(); await sharedCharacters?.close(); await sharedMap?.close()
     })(),
   }

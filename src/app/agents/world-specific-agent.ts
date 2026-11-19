@@ -39,7 +39,7 @@ export interface WorldSpecificAgent { run(input: AgentLoopInput): Promise<AgentL
 export function createWorldSpecificAgent(config: WorldSpecificAgentConfig): Promise<WorldSpecificAgent> { return createWorldSpecificAgentWithCatalogBinding(config) }
 
 /** 使用外部目录绑定时不拥有目录服务及引用句柄。 */
-export async function createWorldSpecificAgentWithCatalogBinding(config: WorldSpecificAgentConfig, createCatalogBinding?: () => CatalogBinding): Promise<WorldSpecificAgent> {
+export async function createWorldSpecificAgentWithCatalogBinding(config: WorldSpecificAgentConfig, createCatalogBinding?: () => CatalogBinding, borrowedStore?: SpecificStore): Promise<WorldSpecificAgent> {
   if (config?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   for (const value of [config.worldId, config.agentId, config.sessionId, config.provider, config.model]) {
     if (typeof value !== 'string' || !value || value.trim() !== value) throw new Error('世界专有内容 Agent 身份和模型配置必须非空且无首尾空白')
@@ -50,6 +50,7 @@ export async function createWorldSpecificAgentWithCatalogBinding(config: WorldSp
   if (!world) throw new Error('世界配置不存在')
   const owner = world.agents.find(item => item.agentId === config.agentId)
   if (!owner) throw new Error('世界专有内容 Agent 身份不属于该世界的特殊 Agent')
+  if (borrowedStore && (borrowedStore.worldId !== world.worldId || borrowedStore.rootDirectory !== owner.writableRoot || !borrowedStore.writable)) throw new Error('共享专有内容存储与可信世界、负责人或写入权限不匹配')
   if (typeof config.sessionRoot !== 'string' || !isAbsolute(config.sessionRoot)) throw new Error('Session 目录必须是绝对路径')
   const sessionRoot = await realpath(config.sessionRoot)
   if (sessionRoot !== resolve(config.sessionRoot) || !(await stat(sessionRoot)).isDirectory()) throw new Error('Session 目录必须是现有真实目录')
@@ -61,8 +62,11 @@ export async function createWorldSpecificAgentWithCatalogBinding(config: WorldSp
   let specificBackend: ReturnType<Context['plugin']> | undefined; let closeFramework: (() => Promise<void>) | undefined
   try {
     if (config.catalog) catalog = await CatalogService.open(world, { singleWriterProcess: true, ...config.catalog })
-    const specificContext = new Context(); specificBackend = specificContext.plugin(LocalFileSystem, { cwd: world.readRoot }); await specificBackend
-    store = await SpecificStore.open({ fs: specificContext.fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, resolveReference: references })
+    if (borrowedStore) store = borrowedStore
+    else {
+      const specificContext = new Context(); specificBackend = specificContext.plugin(LocalFileSystem, { cwd: world.readRoot }); await specificBackend
+      store = await SpecificStore.open({ fs: specificContext.fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, resolveReference: references })
+    }
     const framework = await bootstrapAgents()
     for (const definition of [sandboxPolicyPluginDefinition, worldInitializationDraftFsPluginDefinition, fsObservationPolicyPluginDefinition,
       toolFsReadPluginDefinition, toolFsSearchPluginDefinition, localSubprocessPluginDefinition, specificToolsPluginDefinition]) framework.plugins.register(definition)
@@ -109,9 +113,9 @@ export async function createWorldSpecificAgentWithCatalogBinding(config: WorldSp
     const created = agent; const specificStore = store; const close = closeFramework; const backendScope = specificBackend
     let disposal: Promise<void> | undefined
     return { run: input => created.run(input), cancel: () => created.cancel(),
-      dispose: () => disposal ??= (async () => { await created.dispose(); await specificStore.close(); await backendScope.dispose(); await close(); await binding?.close(); await catalog?.close(); releaseIdentity() })() }
+      dispose: () => disposal ??= (async () => { await created.dispose(); if (!borrowedStore) await specificStore.close(); await backendScope?.dispose(); await close(); await binding?.close(); await catalog?.close(); releaseIdentity() })() }
   } catch (error) {
-    try { await agent?.dispose(); await store?.close(); await specificBackend?.dispose(); await closeFramework?.(); await binding?.close(); await catalog?.close(); if (!(error instanceof AggregateError)) releaseIdentity() }
+    try { await agent?.dispose(); if (!borrowedStore) await store?.close(); await specificBackend?.dispose(); await closeFramework?.(); await binding?.close(); await catalog?.close(); if (!(error instanceof AggregateError)) releaseIdentity() }
     catch (cleanup) { throw new AggregateError([error, cleanup], '世界专有内容 Agent 启动及清理失败') }
     throw error
   }
