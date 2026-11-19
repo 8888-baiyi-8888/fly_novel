@@ -35,6 +35,7 @@ import { worldInitializationWorkspacePromptPluginDefinition } from './world-init
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 import { CatalogService, type CatalogBinding } from '../../world-init/workspace/catalog/service.js'
+import { SharedMapStorage } from '../../world-init/storage/map.js'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
@@ -197,6 +198,8 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     if (config.references) await createWorldSpecificResolver({ ...config.references, workspaces: worlds, worldId: world.worldId })
     specificConfig = { ...config, workspaces: worlds, worldId: world.worldId, singleWriterProcess: true }
   }
+  const sharedMap = mapConfig ? new SharedMapStorage(world, mapConfig.agentId) : undefined
+  if (sharedMap && (creator?.references?.map || organizationConfig?.references?.map)) throw new Error('共享地图与外部地图引用不能同时配置')
   const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
   let agent: Agent
   let catalog: CatalogService | undefined
@@ -216,10 +219,10 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
       historyConfig, catalog && historyConfig ? () => catalog!.bind(historyConfig!.agentId) : undefined,
       situationConfig, catalog && situationConfig ? () => catalog!.bind(situationConfig!.agentId) : undefined,
       developmentConfig, catalog && developmentConfig ? () => catalog!.bind(developmentConfig!.agentId) : undefined,
-      specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined)
+      specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined, sharedMap)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
-      try { await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
+      try { await sharedMap?.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
     }
     throw error
   }
@@ -228,7 +231,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     info: agent.info, context: agent.context,
     get state() { return agent.state },
     run: input => agent.run(input), cancel: () => agent.cancel(),
-    dispose: () => disposal ??= (async () => { await agent.dispose(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() })(),
+    dispose: () => disposal ??= (async () => { await agent.dispose(); await sharedMap?.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() })(),
   }
 }
 
@@ -280,7 +283,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
   historyConfig?: HistoryAgentConfig, createHistoryCatalogBinding?: () => CatalogBinding,
   situationConfig?: InitialSituationAgentConfig, createSituationCatalogBinding?: () => CatalogBinding,
   developmentConfig?: WorldDevelopmentAgentConfig, createDevelopmentCatalogBinding?: () => CatalogBinding,
-  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding): Promise<Agent> {
+  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -328,7 +331,8 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
   } })
   const characterCreate = creatorConfig && createPersistentAgentCreator({ presetId: 'character-creator', sessionMode: creatorConfig.sessionMode,
     async create({ sessionMode, initial }) {
-      const child = await createCharacterCreator({ ...creatorConfig, sessionMode, initializeCharacters: initial && creatorConfig.initializeCharacters })
+      const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
+      const child = await createCharacterCreator({ ...creatorConfig, ...(map ? { references: { ...creatorConfig.references, map } } : {}), sessionMode, initializeCharacters: initial && creatorConfig.initializeCharacters })
       return { agent: child, dispose: () => child.dispose() }
     } })
   const basicsCreate = basicsConfig && createPersistentAgentCreator({ presetId: 'world-basics', sessionMode: basicsConfig.sessionMode,
@@ -338,12 +342,13 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     } })
   const mapCreate = mapConfig && createPersistentAgentCreator({ presetId: 'map-agent', sessionMode: mapConfig.sessionMode,
     async create({ sessionMode }) {
-      const child = await createMapAgentWithCatalogBinding({ ...mapConfig, sessionMode }, createMapCatalogBinding)
+      const child = await createMapAgentWithCatalogBinding({ ...mapConfig, sessionMode }, createMapCatalogBinding, await sharedMap?.get())
       return { agent: child, dispose: () => child.dispose() }
     } })
   const organizationCreate = organizationConfig && createPersistentAgentCreator({ presetId: 'organization-agent', sessionMode: organizationConfig.sessionMode,
     async create({ sessionMode }) {
-      const child = await createOrganizationAgentWithCatalogBinding({ ...organizationConfig, sessionMode }, createOrganizationCatalogBinding)
+      const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
+      const child = await createOrganizationAgentWithCatalogBinding({ ...organizationConfig, ...(map ? { references: { ...organizationConfig.references, map } } : {}), sessionMode }, createOrganizationCatalogBinding)
       return { agent: child, dispose: () => child.dispose() }
     } })
   const historyCreate = historyConfig && createPersistentAgentCreator({ presetId: 'history-agent', sessionMode: historyConfig.sessionMode,

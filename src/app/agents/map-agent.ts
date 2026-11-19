@@ -47,7 +47,7 @@ export function createMapAgent(config: MapAgentConfig): Promise<MapAgent> {
 }
 
 /** 使用外部目录服务绑定；该服务的生命周期由装配方负责。 */
-export async function createMapAgentWithCatalogBinding(config: MapAgentConfig, createCatalogBinding?: () => CatalogBinding): Promise<MapAgent> {
+export async function createMapAgentWithCatalogBinding(config: MapAgentConfig, createCatalogBinding?: () => CatalogBinding, borrowedStore?: MapStore): Promise<MapAgent> {
   if (config?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   for (const value of [config.worldId, config.agentId, config.sessionId, config.provider, config.model]) {
     if (typeof value !== 'string' || !value || value.trim() !== value) throw new Error('地图 Agent 身份和模型配置必须非空且无首尾空白')
@@ -59,6 +59,7 @@ export async function createMapAgentWithCatalogBinding(config: MapAgentConfig, c
   if (!world) throw new Error('世界配置不存在')
   const owner = world.agents.find(item => item.agentId === config.agentId)
   if (!owner) throw new Error('地图 Agent 身份不属于该世界的特殊 Agent')
+  if (borrowedStore && (borrowedStore.boundWorldId !== world.worldId || borrowedStore.rootDirectory !== owner.writableRoot || !borrowedStore.writable)) throw new Error('共享地图存储与可信世界、负责人或写入权限不匹配')
   if (typeof config.sessionRoot !== 'string' || !isAbsolute(config.sessionRoot)) throw new Error('Session 目录必须是绝对路径')
   const sessionRoot = await realpath(config.sessionRoot)
   if (sessionRoot !== resolve(config.sessionRoot) || !(await stat(sessionRoot)).isDirectory()) throw new Error('Session 目录必须是现有真实目录')
@@ -71,10 +72,13 @@ export async function createMapAgentWithCatalogBinding(config: MapAgentConfig, c
   let closeFramework: (() => Promise<void>) | undefined
   try {
     if (config.catalog) catalog = await CatalogService.open(world, { singleWriterProcess: true, ...config.catalog })
-    const mapContext = new Context()
-    mapBackend = mapContext.plugin(LocalFileSystem, { cwd: world.readRoot })
-    await mapBackend
-    store = await MapStore.open({ fs: mapContext.fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', singleWriterProcess: true })
+    if (borrowedStore) store = borrowedStore
+    else {
+      const mapContext = new Context()
+      mapBackend = mapContext.plugin(LocalFileSystem, { cwd: world.readRoot })
+      await mapBackend
+      store = await MapStore.open({ fs: mapContext.fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', singleWriterProcess: true })
+    }
     const framework = await bootstrapAgents()
     for (const definition of [sandboxPolicyPluginDefinition, worldInitializationDraftFsPluginDefinition, fsObservationPolicyPluginDefinition,
       toolFsReadPluginDefinition, toolFsSearchPluginDefinition, localSubprocessPluginDefinition, mapToolsPluginDefinition]) framework.plugins.register(definition)
@@ -110,9 +114,9 @@ export async function createMapAgentWithCatalogBinding(config: MapAgentConfig, c
     const created = agent; const mapStore = store; const close = closeFramework; const backendScope = mapBackend
     let disposal: Promise<void> | undefined
     return { run: input => created.run(input), cancel: () => created.cancel(),
-      dispose: () => disposal ??= (async () => { await created.dispose(); await mapStore.close(); await backendScope.dispose(); await close(); await binding?.close(); await catalog?.close(); releaseIdentity() })() }
+      dispose: () => disposal ??= (async () => { await created.dispose(); if (!borrowedStore) await mapStore.close(); await backendScope?.dispose(); await close(); await binding?.close(); await catalog?.close(); releaseIdentity() })() }
   } catch (error) {
-    try { await agent?.dispose(); await store?.close(); await mapBackend?.dispose(); await closeFramework?.(); await binding?.close(); await catalog?.close(); if (!(error instanceof AggregateError)) releaseIdentity() }
+    try { await agent?.dispose(); if (!borrowedStore) await store?.close(); await mapBackend?.dispose(); await closeFramework?.(); await binding?.close(); await catalog?.close(); if (!(error instanceof AggregateError)) releaseIdentity() }
     catch (cleanup) { throw new AggregateError([error, cleanup], '地图 Agent 启动及清理失败') }
     throw error
   }
