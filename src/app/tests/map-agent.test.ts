@@ -139,6 +139,35 @@ test('主 Agent 委派地图、组织和人物时共用地图并只暴露查询�
   } finally { await parent.dispose() }
 })
 
+test('历史、局势、发展规划和专有内容共用地图核验真实地点', async t => {
+  const { world, sessionRoot } = await setup(t)
+  const directories: Record<string, string[]> = { history: ['events', 'candidates'], situation: ['overviews', 'situations', 'candidates'],
+    development: ['macro-development/blueprints', 'macro-development/directions', 'macro-development/proposals', 'storylines/stories', 'storylines/growth-lines', 'character-growth/blueprints', 'character-growth/items', 'candidates'], specific: ['topics', 'items', 'candidates'] }
+  for (const [owner, names] of Object.entries(directories)) for (const name of names) await mkdir(join(world.readRoot, owner, name), { recursive: true })
+  const configuredWorld = { ...world, agents: [...world.agents, ...Object.keys(directories).map(agentId => ({ agentId, writableRoot: join(world.readRoot, agentId) }))] }
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new ScriptAdapter() }))
+  const common = { sessionRoot, sessionMode: 'create' as const, provider: 'test', model: 'test' }
+  const checks = ['history_reference_check', 'situation_reference_check', 'world_development_reference_check', 'world_specific_reference_check']
+  const calls = checks.map((): { name: string; args: object }[] => [])
+  const adapters = calls.map(value => new ScriptAdapter(value))
+  const config = (agentId: string, adapter: ScriptAdapter) => ({ ...common, agentId, sessionId: agentId, adapter })
+  const parent = await createWorldInitializationAgentWithWorldWorkspaces([configuredWorld], world.worldId, undefined,
+    { singleWriterProcess: true, mapAgent: config('map', new ScriptAdapter([{ name: 'map_overview_create', args: overview }, { name: 'map_place_create', args: place }])),
+      historyAgent: config('history', adapters[0]!), initialSituationAgent: config('situation', adapters[1]!),
+      worldDevelopmentAgent: config('development', adapters[2]!), worldSpecificAgent: config('specific', adapters[3]!) })
+  try {
+    const call = async (name: string) => (await parent.context.tools.execute({ calls: [{ type: 'tool-call', id: name as ToolCallId, name, arguments: JSON.stringify({ task: '核对资料' }) }],
+      workingDirectory: world.readRoot, session: parent.context.sessions.list()[0]!, signal: new AbortController().signal })).results[0].result
+    assert.equal((await call('delegate_map')).isError, false)
+    const [file] = await readdir(join(world.readRoot, 'map', 'places')); assert.ok(file)
+    for (const [index, name] of checks.entries()) calls[index]!.push({ name, args: { type: 'place', id: file.replace(/\.json$/, '') } })
+    const results = await Promise.all(['delegate_history', 'delegate_initial_situation', 'delegate_world_development', 'delegate_world_specific'].map(call))
+    assert.ok(results.every(result => !result.isError), JSON.stringify(results))
+    assert.match(JSON.stringify(adapters[0]!.requests[1].messages), /verified/)
+    for (const adapter of adapters.slice(1)) assert.match(JSON.stringify(adapter.requests[1].messages), /version_unknown/)
+  } finally { await parent.dispose() }
+})
+
 test('独立地图 Agent 使用地图工具、资料目录和可恢复会话', async t => {
   const { world, sessionRoot } = await setup(t)
   await initializeCatalog(world.catalogRoot, world.worldId)

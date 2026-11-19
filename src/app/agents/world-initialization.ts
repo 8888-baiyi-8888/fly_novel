@@ -199,7 +199,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     specificConfig = { ...config, workspaces: worlds, worldId: world.worldId, singleWriterProcess: true }
   }
   const sharedMap = mapConfig ? new SharedMapStorage(world, mapConfig.agentId) : undefined
-  if (sharedMap && (creator?.references?.map || organizationConfig?.references?.map)) throw new Error('共享地图与外部地图引用不能同时配置')
+  if (sharedMap && (creator?.references?.map || organizationConfig?.references?.map || historyConfig?.references?.map || situationConfig?.references?.map || developmentConfig?.references?.map || specificConfig?.references?.map)) throw new Error('共享地图与外部地图引用不能同时配置')
   const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
   let agent: Agent
   let catalog: CatalogService | undefined
@@ -352,13 +352,13 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
       return { agent: child, dispose: () => child.dispose() }
     } })
   const historyCreate = historyConfig && createPersistentAgentCreator({ presetId: 'history-agent', sessionMode: historyConfig.sessionMode,
-    async create({ sessionMode }) { const child = await createHistoryAgentWithCatalogBinding({ ...historyConfig, sessionMode }, createHistoryCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
+    async create({ sessionMode }) { const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined; const child = await createHistoryAgentWithCatalogBinding({ ...historyConfig, ...(map ? { references: { ...historyConfig.references, map } } : {}), sessionMode }, createHistoryCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
   const situationCreate = situationConfig && createPersistentAgentCreator({ presetId: 'initial-situation-agent', sessionMode: situationConfig.sessionMode,
-    async create({ sessionMode }) { const child = await createInitialSituationAgentWithCatalogBinding({ ...situationConfig, sessionMode }, createSituationCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
+    async create({ sessionMode }) { const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined; const child = await createInitialSituationAgentWithCatalogBinding({ ...situationConfig, ...(map ? { references: { ...situationConfig.references, map } } : {}), sessionMode }, createSituationCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
   const developmentCreate = developmentConfig && createPersistentAgentCreator({ presetId: 'world-development-agent', sessionMode: developmentConfig.sessionMode,
-    async create({ sessionMode }) { const child = await createWorldDevelopmentAgentWithCatalogBinding({ ...developmentConfig, sessionMode }, createDevelopmentCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
+    async create({ sessionMode }) { const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined; const child = await createWorldDevelopmentAgentWithCatalogBinding({ ...developmentConfig, ...(map ? { references: { ...developmentConfig.references, map } } : {}), sessionMode }, createDevelopmentCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
   const specificCreate = specificConfig && createPersistentAgentCreator({ presetId: 'world-specific-agent', sessionMode: specificConfig.sessionMode,
-    async create({ sessionMode }) { const child = await createWorldSpecificAgentWithCatalogBinding({ ...specificConfig, sessionMode }, createSpecificCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
+    async create({ sessionMode }) { const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined; const child = await createWorldSpecificAgentWithCatalogBinding({ ...specificConfig, ...(map ? { references: { ...specificConfig.references, map } } : {}), sessionMode }, createSpecificCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
   const routes = { ...(characterCreate ? { 'character-creator': characterCreate } : {}), ...(basicsCreate ? { 'world-basics': basicsCreate } : {}), ...(mapCreate ? { 'map-agent': mapCreate } : {}), ...(organizationCreate ? { 'organization-agent': organizationCreate } : {}), ...(historyCreate ? { 'history-agent': historyCreate } : {}), ...(situationCreate ? { 'initial-situation-agent': situationCreate } : {}), ...(developmentCreate ? { 'world-development-agent': developmentCreate } : {}), ...(specificCreate ? { 'world-specific-agent': specificCreate } : {}) }
   const persistentCreate = characterCreate || basicsCreate || mapCreate || organizationCreate || historyCreate || situationCreate || developmentCreate || specificCreate ? createPersistentAgentRouter(routes) : undefined
   let backend: ReturnType<typeof framework.context.plugin> | undefined
