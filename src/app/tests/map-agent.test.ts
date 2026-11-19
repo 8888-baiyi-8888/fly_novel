@@ -138,6 +138,13 @@ test('主 Agent 委派地图、组织和人物时共用地图并只暴露查询�
     characterCalls.push({ name: 'unused', args: {} }, { name: 'organization_read', args: { id: organizationFile.replace(/\.json$/, '') } })
     assert.equal((await call('delegate_character_creator')).isError, false)
     assert.match(JSON.stringify(characterAdapter.requests.at(-1)?.messages), /青河议会/)
+    characterCalls.push({ name: 'unused', args: {} }, { name: 'character_create', args: { character: { name: '林岚', summary: '', categories: {}, body: '城邦联系人' } } })
+    assert.equal((await call('delegate_character_creator')).isError, false)
+    const characterIndex = JSON.parse(await readFile(join(world.readRoot, 'characters', 'index.json'), 'utf8')) as { characters: { id: string }[] }
+    const personId = characterIndex.characters[0]?.id; assert.ok(personId)
+    organizationCalls.push({ name: 'unused', args: {} }, { name: 'organization_reference_check', args: { kind: 'person', id: personId } })
+    assert.equal((await call('delegate_organization')).isError, false)
+    assert.match(JSON.stringify(organizationAdapter.requests.at(-1)?.messages), /verified/)
     mapCalls.push({ name: 'unused', args: {} }, { name: 'map_place_create', args: { ...place, name: '白石' } })
     assert.equal((await call('delegate_map')).isError, false)
     assert.equal((await readdir(join(world.readRoot, 'map', 'places'))).length, 2)

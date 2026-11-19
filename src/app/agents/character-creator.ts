@@ -18,6 +18,7 @@ import { createMapTools, type MapStore } from '@fly-novel/map'
 import { createOrganizationTools, type OrganizationStore } from '@fly-novel/organization'
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
+import type { SharedCharacterHandles } from '../../world-init/storage/character.js'
 
 /** 由可信应用提供身份、存储及模型路由。所有目录必须已经存在。 */
 export interface CharacterCreatorConfig {
@@ -62,7 +63,7 @@ async function physicalDirectory(path: string): Promise<string> {
  * @returns 负责 Agent、Session 后端和资料服务生命周期的句柄。
  * @throws 配置无效、身份占用或初始化失败时拒绝；不会删除已有资料。
  */
-export async function createCharacterCreator(config: CharacterCreatorConfig): Promise<CharacterCreator> {
+export async function createCharacterCreator(config: CharacterCreatorConfig, borrowed?: SharedCharacterHandles): Promise<CharacterCreator> {
   for (const value of [config.worldId, config.agentId, config.sessionId, config.provider, config.model]) {
     if (!value || value.trim() !== value) throw new Error('角色创建 Agent 身份和模型配置必须非空且无首尾空白')
   }
@@ -72,6 +73,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
     physicalDirectory(config.readRoot), physicalDirectory(config.characterRoot), physicalDirectory(config.sessionRoot),
   ])
   if (!await isPathUnder(characterRoot, readRoot)) throw new Error('角色目录必须位于读取范围内')
+  if (borrowed && (borrowed.store.rootDirectory !== characterRoot || borrowed.relationships.rootDirectory !== join(characterRoot, 'relationships') || borrowed.relationships.worldId !== config.worldId)) throw new Error('共享人物存储与可信世界或负责人目录不匹配')
   if (await isPathUnder(sessionRoot, readRoot) || await isPathUnder(readRoot, sessionRoot)) throw new Error('Session 目录不能与读取范围重叠')
   if (config.references) {
     if (!config.workspaces) throw new Error('共享引用需要可信世界配置')
@@ -94,11 +96,9 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
   let disposeFramework: (() => Promise<void>) | undefined
   let catalogBinding: CatalogBinding | undefined
   try {
-    store = await CharacterStore.open(characterRoot, config.initializeCharacters)
-    const relationshipRoot = join(characterRoot, 'relationships')
-    await mkdir(relationshipRoot, { recursive: true })
+    store = borrowed?.store ?? await CharacterStore.open(characterRoot, config.initializeCharacters)
     const characters = store
-    const resolvePerson = async (id: string, signal?: AbortSignal) => {
+    const resolvePerson = borrowed?.resolvePerson ?? (async (id: string, signal?: AbortSignal) => {
       signal?.throwIfAborted()
       const records = await characters.query({})
       signal?.throwIfAborted()
@@ -106,8 +106,13 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
       const value = await characters.read(id)
       signal?.throwIfAborted()
       return { id: value.metadata.id, worldId: config.worldId, name: value.metadata.name }
+    })
+    if (borrowed) relationships = borrowed.relationships
+    else {
+      const relationshipRoot = join(characterRoot, 'relationships')
+      await mkdir(relationshipRoot, { recursive: true })
+      relationships = await CharacterRelationshipStore.open({ root: relationshipRoot, worldId: config.worldId, phase: 'initialization', singleWriterProcess: true, resolvePerson })
     }
-    relationships = await CharacterRelationshipStore.open({ root: relationshipRoot, worldId: config.worldId, phase: 'initialization', singleWriterProcess: true, resolvePerson })
     const framework = await bootstrapAgents()
     for (const definition of [sandboxPolicyPluginDefinition, fsSandboxPluginDefinition, fsObservationPolicyPluginDefinition,
       toolFsReadPluginDefinition, toolFsSearchPluginDefinition, localSubprocessPluginDefinition, characterToolsPluginDefinition]) framework.plugins.register(definition)
@@ -151,8 +156,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
       dispose: () => disposal ??= (async () => {
         await disposeOwnedFramework()
         await catalogBinding?.close()
-        await ownedRelationships.close()
-        await ownedStore.close()
+        if (!borrowed) { await ownedRelationships.close(); await ownedStore.close() }
         unlock()
       })(),
     }
@@ -160,8 +164,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig): Pr
     try {
       await disposeFramework?.()
       await catalogBinding?.close()
-      await relationships?.close()
-      await store?.close()
+      if (!borrowed) { await relationships?.close(); await store?.close() }
       if (!(error instanceof AggregateError)) unlock()
     } catch (cleanup) {
       throw new AggregateError([error, cleanup], '角色创建 Agent 启动及清理失败')
