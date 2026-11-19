@@ -78,6 +78,7 @@
 
 ```text
 <局势负责人目录>/
+  start.json                   # 同一世界唯一的起始时点说明
   overviews/<方案ID>.json       # 该方案的起始时点说明、范围和局势入口
   situations/<局势ID>.json      # 按需建立的局势正文，记录所属方案
   candidates/<候选ID>.json      # 已确认资料的待审修改，是否采用由契约步骤确定
@@ -96,7 +97,7 @@
 | 工具 | 计划职责 |
 | --- | --- |
 | `situation_overview_create` / `situation_overview_read` | 创建或读取一个待审方案的起点说明、覆盖范围及局势入口；不通过保存选定方案。 |
-| `situation_overview_update` | 读取版本后更新未确认总览；不自动覆盖独立条目或其他模块文件。 |
+| `situation_update` | 读取版本后更新未确认总览或局势；不自动覆盖其他条目或其他模块文件。 |
 | `situation_create` / `situation_read` / `situation_update` | 建立、读取和按版本更新局势条目；返回 ID、实际路径、文件版本与写入结果。 |
 | `situation_search` | 按名称、涉及对象或范围查找已记录局势；同名返回候选，明确分页和记录覆盖范围。 |
 | `situation_related_read` | 查询已记录的局势关联及相关对象线索；不自动推断因果、反向关系或世界全部关联。 |
@@ -116,6 +117,8 @@
 首步对现有能力和两世界方案的核对见[初始局势现状与验收场景](world-initialization-stage-6a-initial-situation-scenarios.md)。
 
 文件格式及版本规则见[初始局势资料契约](world-initialization-stage-6a-initial-situation-contract.md)。
+
+双世界委派走查与真实模型样例的范围和运行方式见[初始局势 Agent 验证指南](../../cookbook/initial-situation-agent-validation.md)。
 
 1. **核对边界和起始方案。** 对照当前代码与两种世界样例，落实已确认的一个世界起点、多个待审方案及按需拆分的总览和条目；核对组织关系、历史相对时间和人物认知的归属，形成明确验收场景。需要新增业务决定时先讨论，不提前实现依赖该决定的契约。
 2. **局势资料契约与受控存储。** 在确认的组织方式下细化版本化 JSON、起始时点、ID、引用、留白、审核状态、候选及旧资料策略；实现局势插件内格式、真实目录与受控存储。验证同名、版本冲突、损坏、未知版本、越权、取消与写入不确定，保留已有用户数据。
