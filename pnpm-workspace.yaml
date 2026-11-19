@@ -15,6 +15,7 @@ packages:
   - 'src/agents/plugins/map'
   - 'src/agents/plugins/history'
   - 'src/agents/plugins/initial-situation'
+  - 'src/agents/plugins/world-development'
   - 'src/agents/plugins/character'
   - 'src/agents/plugins/organization'
   - 'src/agents/plugins/skill-filesystem'

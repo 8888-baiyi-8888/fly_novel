@@ -83,6 +83,7 @@ src/agents/plugins/skill/ `@fly-novel/skill` 独立工作区包，提供 Skill �
 src/agents/plugins/map/ `@fly-novel/map` 独立工作区包，提供地图 JSON 格式、受控文档存储、查询及工具定义
 src/agents/plugins/history/ `@fly-novel/history` 独立工作区包，提供历史事件格式、受控存储、查询及工具
 src/agents/plugins/initial-situation/ `@fly-novel/initial-situation` 独立工作区包，提供初始局势 JSON 格式、受控存储和工具
+src/agents/plugins/world-development/ `@fly-novel/world-development` 独立工作区包，提供世界发展规划 JSON 格式、受控存储、查询与工具
 src/agents/plugins/character/ `@fly-novel/character` 独立工作区包，提供人物及关系格式、受控存储、查询和工具
 src/agents/plugins/organization/ `@fly-novel/organization` 独立工作区包，提供组织 JSON 存储、身份绑定查询和工具
 src/agents/plugins/organization/ `@fly-novel/organization` 独立工作区包，提供组织与关系 JSON 格式和受控文档存储

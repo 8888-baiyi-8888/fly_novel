@@ -59,6 +59,9 @@
       "@fly-novel/initial-situation": [
         "./src/agents/plugins/initial-situation/index.ts"
       ],
+      "@fly-novel/world-development": [
+        "./src/agents/plugins/world-development/index.ts"
+      ],
       "@fly-novel/character": [
         "./src/agents/plugins/character/index.ts"
       ],
