@@ -15,6 +15,7 @@ import { organizationAgentPreset } from '../organization-agent/preset.js'
 import { historyAgentPreset } from '../history-agent/preset.js'
 import { initialSituationAgentPreset } from '../initial-situation-agent/preset.js'
 import { worldDevelopmentAgentPreset } from '../world-development-agent/preset.js'
+import { worldSpecificAgentPreset } from '../world-specific-agent/preset.js'
 import { registerAll } from '@fly-novel/util'
 
 export interface AgentFramework {
@@ -46,6 +47,7 @@ export async function bootstrapAgents(): Promise<AgentFramework> {
     historyAgentPreset,
     initialSituationAgentPreset,
     worldDevelopmentAgentPreset,
+    worldSpecificAgentPreset,
   ], preset => presets.register(preset))
 
   // 验证 Preset 中的插件绑定是否存在于 PluginRegistry 中

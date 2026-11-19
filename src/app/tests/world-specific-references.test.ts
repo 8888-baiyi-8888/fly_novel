@@ -7,14 +7,16 @@ import { LocalFileSystem } from '@fly-novel/fs-local'
 import { SituationStore } from '@fly-novel/initial-situation'
 import { DevelopmentStore } from '@fly-novel/world-development'
 import { createWorldSpecificResolver } from '../agents/world-specific-references.js'
+import { createWorldSpecificAgent } from '../agents/world-specific-agent.js'
+import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 
 test('专有内容引用核验真实局势与规划的世界和负责人', async t => {
   const tmp = join(process.cwd(), 'tmp'); await mkdir(tmp, { recursive: true }); const root = await realpath(await mkdtemp(join(tmp, 'specific-ref-'))); t.after(() => rm(root, { recursive: true, force: true }))
   const worlds = []
   const dirs = ['macro-development/blueprints', 'macro-development/directions', 'macro-development/proposals', 'storylines/stories', 'storylines/growth-lines', 'character-growth/blueprints', 'character-growth/items', 'candidates']
   for (const worldId of ['a', 'b']) {
-    const readRoot = join(root, worldId); for (const dir of ['main', 'confirmed', 'catalog', 'situation/overviews', 'situation/situations', 'situation/candidates', ...dirs.map(value => `development/${value}`)]) await mkdir(join(readRoot, dir), { recursive: true })
-    worlds.push({ worldId, readRoot, confirmedRoot: join(readRoot, 'confirmed'), catalogRoot: join(readRoot, 'catalog'), mainAgent: { agentId: 'main', writableRoot: join(readRoot, 'main') }, agents: ['situation', 'development'].map(agentId => ({ agentId, writableRoot: join(readRoot, agentId) })) })
+    const readRoot = join(root, worldId); for (const dir of ['main', 'confirmed', 'catalog', 'situation/overviews', 'situation/situations', 'situation/candidates', 'specific/topics', 'specific/items', 'specific/candidates', ...dirs.map(value => `development/${value}`)]) await mkdir(join(readRoot, dir), { recursive: true })
+    worlds.push({ worldId, readRoot, confirmedRoot: join(readRoot, 'confirmed'), catalogRoot: join(readRoot, 'catalog'), mainAgent: { agentId: 'main', writableRoot: join(readRoot, 'main') }, agents: ['situation', 'development', 'specific'].map(agentId => ({ agentId, writableRoot: join(readRoot, agentId) })) })
   }
   const world = worlds[0]!; const ctx = new Context(); const fs = await ctx.plugin(LocalFileSystem, { cwd: world.readRoot }); t.after(() => fs.dispose())
   const situation = await SituationStore.open({ fs: ctx.fs, root: join(world.readRoot, 'situation'), worldId: world.worldId, phase: 'initialization', access: 'read-write', singleWriterProcess: true }); t.after(() => situation.close())
@@ -29,4 +31,14 @@ test('专有内容引用核验真实局势与规划的世界和负责人', async
   assert.equal(await resolve('history', story.id), undefined); assert.equal(await resolve('development-proposal', story.id), null)
   await assert.rejects(createWorldSpecificResolver({ ...config, worldId: 'b' }), /不匹配/)
   await assert.rejects(createWorldSpecificResolver({ ...config, development: { agentId: 'situation', store: development } }), /不匹配/)
+  class Probe extends LlmAdapter {
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      const names = options.tools?.map(tool => tool.name) ?? []; for (const name of ['world_specific_topic_create', 'situation_overview_read', 'world_development_read']) assert.ok(names.includes(name))
+      for (const name of ['situation_create', 'world_development_create']) assert.ok(!names.includes(name))
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '完成' } }; yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+  const sessionRoot = join(root, 'sessions'); await mkdir(sessionRoot)
+  const agent = await createWorldSpecificAgent({ workspaces: worlds, worldId: world.worldId, agentId: 'specific', sessionId: 's', sessionRoot, sessionMode: 'create', provider: 'test', model: 'test', adapter: new Probe(), singleWriterProcess: true, references: { situation: config.situation, development: config.development } })
+  try { assert.deepEqual(await agent.run({ prompt: '读取已授权资料' }), { content: '完成' }) } finally { await agent.dispose() }
 })

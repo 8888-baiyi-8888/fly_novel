@@ -20,6 +20,8 @@
 
 双世界固定替身与真实模型样例的命令和范围见[世界发展规划验证指南](../../docs/cookbook/world-development-agent-validation.md)。
 
+世界专有内容入口 `createWorldSpecificAgent` 使用可信世界、负责人目录和 Session 装配[专有内容插件](../agents/plugins/world-specific/README.md)，按配置借用地图、组织、人物、历史、初始局势和世界发展规划的只读句柄。世界初始化部署配置可提供 `worldSpecificAgent`，主 Agent 使用 `delegate_world_specific` 委派，不获得专有写工具。调用方准备 `topics/`、`items/`、`candidates/` 和独立 Session 根，并管理借用句柄的生命周期；保存与目录登记不等于用户确认。
+
 可信应用可通过 `references` 借用已打开的地图和组织存储，并提供完整 `workspaces` 配置；主 Agent 的世界工作区入口提供世界配置。装配时校验世界 ID、负责人身份和目录，角色创建 Agent 只获得地图、组织的规划者只读工具，不能通过这些工具修改其他模块。借用句柄及其文件后端由调用方保持有效并关闭；角色创建 Agent 不自动打开、共享或关闭地图和组织 Agent 的存储。未提供引用时不注册相应结构化查询工具。此规划者视图不是故事角色的权限过滤，普通文件读取权限仍由工作区配置和调用方控制。
 
 `createOrganizationAgent` 从可信世界配置中按特殊 Agent 身份取得组织根，调用前须建立真实的根目录及其 `organizations/`、`relations/`、`memberships/` 子目录；Session 根不能与任何传入世界读取根重叠。调用方提供世界和 Agent ID、Session ID 与模式、模型适配器及单可信写入进程保证，使用后须等待 `dispose()`。组织工具只在初始化期间读写，目录登记与成果保存分别报告；Session 恢复对话不证明业务完成。

@@ -1,4 +1,4 @@
-export { createWorldInitializationAgent, createWorldInitializationAgentWithWorkspace, createWorldInitializationAgentWithWorldWorkspaces, type WorkspaceCharacterCreatorConfig, type WorkspaceWorldBasicsConfig, type WorkspaceMapAgentConfig, type WorkspaceOrganizationAgentConfig, type WorkspaceHistoryAgentConfig, type WorkspaceInitialSituationAgentConfig, type WorkspaceWorldDevelopmentAgentConfig, type WorldInitializationSessionConfig } from './world-initialization.js'
+export { createWorldInitializationAgent, createWorldInitializationAgentWithWorkspace, createWorldInitializationAgentWithWorldWorkspaces, type WorkspaceCharacterCreatorConfig, type WorkspaceWorldBasicsConfig, type WorkspaceMapAgentConfig, type WorkspaceOrganizationAgentConfig, type WorkspaceHistoryAgentConfig, type WorkspaceInitialSituationAgentConfig, type WorkspaceWorldDevelopmentAgentConfig, type WorkspaceWorldSpecificAgentConfig, type WorldInitializationSessionConfig } from './world-initialization.js'
 export type { WorldInitializationWorkspace } from './world-initialization-workspace.js'
 export { createCharacterAgent } from './character.js'
 export { createCharacterCreator, type CharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
@@ -12,5 +12,7 @@ export { createInitialSituationAgent, type InitialSituationAgent, type InitialSi
 export { createSituationReferenceResolver, type SituationReferences } from './initial-situation-references.js'
 export { createWorldDevelopmentAgent, type WorldDevelopmentAgent, type WorldDevelopmentAgentConfig } from './world-development-agent.js'
 export { createWorldDevelopmentResolvers, type WorldDevelopmentReferences } from './world-development-references.js'
+export { createWorldSpecificAgent, type WorldSpecificAgent, type WorldSpecificAgentConfig } from './world-specific-agent.js'
+export { createWorldSpecificResolver, type WorldSpecificReferences } from './world-specific-references.js'
 export { createDirectorAgent } from './director.js'
 export { createWriterAgent } from './writer.js'

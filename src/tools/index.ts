@@ -6,3 +6,4 @@ export { createOrganizationDelegationTool } from './subagent-organization/delega
 export { createHistoryDelegationTool } from './subagent-history/delegate-history.js'
 export { createInitialSituationDelegationTool } from './subagent-initial-situation/delegate-initial-situation.js'
 export { createWorldDevelopmentDelegationTool } from './subagent-world-development/delegate-world-development.js'
+export { createWorldSpecificDelegationTool } from './subagent-world-specific/delegate-world-specific.js'
