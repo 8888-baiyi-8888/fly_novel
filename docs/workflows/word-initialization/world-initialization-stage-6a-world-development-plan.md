@@ -31,7 +31,7 @@
 - [初始局势插件](../../../src/agents/plugins/initial-situation/README.md)保存一个世界起点、多个待审方案及所属局势条目；它没有方案确认或选用流程，也不自动判断跨模块语义冲突。
 - [历史插件](../../../src/agents/plugins/history/README.md)保存历史事件、时间和关联；[地图](../../../src/agents/plugins/map/README.md)、[组织](../../../src/agents/plugins/organization/README.md)、[人物](../../../src/agents/plugins/character/README.md)各自维护自身资料。不同模块读取和版本接口不同，不能假设已经存在统一跨模块存储或关联服务。
 - [世界工作区和目录](../../../src/world-init/README.md)按世界和负责人约束资料范围；目录简介只是导航。现有专用 Agent 的 Preset、SystemPrompt、Tools、Session、可信引用绑定与持久委派可供复用，具体能力以[应用入口说明](../../../src/app/README.md)为准。
-- 当前没有世界发展规划 Agent、三类规划的专用插件及存储、故事线执行器、角色成长运行机制或世界演化引擎。现有主 Agent 提示词中的规划目标不能当作上述能力已经实现。
+- 世界发展规划 Agent 和三类规划的联合插件见[应用说明](../../../src/app/README.md)及[插件说明](../../../src/agents/plugins/world-development/README.md)；故事线执行器、角色成长运行机制和世界演化引擎不由本模块提供。
 
 ## 两世界联合走查
 

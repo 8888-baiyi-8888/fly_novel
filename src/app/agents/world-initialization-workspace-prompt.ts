@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@fly-novel/system-prompt'
 import type { WorldInitializationWorkspace } from './world-initialization-workspace.js'
 
-type WorkspacePromptConfig = WorldInitializationWorkspace & { readonly mode: 'draft-write' | 'read-only'; readonly worldBasics?: boolean; readonly mapAgent?: boolean; readonly organizationAgent?: boolean; readonly historyAgent?: boolean; readonly initialSituationAgent?: boolean; readonly catalog?: {
+type WorkspacePromptConfig = WorldInitializationWorkspace & { readonly mode: 'draft-write' | 'read-only'; readonly worldBasics?: boolean; readonly mapAgent?: boolean; readonly organizationAgent?: boolean; readonly historyAgent?: boolean; readonly initialSituationAgent?: boolean; readonly worldDevelopmentAgent?: boolean; readonly catalog?: {
   readonly mainOwner: string; readonly delegates: readonly { readonly owner: string; readonly tool: string }[]
 } }
 
@@ -39,6 +39,10 @@ export const worldInitializationWorkspacePromptPlugin = Object.assign(function w
   if (config.initialSituationAgent && config.mode === 'draft-write') ctx.effect(() => ctx.systemPrompt.section({
     name: 'world-initialization:initial-situation-agent', order: 16, interpolate: false,
     text: '需要开发初始局势时，使用 delegate_initial_situation 委派专用 Agent，提供用户要求与必要背景；核对实际成果后再整合，不自行代写初始局势模块。其他世界构想仍按实际需要协调或补充。',
+  }))
+  if (config.worldDevelopmentAgent && config.mode === 'draft-write') ctx.effect(() => ctx.systemPrompt.section({
+    name: 'world-initialization:world-development-agent', order: 17, interpolate: false,
+    text: '需要开发宏观发展蓝图、故事线或人物成长蓝图时，使用 delegate_world_development 委派专用 Agent，提供用户要求和必要背景；核对实际成果后再整合，不自行代写这些模块。其他世界构想仍按实际需要协调或补充。',
   }))
   if (config.catalog && config.mode === 'draft-write') {
     const catalog = config.catalog
