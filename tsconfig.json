@@ -62,6 +62,9 @@
       "@fly-novel/world-development": [
         "./src/agents/plugins/world-development/index.ts"
       ],
+      "@fly-novel/world-specific": [
+        "./src/agents/plugins/world-specific/index.ts"
+      ],
       "@fly-novel/character": [
         "./src/agents/plugins/character/index.ts"
       ],

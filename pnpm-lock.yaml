@@ -107,6 +107,9 @@ importers:
       '@fly-novel/world-initialization-system-prompt':
         specifier: workspace:*
         version: link:src/agents/world-initialization-main-agent/plugins/system-prompt
+      '@fly-novel/world-specific':
+        specifier: workspace:*
+        version: link:src/agents/plugins/world-specific
       '@langchain/langgraph':
         specifier: ^1.4.18
         version: 1.4.18(@langchain/core@1.2.14(openai@7.27.0(zod@4.6.5)))(zod@4.6.5)
@@ -689,6 +692,24 @@ importers:
         version: link:../../../util
 
   src/agents/plugins/world-development:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@fly-novel/fs':
+        specifier: workspace:*
+        version: link:../fs/fs
+      '@fly-novel/tools':
+        specifier: workspace:*
+        version: link:../tools
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
+  src/agents/plugins/world-specific:
     dependencies:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2

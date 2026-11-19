@@ -1,0 +1,5 @@
+{
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": { "paths": { "@fly-novel/fs": ["../fs/fs/index.ts"], "@fly-novel/tools": ["../tools/index.ts"], "@fly-novel/llm": ["../../../llm/index.ts"], "@fly-novel/util": ["../../../util/index.ts"] } },
+  "include": ["**/*.ts"], "exclude": ["node_modules", "dist"]
+}
