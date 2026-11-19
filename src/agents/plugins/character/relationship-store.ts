@@ -39,6 +39,9 @@ export class CharacterRelationshipStore {
   /** 提供给可信装配以核对读取绑定。 */
   get worldId(): string { return this.config.worldId }
 
+  /** 用于可信应用核对关系存储对应的负责人目录。 */
+  get rootDirectory(): string { return this.config.root }
+
   /** 打开预先创建的真实目录；不初始化或迁移现有角色资料。 */
   static async open(config: CharacterRelationshipStoreConfig): Promise<CharacterRelationshipStore> {
     if (!config || config.phase !== 'initialization' || config.singleWriterProcess !== true || typeof config.resolvePerson !== 'function' ||
@@ -115,7 +118,7 @@ export class CharacterRelationshipStore {
   }
   /** 读取关系及其文件摘要；不存在或损坏时拒绝。 */
   read(id: string, signal?: AbortSignal): Promise<Stored> {
-    return this.run(async () => { const all = await this.scan(signal); const value = all.find(item => item.document.id === id); if (!value) throw new Error('人物关系不存在'); return value })
+    return this.run(async () => { const all = await this.scan(signal); const value = all.find(item => item.document.id === id); if (!value) throw Object.assign(new Error('人物关系不存在'), { code: 'CHARACTER_RELATION_NOT_FOUND' }); return value })
   }
   /** 按人物及相对方向查询完整关系文档；分页版本反映关系文件而非人物姓名。 */
   query(input: { personId: string; direction?: 'outgoing' | 'incoming' | 'two-way'; keyword?: string; offset?: number; limit?: number; version?: string }, signal?: AbortSignal): Promise<{ items: Stored[]; total: number; offset: number; nextOffset: number | null; version: string }> {

@@ -10,7 +10,7 @@ type Doc = Overview | Situation
 type Stored<T> = { document: T; path: string; version: FsVersion }
 export type OverviewInput = Omit<Overview, 'formatVersion' | 'worldId' | 'id' | 'contentStatus'>
 export type SituationInput = Omit<Situation, 'formatVersion' | 'worldId' | 'id' | 'contentStatus'>
-export type SituationReferenceResolver = (type: string, id: string, signal?: AbortSignal) => Promise<{ id: string; worldId: string; version?: string } | null>
+export type SituationReferenceResolver = (type: string, id: string, signal?: AbortSignal) => Promise<{ id: string; worldId: string; version?: string } | null | undefined>
 export interface SituationStoreConfig { fs: FileSystem; root: string; worldId: string; phase: 'initialization'; access: 'read-only' | 'read-write'; singleWriterProcess: true; resolveReference?: SituationReferenceResolver; maxDocumentBytes?: number; maxDocuments?: number }
 export class SituationError extends Error {
   constructor(message: string, readonly code: string, readonly path?: string, options?: ErrorOptions) { super(message, options); this.name = 'SituationError' }
@@ -89,6 +89,7 @@ export class SituationStore {
     for (const ref of doc.references) if (ref.kind === 'linked') {
       if (!this.config.resolveReference) throw new SituationError('引用解析器未装配', 'SITUATION_REFERENCE_UNAVAILABLE')
       const found = await this.config.resolveReference(ref.type, ref.id, signal); signal?.throwIfAborted()
+      if (found === undefined) throw new SituationError('引用解析器未装配', 'SITUATION_REFERENCE_UNAVAILABLE')
       if (!found || found.id !== ref.id || found.worldId !== this.worldId) throw new SituationError('引用不存在或世界不匹配', 'SITUATION_INVALID_DOCUMENT')
     }
   }
@@ -129,6 +130,17 @@ export class SituationStore {
   }
   readSituation(id: string, signal?: AbortSignal): Promise<Stored<Situation>> { return this.enqueue(() => this.read('situations', id, situationSchema, signal)) }
   snapshot(signal?: AbortSignal) { return this.enqueue(async () => ({ overviews: await this.list('overviews', overviewSchema, signal), situations: await this.list('situations', situationSchema, signal) })) }
+  /** 重新核验已授权引用；读取失败由解析器抛出，不等同于未找到。 */
+  checkReference(type: string, id: string, observedVersion: string | null, signal?: AbortSignal) { return this.enqueue(async () => {
+    situationIdSchema.parse(id)
+    if (!this.config.resolveReference) return { status: 'unconfigured' as const }
+    signal?.throwIfAborted(); const found = await this.config.resolveReference(type, id, signal); signal?.throwIfAborted()
+    if (found === undefined) return { status: 'unconfigured' as const }
+    if (!found) return { status: 'not_found' as const }
+    if (found.worldId !== this.worldId || found.id !== id) throw new SituationError('引用身份或世界不匹配', 'SITUATION_INVALID_DOCUMENT')
+    if (!observedVersion || !found.version) return { status: 'version_unknown' as const }
+    return { status: found.version === observedVersion ? 'current' as const : 'changed' as const }
+  }) }
   private folder(kind: Kind): 'overviews' | 'situations' { return kind === 'overview' ? 'overviews' : 'situations' }
   private async readDoc(kind: Kind, id: string, signal?: AbortSignal): Promise<Stored<Doc>> { return kind === 'overview' ? this.read('overviews', id, overviewSchema, signal) : this.read('situations', id, situationSchema, signal) }
   private async makeDoc(kind: Kind, id: string, input: OverviewInput | SituationInput, old: Doc, signal?: AbortSignal): Promise<Doc> {
