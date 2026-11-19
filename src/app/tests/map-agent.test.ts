@@ -104,6 +104,22 @@ test('共享地图可并发借用，地图 Agent 退出后仍可读取', async t
   await assert.rejects(shared.get(), /关闭/)
 })
 
+test('不同世界共享地图互不占用，关闭后可重新打开', async t => {
+  const first = await setup(t); const second = await setup(t)
+  const worldB = { ...second.world, worldId: 'map-world-b' }
+  const a = new SharedMapStorage(first.world, 'map'); const b = new SharedMapStorage(worldB, 'map')
+  try {
+    const [left, right] = await Promise.all([a.get(), b.get()])
+    await Promise.all([left.createOverview(overview), right.createOverview({ ...overview, name: '另一世界' })])
+    assert.equal((await left.readOverview()).document.name, '河谷')
+    assert.equal((await right.readOverview()).document.name, '另一世界')
+    await a.close()
+    assert.equal((await right.readOverview()).document.name, '另一世界')
+    const reopened = new SharedMapStorage(first.world, 'map')
+    try { assert.equal((await (await reopened.get()).readOverview()).document.name, '河谷') } finally { await reopened.close() }
+  } finally { await a.close(); await b.close() }
+})
+
 test('主 Agent 委派地图、组织和人物时共用地图并只暴露查询工具', async t => {
   const { world, sessionRoot } = await setup(t)
   for (const name of ['organizations', 'relations', 'memberships']) await mkdir(join(world.readRoot, 'organization', name), { recursive: true })
