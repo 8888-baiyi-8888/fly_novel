@@ -20,6 +20,7 @@ type Owner<T> = { agentId: string; references?: T }
 
 /** 可信应用使用已校验的世界配置创建共享存储所有者。 */
 export function createWorldStorage(worlds: readonly WorldWorkspaceConfig[], world: WorldWorkspaceConfig, config: {
+  singleWriterProcess: true
   mapConfig?: { agentId: string }
   creator?: Owner<CreatorRefs> & { initializeCharacters: boolean }
   organizationConfig?: Owner<OrganizationRefs>
@@ -28,6 +29,7 @@ export function createWorldStorage(worlds: readonly WorldWorkspaceConfig[], worl
   developmentConfig?: Owner<WorldDevelopmentReferences>
   specificConfig?: Owner<WorldSpecificReferences>
 }) {
+  if (config.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   const { mapConfig, creator, organizationConfig, historyConfig, situationConfig, developmentConfig, specificConfig } = config
   const sharedMap = mapConfig ? new SharedMapStorage(world, mapConfig.agentId) : undefined
   if (sharedMap && (creator?.references?.map || organizationConfig?.references?.map || historyConfig?.references?.map || situationConfig?.references?.map || developmentConfig?.references?.map || specificConfig?.references?.map)) throw new Error('共享地图与外部地图引用不能同时配置')

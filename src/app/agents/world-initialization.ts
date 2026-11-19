@@ -205,7 +205,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     if (config.references) await createWorldSpecificResolver({ ...config.references, workspaces: worlds, worldId: world.worldId })
     specificConfig = { ...config, workspaces: worlds, worldId: world.worldId, singleWriterProcess: true }
   }
-  const storage = createWorldStorage(worlds, world, { mapConfig, creator, organizationConfig, historyConfig, situationConfig, developmentConfig, specificConfig })
+  const storage = createWorldStorage(worlds, world, { singleWriterProcess: true, mapConfig, creator, organizationConfig, historyConfig, situationConfig, developmentConfig, specificConfig })
   const { sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment, sharedSpecific } = storage
   const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
   let agent: Agent

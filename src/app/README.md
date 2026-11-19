@@ -42,6 +42,8 @@
 
 世界入口配置世界专有内容 Agent 时，其存储也由世界入口持有，并在规划存储之前关闭；独立入口自行持有自己的存储。
 
+共享地图与组织的[真实模型样例](tests/shared-world-storage-real.test.ts)需显式启用真实模型测试及有效的本机模型配置。该样例在隔离目录保存测试成果，结果仍须人工审阅。
+
 世界入口的部署配置可提供 `organizationAgent`，字段为 `agentId`、`sessionId`、`sessionMode`、`sessionRoot`、`provider`、`model`、`adapter` 及可选 `references`。组织身份不能与其他专用 Agent 相同；配置后主 Agent 获得 `delegate_organization`，组织写工具由组织 Agent 持有。启用目录时共用世界目录服务并绑定组织身份；父 Agent 关闭时取消并等待子运行释放。提示词指导职责和成果核查，不能保证真实模型遵循。
 
 组织 Agent 的双世界固定替身走查和真实模型检查见[组织 Agent 验证指南](../../docs/cookbook/organization-agent-validation.md)。
