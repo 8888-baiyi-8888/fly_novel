@@ -34,6 +34,8 @@
 
 世界入口配置组织 Agent 时，共享组织存储供组织 Agent 写入及人物、历史、局势、发展规划和专有内容的只读工具或引用核验使用；不能同时提供外部组织引用。配置角色创建 Agent 时，人物及关系存储由世界入口持有并供引用方查询，组织核验人物时按需获取人物存储；不能同时提供外部人物或人物关系引用。
 
+世界入口配置历史 Agent 时，历史存储由世界入口持有，历史 Agent 借用写入，局势、世界发展规划和专有内容按需借用历史引用；不能同时为这些消费者提供外部历史引用。关闭时先等待子 Agent，再按引用依赖关闭存储。
+
 世界入口的部署配置可提供 `organizationAgent`，字段为 `agentId`、`sessionId`、`sessionMode`、`sessionRoot`、`provider`、`model`、`adapter` 及可选 `references`。组织身份不能与其他专用 Agent 相同；配置后主 Agent 获得 `delegate_organization`，组织写工具由组织 Agent 持有。启用目录时共用世界目录服务并绑定组织身份；父 Agent 关闭时取消并等待子运行释放。提示词指导职责和成果核查，不能保证真实模型遵循。
 
 组织 Agent 的双世界固定替身走查和真实模型检查见[组织 Agent 验证指南](../../docs/cookbook/organization-agent-validation.md)。

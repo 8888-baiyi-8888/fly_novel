@@ -178,6 +178,12 @@ test('历史、局势、发展规划和专有内容共用地图核验真实地�
     assert.ok(results.every(result => !result.isError), JSON.stringify(results))
     assert.match(JSON.stringify(adapters[0]!.requests[1].messages), /verified/)
     for (const adapter of adapters.slice(1)) assert.match(JSON.stringify(adapter.requests[1].messages), /version_unknown/)
+    calls[0]!.push({ name: 'unused', args: {} }, { name: 'history_event_create', args: { content: { name: '旧战争', aliases: [], detailLevel: 'overview', summary: '', body: '', time: [], parents: [], childrenCoverage: 'unknown', relations: [], references: [], publicAccounts: [], hidden: { state: 'unknown', note: '' }, reserved: [] } } })
+    assert.equal((await call('delegate_history')).isError, false)
+    const [eventFile] = await readdir(join(world.readRoot, 'history', 'events')); assert.ok(eventFile)
+    calls[1]!.push({ name: 'unused', args: {} }, { name: 'situation_reference_check', args: { type: 'history', id: eventFile.replace(/\.json$/, '') } })
+    assert.equal((await call('delegate_initial_situation')).isError, false)
+    assert.match(JSON.stringify(adapters[1]!.requests.at(-1)?.messages), /version_unknown/)
   } finally { await parent.dispose() }
 })
 
