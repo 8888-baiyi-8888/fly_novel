@@ -191,6 +191,12 @@ test('历史、局势、发展规划和专有内容共用地图核验真实地�
     calls[2]!.push({ name: 'unused', args: {} }, { name: 'world_development_situation_check', args: { overviewId: overviewFile.replace(/\.json$/, '') } })
     assert.equal((await call('delegate_world_development')).isError, false)
     assert.match(JSON.stringify(adapters[2]!.requests.at(-1)?.messages), /verified/)
+    calls[2]!.push({ name: 'unused', args: {} }, { name: 'world_development_create', args: { kind: 'macro-blueprint', content: { name: '世界蓝图', summary: '', body: '', reserved: [], applicability: { kind: 'unknown' }, references: [], links: [], person: null } } })
+    assert.equal((await call('delegate_world_development')).isError, false)
+    const [blueprintFile] = await readdir(join(world.readRoot, 'development', 'macro-development', 'blueprints')); assert.ok(blueprintFile)
+    calls[3]!.push({ name: 'unused', args: {} }, { name: 'world_specific_reference_check', args: { type: 'development-macro-blueprint', id: blueprintFile.replace(/\.json$/, '') } })
+    assert.equal((await call('delegate_world_specific')).isError, false)
+    assert.match(JSON.stringify(adapters[3]!.requests.at(-1)?.messages), /version_unknown/)
   } finally { await parent.dispose() }
 })
 

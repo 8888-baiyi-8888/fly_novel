@@ -41,6 +41,7 @@ import { SharedCharacterStorage } from '../../world-init/storage/character.js'
 import { sharedLocalStore } from '../../world-init/storage/local.js'
 import { HistoryStore } from '@fly-novel/history'
 import { SituationStore } from '@fly-novel/initial-situation'
+import { DevelopmentStore } from '@fly-novel/world-development'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
@@ -239,6 +240,19 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     const resolveReference = await createSituationReferenceResolver({ ...situationConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters, relationships } : {}), ...(history ? { history } : {}), workspaces: worlds, worldId: world.worldId })
     return SituationStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, resolveReference })
   }) : undefined
+  if (developmentConfig && specificConfig?.references?.development) throw new Error('共享规划与外部规划引用不能同时配置')
+  const sharedDevelopment = developmentConfig ? sharedLocalStore(world.readRoot, async fs => {
+    const owner = world.agents.find(item => item.agentId === developmentConfig!.agentId)!
+    const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
+    const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
+    const person = sharedCharacters && creator ? await sharedCharacters.get() : undefined
+    const characters = person && creator ? { agentId: creator.agentId, store: person.store } : undefined
+    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationships } : undefined
+    const history = sharedHistory && historyConfig ? { agentId: historyConfig.agentId, store: await sharedHistory.get() } : undefined
+    const situation = sharedSituation && situationConfig ? { agentId: situationConfig.agentId, store: await sharedSituation.get() } : undefined
+    const references = await createWorldDevelopmentResolvers({ ...developmentConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters, relationships } : {}), ...(history ? { history } : {}), ...(situation ? { situation } : {}), workspaces: worlds, worldId: world.worldId })
+    return DevelopmentStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, ...references })
+  }) : undefined
   const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
   let agent: Agent
   let catalog: CatalogService | undefined
@@ -258,10 +272,10 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
       historyConfig, catalog && historyConfig ? () => catalog!.bind(historyConfig!.agentId) : undefined,
       situationConfig, catalog && situationConfig ? () => catalog!.bind(situationConfig!.agentId) : undefined,
       developmentConfig, catalog && developmentConfig ? () => catalog!.bind(developmentConfig!.agentId) : undefined,
-      specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined, sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation)
+      specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined, sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
-      try { await sharedSituation?.close(); await sharedHistory?.close(); await sharedOrganization?.close(); await sharedCharacters?.close(); await sharedMap?.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
+      try { await sharedDevelopment?.close(); await sharedSituation?.close(); await sharedHistory?.close(); await sharedOrganization?.close(); await sharedCharacters?.close(); await sharedMap?.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
     }
     throw error
   }
@@ -270,7 +284,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     info: agent.info, context: agent.context,
     get state() { return agent.state },
     run: input => agent.run(input), cancel: () => agent.cancel(),
-    dispose: () => disposal ??= (async () => { await agent.dispose(); await sharedSituation?.close(); await sharedHistory?.close(); await sharedOrganization?.close(); await sharedCharacters?.close(); await sharedMap?.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() })(),
+    dispose: () => disposal ??= (async () => { await agent.dispose(); await sharedDevelopment?.close(); await sharedSituation?.close(); await sharedHistory?.close(); await sharedOrganization?.close(); await sharedCharacters?.close(); await sharedMap?.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() })(),
   }
 }
 
@@ -322,7 +336,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
   historyConfig?: HistoryAgentConfig, createHistoryCatalogBinding?: () => CatalogBinding,
   situationConfig?: InitialSituationAgentConfig, createSituationCatalogBinding?: () => CatalogBinding,
   developmentConfig?: WorldDevelopmentAgentConfig, createDevelopmentCatalogBinding?: () => CatalogBinding,
-  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage, sharedOrganization?: SharedOrganizationStorage, sharedCharacters?: SharedCharacterStorage, sharedHistory?: import('../../world-init/storage/resource.js').SharedResource<HistoryStore>, sharedSituation?: import('../../world-init/storage/resource.js').SharedResource<SituationStore>): Promise<Agent> {
+  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage, sharedOrganization?: SharedOrganizationStorage, sharedCharacters?: SharedCharacterStorage, sharedHistory?: import('../../world-init/storage/resource.js').SharedResource<HistoryStore>, sharedSituation?: import('../../world-init/storage/resource.js').SharedResource<SituationStore>, sharedDevelopment?: import('../../world-init/storage/resource.js').SharedResource<DevelopmentStore>): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -403,9 +417,10 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     async create({ sessionMode }) { const child = await createInitialSituationAgentWithCatalogBinding({ ...situationConfig, references: { ...situationConfig.references, ...await sharedReferences(), ...await historyReference() }, sessionMode }, createSituationCatalogBinding, await sharedSituation?.get()); return { agent: child, dispose: () => child.dispose() } } })
   const situationReference = async () => sharedSituation && situationConfig ? { situation: { agentId: situationConfig.agentId, store: await sharedSituation.get() } } : {}
   const developmentCreate = developmentConfig && createPersistentAgentCreator({ presetId: 'world-development-agent', sessionMode: developmentConfig.sessionMode,
-    async create({ sessionMode }) { const child = await createWorldDevelopmentAgentWithCatalogBinding({ ...developmentConfig, references: { ...developmentConfig.references, ...await sharedReferences(), ...await historyReference(), ...await situationReference() }, sessionMode }, createDevelopmentCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
+    async create({ sessionMode }) { const child = await createWorldDevelopmentAgentWithCatalogBinding({ ...developmentConfig, references: { ...developmentConfig.references, ...await sharedReferences(), ...await historyReference(), ...await situationReference() }, sessionMode }, createDevelopmentCatalogBinding, await sharedDevelopment?.get()); return { agent: child, dispose: () => child.dispose() } } })
+  const developmentReference = async () => sharedDevelopment && developmentConfig ? { development: { agentId: developmentConfig.agentId, store: await sharedDevelopment.get() } } : {}
   const specificCreate = specificConfig && createPersistentAgentCreator({ presetId: 'world-specific-agent', sessionMode: specificConfig.sessionMode,
-    async create({ sessionMode }) { const child = await createWorldSpecificAgentWithCatalogBinding({ ...specificConfig, references: { ...specificConfig.references, ...await sharedReferences(), ...await historyReference(), ...await situationReference() }, sessionMode }, createSpecificCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
+    async create({ sessionMode }) { const child = await createWorldSpecificAgentWithCatalogBinding({ ...specificConfig, references: { ...specificConfig.references, ...await sharedReferences(), ...await historyReference(), ...await situationReference(), ...await developmentReference() }, sessionMode }, createSpecificCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
   const routes = { ...(characterCreate ? { 'character-creator': characterCreate } : {}), ...(basicsCreate ? { 'world-basics': basicsCreate } : {}), ...(mapCreate ? { 'map-agent': mapCreate } : {}), ...(organizationCreate ? { 'organization-agent': organizationCreate } : {}), ...(historyCreate ? { 'history-agent': historyCreate } : {}), ...(situationCreate ? { 'initial-situation-agent': situationCreate } : {}), ...(developmentCreate ? { 'world-development-agent': developmentCreate } : {}), ...(specificCreate ? { 'world-specific-agent': specificCreate } : {}) }
   const persistentCreate = characterCreate || basicsCreate || mapCreate || organizationCreate || historyCreate || situationCreate || developmentCreate || specificCreate ? createPersistentAgentRouter(routes) : undefined
   let backend: ReturnType<typeof framework.context.plugin> | undefined
