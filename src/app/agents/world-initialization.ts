@@ -12,7 +12,7 @@ import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import { registerAll } from '@fly-novel/util'
 import { defineTool } from '@fly-novel/tools'
 import { loadConfiguredAdapter } from '../call-llm.js'
-import { createCatalogTools, createCharacterCreatorDelegationTool, createHistoryDelegationTool, createOrganizationDelegationTool, readFileTool } from '../../tools/index.js'
+import { createCatalogTools, createCharacterCreatorDelegationTool, createHistoryDelegationTool, createInitialSituationDelegationTool, createOrganizationDelegationTool, readFileTool } from '../../tools/index.js'
 import { createCharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
 import { createWorldBasicsAgentWithCatalogBinding, type WorldBasicsConfig } from './world-basics.js'
 import { createWorldBasicsDelegationTool } from '../../tools/subagent-world-basics/delegate-world-basics.js'
@@ -22,6 +22,8 @@ import { createOrganizationAgentWithCatalogBinding, type OrganizationAgentConfig
 import { createOrganizationReferenceResolvers } from './organization-references.js'
 import { createHistoryAgentWithCatalogBinding, type HistoryAgentConfig } from './history-agent.js'
 import { createHistoryReferenceResolvers } from './history-references.js'
+import { createInitialSituationAgentWithCatalogBinding, type InitialSituationAgentConfig } from './initial-situation-agent.js'
+import { createSituationReferenceResolver } from './initial-situation-references.js'
 import { validateWorldInitializationWorkspace, type WorldInitializationWorkspace } from './world-initialization-workspace.js'
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
 import { worldInitializationSkillPluginDefinition } from './world-initialization-skill.js'
@@ -43,6 +45,7 @@ export type WorkspaceMapAgentConfig = Omit<MapAgentConfig, 'workspaces' | 'world
 /** 组织 Agent 的非授权配置；世界和目录由工作区绑定。 */
 export type WorkspaceOrganizationAgentConfig = Omit<OrganizationAgentConfig, 'workspaces' | 'worldId' | 'singleWriterProcess' | 'catalog'>
 export type WorkspaceHistoryAgentConfig = Omit<HistoryAgentConfig, 'workspaces' | 'worldId' | 'singleWriterProcess' | 'catalog'>
+export type WorkspaceInitialSituationAgentConfig = Omit<InitialSituationAgentConfig, 'workspaces' | 'worldId' | 'singleWriterProcess' | 'catalog'>
 
 /** 由可信应用指定主 Agent 会话；目录必须存在且不与世界读取范围重叠。 */
 export interface WorldInitializationSessionConfig {
@@ -61,7 +64,7 @@ export interface WorldInitializationSessionConfig {
  */
 export async function createWorldInitializationAgentWithWorldWorkspaces(
   workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator: WorkspaceCharacterCreatorConfig | undefined,
-  deployment: { readonly singleWriterProcess: true; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig; readonly organizationAgent?: WorkspaceOrganizationAgentConfig; readonly historyAgent?: WorkspaceHistoryAgentConfig },
+  deployment: { readonly singleWriterProcess: true; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig; readonly organizationAgent?: WorkspaceOrganizationAgentConfig; readonly historyAgent?: WorkspaceHistoryAgentConfig; readonly initialSituationAgent?: WorkspaceInitialSituationAgentConfig },
 ): Promise<Agent> {
   if (deployment?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   const worlds = await validateWorldWorkspaceConfigs(workspaces)
@@ -146,6 +149,20 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     if (config.references) await createHistoryReferenceResolvers({ ...config.references, workspaces: worlds, worldId: world.worldId })
     historyConfig = { ...config, workspaces: worlds, worldId: world.worldId, singleWriterProcess: true }
   }
+  let situationConfig: InitialSituationAgentConfig | undefined
+  if (deployment.initialSituationAgent) {
+    const config = deployment.initialSituationAgent; const owner = world.agents.find(item => item.agentId === config.agentId)
+    if (!owner) throw new Error('初始局势 Agent 身份不属于该世界的特殊 Agent')
+    if ([creator?.agentId, basics?.agentId, mapConfig?.agentId, organizationConfig?.agentId, historyConfig?.agentId].includes(config.agentId)) throw new Error('初始局势 Agent 与其他专用 Agent 身份不能相同')
+    for (const name of ['overviews', 'situations', 'candidates']) {
+      const path = resolve(owner.writableRoot, name)
+      if (!(await lstat(path)).isDirectory() || await realpath(path) !== path) throw new Error('初始局势子目录必须是现有真实目录')
+    }
+    const sessionRoot = await realpath(config.sessionRoot)
+    for (const item of worlds) if (await isPathUnder(sessionRoot, item.readRoot) || await isPathUnder(item.readRoot, sessionRoot)) throw new Error('初始局势 Session 目录不能与任何世界读取根重叠')
+    if (config.references) await createSituationReferenceResolver({ ...config.references, workspaces: worlds, worldId: world.worldId })
+    situationConfig = { ...config, workspaces: worlds, worldId: world.worldId, singleWriterProcess: true }
+  }
   const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
   let agent: Agent
   let catalog: CatalogService | undefined
@@ -162,7 +179,8 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
       basics, catalog && basics ? () => catalog!.bind(basics!.agentId) : undefined,
       mapConfig, catalog && mapConfig ? () => catalog!.bind(mapConfig!.agentId) : undefined,
       organizationConfig, catalog && organizationConfig ? () => catalog!.bind(organizationConfig!.agentId) : undefined,
-      historyConfig, catalog && historyConfig ? () => catalog!.bind(historyConfig!.agentId) : undefined)
+      historyConfig, catalog && historyConfig ? () => catalog!.bind(historyConfig!.agentId) : undefined,
+      situationConfig, catalog && situationConfig ? () => catalog!.bind(situationConfig!.agentId) : undefined)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
       try { await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
@@ -223,7 +241,8 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
   basicsConfig?: WorldBasicsConfig, createBasicsCatalogBinding?: () => CatalogBinding,
   mapConfig?: MapAgentConfig, createMapCatalogBinding?: () => CatalogBinding,
   organizationConfig?: OrganizationAgentConfig, createOrganizationCatalogBinding?: () => CatalogBinding,
-  historyConfig?: HistoryAgentConfig, createHistoryCatalogBinding?: () => CatalogBinding): Promise<Agent> {
+  historyConfig?: HistoryAgentConfig, createHistoryCatalogBinding?: () => CatalogBinding,
+  situationConfig?: InitialSituationAgentConfig, createSituationCatalogBinding?: () => CatalogBinding): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -260,7 +279,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     { pluginId: 'sandbox-policy' }, { pluginId: 'world-initialization-draft-fs' }, { pluginId: 'fs-observation-policy' },
     { pluginId: 'subprocess-local' }, { pluginId: 'tool-fs' }, { pluginId: 'tool-fs-search' },
     { pluginId: 'subagent' }, { pluginId: 'subagent-spawn-in-process' }, { pluginId: 'tool-subagent' },
-    ...(creatorConfig || basicsConfig || mapConfig || organizationConfig || historyConfig ? [{ pluginId: 'subagent-persistent-in-process' }] : []),
+    ...(creatorConfig || basicsConfig || mapConfig || organizationConfig || historyConfig || situationConfig ? [{ pluginId: 'subagent-persistent-in-process' }] : []),
   ] })
   const modelConfig = { adapters: [{ providers: [provider], adapter }] }
   const loopConfig = { provider, model, workingDirectory: roots.viewRoot }
@@ -291,8 +310,10 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     } })
   const historyCreate = historyConfig && createPersistentAgentCreator({ presetId: 'history-agent', sessionMode: historyConfig.sessionMode,
     async create({ sessionMode }) { const child = await createHistoryAgentWithCatalogBinding({ ...historyConfig, sessionMode }, createHistoryCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
-  const routes = { ...(characterCreate ? { 'character-creator': characterCreate } : {}), ...(basicsCreate ? { 'world-basics': basicsCreate } : {}), ...(mapCreate ? { 'map-agent': mapCreate } : {}), ...(organizationCreate ? { 'organization-agent': organizationCreate } : {}), ...(historyCreate ? { 'history-agent': historyCreate } : {}) }
-  const persistentCreate = characterCreate || basicsCreate || mapCreate || organizationCreate || historyCreate ? createPersistentAgentRouter(routes) : undefined
+  const situationCreate = situationConfig && createPersistentAgentCreator({ presetId: 'initial-situation-agent', sessionMode: situationConfig.sessionMode,
+    async create({ sessionMode }) { const child = await createInitialSituationAgentWithCatalogBinding({ ...situationConfig, sessionMode }, createSituationCatalogBinding); return { agent: child, dispose: () => child.dispose() } } })
+  const routes = { ...(characterCreate ? { 'character-creator': characterCreate } : {}), ...(basicsCreate ? { 'world-basics': basicsCreate } : {}), ...(mapCreate ? { 'map-agent': mapCreate } : {}), ...(organizationCreate ? { 'organization-agent': organizationCreate } : {}), ...(historyCreate ? { 'history-agent': historyCreate } : {}), ...(situationCreate ? { 'initial-situation-agent': situationCreate } : {}) }
+  const persistentCreate = characterCreate || basicsCreate || mapCreate || organizationCreate || historyCreate || situationCreate ? createPersistentAgentRouter(routes) : undefined
   let backend: ReturnType<typeof framework.context.plugin> | undefined
   let agent: Agent | undefined
   try {
@@ -304,9 +325,9 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     'agent-loop-runtime': { ...loopConfig, ...(mainSession && (mainSession.mode === 'create' ? { sessionId: mainSession.id } : { resumeSessionId: mainSession.id })) }, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
     'sandbox-policy': { mode: 'workspace-write', workspaceRoot: roots.draftRoot },
     'world-initialization-draft-fs': { cwd: roots.viewRoot, draftRoot: roots.draftRoot },
-    'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write', worldBasics: Boolean(basicsConfig), mapAgent: Boolean(mapConfig), organizationAgent: Boolean(organizationConfig), historyAgent: Boolean(historyConfig), ...(catalogBinding && catalogMainOwner ? { catalog: {
+    'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write', worldBasics: Boolean(basicsConfig), mapAgent: Boolean(mapConfig), organizationAgent: Boolean(organizationConfig), historyAgent: Boolean(historyConfig), initialSituationAgent: Boolean(situationConfig), ...(catalogBinding && catalogMainOwner ? { catalog: {
       mainOwner: catalogMainOwner, delegates: [...(creatorConfig ? [{ owner: creatorConfig.agentId, tool: 'delegate_character_creator' }] : []),
-        ...(basicsConfig ? [{ owner: basicsConfig.agentId, tool: 'delegate_world_basics' }] : []), ...(mapConfig ? [{ owner: mapConfig.agentId, tool: 'delegate_map' }] : []), ...(organizationConfig ? [{ owner: organizationConfig.agentId, tool: 'delegate_organization' }] : []), ...(historyConfig ? [{ owner: historyConfig.agentId, tool: 'delegate_history' }] : [])],
+        ...(basicsConfig ? [{ owner: basicsConfig.agentId, tool: 'delegate_world_basics' }] : []), ...(mapConfig ? [{ owner: mapConfig.agentId, tool: 'delegate_map' }] : []), ...(organizationConfig ? [{ owner: organizationConfig.agentId, tool: 'delegate_organization' }] : []), ...(historyConfig ? [{ owner: historyConfig.agentId, tool: 'delegate_history' }] : []), ...(situationConfig ? [{ owner: situationConfig.agentId, tool: 'delegate_initial_situation' }] : [])],
     } } : {}) },
     'tool-fs': { applyPatch: true }, 'subagent-spawn-in-process': { create }, 'tool-subagent': { presetId: fileChildId },
     ...(persistentCreate ? { 'subagent-persistent-in-process': { create: persistentCreate } } : {}),
@@ -316,6 +337,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     if (mapConfig) agent.context.tools.register(createMapDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (organizationConfig) agent.context.tools.register(createOrganizationDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (historyConfig) agent.context.tools.register(createHistoryDelegationTool(agent.context.subagents, agent.info.identity.id))
+    if (situationConfig) agent.context.tools.register(createInitialSituationDelegationTool(agent.context.subagents, agent.info.identity.id))
     const createdAgent = agent
     const draftRelative = relative(roots.viewRoot, roots.draftRoot).split(sep).join('/')
     agent.context.tools.register(defineTool({

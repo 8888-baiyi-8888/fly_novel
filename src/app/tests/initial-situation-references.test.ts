@@ -9,14 +9,16 @@ import { OrganizationStore } from '@fly-novel/organization'
 import { HistoryStore } from '@fly-novel/history'
 import { CharacterStore, CharacterRelationshipStore } from '@fly-novel/character'
 import { createSituationReferenceResolver } from '../agents/initial-situation-references.js'
+import { createInitialSituationAgent } from '../agents/initial-situation-agent.js'
+import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 
 test('局势引用借用同世界负责人资料并取得实际版本', async t => {
   const tmp = join(process.cwd(), 'tmp'); await mkdir(tmp, { recursive: true }); const root = await realpath(await mkdtemp(join(tmp, 'situation-ref-'))); t.after(() => rm(root, { recursive: true, force: true }))
   const worlds = []
   for (const worldId of ['a', 'b']) {
     const readRoot = join(root, worldId)
-    for (const dir of ['main', 'confirmed', 'catalog', 'history/events', 'history/candidates', 'map/places', 'map/connections', 'characters', 'organization/organizations', 'organization/relations', 'organization/memberships']) await mkdir(join(readRoot, dir), { recursive: true })
-    worlds.push({ worldId, readRoot, confirmedRoot: join(readRoot, 'confirmed'), catalogRoot: join(readRoot, 'catalog'), mainAgent: { agentId: 'main', writableRoot: join(readRoot, 'main') }, agents: ['history', 'map', 'characters', 'organization'].map(agentId => ({ agentId, writableRoot: join(readRoot, agentId) })) })
+    for (const dir of ['main', 'confirmed', 'catalog', 'history/events', 'history/candidates', 'map/places', 'map/connections', 'characters', 'organization/organizations', 'organization/relations', 'organization/memberships', 'situation/overviews', 'situation/situations', 'situation/candidates']) await mkdir(join(readRoot, dir), { recursive: true })
+    worlds.push({ worldId, readRoot, confirmedRoot: join(readRoot, 'confirmed'), catalogRoot: join(readRoot, 'catalog'), mainAgent: { agentId: 'main', writableRoot: join(readRoot, 'main') }, agents: ['history', 'map', 'characters', 'organization', 'situation'].map(agentId => ({ agentId, writableRoot: join(readRoot, agentId) })) })
   }
   const world = worlds[0]!; const ctx = new Context(); const scope = await ctx.plugin(LocalFileSystem, { cwd: world.readRoot }); t.after(() => scope.dispose())
   const map = await MapStore.open({ fs: ctx.fs, root: join(world.readRoot, 'map'), worldId: world.worldId, access: 'read-write', singleWriterProcess: true }); t.after(() => map.close())
@@ -41,4 +43,15 @@ test('局势引用借用同世界负责人资料并取得实际版本', async t 
   assert.equal(await resolve('person-relation', '00000000-0000-4000-8000-000000000001'), null)
   await assert.rejects(createSituationReferenceResolver({ ...config, worldId: 'b' }), /不匹配/)
   await assert.rejects(createSituationReferenceResolver({ ...config, history: { agentId: 'map', store: history } }), /不匹配/)
+  class Probe extends LlmAdapter {
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      const names = options.tools?.map(tool => tool.name) ?? []
+      for (const name of ['history_event_read', 'map_place_read', 'organization_read', 'character_read', 'character_relationship_read']) assert.ok(names.includes(name))
+      for (const name of ['history_event_create', 'map_place_create', 'organization_create', 'character_create', 'character_relationship_create']) assert.ok(!names.includes(name))
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '完成' } }; yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+  const sessionRoot = join(root, 'sessions'); await mkdir(sessionRoot)
+  const agent = await createInitialSituationAgent({ workspaces: worlds, worldId: world.worldId, agentId: 'situation', sessionId: 's', sessionRoot, sessionMode: 'create', provider: 'test', model: 'test', adapter: new Probe(), singleWriterProcess: true, references: { map: config.map, history: config.history, organization: config.organization, characters: config.characters, relationships: config.relationships } })
+  try { assert.deepEqual(await agent.run({ prompt: '核查资料' }), { content: '完成' }) } finally { await agent.dispose() }
 })

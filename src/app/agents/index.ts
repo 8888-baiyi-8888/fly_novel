@@ -1,4 +1,4 @@
-export { createWorldInitializationAgent, createWorldInitializationAgentWithWorkspace, createWorldInitializationAgentWithWorldWorkspaces, type WorkspaceCharacterCreatorConfig, type WorkspaceWorldBasicsConfig, type WorkspaceMapAgentConfig, type WorkspaceOrganizationAgentConfig, type WorkspaceHistoryAgentConfig, type WorldInitializationSessionConfig } from './world-initialization.js'
+export { createWorldInitializationAgent, createWorldInitializationAgentWithWorkspace, createWorldInitializationAgentWithWorldWorkspaces, type WorkspaceCharacterCreatorConfig, type WorkspaceWorldBasicsConfig, type WorkspaceMapAgentConfig, type WorkspaceOrganizationAgentConfig, type WorkspaceHistoryAgentConfig, type WorkspaceInitialSituationAgentConfig, type WorldInitializationSessionConfig } from './world-initialization.js'
 export type { WorldInitializationWorkspace } from './world-initialization-workspace.js'
 export { createCharacterAgent } from './character.js'
 export { createCharacterCreator, type CharacterCreator, type CharacterCreatorConfig } from './character-creator.js'
@@ -8,5 +8,7 @@ export { createOrganizationReferenceResolvers } from './organization-references.
 export { createOrganizationAgent, type OrganizationAgent, type OrganizationAgentConfig } from './organization-agent.js'
 export { createHistoryAgent, type HistoryAgent, type HistoryAgentConfig } from './history-agent.js'
 export { createHistoryReferenceResolvers } from './history-references.js'
+export { createInitialSituationAgent, type InitialSituationAgent, type InitialSituationAgentConfig } from './initial-situation-agent.js'
+export { createSituationReferenceResolver, type SituationReferences } from './initial-situation-references.js'
 export { createDirectorAgent } from './director.js'
 export { createWriterAgent } from './writer.js'

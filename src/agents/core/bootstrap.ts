@@ -13,6 +13,7 @@ import { worldBasicsPreset } from '../world-basics/preset.js'
 import { mapAgentPreset } from '../map-agent/preset.js'
 import { organizationAgentPreset } from '../organization-agent/preset.js'
 import { historyAgentPreset } from '../history-agent/preset.js'
+import { initialSituationAgentPreset } from '../initial-situation-agent/preset.js'
 import { registerAll } from '@fly-novel/util'
 
 export interface AgentFramework {
@@ -42,6 +43,7 @@ export async function bootstrapAgents(): Promise<AgentFramework> {
     mapAgentPreset,
     organizationAgentPreset,
     historyAgentPreset,
+    initialSituationAgentPreset,
   ], preset => presets.register(preset))
 
   // 验证 Preset 中的插件绑定是否存在于 PluginRegistry 中

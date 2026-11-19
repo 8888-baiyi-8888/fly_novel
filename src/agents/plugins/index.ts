@@ -23,6 +23,7 @@ import { toolSubagentPluginDefinition } from '@fly-novel/tool-subagent'
 import { mapAgentSystemPromptPluginDefinition } from '../map-agent/system-prompt.js'
 import { organizationAgentSystemPromptPluginDefinition } from '../organization-agent/system-prompt.js'
 import { historyAgentSystemPromptPluginDefinition } from '../history-agent/system-prompt.js'
+import { initialSituationAgentSystemPromptPluginDefinition } from '../initial-situation-agent/system-prompt.js'
 
 /** 启动时可用的内置插件定义；具体 Agent 由各自 Preset 选择。 */
 export const builtInPlugins: AgentPluginDefinition[] = [
@@ -47,6 +48,7 @@ export const builtInPlugins: AgentPluginDefinition[] = [
   mapAgentSystemPromptPluginDefinition,
   organizationAgentSystemPromptPluginDefinition,
   historyAgentSystemPromptPluginDefinition,
+  initialSituationAgentSystemPromptPluginDefinition,
   directorSystemPromptPluginDefinition,
   writerSystemPromptPluginDefinition,
   worldInitializationSystemPromptPluginDefinition,

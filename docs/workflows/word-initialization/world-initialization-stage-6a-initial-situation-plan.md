@@ -24,7 +24,7 @@
 - [组织插件](../../../src/agents/plugins/organization/README.md)维护组织、组织关系和成员关系，提供规划者查询。它的角色等级过滤只适用于组织查询，并不自动保护复制到局势中的内容。
 - [地图插件](../../../src/agents/plugins/map/README.md)维护地点及空间关系；[人物插件](../../../src/agents/plugins/character/README.md)维护人物和人物关系。各模块有各自存储、身份和版本规则，不存在已经实现的统一跨模块对象或局势引用服务。
 - 专用 Agent 可参考[历史 Agent 装配](../../../src/app/agents/history-agent.ts)和[历史引用绑定](../../../src/app/agents/history-references.ts)：可信应用绑定同世界负责人、目录、Session、模型和已授权存储句柄；模型提供任务和必要背景，不自报权限。
-- 当前没有初始局势的专用插件、专用 Agent、持久数据格式或局势工具。现有主 Agent 提示词提出初始状态规划目标，不代表本模块已实现。宏观发展蓝图和完整世界演化能力尚待后续开发。
+- 初始局势格式、受控存储和局势工具见[局势插件](../../../src/agents/plugins/initial-situation/README.md)；专用 Agent 和主 Agent 委派见[应用说明](../../../src/app/README.md)。宏观发展蓝图和完整世界演化能力尚待后续开发。
 
 ## 两个世界与边界走查
 
