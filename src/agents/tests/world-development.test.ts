@@ -11,23 +11,26 @@ import { DevelopmentStore, DevelopmentQueries, developmentToolsPlugin, type Deve
 
 const a = '00000000-0000-4000-8000-000000000001'; const b = '00000000-0000-4000-8000-000000000002'; const person = '00000000-0000-4000-8000-000000000003'; const point = '00000000-0000-4000-8000-000000000004'
 const data = (name: string): DevelopmentContent => ({ name, summary: '', body: '', reserved: [], applicability: { kind: 'unknown' }, references: [], links: [], person: null })
-async function setup(t: TestContext) {
+async function setup(t: TestContext, mode: 'normal' | 'unconfigured' | 'denied' | 'foreign' = 'normal') {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'development-'))); t.after(() => rm(root, { recursive: true, force: true }))
   for (const folder of ['macro-development/blueprints', 'macro-development/directions', 'macro-development/proposals', 'storylines/stories', 'storylines/growth-lines', 'character-growth/blueprints', 'character-growth/items', 'candidates']) await mkdir(join(root, folder), { recursive: true })
   const context = new Context(); const scope = await context.plugin(LocalFileSystem, { cwd: root }); t.after(() => scope.dispose())
+  const source = { missingItem: false }
   const store = await DevelopmentStore.open({ fs: context.fs, root, worldId: 'world', access: 'read-write', phase: 'initialization', singleWriterProcess: true,
-    resolveReference: async (_type, id) => [person, point].includes(id) ? { id, worldId: 'world', version: 'v2' } : null,
-    resolveSituation: async (overviewId, situationId) => [a, b].includes(overviewId) && (!situationId || (overviewId === a && situationId === point)) ? { worldId: 'world', overviewId, situationId, version: 'v1' } : null })
-  t.after(() => store.close()); return { root, context, store }
+    resolveReference: async (_type, id) => { if (mode === 'unconfigured') return undefined; if (mode === 'denied') throw new Error('模拟权限不足'); if (mode === 'foreign') return { id, worldId: 'other' }; return [person, point].includes(id) ? { id, worldId: 'world', version: 'v2' } : null },
+    resolveSituation: async (overviewId, situationId) => mode === 'unconfigured' ? undefined : [a, b].includes(overviewId) && (!situationId || (!source.missingItem && overviewId === a && situationId === point)) ? { worldId: 'world', overviewId, situationId, version: 'v1' } : null })
+  t.after(() => store.close()); return { root, context, store, source }
 }
 test('候选局势条件互不串用，未知与通用分开，条目错配拒绝', async t => {
-  const { store } = await setup(t); const query = new DevelopmentQueries(store)
+  const { store, source } = await setup(t); const query = new DevelopmentQueries(store)
   await store.create('direction', { ...data('封渠'), applicability: { kind: 'scoped', scopes: [{ overviewId: a, description: '封渠持续', situationIds: [point], observedVersion: 'old' }] } })
   await store.create('direction', { ...data('通水'), applicability: { kind: 'scoped', scopes: [{ overviewId: b, description: '协议失效', situationIds: [] }] } })
   await store.create('direction', { ...data('共同背景'), applicability: { kind: 'general', description: '不依赖方案' } })
   await store.create('direction', data('尚未判断'))
   await assert.rejects(store.create('direction', { ...data('错配'), applicability: { kind: 'scoped', scopes: [{ overviewId: b, description: '错配', situationIds: [point] }] } }), { code: 'DEVELOPMENT_INVALID_DOCUMENT' })
   const result = await query.search({ overviewId: a }); assert.deepEqual(result.items.map(item => item.name).sort(), ['共同背景', '封渠'].sort()); assert.equal(result.unknown[0]?.name, '尚未判断'); assert.equal(result.items.find(item => item.name === '封渠')?.sourceVersionStatus, 'changed')
+  source.missingItem = true
+  assert.equal((await query.search({ overviewId: a })).items.find(item => item.name === '封渠')?.situationChecks?.[0]?.status, 'not_found')
   const page = await query.search({ overviewId: a, limit: 1 }); await store.create('direction', data('变更'))
   await assert.rejects(query.search({ overviewId: a, offset: 1, limit: 1, version: page.version }), { code: 'DEVELOPMENT_CONFLICT' })
 })
@@ -78,4 +81,15 @@ test('外部引用可比较版本并拒绝缺失人物', async t => {
   assert.equal((await store.checkReference('person', person, 'v1')).status, 'changed')
   assert.equal((await store.checkReference('person', a, 'v1')).status, 'not_found')
   await assert.rejects(store.create('direction', { ...data('无效人物'), references: [{ kind: 'linked', type: 'person', id: a, description: '', observedVersion: null }] }), { code: 'DEVELOPMENT_INVALID_DOCUMENT' })
+})
+test('未配置、权限失败及跨世界引用不能当作无结果', async t => {
+  for (const mode of ['unconfigured', 'denied', 'foreign'] as const) {
+    const { store } = await setup(t, mode)
+    if (mode === 'unconfigured') {
+      assert.equal((await store.checkReference('person', person, null)).status, 'unconfigured')
+      await assert.rejects(new DevelopmentQueries(store).search({ overviewId: a }), { code: 'DEVELOPMENT_REFERENCE_UNAVAILABLE' })
+    } else if (mode === 'denied') await assert.rejects(store.checkReference('person', person, null), /权限不足/)
+    else await assert.rejects(store.checkReference('person', person, null), { code: 'DEVELOPMENT_INVALID_DOCUMENT' })
+    await store.close()
+  }
 })

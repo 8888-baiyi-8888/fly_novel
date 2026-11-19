@@ -87,19 +87,19 @@
 
 ## 存储与提取方案（建议）
 
-建议为三个模块建立一个世界发展规划插件 `src/agents/plugins/world-development/`，集中存放格式、受控存储、查询、工具定义和注册。三个模块分别有清晰的存储范围及各自权威正文，不因同一插件或 Agent 而混写；具体目录和字段由契约步骤确定。以下为运行时负责人的目录示意，不是已经存在的文件：
+三个模块使用[世界发展规划插件](../../../src/agents/plugins/world-development/README.md)，集中存放格式、受控存储、查询、工具定义和注册。三个模块分别有清晰的存储范围及各自权威正文，不因同一插件或 Agent 而混写；以下为运行时负责人目录结构：
 
 ```text
 <世界发展规划负责人目录>/
   macro-development/
-    blueprint.json                 # 世界宏观蓝图总览
+    blueprints/<蓝图ID>.json       # 世界宏观蓝图总览，最多一份
     directions/<方向ID>.json       # 按需建立
     proposals/<构想ID>.json        # 按需建立的重大事件构想
   storylines/
     stories/<故事线ID>.json        # 按需建立的持续叙事线路
     growth-lines/<成长线ID>.json   # 人物详细成长规划
   character-growth/
-    blueprint.json                 # 世界人物成长蓝图
+    blueprints/<蓝图ID>.json       # 世界人物成长蓝图，最多一份
     items/<规划项ID>.json          # 按需建立的跨人物规划项
   candidates/                      # 已确认资料的待审候选
 ```
@@ -114,16 +114,14 @@
 
 ## 插件工具规划
 
-工具定义和注册集中在世界发展规划插件内部，以下名称是提案；具体参数、输出及错误契约在实现前确定。
+工具定义和注册集中在世界发展规划插件内部；以下是当前工具与职责。
 
 | 工具组 | 职责与边界 |
 | --- | --- |
-| `world_development_macro_*` | 创建、读取、按版本更新宏观蓝图、发展方向和重大事件构想；不把未来构想写成历史事实。 |
-| `world_development_storyline_*` | 创建、读取、更新和查找故事线、阶段及必要关联；不执行故事或固定角色行动。 |
-| `world_development_growth_line_*` | 按人物建立、读取和更新角色成长线及阶段规划；不写入角色当前资料。 |
-| `world_development_growth_blueprint_*` | 管理世界人物成长蓝图及跨人物规划项，引用成长线；不复制或重写成长线详细内容。 |
+| `world_development_create` / `world_development_read` / `world_development_update` | 根据规划类型创建、读取和按版本更新宏观蓝图、方向、事件构想、故事线、成长线及人物成长规划；不执行故事、改写角色或将构想写成历史事实。 |
 | `world_development_search` / `world_development_related_read` | 按世界、规划类型、人物、局势方案、故事线或方向查找，并从关联两端查询；同名列候选，返回已记录范围与分页版本。 |
-| `world_development_reference_check` | 通过可信绑定核验局势方案与条目归属、人物、历史、地点和组织等引用及可用版本；区分未配置、缺失、无权、已变化和无法核验。 |
+| `world_development_reference_check` | 通过可信绑定核验人物、历史、地点和组织等引用及可用版本；区分未配置、缺失、无权、已变化和无法核验。 |
+| `world_development_situation_check` | 核验局势方案及可选条目的真实归属。 |
 | `world_development_consistency_check` | 检查同世界身份、文件版本及可机械验证的关联，报告发现、来源和未检查范围；不自动裁决全部语义冲突或修改外部资料。 |
 | `world_development_candidate_prepare` / `world_development_candidate_read` | 为已确认规划准备或读取待审候选，记录并检查基线；不执行确认提交。 |
 | `delegate_world_development` | 主 Agent 向世界发展规划 Agent 提供任务和必要背景；可信应用绑定世界、身份、目录、Session、模型和权限。 |
@@ -143,6 +141,8 @@
 第一步的实际能力核对、角色唯一成长线及双世界关联验收见[现状与联合场景走查](world-initialization-stage-6a-world-development-scenarios.md)。
 
 第二步的文件版本、身份、单角色成长线、适用性和关联约定见[联合资料契约](world-initialization-stage-6a-world-development-contract.md)。
+
+双世界委派走查和真实模型样例见[世界发展规划 Agent 验证指南](../../cookbook/world-development-agent-validation.md)。
 
 1. **核对现状与联合场景。** 对照现有代码及修仙、城邦样例，落实一个蓝图多方向、多个候选局势和三类内容的边界；核对已确认的成长线 / 成长蓝图分工，列出需要独立定位与关联的内容。遇到影响近期实现的新业务歧义，先举例和推荐方案与用户商议。
 2. **联合资料契约。** 基于两个样例确定宏观方向、事件构想、故事线、成长线和成长蓝图的最小输入输出、身份、状态、引用、局势适用、留白及关系语义；明确格式版本、旧资料保护、已确认候选和版本冲突。具体 Schema 不因本文示意自动成为已确认业务契约。

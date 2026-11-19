@@ -17,11 +17,13 @@ export class DevelopmentQueries {
     const candidates = snapshot.items.map(item => item.document).filter(item => (!q.kind || item.kind === q.kind) && (!q.keyword || [item.name, item.summary, item.body].some(value => value.includes(q.keyword!))) && (!q.personId || (item.person?.kind === 'linked' && item.person.id === q.personId) || item.references.some(ref => ref.kind === 'linked' && ref.type === 'person' && ref.id === q.personId) || item.links.some(link => link.targetKind === 'growth-line' && growthIds.has(link.targetId))))
     const relevant = candidates.filter(item => !q.overviewId || item.applicability.kind === 'general' || (item.applicability.kind === 'scoped' && item.applicability.scopes.some(scope => scope.overviewId === q.overviewId)))
     const unknown = q.overviewId ? candidates.filter(item => item.applicability.kind === 'unknown').map(item => ({ id: item.id, kind: item.kind, name: item.name })) : []
-    const items = relevant.slice(q.offset, q.offset + q.limit).map(item => {
+    const items = []
+    for (const item of relevant.slice(q.offset, q.offset + q.limit)) {
       const scope = item.applicability.kind === 'scoped' ? item.applicability.scopes.find(value => value.overviewId === q.overviewId) : undefined
       const recorded = scope?.observedVersion; const actual = checked?.status === 'verified' ? checked.version : null
-      return { ...item, ...(scope ? { sourceVersionStatus: !recorded || !actual ? 'unknown' as const : recorded === actual ? 'current' as const : 'changed' as const } : {}) }
-    })
+      const situationChecks = scope ? await Promise.all(scope.situationIds.map(async id => ({ id, ...(await this.store.checkSituation(scope.overviewId, id, signal)) }))) : []
+      items.push({ ...item, ...(scope ? { sourceVersionStatus: !recorded || !actual ? 'unknown' as const : recorded === actual ? 'current' as const : 'changed' as const, situationChecks } : {}) })
+    }
     return { items, total: relevant.length, nextOffset: q.offset + q.limit < relevant.length ? q.offset + q.limit : null, unknown, version, scope: 'recorded' as const }
   }
   async related(kind: z.infer<typeof kindSchema>, id: string, signal?: AbortSignal) {
