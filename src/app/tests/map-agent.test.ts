@@ -3,6 +3,9 @@ import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test, type TestContext } from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
+import { Context } from '@deepseek-ai/cordis'
+import { LocalFileSystem } from '@fly-novel/fs-local'
+import { MapStore } from '@fly-novel/map'
 import configured = require('../call-llm.js')
 import { createMapAgent, createWorldInitializationAgentWithWorldWorkspaces } from '../agents/index.js'
 import { initializeCatalog } from '../../world-init/workspace/catalog/format.js'
@@ -49,6 +52,40 @@ const calls = [
   { name: 'map_overview_create', args: overview }, { name: 'map_place_create', args: place },
   { name: 'catalog_register', args: { path: 'map/map.json', summary: '世界地图概览' } },
 ]
+
+test('外部引用持有地图存储时地图 Agent 不能重复打开，释放后可启动', async t => {
+  const { world, sessionRoot } = await setup(t)
+  const context = new Context()
+  const backend = await context.plugin(LocalFileSystem, { cwd: world.readRoot })
+  const store = await MapStore.open({ fs: context.fs, root: join(world.readRoot, 'map'), worldId: world.worldId, access: 'read-write', singleWriterProcess: true })
+  const config = { workspaces: [world], worldId: world.worldId, agentId: 'map', sessionId: 'shared', sessionMode: 'create' as const,
+    sessionRoot, provider: 'test', model: 'test', adapter: new ScriptAdapter(), singleWriterProcess: true as const }
+  try {
+    await assert.rejects(createMapAgent(config), /占用|使用/)
+  } finally {
+    await store.close()
+    await backend.dispose()
+  }
+  const agent = await createMapAgent(config)
+  await agent.dispose()
+})
+
+test('地图存储不同访问模式均独占同一世界和目录', async t => {
+  const { world } = await setup(t)
+  const context = new Context()
+  const backend = await context.plugin(LocalFileSystem, { cwd: world.readRoot })
+  const config = { fs: context.fs, root: join(world.readRoot, 'map'), worldId: world.worldId, singleWriterProcess: true as const }
+  try {
+    for (const first of ['read-only', 'read-write'] as const) {
+      const store = await MapStore.open({ ...config, access: first })
+      try {
+        for (const second of ['read-only', 'read-write'] as const) {
+          await assert.rejects(MapStore.open({ ...config, access: second }), { code: 'MAP_BUSY' })
+        }
+      } finally { await store.close() }
+    }
+  } finally { await backend.dispose() }
+})
 
 test('独立地图 Agent 使用地图工具、资料目录和可恢复会话', async t => {
   const { world, sessionRoot } = await setup(t)
