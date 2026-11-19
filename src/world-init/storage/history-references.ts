@@ -2,7 +2,7 @@ import { MapStore } from '@fly-novel/map'
 import { OrganizationStore, OrganizationStoreError } from '@fly-novel/organization'
 import { CharacterStore } from '@fly-novel/character'
 import type { HistoryReferenceResolver } from '@fly-novel/history'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 import { createOrganizationReferenceResolvers } from './organization-references.js'
 
 /** 借用同世界负责人持有的存储，调用方负责保持句柄有效。 */

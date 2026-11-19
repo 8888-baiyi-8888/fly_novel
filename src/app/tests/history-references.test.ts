@@ -7,7 +7,7 @@ import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
 import { OrganizationStore } from '@fly-novel/organization'
 import { CharacterStore } from '@fly-novel/character'
-import { createHistoryReferenceResolvers } from '../agents/history-references.js'
+import { createHistoryReferenceResolvers } from '../../world-init/storage/history-references.js'
 import { createHistoryAgent } from '../agents/history-agent.js'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 

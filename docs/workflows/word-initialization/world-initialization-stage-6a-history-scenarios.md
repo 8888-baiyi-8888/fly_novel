@@ -11,7 +11,7 @@
 | [地图插件](../../../src/agents/plugins/map/README.md) | 地点 ID、名称和层级查询、世界绑定、未知与未展开范围。 | 引用历史参与地点需另行装配只读句柄及核验；同名、未建档或地图未覆盖不能自动视为不存在。 |
 | [组织插件](../../../src/agents/plugins/organization/README.md) | 组织 ID、组织与成员关系、初始化版本更新，以及规划者读取能力。 | 历史事件不是组织关系；组织角色的等级不自动变成角色对历史的认知。 |
 | [人物插件](../../../src/agents/plugins/character/README.md)与[角色创建入口](../../../src/app/agents/character-creator.ts) | 角色 ID、自由正文、人物关系、未确认资料版本更新和待审能力。 | 人物正文可记录本人已知或误认的往事，但没有历史事实与角色认知的自动同步或长期记忆恢复。 |
-| [跨模块引用装配](../../../src/app/agents/organization-references.ts) | 组织通过可信应用复用同世界地图和人物存储，验证世界与负责人；可借鉴引用核验和资源归属。 | 专用 Agent 内部打开的句柄不会自动共享；没有覆盖所有模块的统一 ID 解析或路径无关读取服务。 |
+| [跨模块引用装配](../../../src/world-init/storage/organization-references.ts) | 组织通过可信应用复用同世界地图和人物存储，验证世界与负责人；可借鉴引用核验和资源归属。 | 专用 Agent 内部打开的句柄不会自动共享；没有覆盖所有模块的统一 ID 解析或路径无关读取服务。 |
 
 [地图 Agent 测试](../../../src/app/tests/map-agent.test.ts)、[组织引用测试](../../../src/app/tests/organization-references.test.ts)、[人物关系装配测试](../../../src/app/tests/character-relationships-assembly.test.ts)和[世界工作区测试](../../../src/world-init/tests/world-workspace-config.test.ts)提供可借鉴的真实目录、跨世界、取消或生命周期验证；它们不证明历史存储、时间线或历史 Agent 已存在。固定模型替身只验证其预设执行路径。没有历史事件的格式、专用插件、专用 Agent、委派工具、时间线服务或角色历史记忆接口。
 

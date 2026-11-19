@@ -12,7 +12,7 @@
 | 创建 Agent 和工具 | [角色创建入口](../../../src/app/agents/character-creator.ts)提供独立运行、持久 Session 和角色工具；世界入口可通过 `delegate_character_creator` 委派。工具提供创建、按名称和分类查询、读取、准备候选和需求清单，不提供人物关系存储或初始化直接更新。Session 恢复对话，不证明业务完成。 |
 | 角色 Agent 样例 | [角色 Preset](../../../src/agents/character/preset.ts)和[提示词](../../../src/agents/character/plugins/system-prompt/README.md)提供角色视角示例；角色资料由输入提供，尚不按 ID 自动加载；记忆插件是实例内样例，不代表长期记忆。 |
 | 组织成员 | [组织查询](../../../src/agents/plugins/organization/README.md)按组织或已关联人物 ID 查询同一份成员记录，并提供受可信授权绑定的角色视图。当前角色创建入口没有自动装配该查询；`faction` 分类不会自动同步为成员关系。 |
-| 地点与人物引用 | [组织引用装配](../../../src/app/agents/organization-references.ts)可复用由可信应用持有的同世界地图与角色存储校验引用；调用方负责句柄生命周期。此能力不等于已有通用人物关系读取接口。 |
+| 地点与人物引用 | [组织引用装配](../../../src/world-init/storage/organization-references.ts)可复用由可信应用持有的同世界地图与角色存储校验引用；调用方负责句柄生命周期。此能力不等于已有通用人物关系读取接口。 |
 
 现有[角色存储测试](../../../src/agents/tests/character-store.test.ts)覆盖同名、候选、索引和恢复；[角色创建集成测试](../../../src/app/tests/character-creator-integration.test.ts)覆盖委派、Session 和角色工具；[组织引用测试](../../../src/app/tests/organization-references.test.ts)覆盖同世界校验。它们不能证明人物关系服务、初始化直接覆盖或角色认知隔离已经存在。
 

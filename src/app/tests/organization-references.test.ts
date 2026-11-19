@@ -7,7 +7,7 @@ import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
 import { OrganizationStore } from '@fly-novel/organization'
 import { CharacterStore } from '@fly-novel/character'
-import { createOrganizationReferenceResolvers } from '../agents/organization-references.js'
+import { createOrganizationReferenceResolvers } from '../../world-init/storage/organization-references.js'
 
 test('组织引用复用同世界真实地图和角色服务，并拒绝跨世界绑定', async t => {
   const temp = join(process.cwd(), 'tmp'); await mkdir(temp, { recursive: true })

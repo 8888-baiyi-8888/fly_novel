@@ -1,7 +1,7 @@
 import { SituationError } from '@fly-novel/initial-situation'
 import { DevelopmentError, DevelopmentStore, kindSchema } from '@fly-novel/world-development'
 import type { SpecificResolver } from '@fly-novel/world-specific'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 import { createWorldDevelopmentResolvers, type WorldDevelopmentReferences } from './world-development-references.js'
 
 export interface WorldSpecificReferences extends WorldDevelopmentReferences { development?: { agentId: string; store: DevelopmentStore } }

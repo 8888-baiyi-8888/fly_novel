@@ -24,7 +24,7 @@ import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 import { CatalogService, type CatalogBinding } from '../../world-init/workspace/catalog/service.js'
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
-import { createWorldSpecificResolver } from './world-specific-references.js'
+import { createWorldSpecificResolver } from '../../world-init/storage/world-specific-references.js'
 
 /** 世界专有内容目录、世界、引用和权限均由可信应用绑定。 */
 export interface WorldSpecificAgentConfig {

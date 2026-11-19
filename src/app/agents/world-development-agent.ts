@@ -23,7 +23,7 @@ import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 import { CatalogService, type CatalogBinding } from '../../world-init/workspace/catalog/service.js'
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
-import { createWorldDevelopmentResolvers } from './world-development-references.js'
+import { createWorldDevelopmentResolvers } from '../../world-init/storage/world-development-references.js'
 
 /** 世界发展规划目录、世界、引用和权限均由可信应用绑定。 */
 export interface WorldDevelopmentAgentConfig {

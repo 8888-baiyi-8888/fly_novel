@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { SituationStore } from '@fly-novel/initial-situation'
 import { DevelopmentStore } from '@fly-novel/world-development'
-import { createWorldSpecificResolver } from '../agents/world-specific-references.js'
+import { createWorldSpecificResolver } from '../../world-init/storage/world-specific-references.js'
 import { createWorldSpecificAgent } from '../agents/world-specific-agent.js'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 

@@ -8,7 +8,7 @@ import { MapStore } from '@fly-novel/map'
 import { OrganizationStore } from '@fly-novel/organization'
 import { HistoryStore } from '@fly-novel/history'
 import { CharacterStore, CharacterRelationshipStore } from '@fly-novel/character'
-import { createSituationReferenceResolver } from '../agents/initial-situation-references.js'
+import { createSituationReferenceResolver } from '../../world-init/storage/initial-situation-references.js'
 import { createInitialSituationAgent } from '../agents/initial-situation-agent.js'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 

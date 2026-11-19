@@ -77,7 +77,7 @@ src/app/agents/history-agent.ts 历史 Agent 的独立应用装配与生命周�
 src/app/agents/initial-situation-agent.ts 初始局势 Agent 的独立应用装配与生命周期入口
 src/app/agents/world-development-agent.ts 世界发展规划 Agent 的独立应用装配与生命周期入口
 src/app/agents/world-specific-agent.ts 世界专有内容 Agent 的独立应用装配与生命周期入口
-src/app/agents/history-references.ts 历史对同世界人物、地图和组织的可信引用解析
+src/world-init/storage/history-references.ts 历史对同世界人物、地图和组织的可信引用解析
 src/app/agents/world-basics.ts 世界基础信息 Agent 的独立应用装配与受控成果保存入口
 src/agents/generic-subagent/ 通用子 Agent 的 Preset 和职责提示词插件
 src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理

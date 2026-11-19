@@ -1,6 +1,6 @@
 import { SituationStore, SituationError } from '@fly-novel/initial-situation'
 import type { DevelopmentResolver, SituationResolver } from '@fly-novel/world-development'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 import { createSituationReferenceResolver, type SituationReferences } from './initial-situation-references.js'
 
 export interface WorldDevelopmentReferences extends SituationReferences { situation?: { agentId: string; store: SituationStore } }

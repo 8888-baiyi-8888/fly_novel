@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { SituationStore } from '@fly-novel/initial-situation'
-import { createWorldDevelopmentResolvers } from '../agents/world-development-references.js'
+import { createWorldDevelopmentResolvers } from '../../world-init/storage/world-development-references.js'
 import { createWorldDevelopmentAgent } from '../agents/world-development-agent.js'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 

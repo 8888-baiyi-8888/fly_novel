@@ -19,15 +19,15 @@ import { createWorldBasicsDelegationTool } from '../../tools/subagent-world-basi
 import { createMapAgentWithCatalogBinding, type MapAgentConfig } from './map-agent.js'
 import { createMapDelegationTool } from '@fly-novel/map'
 import { createOrganizationAgentWithCatalogBinding, type OrganizationAgentConfig } from './organization-agent.js'
-import { createOrganizationReferenceResolvers } from './organization-references.js'
+import { createOrganizationReferenceResolvers } from '../../world-init/storage/organization-references.js'
 import { createHistoryAgentWithCatalogBinding, type HistoryAgentConfig } from './history-agent.js'
-import { createHistoryReferenceResolvers } from './history-references.js'
+import { createHistoryReferenceResolvers } from '../../world-init/storage/history-references.js'
 import { createInitialSituationAgentWithCatalogBinding, type InitialSituationAgentConfig } from './initial-situation-agent.js'
-import { createSituationReferenceResolver } from './initial-situation-references.js'
+import { createSituationReferenceResolver } from '../../world-init/storage/initial-situation-references.js'
 import { createWorldDevelopmentAgentWithCatalogBinding, type WorldDevelopmentAgentConfig } from './world-development-agent.js'
-import { createWorldDevelopmentResolvers } from './world-development-references.js'
+import { createWorldDevelopmentResolvers } from '../../world-init/storage/world-development-references.js'
 import { createWorldSpecificAgentWithCatalogBinding, type WorldSpecificAgentConfig } from './world-specific-agent.js'
-import { createWorldSpecificResolver } from './world-specific-references.js'
+import { createWorldSpecificResolver } from '../../world-init/storage/world-specific-references.js'
 import { validateWorldInitializationWorkspace, type WorldInitializationWorkspace } from './world-initialization-workspace.js'
 import { worldInitializationDraftFsPluginDefinition } from './world-initialization-draft-fs.js'
 import { worldInitializationSkillPluginDefinition } from './world-initialization-skill.js'
@@ -35,13 +35,13 @@ import { worldInitializationWorkspacePromptPluginDefinition } from './world-init
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
 import { CatalogService, type CatalogBinding } from '../../world-init/workspace/catalog/service.js'
-import { SharedMapStorage } from '../../world-init/storage/map.js'
-import { SharedOrganizationStorage } from '../../world-init/storage/organization.js'
-import { SharedCharacterStorage } from '../../world-init/storage/character.js'
-import { sharedLocalStore } from '../../world-init/storage/local.js'
-import { HistoryStore } from '@fly-novel/history'
-import { SituationStore } from '@fly-novel/initial-situation'
-import { DevelopmentStore } from '@fly-novel/world-development'
+import type { SharedMapStorage } from '../../world-init/storage/map.js'
+import type { SharedOrganizationStorage } from '../../world-init/storage/organization.js'
+import type { SharedCharacterStorage } from '../../world-init/storage/character.js'
+import { createWorldStorage } from '../../world-init/storage/world.js'
+import type { HistoryStore } from '@fly-novel/history'
+import type { SituationStore } from '@fly-novel/initial-situation'
+import type { DevelopmentStore } from '@fly-novel/world-development'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
@@ -204,55 +204,8 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     if (config.references) await createWorldSpecificResolver({ ...config.references, workspaces: worlds, worldId: world.worldId })
     specificConfig = { ...config, workspaces: worlds, worldId: world.worldId, singleWriterProcess: true }
   }
-  const sharedMap = mapConfig ? new SharedMapStorage(world, mapConfig.agentId) : undefined
-  if (sharedMap && (creator?.references?.map || organizationConfig?.references?.map || historyConfig?.references?.map || situationConfig?.references?.map || developmentConfig?.references?.map || specificConfig?.references?.map)) throw new Error('共享地图与外部地图引用不能同时配置')
-  const sharedCharacters = creator ? new SharedCharacterStorage(world, creator.agentId, creator.initializeCharacters) : undefined
-  if (sharedCharacters && (organizationConfig?.references?.characters || historyConfig?.references?.characters || situationConfig?.references?.characters || situationConfig?.references?.relationships || developmentConfig?.references?.characters || developmentConfig?.references?.relationships || specificConfig?.references?.characters || specificConfig?.references?.relationships)) throw new Error('共享人物与外部人物引用不能同时配置')
-  const sharedOrganization = organizationConfig ? new SharedOrganizationStorage(world, organizationConfig.agentId, async () => {
-    const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
-    const references = await createOrganizationReferenceResolvers({ ...organizationConfig!.references, ...(map ? { map } : {}), workspaces: worlds, worldId: world.worldId })
-    return { ...references, ...(sharedCharacters && creator ? { resolvePerson: async (id: string, signal?: AbortSignal) => {
-      const characters = { agentId: creator!.agentId, store: (await sharedCharacters.get()).store }
-      const resolver = await createOrganizationReferenceResolvers({ characters, workspaces: worlds, worldId: world.worldId })
-      if (!resolver.resolvePerson) throw new Error('人物引用解析器不可用')
-      return resolver.resolvePerson(id, signal)
-    } } : {}) }
-  }) : undefined
-  if (sharedOrganization && (creator?.references?.organization || historyConfig?.references?.organization || situationConfig?.references?.organization || developmentConfig?.references?.organization || specificConfig?.references?.organization)) throw new Error('共享组织与外部组织引用不能同时配置')
-  if (historyConfig && (situationConfig?.references?.history || developmentConfig?.references?.history || specificConfig?.references?.history)) throw new Error('共享历史与外部历史引用不能同时配置')
-  const sharedHistory = historyConfig ? sharedLocalStore(world.readRoot, async fs => {
-    const owner = world.agents.find(item => item.agentId === historyConfig!.agentId)!
-    const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
-    const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
-    const characters = sharedCharacters && creator ? { agentId: creator.agentId, store: (await sharedCharacters.get()).store } : undefined
-    const references = await createHistoryReferenceResolvers({ ...historyConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters } : {}), workspaces: worlds, worldId: world.worldId })
-    return HistoryStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, ...references })
-  }) : undefined
-  if (situationConfig && (developmentConfig?.references?.situation || specificConfig?.references?.situation)) throw new Error('共享局势与外部局势引用不能同时配置')
-  const sharedSituation = situationConfig ? sharedLocalStore(world.readRoot, async fs => {
-    const owner = world.agents.find(item => item.agentId === situationConfig!.agentId)!
-    const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
-    const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
-    const person = sharedCharacters && creator ? await sharedCharacters.get() : undefined
-    const characters = person && creator ? { agentId: creator.agentId, store: person.store } : undefined
-    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationships } : undefined
-    const history = sharedHistory && historyConfig ? { agentId: historyConfig.agentId, store: await sharedHistory.get() } : undefined
-    const resolveReference = await createSituationReferenceResolver({ ...situationConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters, relationships } : {}), ...(history ? { history } : {}), workspaces: worlds, worldId: world.worldId })
-    return SituationStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, resolveReference })
-  }) : undefined
-  if (developmentConfig && specificConfig?.references?.development) throw new Error('共享规划与外部规划引用不能同时配置')
-  const sharedDevelopment = developmentConfig ? sharedLocalStore(world.readRoot, async fs => {
-    const owner = world.agents.find(item => item.agentId === developmentConfig!.agentId)!
-    const map = sharedMap && mapConfig ? { agentId: mapConfig.agentId, store: await sharedMap.get() } : undefined
-    const organization = sharedOrganization && organizationConfig ? { agentId: organizationConfig.agentId, store: await sharedOrganization.get() } : undefined
-    const person = sharedCharacters && creator ? await sharedCharacters.get() : undefined
-    const characters = person && creator ? { agentId: creator.agentId, store: person.store } : undefined
-    const relationships = person && creator ? { agentId: creator.agentId, store: person.relationships } : undefined
-    const history = sharedHistory && historyConfig ? { agentId: historyConfig.agentId, store: await sharedHistory.get() } : undefined
-    const situation = sharedSituation && situationConfig ? { agentId: situationConfig.agentId, store: await sharedSituation.get() } : undefined
-    const references = await createWorldDevelopmentResolvers({ ...developmentConfig!.references, ...(map ? { map } : {}), ...(organization ? { organization } : {}), ...(characters ? { characters, relationships } : {}), ...(history ? { history } : {}), ...(situation ? { situation } : {}), workspaces: worlds, worldId: world.worldId })
-    return DevelopmentStore.open({ fs, root: owner.writableRoot, worldId: world.worldId, access: 'read-write', phase: 'initialization', singleWriterProcess: true, ...references })
-  }) : undefined
+  const storage = createWorldStorage(worlds, world, { mapConfig, creator, organizationConfig, historyConfig, situationConfig, developmentConfig, specificConfig })
+  const { sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment } = storage
   const releaseIdentity = acquireWorldAgentLease(world.worldId, world.mainAgent.agentId)
   let agent: Agent
   let catalog: CatalogService | undefined
@@ -275,7 +228,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
       specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined, sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
-      try { await sharedDevelopment?.close(); await sharedSituation?.close(); await sharedHistory?.close(); await sharedOrganization?.close(); await sharedCharacters?.close(); await sharedMap?.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
+      try { await storage.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
     }
     throw error
   }
@@ -284,7 +237,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     info: agent.info, context: agent.context,
     get state() { return agent.state },
     run: input => agent.run(input), cancel: () => agent.cancel(),
-    dispose: () => disposal ??= (async () => { await agent.dispose(); await sharedDevelopment?.close(); await sharedSituation?.close(); await sharedHistory?.close(); await sharedOrganization?.close(); await sharedCharacters?.close(); await sharedMap?.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() })(),
+    dispose: () => disposal ??= (async () => { await agent.dispose(); await storage.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() })(),
   }
 }
 

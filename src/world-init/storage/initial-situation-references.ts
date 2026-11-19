@@ -4,7 +4,7 @@ import { OrganizationStore, OrganizationStoreError } from '@fly-novel/organizati
 import { HistoryStore, HistoryError } from '@fly-novel/history'
 import { CharacterStore, CharacterRelationshipStore } from '@fly-novel/character'
 import type { SituationReferenceResolver } from '@fly-novel/initial-situation'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
+import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 
 type Bound<T> = { agentId: string; store: T }
 export interface SituationReferences { map?: Bound<MapStore>; organization?: Bound<OrganizationStore>; history?: Bound<HistoryStore>; characters?: Bound<CharacterStore>; relationships?: Bound<CharacterRelationshipStore> }

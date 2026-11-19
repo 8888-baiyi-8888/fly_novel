@@ -9,7 +9,7 @@
 | 初始局势 | [局势存储和工具](../../../src/agents/plugins/initial-situation/README.md)记录一个世界起点、多个待审方案和各自的局势条目；通过总览 ID / 条目 ID 读取，条目包含所属方案 ID。 | 可读取实际方案与条目并检查归属；尚无方案选择 / 确认入口，不得从名称、返回顺序或目录记录推断哪个方案已选。 |
 | 来源与版本 | 局势读取返回文件版本；引用核验可比较可用版本，并分别报告未配置、未找到、版本未知和变化；模型提供的历史版本不证明实际读取过来源。 | 提示来源变化并重新读取实际正文；多文件读取不是原子快照，版本一致不证明规划语义正确。世界基础信息按现有文档 / 目录读取，不虚构其结构化对象 ID。 |
 | 历史、地点、组织与人物 | [历史](../../../src/agents/plugins/history/README.md)、[地图](../../../src/agents/plugins/map/README.md)、[组织](../../../src/agents/plugins/organization/README.md)和[人物](../../../src/agents/plugins/character/README.md)各自提供存储与查询，格式、版本和接口并不相同。 | 规划引用真实资料及稳定身份，不复制其完整正文或修改原模块；人物名称与 ID 分离。无法读取时保留原因或线索，不把无权当成不存在。 |
-| 可信装配 | [局势引用绑定](../../../src/app/agents/initial-situation-references.ts)借用实际模块句柄并核验世界和负责人；[局势 Agent 入口](../../../src/app/agents/initial-situation-agent.ts)按配置注册读取能力。 | 这些代码是可参考的实现，并不是已有的通用世界发展规划引用服务；局势方案和条目的读取、版本及归属核验仍需为新 Agent 明确绑定。 |
+| 可信装配 | [局势引用绑定](../../../src/world-init/storage/initial-situation-references.ts)借用实际模块句柄并核验世界和负责人；[局势 Agent 入口](../../../src/app/agents/initial-situation-agent.ts)按配置注册读取能力。 | 这些代码是可参考的实现，并不是已有的通用世界发展规划引用服务；局势方案和条目的读取、版本及归属核验仍需为新 Agent 明确绑定。 |
 | 委派和生命周期 | 主 Agent 可配置初始局势 Agent、Session 和专用委派；现有[固定替身走查](../../../src/app/tests/initial-situation-agent-e2e.test.ts)覆盖两个世界及多个方案。 | 世界发展规划专用 Agent、规划文件和工具尚不存在；固定替身不证明真实模型能正确组织三类规划，也不证明世界运行已经实现。 |
 
 ## 内容对象及职责

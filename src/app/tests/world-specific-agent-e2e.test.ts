@@ -10,7 +10,7 @@ import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } f
 import { initializeCatalog } from '../../world-init/workspace/catalog/format.js'
 import type { WorldWorkspaceConfig } from '../../world-init/workspace/config.js'
 import configured = require('../call-llm.js')
-import { createWorldSpecificResolver } from '../agents/world-specific-references.js'
+import { createWorldSpecificResolver } from '../../world-init/storage/world-specific-references.js'
 import { createWorldInitializationAgentWithWorldWorkspaces } from '../agents/index.js'
 
 function call(id: string, name: string, args: object): StreamChunk { return { type: 'block-end', index: 0, block: { type: 'tool-call', id: id as ToolCallId, name, arguments: JSON.stringify(args) } } }
