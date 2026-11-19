@@ -184,6 +184,13 @@ test('历史、局势、发展规划和专有内容共用地图核验真实地�
     calls[1]!.push({ name: 'unused', args: {} }, { name: 'situation_reference_check', args: { type: 'history', id: eventFile.replace(/\.json$/, '') } })
     assert.equal((await call('delegate_initial_situation')).isError, false)
     assert.match(JSON.stringify(adapters[1]!.requests.at(-1)?.messages), /version_unknown/)
+    calls[1]!.push({ name: 'unused', args: {} }, { name: 'situation_start_create', args: { description: '演化起点' } },
+      { name: 'situation_overview_create', args: { content: { name: '封渠方案', summary: '缺水', coverage: '河谷', reserved: [] } } })
+    assert.equal((await call('delegate_initial_situation')).isError, false)
+    const [overviewFile] = await readdir(join(world.readRoot, 'situation', 'overviews')); assert.ok(overviewFile)
+    calls[2]!.push({ name: 'unused', args: {} }, { name: 'world_development_situation_check', args: { overviewId: overviewFile.replace(/\.json$/, '') } })
+    assert.equal((await call('delegate_world_development')).isError, false)
+    assert.match(JSON.stringify(adapters[2]!.requests.at(-1)?.messages), /verified/)
   } finally { await parent.dispose() }
 })
 
