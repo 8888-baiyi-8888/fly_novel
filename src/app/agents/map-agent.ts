@@ -1,3 +1,4 @@
+import { validateAgentMaxSteps } from './loop-options.js'
 import { createHash } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -29,6 +30,7 @@ export interface MapAgentConfig {
   sessionRoot: string
   provider: string
   model: string
+  maxSteps?: number
   adapter: LlmAdapter
   singleWriterProcess: true
   catalog?: { maxCatalogBytes?: number; maxSourceBytes?: number; receiptTtlMs?: number; maxReceipts?: number }
@@ -48,6 +50,7 @@ export function createMapAgent(config: MapAgentConfig): Promise<MapAgent> {
 
 /** 使用外部目录服务绑定；该服务的生命周期由装配方负责。 */
 export async function createMapAgentWithCatalogBinding(config: MapAgentConfig, createCatalogBinding?: () => CatalogBinding, borrowedStore?: MapStore): Promise<MapAgent> {
+  validateAgentMaxSteps(config.maxSteps)
   if (config?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   for (const value of [config.worldId, config.agentId, config.sessionId, config.provider, config.model]) {
     if (typeof value !== 'string' || !value || value.trim() !== value) throw new Error('地图 Agent 身份和模型配置必须非空且无首尾空白')
@@ -93,7 +96,7 @@ export async function createMapAgentWithCatalogBinding(config: MapAgentConfig, c
     closeFramework = async () => { await framework.manager.disposeAll(); await backend.dispose() }
     await backend
     agent = await framework.manager.create({ id: owner.agentId, presetId, pluginConfigs: {
-      'agent-loop-runtime': { provider: config.provider, model: config.model, workingDirectory: world.readRoot,
+      'agent-loop-runtime': { provider: config.provider, model: config.model, maxSteps: config.maxSteps, workingDirectory: world.readRoot,
         ...(config.sessionMode === 'create' ? { sessionId } : { resumeSessionId: sessionId }) },
       'sandbox-policy': { mode: 'workspace-write', workspaceRoot: owner.writableRoot },
       'world-initialization-draft-fs': { cwd: world.readRoot, draftRoot: owner.writableRoot },

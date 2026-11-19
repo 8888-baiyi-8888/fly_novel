@@ -1,3 +1,4 @@
+import { validateAgentMaxSteps } from './loop-options.js'
 import { createHash } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -28,7 +29,7 @@ import { createWorldDevelopmentResolvers } from '../../world-init/storage/world-
 /** 世界发展规划目录、世界、引用和权限均由可信应用绑定。 */
 export interface WorldDevelopmentAgentConfig {
   workspaces: readonly WorldWorkspaceConfig[]; worldId: string; agentId: string; sessionId: string; sessionMode: 'create' | 'resume'
-  sessionRoot: string; provider: string; model: string; adapter: LlmAdapter; singleWriterProcess: true
+  sessionRoot: string; provider: string; model: string; maxSteps?: number; adapter: LlmAdapter; singleWriterProcess: true
   references?: Pick<Parameters<typeof createWorldDevelopmentResolvers>[0], 'map' | 'characters' | 'organization' | 'history' | 'relationships' | 'situation'>
   catalog?: { maxCatalogBytes?: number; maxSourceBytes?: number; receiptTtlMs?: number; maxReceipts?: number }
 }
@@ -39,6 +40,7 @@ export function createWorldDevelopmentAgent(config: WorldDevelopmentAgentConfig)
 
 /** 使用外部目录绑定时不拥有目录服务及引用句柄。 */
 export async function createWorldDevelopmentAgentWithCatalogBinding(config: WorldDevelopmentAgentConfig, createCatalogBinding?: () => CatalogBinding, borrowedStore?: DevelopmentStore): Promise<WorldDevelopmentAgent> {
+  validateAgentMaxSteps(config.maxSteps)
   if (config?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   for (const value of [config.worldId, config.agentId, config.sessionId, config.provider, config.model]) {
     if (typeof value !== 'string' || !value || value.trim() !== value) throw new Error('世界发展规划 Agent 身份和模型配置必须非空且无首尾空白')
@@ -77,7 +79,7 @@ export async function createWorldDevelopmentAgentWithCatalogBinding(config: Worl
     const backend = framework.context.plugin(jsonlSessionPersistencePlugin, { root: sessionRoot })
     closeFramework = async () => { await framework.manager.disposeAll(); await backend.dispose() }; await backend
     agent = await framework.manager.create({ id: owner.agentId, presetId, pluginConfigs: {
-      'agent-loop-runtime': { provider: config.provider, model: config.model, workingDirectory: world.readRoot,
+      'agent-loop-runtime': { provider: config.provider, model: config.model, maxSteps: config.maxSteps, workingDirectory: world.readRoot,
         ...(config.sessionMode === 'create' ? { sessionId } : { resumeSessionId: sessionId }) },
       'sandbox-policy': { mode: 'workspace-write', workspaceRoot: owner.writableRoot },
       'world-initialization-draft-fs': { cwd: world.readRoot, draftRoot: owner.writableRoot },

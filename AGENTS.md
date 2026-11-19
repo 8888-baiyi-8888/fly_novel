@@ -23,6 +23,7 @@ docs/              开发文档目录，存放架构、模块设计、开发流�
 docs/cookbook/     可重复执行的本地调试与验证步骤
 src/               源码目录，包含应用组装、LLM 调用、Agent 运行框架及工具（见 src/README.md）
 src/app/agents/    各类 Agent 的应用层创建入口
+src/app/agents/loop-options.ts 世界初始化 Agent 的可信步数限制校验
 src/world-init/    世界初始化业务能力目录，测试放在 src/world-init/tests/
 src/world-init/storage/ 世界资料共享存储的可信装配和生命周期管理
 src/world-init/workspace/ 多世界工作区配置校验、Agent 身份占用及资料目录

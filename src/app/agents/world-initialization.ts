@@ -39,6 +39,7 @@ import type { SharedMapStorage } from '../../world-init/storage/map.js'
 import type { SharedOrganizationStorage } from '../../world-init/storage/organization.js'
 import type { SharedCharacterStorage } from '../../world-init/storage/character.js'
 import { createWorldStorage } from '../../world-init/storage/world.js'
+import { validateAgentMaxSteps } from './loop-options.js'
 import type { HistoryStore } from '@fly-novel/history'
 import type { SituationStore } from '@fly-novel/initial-situation'
 import type { DevelopmentStore } from '@fly-novel/world-development'
@@ -78,9 +79,11 @@ export interface WorldInitializationSessionConfig {
  */
 export async function createWorldInitializationAgentWithWorldWorkspaces(
   workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator: WorkspaceCharacterCreatorConfig | undefined,
-  deployment: { readonly singleWriterProcess: true; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig; readonly organizationAgent?: WorkspaceOrganizationAgentConfig; readonly historyAgent?: WorkspaceHistoryAgentConfig; readonly initialSituationAgent?: WorkspaceInitialSituationAgentConfig; readonly worldDevelopmentAgent?: WorkspaceWorldDevelopmentAgentConfig; readonly worldSpecificAgent?: WorkspaceWorldSpecificAgentConfig },
+  deployment: { readonly singleWriterProcess: true; readonly mainMaxSteps?: number; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig; readonly organizationAgent?: WorkspaceOrganizationAgentConfig; readonly historyAgent?: WorkspaceHistoryAgentConfig; readonly initialSituationAgent?: WorkspaceInitialSituationAgentConfig; readonly worldDevelopmentAgent?: WorkspaceWorldDevelopmentAgentConfig; readonly worldSpecificAgent?: WorkspaceWorldSpecificAgentConfig },
 ): Promise<Agent> {
   if (deployment?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
+  validateAgentMaxSteps(deployment.mainMaxSteps)
+  for (const config of [characterCreator, deployment.worldBasics, deployment.mapAgent, deployment.organizationAgent, deployment.historyAgent, deployment.initialSituationAgent, deployment.worldDevelopmentAgent, deployment.worldSpecificAgent]) validateAgentMaxSteps(config?.maxSteps)
   const worlds = await validateWorldWorkspaceConfigs(workspaces)
   const world = worlds.find(item => item.worldId === worldId)
   if (!world) throw new Error('世界配置不存在')
@@ -226,7 +229,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
       historyConfig, catalog && historyConfig ? () => catalog!.bind(historyConfig!.agentId) : undefined,
       situationConfig, catalog && situationConfig ? () => catalog!.bind(situationConfig!.agentId) : undefined,
       developmentConfig, catalog && developmentConfig ? () => catalog!.bind(developmentConfig!.agentId) : undefined,
-      specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined, sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment, sharedSpecific)
+      specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined, sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment, sharedSpecific, deployment.mainMaxSteps)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
       try { await storage.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
@@ -290,7 +293,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
   historyConfig?: HistoryAgentConfig, createHistoryCatalogBinding?: () => CatalogBinding,
   situationConfig?: InitialSituationAgentConfig, createSituationCatalogBinding?: () => CatalogBinding,
   developmentConfig?: WorldDevelopmentAgentConfig, createDevelopmentCatalogBinding?: () => CatalogBinding,
-  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage, sharedOrganization?: SharedOrganizationStorage, sharedCharacters?: SharedCharacterStorage, sharedHistory?: import('../../world-init/storage/resource.js').SharedResource<HistoryStore>, sharedSituation?: import('../../world-init/storage/resource.js').SharedResource<SituationStore>, sharedDevelopment?: import('../../world-init/storage/resource.js').SharedResource<DevelopmentStore>, sharedSpecific?: import('../../world-init/storage/resource.js').SharedResource<SpecificStore>): Promise<Agent> {
+  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage, sharedOrganization?: SharedOrganizationStorage, sharedCharacters?: SharedCharacterStorage, sharedHistory?: import('../../world-init/storage/resource.js').SharedResource<HistoryStore>, sharedSituation?: import('../../world-init/storage/resource.js').SharedResource<SituationStore>, sharedDevelopment?: import('../../world-init/storage/resource.js').SharedResource<DevelopmentStore>, sharedSpecific?: import('../../world-init/storage/resource.js').SharedResource<SpecificStore>, mainMaxSteps?: number): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -386,7 +389,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
       await backend
     }
     agent = await framework.factory.create({ id: `world-initialization-${randomUUID()}`, presetId: mainId, pluginConfigs: {
-    'agent-loop-runtime': { ...loopConfig, ...(mainSession && (mainSession.mode === 'create' ? { sessionId: mainSession.id } : { resumeSessionId: mainSession.id })) }, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
+    'agent-loop-runtime': { ...loopConfig, maxSteps: mainMaxSteps, ...(mainSession && (mainSession.mode === 'create' ? { sessionId: mainSession.id } : { resumeSessionId: mainSession.id })) }, llm: modelConfig, 'world-initialization-skill-source': { root: skillRoot },
     'sandbox-policy': { mode: 'workspace-write', workspaceRoot: roots.draftRoot },
     'world-initialization-draft-fs': { cwd: roots.viewRoot, draftRoot: roots.draftRoot },
     'world-initialization-workspace-prompt': { ...roots, mode: 'draft-write', worldBasics: Boolean(basicsConfig), mapAgent: Boolean(mapConfig), organizationAgent: Boolean(organizationConfig), historyAgent: Boolean(historyConfig), initialSituationAgent: Boolean(situationConfig), worldDevelopmentAgent: Boolean(developmentConfig), worldSpecificAgent: Boolean(specificConfig), ...(catalogBinding && catalogMainOwner ? { catalog: {

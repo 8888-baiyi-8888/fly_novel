@@ -271,6 +271,37 @@ test('独立地图 Agent 使用地图工具、资料目录和可恢复会话', a
   finally { await resumed.dispose() }
 })
 
+test('地图 Agent 步数上限保留成果，调整限制后恢复同一会话', async t => {
+  const { world, sessionRoot } = await setup(t)
+  const config = { workspaces: [world], worldId: world.worldId, agentId: 'map', sessionId: 'max-steps', sessionMode: 'create' as const,
+    sessionRoot, provider: 'test', model: 'test', adapter: new ScriptAdapter([{ name: 'map_overview_create', args: overview }]), singleWriterProcess: true as const, maxSteps: 1 }
+  await assert.rejects(createMapAgent({ ...config, maxSteps: 0 }), /maxSteps/)
+  const first = await createMapAgent(config)
+  try { await assert.rejects(first.run({ prompt: '创建地图' }), { code: 'MAX_STEPS' }) } finally { await first.dispose() }
+  assert.match(await readFile(join(world.readRoot, 'map', 'map.json'), 'utf8'), /河谷/)
+  const adapter = new ScriptAdapter()
+  const resumed = await createMapAgent({ ...config, adapter, sessionMode: 'resume', maxSteps: 3 })
+  try { await resumed.run({ prompt: '继续' }); assert.match(JSON.stringify(adapter.requests[0].messages), /创建地图/) } finally { await resumed.dispose() }
+  assert.match(await readFile(join(world.readRoot, 'map', 'map.json'), 'utf8'), /河谷/)
+})
+
+test('委派达到步数上限时报告错误并保留地图，继续时复用会话', async t => {
+  const { world, sessionRoot } = await setup(t)
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new ScriptAdapter() }))
+  const adapter = new ScriptAdapter([{ name: 'map_overview_create', args: overview }])
+  const map = { agentId: 'map', sessionId: 'limited', sessionMode: 'create' as const, sessionRoot, provider: 'test', model: 'test', adapter, maxSteps: 1 }
+  const parent = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true, mapAgent: map })
+  try {
+    const call = async (task: string) => (await parent.context.tools.execute({ calls: [{ type: 'tool-call', id: task as ToolCallId, name: 'delegate_map', arguments: JSON.stringify({ task }) }],
+      workingDirectory: world.readRoot, session: parent.context.sessions.list()[0]!, signal: new AbortController().signal })).results[0].result
+    const failed = await call('建立地图')
+    assert.equal(failed.isError, true); assert.match(JSON.stringify(failed), /MAX_STEPS/)
+    assert.match(await readFile(join(world.readRoot, 'map', 'map.json'), 'utf8'), /河谷/)
+    assert.equal((await call('继续并核对地图')).isError, false)
+    assert.match(JSON.stringify(adapter.requests.at(-1)?.messages), /建立地图/)
+  } finally { await parent.dispose() }
+})
+
 test('主 Agent 同时装配地图、角色和基础信息委派，地图共享目录并隔离身份', async t => {
   const { world, sessionRoot } = await setup(t)
   await initializeCatalog(world.catalogRoot, world.worldId)

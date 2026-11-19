@@ -1,3 +1,4 @@
+import { validateAgentMaxSteps } from './loop-options.js'
 import { isAbsolute, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { mkdir, realpath, stat } from 'node:fs/promises'
@@ -32,6 +33,7 @@ export interface CharacterCreatorConfig {
   readRoot: string
   provider: string
   model: string
+  maxSteps?: number
   adapter: LlmAdapter
   defaultCharacterCount: number
   /** 可选共享引用；句柄由可信调用方持有，须提供其世界配置。 */
@@ -64,6 +66,7 @@ async function physicalDirectory(path: string): Promise<string> {
  * @throws 配置无效、身份占用或初始化失败时拒绝；不会删除已有资料。
  */
 export async function createCharacterCreator(config: CharacterCreatorConfig, borrowed?: SharedCharacterHandles): Promise<CharacterCreator> {
+  validateAgentMaxSteps(config.maxSteps)
   for (const value of [config.worldId, config.agentId, config.sessionId, config.provider, config.model]) {
     if (!value || value.trim() !== value) throw new Error('角色创建 Agent 身份和模型配置必须非空且无首尾空白')
   }
@@ -129,7 +132,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig, bor
     }
     await backend
     agent = await framework.manager.create({ id: config.agentId, presetId, pluginConfigs: {
-      'agent-loop-runtime': { provider: config.provider, model: config.model, workingDirectory: readRoot,
+      'agent-loop-runtime': { provider: config.provider, model: config.model, maxSteps: config.maxSteps, workingDirectory: readRoot,
         ...(config.sessionMode === 'create' ? { sessionId: storageSessionId } : { resumeSessionId: storageSessionId }) },
       'sandbox-policy': { mode: 'read-only', workspaceRoot: readRoot }, 'fs-sandbox': { cwd: readRoot },
       llm: { adapters: [{ providers: [config.provider], adapter: config.adapter }] },

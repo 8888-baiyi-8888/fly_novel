@@ -15,6 +15,41 @@ class FixedAdapter extends LlmAdapter {
   }
 }
 
+test('步数上限保留已写草稿，恢复同一会话后读取再继续', async t => {
+  const temp = join(process.cwd(), 'tmp'); await mkdir(temp, { recursive: true })
+  const root = await realpath(await mkdtemp(join(temp, 'world-max-steps-'))); t.after(() => rm(root, { recursive: true, force: true }))
+  const readRoot = join(root, 'world'); const sessionRoot = join(root, 'sessions')
+  for (const dir of ['main', 'confirmed', 'catalog']) await mkdir(join(readRoot, dir), { recursive: true })
+  await mkdir(sessionRoot)
+  const world: WorldWorkspaceConfig = { worldId: 'max-steps', readRoot, confirmedRoot: join(readRoot, 'confirmed'), catalogRoot: join(readRoot, 'catalog'), mainAgent: { agentId: 'main', writableRoot: join(readRoot, 'main') }, agents: [] }
+  class Adapter extends LlmAdapter {
+    calls = 0
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      this.calls++
+      if (this.calls === 1) yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'write' as ToolCallId, name: 'write', arguments: JSON.stringify({ file_path: 'main/partial.md', content: '已有草稿' }) } }
+      else if (this.calls === 2) {
+        assert.match(JSON.stringify(options.messages), /继续/)
+        yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'read' as ToolCallId, name: 'read', arguments: JSON.stringify({ file_path: 'main/partial.md' }) } }
+      } else {
+        assert.match(JSON.stringify(options.messages), /已有草稿/)
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: '已核查现有草稿' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }; return
+      }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+    }
+  }
+  const adapter = new Adapter()
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter }))
+  const mainSession = { sessionRoot, sessionId: 'main', sessionMode: 'create' as const }
+  await assert.rejects(createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true, mainSession, mainMaxSteps: 0 }), /maxSteps/)
+  const first = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true, mainSession, mainMaxSteps: 1 })
+  try { await assert.rejects(first.run({ prompt: '建立草稿' }), { code: 'MAX_STEPS' }) } finally { await first.dispose() }
+  assert.equal(await readFile(join(world.mainAgent.writableRoot, 'partial.md'), 'utf8'), '已有草稿')
+  const resumed = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true, mainSession: { ...mainSession, sessionMode: 'resume' }, mainMaxSteps: 3 })
+  try { assert.deepEqual(await resumed.run({ prompt: '继续' }), { content: '已核查现有草稿' }) } finally { await resumed.dispose() }
+  assert.equal(await readFile(join(world.mainAgent.writableRoot, 'partial.md'), 'utf8'), '已有草稿')
+})
+
 test('世界身份在启动到释放期间独占，失败后可重建并保留目录成果', async t => {
   const temp = join(process.cwd(), 'tmp'); await mkdir(temp, { recursive: true })
   const root = await realpath(await mkdtemp(join(temp, 'workspace-lifecycle-')))

@@ -1,3 +1,4 @@
+import { validateAgentMaxSteps } from './loop-options.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -27,6 +28,7 @@ export interface WorldBasicsConfig {
   sessionRoot: string
   provider: string
   model: string
+  maxSteps?: number
   adapter: LlmAdapter
   singleWriterProcess: true
   catalog?: { maxCatalogBytes?: number; maxSourceBytes?: number; receiptTtlMs?: number; maxReceipts?: number }
@@ -51,6 +53,7 @@ export async function createWorldBasicsAgent(config: WorldBasicsConfig): Promise
 
 /** 由拥有世界目录服务的可信装配方提供绑定；调用方负责该服务的生命周期。 */
 export async function createWorldBasicsAgentWithCatalogBinding(config: WorldBasicsConfig, createCatalogBinding?: () => CatalogBinding): Promise<WorldBasicsAgent> {
+  validateAgentMaxSteps(config.maxSteps)
   if (config?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   for (const value of [config.worldId, config.agentId, config.sessionId, config.provider, config.model]) {
     if (typeof value !== 'string' || !value || value.trim() !== value) throw new Error('世界基础信息 Agent 身份和模型配置必须非空且无首尾空白')
@@ -88,7 +91,7 @@ export async function createWorldBasicsAgentWithCatalogBinding(config: WorldBasi
     disposeFramework = async () => { await framework.manager.disposeAll(); await backend.dispose() }
     await backend
     const agent: Agent = await framework.manager.create({ id: owner.agentId, presetId, pluginConfigs: {
-      'agent-loop-runtime': { provider: config.provider, model: config.model, workingDirectory: world.readRoot,
+      'agent-loop-runtime': { provider: config.provider, model: config.model, maxSteps: config.maxSteps, workingDirectory: world.readRoot,
         ...(config.sessionMode === 'create' ? { sessionId } : { resumeSessionId: sessionId }) },
       'sandbox-policy': { mode: 'workspace-write', workspaceRoot: owner.writableRoot },
       'world-initialization-draft-fs': { cwd: world.readRoot, draftRoot: owner.writableRoot },
