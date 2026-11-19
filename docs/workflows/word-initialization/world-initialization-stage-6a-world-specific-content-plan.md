@@ -31,7 +31,7 @@
 - [世界基础信息 Agent](../../../src/app/README.md)保存待审 Markdown 成果，按需供其他 Agent 读取。它提供整体背景，但目前不存在可对所有基础信息按路径无关 ID 读取的统一对象服务。
 - [地图](../../../src/agents/plugins/map/README.md)、[组织](../../../src/agents/plugins/organization/README.md)、[人物](../../../src/agents/plugins/character/README.md)、[历史](../../../src/agents/plugins/history/README.md)、[初始局势](../../../src/agents/plugins/initial-situation/README.md)和[世界发展规划](../../../src/agents/plugins/world-development/README.md)各自维护自己的格式、工具、身份与版本；不能假定跨模块自动关联或统一存储已经存在。
 - [世界工作区及资料目录](../../../src/world-init/README.md)提供世界、负责人和资料登记；目录简介是导航线索，不能代替成果正文或用户确认。现有专用 Agent 的 Preset、SystemPrompt、Tools、Session、受控文件和可信委派可复用，实际权限以[应用说明](../../../src/app/README.md)及具体装配为准。
-- 当前没有世界专有内容的专用插件、数据格式、查询工具或专用 Agent；主 Agent Skill 中提出的修炼体系等观察方向，不代表这些专有内容的存储和自动开发能力已经实现。
+- [世界专有内容插件](../../../src/agents/plugins/world-specific/README.md)提供版本化格式、受控存储和查询工具；专用 Agent 和自动开发能力需按后续步骤装配，主 Agent Skill 中提出的观察方向本身不能证明模型已完成这些任务。
 
 ## 示例走查
 
