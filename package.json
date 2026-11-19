@@ -46,6 +46,7 @@
     "@fly-novel/fs": "workspace:*",
     "@fly-novel/map": "workspace:*",
     "@fly-novel/history": "workspace:*",
+    "@fly-novel/initial-situation": "workspace:*",
     "@fly-novel/character": "workspace:*",
     "@fly-novel/organization": "workspace:*",
     "@fly-novel/fs-sandbox": "workspace:*",

@@ -41,6 +41,9 @@ importers:
       '@fly-novel/history':
         specifier: workspace:*
         version: link:src/agents/plugins/history
+      '@fly-novel/initial-situation':
+        specifier: workspace:*
+        version: link:src/agents/plugins/initial-situation
       '@fly-novel/llm':
         specifier: workspace:*
         version: link:src/llm
@@ -414,6 +417,18 @@ importers:
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:../tools
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
+  src/agents/plugins/initial-situation:
+    dependencies:
+      '@fly-novel/fs':
+        specifier: workspace:*
+        version: link:../fs/fs
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
