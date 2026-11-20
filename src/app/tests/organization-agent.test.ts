@@ -58,6 +58,7 @@ test('独立组织 Agent 使用工具保存资料并恢复会话', async t => {
     assert.equal(files.length, 1)
     assert.match(await readFile(join(world.readRoot, 'organization/organizations', files[0]!), 'utf8'), /青云宗/)
     assert.match(JSON.stringify(adapter.requests[0].messages), /成员关系只由组织模块维护/)
+    assert.match(JSON.stringify(adapter.requests[0].messages), /正文中的名称、代号或其他看似 ID 的文本不能替代结构化引用/)
   } finally { await agent.dispose() }
   const resumedAdapter = new ScriptAdapter()
   const resumed = await createOrganizationAgent({ ...config, adapter: resumedAdapter, sessionMode: 'resume' })

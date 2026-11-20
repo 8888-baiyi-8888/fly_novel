@@ -37,3 +37,26 @@ test('真实模型使用地图 Agent 规划并保存城邦地图', { skip: proce
     t.diagnostic(`成果目录：${root}；地图层面 ${overview.layers.length} 个，地点 ${places.length} 个；模型返回 ${response.content.length} 字`)
   } finally { await agent.dispose() }
 })
+
+test('真实地图 Agent 遵守单地点范围并使用工具生成的正式 ID', { skip: process.env.FLY_NOVEL_REAL_LLM_TEST !== '1', timeout: 180000 }, async t => {
+  const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })
+  const root = await realpath(await mkdtemp(join(parent, 'map-boundary-real-'))); t.diagnostic(`独立测试目录：${root}`)
+  const readRoot = join(root, 'world'); const sessionRoot = join(root, 'sessions')
+  for (const name of ['main', 'map/places', 'map/connections', 'confirmed', 'catalog']) await mkdir(join(readRoot, name), { recursive: true })
+  await mkdir(sessionRoot)
+  const world = { worldId: 'real-map-boundary', readRoot, confirmedRoot: join(readRoot, 'confirmed'), catalogRoot: join(readRoot, 'catalog'),
+    mainAgent: { agentId: 'main', writableRoot: join(readRoot, 'main') }, agents: [{ agentId: 'map', writableRoot: join(readRoot, 'map') }] }
+  const model = await loadConfiguredAdapter('deepseek')
+  const agent = await createMapAgent({ workspaces: [world], worldId: world.worldId, agentId: 'map', sessionId: 'real', sessionRoot, sessionMode: 'create', ...model, singleWriterProcess: true, maxSteps: 12 })
+  const timeout = setTimeout(() => agent.cancel(), 150000)
+  try {
+    const response = await agent.run({ prompt: '用户明确要求：近期只建立一处地点“曲水城”，不创建其他城镇或周边地点；可建立世界地图概览，外海留白。调用地图工具实际保存，使用工具生成的正式地点 ID，最后报告该 ID。' })
+    const names = (await readdir(join(readRoot, 'map', 'places'))).filter(name => name.endsWith('.json'))
+    assert.equal(names.length, 1, `地点数量超出用户范围：${names.length}`)
+    const place = parseMapPlace(await readFile(join(readRoot, 'map', 'places', names[0]!), 'utf8'))
+    assert.equal(place.name, '曲水城'); assert.equal(names[0], `${place.id}.json`)
+    assert.ok(response.content.includes(place.id), '最终回复未报告工具生成的正式 ID')
+    assert.doesNotMatch(place.description, /city[._-]qushui/i, '地点正文出现另造的正式标识')
+    t.diagnostic('已保存一个地点；其余正文仍需人工审阅')
+  } finally { clearTimeout(timeout); await agent.dispose() }
+})

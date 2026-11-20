@@ -8,7 +8,7 @@ const input = z.object({ task: z.string().trim().min(1) }).strict()
 export function createMapDelegationTool(subagents: SubagentRuntime, parentId: string) {
   if (!parentId.trim()) throw new Error('地图委派工具需要父 Agent 身份')
   if (!subagents.getProvider('persistent')) throw new Error('地图委派工具需要已注册的 persistent Provider')
-  return defineTool({ name: 'delegate_map', description: '委派地图与空间开发或地图负责人的目录更新；子 Agent 看不到父会话，请提供任务及必要背景。',
+  return defineTool({ name: 'delegate_map', description: '委派地图与空间开发或地图负责人的目录更新；子 Agent 看不到父会话，请提供用户明确的范围及必要背景，地点正式 ID 由地图工具生成。',
     parameters: { task: { type: 'string', required: true, description: '地图任务、用户要求和必要背景。' } },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     async execute(args, exec) {

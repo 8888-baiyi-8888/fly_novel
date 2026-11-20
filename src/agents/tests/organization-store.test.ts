@@ -43,6 +43,7 @@ test('组织 JSON 拒绝重复键、未知版本、无效权限与错误结构',
   assert.throws(() => parseOrganization(json.replace('"formatVersion":1', '"formatVersion":2')))
   assert.throws(() => parseOrganization(JSON.stringify({ ...org, minLevel: 3, sections: [{ title: '秘密', content: '', minLevel: 1 }] })))
   assert.throws(() => parseOrganization(JSON.stringify({ ...org, extra: true })))
+  assert.throws(() => parseOrganization(JSON.stringify({ ...org, locations: [{ place: { kind: 'linked', id: 'city.qushui' }, purpose: '驻地', minLevel: 0 }] })))
   assert.throws(() => parseOrganizationRelation(JSON.stringify({ ...relation(personId, placeId), id: missingId, worldId: 'org-world', formatVersion: 1, direction: 'two-way' })))
   assert.throws(() => parseOrganizationMembership(JSON.stringify({ ...membership(personId), id: missingId, worldId: 'org-world', formatVersion: 1, minLevel: 5 })))
 })

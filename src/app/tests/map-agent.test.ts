@@ -264,6 +264,9 @@ test('独立地图 Agent 使用地图工具、资料目录和可恢复会话', a
     assert.match(await readFile(join(world.readRoot, 'map', 'map.json'), 'utf8'), /河谷/)
     assert.match(await readFile(join(world.catalogRoot, 'catalog.json'), 'utf8'), /世界地图概览/)
     assert.match(JSON.stringify(adapter.requests[0].messages), /localBoxes/)
+    assert.match(JSON.stringify(adapter.requests[0].messages), /地图地点正式 ID 由创建工具生成/)
+    assert.match(JSON.stringify(adapter.requests[0].tools?.find(tool => tool.name === 'map_place_create')), /返回结果的 id/)
+    assert.match(JSON.stringify(adapter.requests[0].messages), /不因任务提到世界或周边就自动创建额外地点/)
   } finally { await agent.dispose() }
   const resumedAdapter = new ScriptAdapter()
   const resumed = await createMapAgent({ ...config, adapter: resumedAdapter, sessionMode: 'resume' })

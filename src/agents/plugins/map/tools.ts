@@ -53,7 +53,7 @@ export function createMapTools(store: MapStore, identity: ToolAgentIdentity, acc
   ]
   if (access === 'read-write') tools.push(
     tool('map_overview_create', '创建世界地图概览，比例由本世界地图设置。', { name: requiredString, description: requiredString, scale, layers, orientation: requiredString, reserved: names }, (args, ctx) => store.createOverview(overviewInput.parse(args), ctx.signal), true),
-    tool('map_place_create', '创建地点；parents 给出层面、父级、局部矩形和参考框。', { name: requiredString, aliases: names, description: requiredString, detailLevel: { type: 'string', enum: ['unexpanded', 'overview', 'detailed'], required: true }, parents, reserved: names }, (args, ctx) => store.createPlace(placeInput.parse(args), ctx.signal), true),
+    tool('map_place_create', '创建地点；正式地点 ID 由程序生成并在返回结果的 id 中提供，跨模块引用使用该 id，不自行编造另一个正式 ID。parents 给出层面、父级、局部矩形和参考框。', { name: requiredString, aliases: names, description: requiredString, detailLevel: { type: 'string', enum: ['unexpanded', 'overview', 'detailed'], required: true }, parents, reserved: names }, (args, ctx) => store.createPlace(placeInput.parse(args), ctx.signal), true),
     tool('map_connection_create', '创建两地点之间的当前连通设定。', connectionFields, (args, ctx) => store.createConnection(connectionInput.parse(args), ctx.signal), true),
     tool('map_connection_update', '按文件版本用完整内容覆盖连通设定。', { id: requiredString, version: requiredString, content }, (args, ctx) => { const q = updateInput.parse(args); return store.updateConnection(q.id, q.version, q.content, ctx.signal) }, true),
   )

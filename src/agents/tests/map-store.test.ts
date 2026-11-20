@@ -45,6 +45,7 @@ test('地图 JSON 拒绝重复键、未知版本、无效坐标与重复父关�
   assert.throws(() => parseMapPlace(JSON.stringify({ ...candidate, parents: [{ ...rootParent, frameBox: [0, 0, 0, 10] }] })))
   assert.throws(() => parseMapPlace(JSON.stringify({ ...candidate, parents: [{ ...rootParent, frameBox: [0, 0, 100, 100] }] })))
   assert.throws(() => parseMapPlace(JSON.stringify({ ...candidate, parents: [{ ...rootParent, parent: { kind: 'place', id: candidate.id } }] })))
+  assert.throws(() => parseMapPlace(JSON.stringify({ ...candidate, parents: [{ ...rootParent, parent: { kind: 'place', id: 'city.qushui' } }] })))
 })
 
 test('真实文件保存多父级地点和连通，按版本更新并保护旧数据', async t => {

@@ -50,6 +50,8 @@ test('世界初始化提示词进入模型请求，按 Agent 隔离并随作用�
   assert.match(String(section?.text), /十个内容模块由各自专用 Agent 开发/)
   assert.match(String(section?.text), /多个待审初始局势分别列出/)
   assert.match(String(section?.text), /不根据文件顺序或目录登记自动选定方案/)
+  assert.match(String(section?.text), /用户明确限定近期建立范围时/)
+  assert.match(String(section?.text), /不要要求子 Agent 自行发明第二套正式 ID/)
 
   await framework.manager.dispose('world-prompt')
   assert.throws(() => prompt.assemble(), /已销毁/)
