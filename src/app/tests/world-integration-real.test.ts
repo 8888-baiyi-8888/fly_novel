@@ -39,10 +39,13 @@ test('真实主 Agent 委派地图与组织、保存总览并恢复会话', { sk
     const placeFiles = (await readdir(placeRoot)).filter(name => name.endsWith('.json'))
     const places = await Promise.all(placeFiles.map(async file => parseMapPlace(await readFile(join(placeRoot, file), 'utf8'))))
     const city = places.find(place => place.name === '曲水城')
-    const orgCount = (await readdir(join(readRoot, 'organization', 'organizations'))).filter(name => name.endsWith('.json')).length
+    const orgFiles = (await readdir(join(readRoot, 'organization', 'organizations'))).filter(name => name.endsWith('.json'))
+    const orgCount = orgFiles.length
     const plans = (await readdir(world.mainAgent.writableRoot)).filter(name => name.startsWith('world-plan-') && name.endsWith('.md')).length
     resumePrompt += ` 已核实：地图已有 ${places.length} 个地点${city ? `，曲水城 ID 为 ${city.id}` : ''}；组织 ${orgCount} 个，第一版总览 ${plans} 个。`
     if (city) resumePrompt += ' 保留现有地图，不再开发或重复创建地点；核对必要正文后继续未完成的组织与总览。可能超出近期范围的地点保留并在报告中说明，不删除已有成果。'
+    if (city && orgCount === 0) resumePrompt += ` 不需要再次委派地图 Agent。请委派组织 Agent 只核验曲水城 ID ${city.id}、检查议会是否已存在，再创建一份青河议会并关联该地点；不创建成员，也不扩展其他组织。完成后读取实际成果并保存待审总览，明确说明超出近期范围的已有地点和未完成范围。`
+    if (city && orgCount > 0 && plans === 0) resumePrompt += ` 地图和组织均已存在，不再委派地图或组织 Agent。先读取 map/places/${city.id}.json 和 organization/organizations/${orgFiles[0]}，核查关联后整合待审总览并保存；组织正文中的额外文本标识可能与真实地点 ID 不一致，应作为待核查问题报告，不能当作已核验 ID。`
   }
   const first = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, deployment)
   const firstTimeout = setTimeout(() => first.cancel(), 240000)

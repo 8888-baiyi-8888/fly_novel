@@ -2,7 +2,7 @@
 
 本文细化[内容模块开发计划的跨模块整合与交付步骤](world-initialization-stage-6a-content-modules-plan.md#11-跨模块整合与交付)，目标是在已有模块和专用 Agent 的基础上，形成可验证、可恢复、供用户整体审阅的世界初始化第一版。本文是开发计划；建议的装配、测试与接口不代表已经实现。局部讨论、确认提交与世界演化的阶段边界见[世界初始化总开发计划](world-initialization-development-plan.md)。
 
-双世界固定替身验证及真实模型样例的运行方式见[整合验证指南](../../cookbook/world-initialization-integration-validation.md)。真实模型完整交付样例尚未通过，已保存的测试成果和后续核查范围见[整合验证记录](../../../.agents/notes/2026-11-20-world-integration-validation.md)；不得把固定替身结果当作真实模型验收通过。
+双世界固定替身验证及真实模型样例的运行方式见[整合验证指南](../../cookbook/world-initialization-integration-validation.md)。真实模型样例在多次恢复后完成地图、组织与总览路径；额外地点、文本标识和未配置范围仍需人工核查，详见[整合验证记录](../../../.agents/notes/2026-11-20-world-integration-validation.md)。不得把固定替身结果当作真实模型质量证明。
 
 ## 已确定的业务边界
 
