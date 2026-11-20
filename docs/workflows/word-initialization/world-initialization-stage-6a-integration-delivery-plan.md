@@ -2,6 +2,8 @@
 
 本文细化[内容模块开发计划的跨模块整合与交付步骤](world-initialization-stage-6a-content-modules-plan.md#11-跨模块整合与交付)，目标是在已有模块和专用 Agent 的基础上，形成可验证、可恢复、供用户整体审阅的世界初始化第一版。本文是开发计划；建议的装配、测试与接口不代表已经实现。局部讨论、确认提交与世界演化的阶段边界见[世界初始化总开发计划](world-initialization-development-plan.md)。
 
+双世界固定替身验证及真实模型样例的运行方式见[整合验证指南](../../cookbook/world-initialization-integration-validation.md)。真实模型完整交付样例尚未通过，已保存的测试成果和后续核查范围见[整合验证记录](../../../.agents/notes/2026-11-20-world-integration-validation.md)；不得把固定替身结果当作真实模型验收通过。
+
 ## 已确定的业务边界
 
 1. 内容范围仍是用户确定的十个模块。宏观发展蓝图、故事线组织和人物成长蓝图由同一个世界发展规划 Agent 负责；世界专有内容由专用 Agent 根据构想和其他成果自主识别、补充。模块是职责划分，不要求每次生成十份文件、填满所有主题或逐一调用所有 Agent。
