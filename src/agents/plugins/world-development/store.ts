@@ -123,6 +123,16 @@ export class DevelopmentStore {
     return { id: doc.id, path: this.path(folders[kind], doc.id), version: await this.write(folders[kind], doc.id, doc, { kind: 'createIfAbsent' }, signal) }
   }) }
   readDocument(kind: DevelopmentKind, id: string, signal?: AbortSignal) { return this.enqueue(async () => { kindSchema.parse(kind); idSchema.parse(id); const found = (await this.scan(signal)).items.find(item => item.document.kind === kind && item.document.id === id); if (!found) throw new DevelopmentError('规划文档不存在', 'DEVELOPMENT_NOT_FOUND'); return found }) }
+  /** 校验已有规划候选、关联图与外部引用，不写入当前资料。 */
+  validateCandidate(value: DevelopmentDocument, signal?: AbortSignal): Promise<void> { return this.enqueue(async () => {
+    const doc = documentSchema.parse(value)
+    if (doc.worldId !== this.worldId || doc.contentStatus !== 'suggested') throw new DevelopmentError('规划候选身份或状态无效', 'DEVELOPMENT_INVALID_DOCUMENT')
+    const snapshot = await this.scan(signal); const old = snapshot.items.find(item => item.document.id === doc.id && item.document.kind === doc.kind)
+    if (!old) throw new DevelopmentError('规划不存在', 'DEVELOPMENT_NOT_FOUND')
+    if (old.document.person?.kind === 'unresolved' && doc.person?.kind === 'linked' && doc.person.originalClue !== old.document.person.description) throw new DevelopmentError('关联人物须保留原线索', 'DEVELOPMENT_INVALID_DOCUMENT')
+    if (old.document.person?.kind === 'linked' && doc.person?.kind === 'linked' && old.document.person.id === doc.person.id && old.document.person.originalClue !== doc.person.originalClue) throw new DevelopmentError('人物原线索不能更改', 'DEVELOPMENT_INVALID_DOCUMENT')
+    this.validateGraph(snapshot.items.map(item => item.document.id === doc.id ? doc : item.document)); await this.verify(doc, signal)
+  }) }
   snapshot(signal?: AbortSignal) { return this.enqueue(() => this.scan(signal)) }
   update(kind: DevelopmentKind, id: string, version: string, input: DevelopmentContent, signal?: AbortSignal) { return this.enqueue(async () => {
     kindSchema.parse(kind); idSchema.parse(id); const snapshot = await this.scan(signal); const old = snapshot.items.find(item => item.document.kind === kind && item.document.id === id)

@@ -129,6 +129,15 @@ export class SituationStore {
     for (const rel of doc.relations) if (!all.some(item => item.id === rel.targetId && item.overviewId === doc.overviewId)) throw new SituationError('局势关联目标不存在或不属于同一方案', 'SITUATION_INVALID_DOCUMENT')
   }
   readSituation(id: string, signal?: AbortSignal): Promise<Stored<Situation>> { return this.enqueue(() => this.read('situations', id, situationSchema, signal)) }
+  /** 校验已有局势候选及其关联，不写入当前资料。 */
+  validateCandidate(kind: Kind, value: Overview | Situation, signal?: AbortSignal): Promise<void> {
+    return this.enqueue(async () => {
+      const candidate = kind === 'overview' ? overviewSchema.parse(value) : situationSchema.parse(value)
+      if (candidate.worldId !== this.worldId || candidate.contentStatus !== 'suggested') throw new SituationError('局势候选身份或状态无效', 'SITUATION_INVALID_DOCUMENT')
+      const old = await this.readDoc(kind, candidate.id, signal)
+      await this.makeDoc(kind, candidate.id, candidate, old.document, signal)
+    })
+  }
   snapshot(signal?: AbortSignal) { return this.enqueue(async () => ({ overviews: await this.list('overviews', overviewSchema, signal), situations: await this.list('situations', situationSchema, signal) })) }
   /** 重新核验已授权引用；读取失败由解析器抛出，不等同于未找到。 */
   checkReference(type: string, id: string, observedVersion: string | null, signal?: AbortSignal) { return this.enqueue(async () => {

@@ -5,13 +5,27 @@ import { parseDocument } from 'yaml'
 import { z } from 'zod'
 import type { FileSystem, FsVersion } from '@fly-novel/fs'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
+import { kindSchema as developmentKindSchema } from '@fly-novel/world-development'
+import { specificKindSchema } from '@fly-novel/world-specific'
 
 const uuid = z.string().uuid()
 const targetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('place'), id: uuid }).strict(),
   z.object({ kind: z.literal('character'), id: uuid }).strict(),
+  z.object({ kind: z.literal('character-relationship'), id: uuid }).strict(),
+  z.object({ kind: z.literal('organization-membership'), id: uuid }).strict(),
+  z.object({ kind: z.literal('organization'), id: uuid }).strict(),
+  z.object({ kind: z.literal('organization-relation'), id: uuid }).strict(),
+  z.object({ kind: z.literal('history-event'), id: uuid }).strict(),
+  z.object({ kind: z.literal('file'), ownerAgentId: z.string().trim().min(1), path: z.string().trim().min(1) }).strict(),
+  z.object({ kind: z.literal('situation-start') }).strict(),
+  z.object({ kind: z.literal('situation'), documentKind: z.enum(['overview', 'situation']), id: uuid }).strict(),
+  z.object({ kind: z.literal('development'), documentKind: developmentKindSchema, id: uuid }).strict(),
+  z.object({ kind: z.literal('specific'), documentKind: specificKindSchema, id: uuid }).strict(),
 ])
 export type DiscussionTarget = z.infer<typeof targetSchema>
+/** 校验并规范化可信应用选择的目标标识。 */
+export function parseDiscussionTarget(value: unknown): DiscussionTarget { return targetSchema.parse(value) }
 const discussionSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), id: uuid,
   target: targetSchema, sessionId: z.string().min(1) }).strict()
 const candidateSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), id: uuid,
@@ -25,6 +39,7 @@ const occupiedRoots = new Set<string>()
 export interface DiscussionTargetAdapter {
   read(target: DiscussionTarget): Promise<{ content: string; version: string }>
   assertNoLegacyCandidate(target: DiscussionTarget): Promise<void>
+  validateStored(target: DiscussionTarget, content: string): Promise<void>
   validate(target: DiscussionTarget, content: string): Promise<void>
 }
 
@@ -105,7 +120,7 @@ export class DiscussionService {
       if (entry.type !== 'file' || !/^[0-9a-f-]{36}\.json$/.test(entry.name)) throw new Error('候选目录含无法识别的记录')
       const id = entry.name.slice(0, -5); const { value } = await this.read('candidates', id, candidateSchema)
       if (value.id !== id || value.worldId !== this.worldId) throw new Error('候选身份不匹配')
-      await this.adapter.validate(value.target, value.content)
+      await this.adapter.validateStored(value.target, value.content)
       result.push(value)
     }
     return result
@@ -141,6 +156,13 @@ export class DiscussionService {
     return this.adapter.read(discussion.target)
   }) }
 
+  /** 读取可信应用授权的关联目标；调用者负责限定目标选择范围。 */
+  readRelated(discussionId: string, target: DiscussionTarget) { return this.enqueue(async () => {
+    const discussion = (await this.read('discussions', discussionId, discussionSchema)).value
+    if (discussion.id !== discussionId || discussion.worldId !== this.worldId) throw new Error('讨论身份不匹配')
+    return this.adapter.read(targetSchema.parse(target))
+  }) }
+
   /** 查询讨论保存的候选；逐项返回版本，不以索引代替正文。 */
   listCandidates(discussionId: string) { return this.enqueue(async () => {
     const discussion = (await this.read('discussions', discussionId, discussionSchema)).value
@@ -169,7 +191,7 @@ export class DiscussionService {
   readCandidate(id: string) { return this.enqueue(async () => {
     const result = await this.read('candidates', id, candidateSchema)
     if (result.value.id !== id || result.value.worldId !== this.worldId) throw new Error('候选身份不匹配')
-    await this.adapter.validate(result.value.target, result.value.content)
+    await this.adapter.validateStored(result.value.target, result.value.content)
     const current = await this.adapter.read(result.value.target)
     return { ...result, current, stale: current.version !== result.value.baseline }
   }) }

@@ -46,7 +46,7 @@ import type { DevelopmentStore } from '@fly-novel/world-development'
 import type { SpecificStore } from '@fly-novel/world-specific'
 import { createDiscussionSubagent } from './discussion-subagent.js'
 import { createDiscussionTools } from './discussion-tools.js'
-import type { DiscussionService } from '../../world-init/discussion/service.js'
+import type { DiscussionService, DiscussionTarget } from '../../world-init/discussion/service.js'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
@@ -82,7 +82,7 @@ export interface WorldInitializationSessionConfig {
  */
 export async function createWorldInitializationAgentWithWorldWorkspaces(
   workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator: WorkspaceCharacterCreatorConfig | undefined,
-  deployment: { readonly singleWriterProcess: true; readonly discussion?: { readonly firstVersionComplete: true; readonly binding?: { readonly service: DiscussionService; readonly discussionId: string } }; readonly mainMaxSteps?: number; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig; readonly organizationAgent?: WorkspaceOrganizationAgentConfig; readonly historyAgent?: WorkspaceHistoryAgentConfig; readonly initialSituationAgent?: WorkspaceInitialSituationAgentConfig; readonly worldDevelopmentAgent?: WorkspaceWorldDevelopmentAgentConfig; readonly worldSpecificAgent?: WorkspaceWorldSpecificAgentConfig },
+  deployment: { readonly singleWriterProcess: true; readonly discussion?: { readonly firstVersionComplete: true; readonly binding?: { readonly service: DiscussionService; readonly discussionId: string; readonly additionalTargets?: readonly DiscussionTarget[] } }; readonly mainMaxSteps?: number; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig; readonly organizationAgent?: WorkspaceOrganizationAgentConfig; readonly historyAgent?: WorkspaceHistoryAgentConfig; readonly initialSituationAgent?: WorkspaceInitialSituationAgentConfig; readonly worldDevelopmentAgent?: WorkspaceWorldDevelopmentAgentConfig; readonly worldSpecificAgent?: WorkspaceWorldSpecificAgentConfig },
 ): Promise<Agent> {
   if (deployment?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   if (deployment.discussion && deployment.discussion.firstVersionComplete !== true) throw new Error('第一版尚未完整，请继续补做')
@@ -313,7 +313,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
   historyConfig?: HistoryAgentConfig, createHistoryCatalogBinding?: () => CatalogBinding,
   situationConfig?: InitialSituationAgentConfig, createSituationCatalogBinding?: () => CatalogBinding,
   developmentConfig?: WorldDevelopmentAgentConfig, createDevelopmentCatalogBinding?: () => CatalogBinding,
-  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage, sharedOrganization?: SharedOrganizationStorage, sharedCharacters?: SharedCharacterStorage, sharedHistory?: import('../../world-init/storage/resource.js').SharedResource<HistoryStore>, sharedSituation?: import('../../world-init/storage/resource.js').SharedResource<SituationStore>, sharedDevelopment?: import('../../world-init/storage/resource.js').SharedResource<DevelopmentStore>, sharedSpecific?: import('../../world-init/storage/resource.js').SharedResource<SpecificStore>, mainMaxSteps?: number, discussion = false, discussionBinding?: { readonly service: DiscussionService; readonly discussionId: string }): Promise<Agent> {
+  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage, sharedOrganization?: SharedOrganizationStorage, sharedCharacters?: SharedCharacterStorage, sharedHistory?: import('../../world-init/storage/resource.js').SharedResource<HistoryStore>, sharedSituation?: import('../../world-init/storage/resource.js').SharedResource<SituationStore>, sharedDevelopment?: import('../../world-init/storage/resource.js').SharedResource<DevelopmentStore>, sharedSpecific?: import('../../world-init/storage/resource.js').SharedResource<SpecificStore>, mainMaxSteps?: number, discussion = false, discussionBinding?: { readonly service: DiscussionService; readonly discussionId: string; readonly additionalTargets?: readonly DiscussionTarget[] }): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -434,7 +434,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     if (situationConfig) agent.context.tools.register(createInitialSituationDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (developmentConfig) agent.context.tools.register(createWorldDevelopmentDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (specificConfig) agent.context.tools.register(createWorldSpecificDelegationTool(agent.context.subagents, agent.info.identity.id))
-    if (discussionBinding) for (const tool of await createDiscussionTools(discussionBinding.service, discussionBinding.discussionId, agent.info.identity.id)) agent.context.tools.register(tool)
+    if (discussionBinding) for (const tool of await createDiscussionTools(discussionBinding.service, discussionBinding.discussionId, agent.info.identity.id, discussionBinding.additionalTargets)) agent.context.tools.register(tool)
     const createdAgent = agent
     const draftRelative = relative(roots.viewRoot, roots.draftRoot).split(sep).join('/')
     if (!discussion) agent.context.tools.register(defineTool({

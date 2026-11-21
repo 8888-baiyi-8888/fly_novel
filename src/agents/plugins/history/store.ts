@@ -137,6 +137,17 @@ export class HistoryStore {
   readEvent(id: string, signal?: AbortSignal): Promise<StoredHistoryEvent> {
     return this.enqueue(async () => { historyIdSchema.parse(id); const found = (await this.scan(signal)).events.find(item => item.document.id === id); if (!found) throw new HistoryError('历史事件不存在', 'HISTORY_NOT_FOUND'); return found })
   }
+  /** 校验已有历史事件候选、事件图及外部引用，不写入当前资料。 */
+  validateEventCandidate(value: HistoryEvent, signal?: AbortSignal): Promise<void> {
+    return this.enqueue(async () => {
+      const candidate = historyEventSchema.parse(value)
+      if (candidate.worldId !== this.config.worldId || candidate.contentStatus !== 'suggested') throw new HistoryError('历史候选身份或状态无效', 'HISTORY_INVALID_DOCUMENT')
+      const all = await this.scan(signal)
+      if (!all.events.some(item => item.document.id === candidate.id)) throw new HistoryError('历史事件不存在', 'HISTORY_NOT_FOUND')
+      this.graph(all.events.map(item => item.document.id === candidate.id ? candidate : item.document))
+      await this.verify(candidate, signal)
+    })
+  }
   /** 快照覆盖当前事件清单和版本；不是跨进程或跨模块原子快照。 */
   snapshot(signal?: AbortSignal): Promise<HistorySnapshot> { return this.enqueue(() => this.scan(signal)) }
   /** 仅更新未确认事件；已有候选或版本过期时拒绝。 */

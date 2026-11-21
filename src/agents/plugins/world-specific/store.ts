@@ -111,6 +111,14 @@ export class SpecificStore {
     return { id: doc.id, path: this.path(folders[kind], doc.id), version: await this.write(folders[kind], doc.id, doc, { kind: 'createIfAbsent' }, signal) }
   }) }
   readDocument(kind: SpecificKind, id: string, signal?: AbortSignal) { return this.enqueue(async () => { specificKindSchema.parse(kind); specificIdSchema.parse(id); const found = (await this.scan(signal)).items.find(value => value.document.kind === kind && value.document.id === id); if (!found) throw new SpecificError('专有内容不存在', 'SPECIFIC_NOT_FOUND'); return found }) }
+  /** 校验已有专有内容候选、主题关联与外部引用，不写入当前资料。 */
+  validateCandidate(value: SpecificDocument, signal?: AbortSignal): Promise<void> { return this.enqueue(async () => {
+    const doc = specificDocumentSchema.parse(value)
+    if (doc.worldId !== this.worldId || doc.contentStatus !== 'suggested') throw new SpecificError('专有内容候选身份或状态无效', 'SPECIFIC_INVALID_DOCUMENT')
+    const snapshot = await this.scan(signal)
+    if (!snapshot.items.some(item => item.document.id === doc.id && item.document.kind === doc.kind)) throw new SpecificError('专有内容不存在', 'SPECIFIC_NOT_FOUND')
+    this.graph(snapshot.items.map(item => item.document.id === doc.id ? doc : item.document)); await this.verify(doc, signal)
+  }) }
   snapshot(signal?: AbortSignal) { return this.enqueue(() => this.scan(signal)) }
   update(kind: SpecificKind, id: string, version: string, input: SpecificContent, signal?: AbortSignal) { return this.enqueue(async () => {
     specificKindSchema.parse(kind); specificIdSchema.parse(id); const snapshot = await this.scan(signal); const old = snapshot.items.find(value => value.document.kind === kind && value.document.id === id)

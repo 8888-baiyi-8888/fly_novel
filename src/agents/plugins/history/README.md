@@ -2,6 +2,8 @@
 
 历史事件版本 1 格式、受控存储、事件查询和 Agent 工具工作区包。字段、世界时间及兼容策略见[历史资料契约](../../../../docs/workflows/word-initialization/world-initialization-stage-6a-history-contract.md)。历史 Agent 的可信装配见[应用说明](../../../app/README.md)；本包不实现角色认知。
 
+事件候选校验检查已有事件身份、事件图和外部引用，不写入正文；讨论服务保存候选前还会拒绝已有的模块候选。
+
 `parseHistoryEvent` 和 `formatHistoryEvent` 校验单份 JSON；`validateHistoryEventGraph` 针对调用方提供的完整同世界事件集合校验上级及事件关系目标存在、事件 ID 唯一和上级无环。该检查不读取文件，不核验人物、组织和地点引用，也不推断时间或因果。
 
 `HistoryStore.open` 需要可信世界 ID、已有真实根及 `events/`、`candidates/` 子目录、文件后端、访问模式和 `singleWriterProcess: true`；同一进程中相同世界或根不能重复打开。调用方负责目录准备、提供必要的同世界人物／地点／组织解析器及后端生命周期，并等待 `close()`；此声明不是跨进程锁。默认每个事件或候选最大 1 MiB，事件目录最多 10000 个条目，可由可信应用配置。读取损坏、未知版本、缺失关联或跨世界事件会拒绝，不把错误伪装成无结果。

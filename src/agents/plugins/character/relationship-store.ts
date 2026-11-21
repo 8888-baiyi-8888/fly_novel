@@ -102,6 +102,15 @@ export class CharacterRelationshipStore {
     const pair = this.pair(document)
     if (pair && all.some(value => value.document.id !== document.id && this.pair(value.document) === pair)) throw new Error('人物关系配对已存在')
   }
+  private validateParticipants(old: CharacterRelationship, document: CharacterRelationship): void {
+    for (let i = 0; i < 2; i++) {
+      const previous = old.participants[i]; const next = document.participants[i]
+      if (previous.kind === 'linked' && (next.kind !== 'linked' || next.id !== previous.id)) throw new Error('已关联人物不能直接替换')
+      if (previous.kind === 'linked' && next.kind === 'linked' && JSON.stringify(previous.previousClue) !== JSON.stringify(next.previousClue)) throw new Error('已关联人物的原线索不能直接修改')
+      if (previous.kind === 'unresolved' && next.kind === 'linked' && (next.previousClue?.clueId !== previous.clueId || next.previousClue.description !== previous.description)) throw new Error('关联人物须保留原线索')
+      if (previous.kind === 'unresolved' && next.kind === 'unresolved' && next.clueId !== previous.clueId) throw new Error('线索身份不能更改')
+    }
+  }
   /** 创建一对人物的关系；文档、线索和条目 ID 由服务生成。 */
   create(input: { participants: [ParticipantInput, ParticipantInput]; relations: RelationInput[] }, signal?: AbortSignal): Promise<Stored> {
     return this.run(async () => {
@@ -119,6 +128,19 @@ export class CharacterRelationshipStore {
   /** 读取关系及其文件摘要；不存在或损坏时拒绝。 */
   read(id: string, signal?: AbortSignal): Promise<Stored> {
     return this.run(async () => { const all = await this.scan(signal); const value = all.find(item => item.document.id === id); if (!value) throw Object.assign(new Error('人物关系不存在'), { code: 'CHARACTER_RELATION_NOT_FOUND' }); return value })
+  }
+  /** 校验已有关系候选及人物引用，不写入当前资料；候选暂不支持新增关系条目。 */
+  validateCandidate(value: CharacterRelationship, signal?: AbortSignal): Promise<void> {
+    return this.run(async () => {
+      const document = characterRelationshipSchema.parse(value)
+      if (document.worldId !== this.worldId || document.contentStatus !== 'suggested') throw new Error('人物关系候选身份或状态无效')
+      const all = await this.scan(signal); const old = all.find(item => item.document.id === document.id)
+      if (!old) throw new Error('人物关系不存在')
+      const oldIds = new Set(old.document.relations.map(item => item.id))
+      if (document.relations.some(item => !oldIds.has(item.id))) throw new Error('人物关系候选暂不支持新增条目')
+      this.validateParticipants(old.document, document)
+      await this.verify(document, all, signal)
+    })
   }
   /** 按人物及相对方向查询完整关系文档；分页版本反映关系文件而非人物姓名。 */
   query(input: { personId: string; direction?: 'outgoing' | 'incoming' | 'two-way'; keyword?: string; offset?: number; limit?: number; version?: string }, signal?: AbortSignal): Promise<{ items: Stored[]; total: number; offset: number; nextOffset: number | null; version: string }> {
@@ -156,13 +178,7 @@ export class CharacterRelationshipStore {
       if (content.relations.some(item => item.id !== undefined && !oldIds.has(item.id))) throw new Error('新关系条目不能指定 ID')
       const document = characterRelationshipSchema.parse({ ...old.document, ...content,
         relations: content.relations.map(item => ({ ...item, id: item.id ?? randomUUID() })) })
-      for (let i = 0; i < 2; i++) {
-        const previous = old.document.participants[i]; const next = document.participants[i]
-        if (previous.kind === 'linked' && (next.kind !== 'linked' || next.id !== previous.id)) throw new Error('已关联人物不能直接替换')
-        if (previous.kind === 'linked' && next.kind === 'linked' && JSON.stringify(previous.previousClue) !== JSON.stringify(next.previousClue)) throw new Error('已关联人物的原线索不能直接修改')
-        if (previous.kind === 'unresolved' && next.kind === 'linked' && (next.previousClue?.clueId !== previous.clueId || next.previousClue.description !== previous.description)) throw new Error('关联人物须保留原线索')
-        if (previous.kind === 'unresolved' && next.kind === 'unresolved' && next.clueId !== previous.clueId) throw new Error('线索身份不能更改')
-      }
+      this.validateParticipants(old.document, document)
       await this.verify(document, all, signal); signal?.throwIfAborted()
       const text = formatCharacterRelationship(document); if (Buffer.byteLength(text) > 1024 * 1024) throw new Error('人物关系文件超过大小限制')
       const path = this.path(id); const temp = `${path}.${randomUUID()}.tmp`

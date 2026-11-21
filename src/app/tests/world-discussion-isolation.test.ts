@@ -141,14 +141,15 @@ test('主 Agent 候选工具绑定讨论目标并保留当前正文', async t =>
     mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [] }
   const source = join(view, 'main', 'plan.md'); await writeFile(source, '当前正文')
   const target = { kind: 'place' as const, id: '11111111-1111-4111-8111-111111111111' }
+  const related = { kind: 'character' as const, id: '22222222-2222-4222-8222-222222222222' }
   const adapter: DiscussionTargetAdapter = { async read() { return { content: await readFile(source, 'utf8'), version: 'v1' } },
-    async validate() {}, async assertNoLegacyCandidate() {} }
+    async validate() {}, async validateStored() {}, async assertNoLegacyCandidate() {} }
   const context = new Context(); const backend = context.plugin(LocalFileSystem, { cwd: root }); await backend
   const service = await DiscussionService.open({ worldId: world.worldId, root: pending, worldRoots: [view], fs: context.fs, adapter, singleWriterProcess: true })
   const record = await service.createDiscussion(target, 'session')
   t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new FixedAdapter() }))
   const agent = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true,
-    discussion: { firstVersionComplete: true, binding: { service, discussionId: record.id } },
+    discussion: { firstVersionComplete: true, binding: { service, discussionId: record.id, additionalTargets: [related] } },
     mainSession: { sessionRoot: sessions, sessionId: 'session', sessionMode: 'create' } })
   try {
     const call = async (name: string, args: object) => (await agent.context.tools.execute({
@@ -157,7 +158,9 @@ test('主 Agent 候选工具绑定讨论目标并保留当前正文', async t =>
     assert.equal((await call('discussion_read', {})).isError, false)
     assert.equal((await call('discussion_prepare', { content: '候选正文', summary: '修改' })).isError, false)
     assert.equal((await call('discussion_prepare', { content: '盲目覆盖', summary: '修改' })).isError, true)
-    assert.equal((await service.listCandidates(record.id))[0]!.value.content, '候选正文')
+    assert.equal((await call('discussion_prepare', { content: '人物候选', summary: '关联修改', targetIndex: 1 })).isError, false)
+    assert.equal((await call('discussion_prepare', { content: '越权', summary: '修改', targetIndex: 2 })).isError, true)
+    assert.deepEqual(new Set((await service.listCandidates(record.id)).map(item => item.value.content)), new Set(['候选正文', '人物候选']))
     assert.equal(await readFile(source, 'utf8'), '当前正文')
     await agent.run({ prompt: '继续讨论' })
     await agent.dispose()

@@ -191,6 +191,15 @@ export class OrganizationStore {
   }
   /** 读取组织文档；返回文件版本用于初始化期间覆盖。 */
   readOrganization(id: string, signal?: AbortSignal): Promise<StoredOrganizationDocument<Organization>> { return this.enqueue(() => this.read('organizations', id, parseOrganization, signal)) }
+  /** 校验已有组织候选及其外部地点引用，不写入当前资料。 */
+  validateOrganizationCandidate(value: Organization, signal?: AbortSignal): Promise<void> {
+    return this.enqueue(async () => {
+      const candidate = organizationSchema.parse(value)
+      if (candidate.worldId !== this.config.worldId) throw new OrganizationStoreError('组织世界不匹配', 'ORG_INVALID_DOCUMENT')
+      await this.read('organizations', candidate.id, parseOrganization, signal)
+      await this.verifyOrganization(candidate, signal)
+    })
+  }
   /** 初始化期间按版本直接覆盖组织资料，保持组织 ID。 */
   updateOrganization(id: string, version: string, input: OrganizationInput, signal?: AbortSignal): Promise<{ path: string; version: FsVersion }> {
     return this.enqueue(async () => {
@@ -220,6 +229,19 @@ export class OrganizationStore {
       return found
     })
   }
+  /** 校验已有组织关系候选及替换后的统属图，不写入当前资料。 */
+  validateRelationCandidate(value: OrganizationRelation, signal?: AbortSignal): Promise<void> {
+    return this.enqueue(async () => {
+      const candidate = organizationRelationSchema.parse(value)
+      if (candidate.worldId !== this.config.worldId) throw new OrganizationStoreError('组织关系世界不匹配', 'ORG_INVALID_DOCUMENT')
+      const orgs = await this.scan('organizations', parseOrganization, signal)
+      const relations = await this.scan('relations', parseOrganizationRelation, signal)
+      const current = relations.get(candidate.id)
+      if (!current) throw new OrganizationStoreError('组织关系不存在', 'ORG_NOT_FOUND')
+      relations.set(candidate.id, { ...current, document: candidate })
+      this.validateRelations(orgs, Array.from(relations.values(), entry => entry.document))
+    })
+  }
   /** 初始化期间按版本覆盖组织间关系；先校验新图。 */
   updateRelation(id: string, version: string, input: RelationInput, signal?: AbortSignal): Promise<{ path: string; version: FsVersion }> {
     return this.enqueue(async () => {
@@ -247,6 +269,15 @@ export class OrganizationStore {
     return this.enqueue(async () => {
       const value = await this.read('memberships', id, parseOrganizationMembership, signal)
       await this.read('organizations', value.document.organizationId, parseOrganization, signal); return value
+    })
+  }
+  /** 校验已有成员关系候选及其组织和人物引用，不写入当前资料。 */
+  validateMembershipCandidate(value: OrganizationMembership, signal?: AbortSignal): Promise<void> {
+    return this.enqueue(async () => {
+      const candidate = organizationMembershipSchema.parse(value)
+      if (candidate.worldId !== this.config.worldId) throw new OrganizationStoreError('成员关系世界不匹配', 'ORG_INVALID_DOCUMENT')
+      await this.read('memberships', candidate.id, parseOrganizationMembership, signal)
+      await this.verifyMembership(candidate, signal)
     })
   }
   /** 初始化期间按版本覆盖成员关系。 */

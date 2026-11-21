@@ -2,6 +2,8 @@
 
 组织、组织间关系和成员关系的版本化 JSON 与初始化受控文件存储工作区包。业务范围和后续工作见[组织模块开发计划](../../../../docs/workflows/word-initialization/world-initialization-stage-6a-organization-plan.md)，文件字段及校验见[组织数据契约](../../../../docs/workflows/word-initialization/world-initialization-stage-6a-organization-contract.md)。本包不自动创建目录、注册模型工具或创建 Agent。
 
+存储的候选校验方法检查已有组织、关系或成员的身份及对应的引用或统属图，不写入正文；候选保存和版本归讨论服务管理。
+
 `parseOrganization`、`parseOrganizationRelation` 和 `parseOrganizationMembership` 检查 JSON 语法、重复键、版本及结构；未知版本、无效字段和非法权限等级被拒绝。`formatOrganizationDocument` 校验后序列化。所有 JSON 文件是新建的版本 1 格式，不自动导入现有角色分类、目录记录或其他资料；不支持的版本拒绝读取并保留原文件。
 
 `OrganizationStore.open` 接受可信文件后端、世界 ID、组织根、访问模式、`phase: 'initialization'` 和 `singleWriterProcess: true`。组织根及 `organizations/`、`relations/`、`memberships/` 必须预先是实际存在的真实目录；同进程相同世界或根目录不能重复打开。调用方确保只有一个可信进程写入，并保护目录免遭未授权操作。声明 `phase` 不会检测实际世界状态：世界开始演化后，调用方不能使用此初始化入口覆盖资料，应等待历史留存能力另行实现。

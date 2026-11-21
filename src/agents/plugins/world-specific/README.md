@@ -2,6 +2,8 @@
 
 世界专有主题与内容项的版本化 JSON、初始化受控存储、查询及工具。业务范围及文件契约见[开发计划](../../../../docs/workflows/word-initialization/world-initialization-stage-6a-world-specific-content-plan.md)和[资料契约](../../../../docs/workflows/word-initialization/world-initialization-stage-6a-world-specific-content-contract.md)。
 
+专有内容候选校验检查已有文档身份、主题关系和外部引用，不写入正文；候选保存和版本归讨论服务管理。
+
 `SpecificStore.open` 由可信应用绑定已有真实根、世界、文件后端、访问模式与单可信写入进程声明；根下必须已有 `topics/`、`items/`、`candidates/`。调用者持有后端与外部解析器，关闭时等待已受理操作。同一进程的世界或根独占不是跨进程锁或系统级隔离。
 
 主题与内容使用分离的 UUID 文件，内容可引用多个已存在主题；每份内容独立维护全部归属，不维护需要人工同步的条目总表。外部已关联引用由可信解析器核验，未配置或读取错误不能当作无结果。未确认资料按版本更新，已确认资料可准备独占候选并检查基线；确认提交及演化留存尚未实现。
