@@ -15,11 +15,11 @@ const uuid = z.string().uuid()
 const sourceSchema = z.object({ kind: z.string(), id: z.string(), version: z.string(), content: z.string() }).strict()
 const scopeSchema = z.object({ name: z.string(), status: z.enum(['checked', 'uncovered', 'failed', 'cancelled', 'changed']),
   version: z.string().nullable(), reason: z.string(), sources: z.array(sourceSchema) }).strict()
-const reportSchema = z.object({ formatVersion: z.literal(1), worldId: z.string(), discussionId: uuid, id: uuid, createdAt: z.iso.datetime(),
+export const impactReportSchema = z.object({ formatVersion: z.literal(1), worldId: z.string(), discussionId: uuid, id: uuid, createdAt: z.iso.datetime(),
   candidateId: uuid, candidateVersion: z.string(), baseline: z.string(), currentVersion: z.string(), target: z.unknown(),
   currentContent: z.string(), candidateContent: z.string(), candidateSummary: z.string(),
   status: z.enum(['completed', 'failed', 'cancelled', 'changed']), scopes: z.array(scopeSchema) }).strict()
-export type ImpactReport = z.infer<typeof reportSchema>
+export type ImpactReport = z.infer<typeof impactReportSchema>
 type Scope = z.infer<typeof scopeSchema>
 type Owned<T> = { readonly agentId: string; readonly store: T }
 const occupiedWorlds = new Set<string>(); const occupiedRoots = new Set<string>()
@@ -166,7 +166,7 @@ export class ImpactService {
         status = 'changed'; scopes.push({ name: '候选复核', status: 'changed', version: null, reason: '候选或当前资料在检查期间变化', sources: [] })
       }
     } catch (error) { failed('候选复核', error) }
-    const report = reportSchema.parse({ formatVersion: 1, worldId: this.world.worldId, discussionId, id: randomUUID(), createdAt: new Date().toISOString(), candidateId,
+    const report = impactReportSchema.parse({ formatVersion: 1, worldId: this.world.worldId, discussionId, id: randomUUID(), createdAt: new Date().toISOString(), candidateId,
       candidateVersion: candidate.version, baseline: candidate.value.baseline, currentVersion: candidate.current.version, target,
       currentContent: candidate.current.content, candidateContent: candidate.value.content, candidateSummary: candidate.value.summary, status, scopes })
     const text = `${JSON.stringify(report, null, 2)}\n`
@@ -182,7 +182,7 @@ export class ImpactService {
     const bytes = await this.fs.readBytes(target, undefined, 8 * 1024 * 1024)
     const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
     if (parseDocument(text, { uniqueKeys: true }).errors.length) throw new Error('检查报告格式无效')
-    const report = reportSchema.parse(JSON.parse(text)); parseDiscussionTarget(report.target)
+    const report = impactReportSchema.parse(JSON.parse(text)); parseDiscussionTarget(report.target)
     const after = await this.fs.stat(target)
     if (!after || before.version !== after.version) throw new Error('检查报告读取期间变化')
     if (report.worldId !== this.world.worldId || report.discussionId !== discussionId || report.id !== id) throw new Error('检查报告身份不匹配')

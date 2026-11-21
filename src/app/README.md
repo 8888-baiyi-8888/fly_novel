@@ -84,6 +84,8 @@
 
 讨论绑定可选提供同世界、同讨论服务的影响检查服务；主 Agent 与按需委派的专用 Agent 获得 `impact_check` 和 `impact_read`，仅能检查 / 读取授权目标的报告。报告目录不得与任一世界读取根、讨论根或 Agent Session 根重叠，服务与底层存储由可信调用方持有。检查结果是关联线索和覆盖范围，不代表自动完成语义冲突判断、用户确认或提交。
 
+可信应用可通过 [`world-review.ts`](world-review.ts) 读取审阅全文和逐项正文差异，用于呈现用户选择；审阅和确认服务的身份、持久化与拒绝条件见[世界初始化业务说明](../world-init/README.md)。确认必须由可信应用接收明确用户动作，不能将确认服务作为 Agent 工具装配。
+
 世界入口的部署配置可提供 `mainSession: { sessionRoot, sessionId, sessionMode }`，由可信应用使用 `create` 新建或 `resume` 恢复主 Agent 的 JSONL Session。`sessionRoot` 必须是现有绝对真实目录，不能与传入的任何世界读取根重叠；存储身份由世界 ID、主 Agent 身份和 Session ID 派生，重建时必须使用相同的值和目录。未提供配置时使用内存 Session。恢复后用户可在同一会话继续，主 Agent 根据历史和获授权工具核对成果并决定后续操作；中断工具结果未知时不得假设成功或盲目重试。持久化恢复的是会话历史，不保证模型正确排查，也不提供长期记忆。调用方须等待 `dispose()` 完成，后端随主 Agent 释放；已保存的世界成果不会因 Session 关闭而删除。
 
 旧的 `createWorldInitializationAgentWithWorkspace` 主 Agent 没有世界业务身份，不参与新入口的身份占用；应用不能通过同时使用旧入口绕过同一世界目录的写入协调。角色资料服务和角色 Agent 的 `read_file` 直接访问文件，不产生普通文件工具的观察事件；观察策略本身不授予路径权限。角色 Session 恢复的是对话历史，不代表恢复长期记忆。

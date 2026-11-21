@@ -11,6 +11,8 @@ import { OrganizationStore } from '@fly-novel/organization'
 import { DiscussionService } from '../discussion/service.js'
 import { createInitialDiscussionAdapter } from '../discussion/initial-adapters.js'
 import { ImpactService } from '../impact/service.js'
+import { ReviewService } from '../impact/review.js'
+import { readWorldReview } from '../../app/world-review.js'
 
 test('影响检查记录真实正文与范围，新增关联使原报告过期', async t => {
   const temp = join(process.cwd(), 'tmp'); await mkdir(temp, { recursive: true })
@@ -18,7 +20,8 @@ test('影响检查记录真实正文与范围，新增关联使原报告过期',
   const view = join(root, 'world'); const pending = join(root, 'pending'); const reports = join(root, 'reports')
   for (const dir of ['main', 'confirmed', 'catalog', 'map/places', 'map/connections', 'characters', 'history/events', 'history/candidates',
     'organization/organizations', 'organization/relations', 'organization/memberships']) await mkdir(join(view, dir), { recursive: true })
-  for (const dir of [join(pending, 'discussions'), join(pending, 'candidates'), reports]) await mkdir(dir, { recursive: true })
+  const reviews = join(root, 'reviews')
+  for (const dir of [join(pending, 'discussions'), join(pending, 'candidates'), reports, join(reviews, 'reviews'), join(reviews, 'confirmations')]) await mkdir(dir, { recursive: true })
   const world = { worldId: 'impact-world', readRoot: view, confirmedRoot: join(view, 'confirmed'), catalogRoot: join(view, 'catalog'),
     mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [
       { agentId: 'map', writableRoot: join(view, 'map') }, { agentId: 'character', writableRoot: join(view, 'characters') },
@@ -60,8 +63,49 @@ test('影响检查记录真实正文与范围，新增关联使原报告过期',
   assert.equal((await impact.verify(d.id, checked.report.id, checked.version)).status, 'current')
   assert.equal((await impact.read(d.id, checked.report.id)).version, checked.version)
   await assert.rejects(impact.read('11111111-1111-4111-8111-111111111111', checked.report.id), /身份不匹配/)
+  const review = await ReviewService.open({ workspaces: [world], worldId: world.worldId, root: reviews, fs: context.fs, discussion, impact, singleWriterProcess: true }); t.after(() => review.close())
+  const finding = { description: '城门规则与历史需要核对', severity: 'important' as const,
+    evidence: [{ reportId: checked.report.id, scope: '历史引用', sourceId: checked.report.scopes.find(item => item.name === '历史引用')!.sources[0]!.id }],
+    options: [{ label: '处理', effect: '采用城门候选', candidateIds: [candidate.value.id], resolves: true },
+      { label: '保留冲突', effect: '不处理', candidateIds: [], resolves: false }], recommendedIndex: 0 }
+  const draft = await review.create(d.id, [checked.report.id], { findings: [finding], dependencies: [] })
+  assert.equal((await review.read(d.id, draft.value.id)).version, draft.version)
+  const presented = await readWorldReview(review, d.id, draft.value.id)
+  assert.ok(presented.changes[0]!.difference.removed.join('\n').includes('城门开放'))
+  assert.ok(presented.changes[0]!.difference.added.join('\n').includes('夜间关闭'))
+  assert.equal(presented.findings[0]!.recommendedOptionId, presented.findings[0]!.options[0]!.id)
+  const uncovered = checked.report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: checked.report.id, scope: scope.name }))
+  const input = { reviewVersion: draft.version, confirmContinue: true as const, selectedCandidateIds: [candidate.value.id], selections: [], acknowledgedUncovered: uncovered }
+  await assert.rejects(review.confirm(d.id, draft.value.id, { ...input, confirmContinue: false as true }), /明确确认/)
+  await assert.rejects(review.confirm(d.id, draft.value.id, { ...input, acknowledgedUncovered: [] }), /未覆盖/)
+  await assert.rejects(review.confirm(d.id, draft.value.id, { ...input, selections: [{ findingId: draft.value.findings[0]!.id, optionId: draft.value.findings[0]!.options[1]!.id }] }), /重要冲突/)
+  const confirmed = await review.confirm(d.id, draft.value.id, input)
+  assert.equal(confirmed.value.choices[0]!.origin, 'recommended')
+  assert.equal((await review.readConfirmation(d.id, draft.value.id)).version, confirmed.version)
+  await assert.rejects(review.confirm(d.id, draft.value.id, input), /已存在|不确定/)
+  const explicitDraft = await review.create(d.id, [checked.report.id], { findings: [finding], dependencies: [] })
+  const explicit = await review.confirm(d.id, explicitDraft.value.id, { ...input, reviewVersion: explicitDraft.version,
+    selections: [{ findingId: explicitDraft.value.findings[0]!.id, optionId: explicitDraft.value.findings[0]!.options[0]!.id }] })
+  assert.equal(explicit.value.choices[0]!.origin, 'explicit')
+  const noSuggestion = await review.create(d.id, [checked.report.id], { findings: [{ ...finding, recommendedIndex: null }], dependencies: [] })
+  await assert.rejects(review.confirm(d.id, noSuggestion.value.id, { ...input, reviewVersion: noSuggestion.version }), /缺少有效选择/)
+  const currentPerson = await characters.read(person.id)
+  const other = await discussion.createCandidate(d.id, { kind: 'character', id: person.id }, formatCharacterDocument({ ...currentPerson, metadata: { ...currentPerson.metadata, contentStatus: 'pending' }, body: '白天入城' }), '人物经历')
+  const otherReport = await impact.check(d.id, other.value.id)
+  const dependent = await review.create(d.id, [checked.report.id, otherReport.report.id], { findings: [], dependencies: [{ candidateIds: [candidate.value.id, other.value.id], reason: '地点和人物需要一致' }] })
+  const allUncovered = dependent.value.reports.flatMap(({ report }) => report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: report.id, scope: scope.name })))
+  await assert.rejects(review.confirm(d.id, dependent.value.id, { ...input, reviewVersion: dependent.version, acknowledgedUncovered: allUncovered }), /已知不一致/)
+  await discussion.abandonCandidate(d.id, other.value.id, other.version)
+  const staleDraft = await review.create(d.id, [checked.report.id], { findings: [], dependencies: [] })
+  const altered = await review.create(d.id, [checked.report.id], { findings: [], dependencies: [] })
+  const alteredPath = join(reviews, 'reviews', `${altered.value.id}.json`)
+  const alteredText = await readFile(alteredPath, 'utf8')
+  await writeFile(alteredPath, alteredText.replace('城门开放', '虚构正文'))
+  const alteredRead = await review.read(d.id, altered.value.id)
+  await assert.rejects(review.confirm(d.id, altered.value.id, { ...input, reviewVersion: alteredRead.version }), /不一致/)
   await history.create(event('新增事件'))
   assert.equal((await impact.verify(d.id, checked.report.id, checked.version)).status, 'changed')
+  await assert.rejects(review.confirm(d.id, staleDraft.value.id, { ...input, reviewVersion: staleDraft.version }), /重新检查/)
   assert.equal((await map.readPlace(city.id)).document.description, '城门开放')
   const search = HistoryQueries.prototype.search; let pages = 0
   const mocked = t.mock.method(HistoryQueries.prototype, 'search', async function (this: HistoryQueries, ...args: Parameters<HistoryQueries['search']>) {
@@ -73,6 +117,9 @@ test('影响检查记录真实正文与范围，新增关联使原报告过期',
   const partialHistory = partial.report.scopes.find(item => item.name === '历史引用')!
   assert.equal(partial.report.status, 'failed'); assert.equal(partialHistory.status, 'failed')
   assert.ok(partialHistory.sources.length > 0); assert.match(partialHistory.reason, /后续页/)
+  const failedReview = await review.create(d.id, [partial.report.id], { findings: [], dependencies: [] })
+  const failedUncovered = partial.report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: partial.report.id, scope: scope.name }))
+  await assert.rejects(review.confirm(d.id, failedReview.value.id, { ...input, reviewVersion: failedReview.version, acknowledgedUncovered: failedUncovered }), /检查未完成/)
   let enter!: () => void; let release!: () => void
   const entered = new Promise<void>(resolve => { enter = resolve }); const wait = new Promise<void>(resolve => { release = resolve })
   const originalSnapshot = map.snapshot.bind(map)
