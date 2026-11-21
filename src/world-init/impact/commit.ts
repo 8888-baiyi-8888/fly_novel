@@ -17,7 +17,7 @@ import type { ReviewService } from './review.js'
 const uuid = z.string().uuid()
 const hash = (text: string) => createHash('sha256').update(text).digest('hex')
 const target = z.discriminatedUnion('kind', [z.object({ kind: z.literal('place'), id: uuid }).strict(), z.object({ kind: z.literal('character'), id: uuid }).strict()])
-const operationSchema = z.object({ formatVersion: z.literal(1), id: uuid, worldId: z.string().min(1), discussionId: uuid,
+export const operationSchema = z.object({ formatVersion: z.literal(1), id: uuid, worldId: z.string().min(1), discussionId: uuid,
   reviewVersion: z.string().min(1), confirmationVersion: z.string().min(1), reportId: uuid, reportVersion: z.string().min(1),
   candidateId: uuid, candidateVersion: z.string().min(1), baseline: z.string().min(1), target,
   beforeDigest: z.string().length(64), afterDigest: z.string().length(64), afterVersion: z.string().nullable(),

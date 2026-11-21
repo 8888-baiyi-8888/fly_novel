@@ -29,11 +29,11 @@ const targetSchema = z.discriminatedUnion('kind', [
 export type DiscussionTarget = z.infer<typeof targetSchema>
 /** 校验并规范化可信应用选择的目标标识。 */
 export function parseDiscussionTarget(value: unknown): DiscussionTarget { return targetSchema.parse(value) }
-const discussionSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), id: uuid,
+export const discussionSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), id: uuid,
   target: targetSchema, sessionId: z.string().min(1) }).strict()
 const candidateFields = { worldId: z.string().min(1), id: uuid, discussionId: uuid, target: targetSchema,
   baseline: z.string().min(1), content: z.string(), summary: z.string().trim().min(1) }
-const candidateSchema = z.discriminatedUnion('formatVersion', [
+export const candidateSchema = z.discriminatedUnion('formatVersion', [
   z.object({ ...candidateFields, formatVersion: z.literal(1), status: z.enum(['active', 'abandoned']) }).strict(),
   z.object({ ...candidateFields, formatVersion: z.literal(2), status: z.enum(['publishing', 'committed']), operationId: uuid }).strict(),
 ])

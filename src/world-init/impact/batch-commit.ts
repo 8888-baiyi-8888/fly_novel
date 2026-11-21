@@ -21,13 +21,13 @@ const itemSchema = z.object({ candidateId: uuid, candidateVersion: z.string().mi
   phase: z.enum(['ready', 'locking', 'publishing', 'published', 'committed', 'failed']),
   catalogStatus: z.enum(['pending', 'not-configured', 'unregistered', 'current', 'stale', 'failed']), catalogError: z.string().nullable(),
   recoveryDecision: z.object({ kind: z.enum(['accept-result', 'accept-baseline']), observedVersion: z.string().min(1), confirmedAt: z.iso.datetime() }).strict().nullable() }).strict()
-const batchSchema = z.object({ formatVersion: z.literal(1), id: uuid, worldId: z.string().min(1), discussionId: uuid,
+export const batchSchema = z.object({ formatVersion: z.literal(1), id: uuid, worldId: z.string().min(1), discussionId: uuid,
   reviewVersion: z.string().min(1), confirmationVersion: z.string().min(1), state: z.enum(['running', 'stopped', 'completed']),
   error: z.string().nullable(), items: z.array(itemSchema).min(1).max(100) }).strict()
 type Batch = z.infer<typeof batchSchema>
 type Item = z.infer<typeof itemSchema>
 const occupied = new Set<string>()
-function validateBatch(value: Batch): void {
+export function validateBatch(value: Batch): void {
   if (new Set(value.items.map(item => item.candidateId)).size !== value.items.length) throw new Error('批量记录候选重复')
   for (const item of value.items) {
     parseDiscussionTarget(item.target)

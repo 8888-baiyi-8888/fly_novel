@@ -21,11 +21,11 @@ const findingSchema = z.object({ id: uuid, description: z.string().min(1), sever
   options: z.array(optionSchema).min(1), recommendedOptionId: uuid.nullable() }).strict()
 const dependencySchema = z.object({ candidateIds: z.array(uuid).min(2), reason: z.string().trim().min(1) }).strict()
 const reportBindingSchema = z.object({ version: z.string().min(1), report: impactReportSchema }).strict()
-const reviewSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), discussionId: uuid, id: uuid, createdAt: z.iso.datetime(),
+export const reviewSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), discussionId: uuid, id: uuid, createdAt: z.iso.datetime(),
   reports: z.array(reportBindingSchema).min(1), findings: z.array(findingSchema), dependencies: z.array(dependencySchema) }).strict()
 const uncoveredSchema = z.object({ reportId: uuid, scope: z.string().trim().min(1) }).strict()
 const selectionSchema = z.object({ findingId: uuid, optionId: uuid }).strict()
-const confirmationSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), discussionId: uuid, reviewId: uuid,
+export const confirmationSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), discussionId: uuid, reviewId: uuid,
   reviewVersion: z.string().min(1), createdAt: z.iso.datetime(), selectedCandidateIds: z.array(uuid).min(1), acknowledgedUncovered: z.array(uncoveredSchema),
   choices: z.array(selectionSchema.extend({ origin: z.enum(['explicit', 'recommended']) }).strict()) }).strict()
 export type ReviewFindingInput = z.input<typeof findingInputSchema>
@@ -37,7 +37,7 @@ const digest = (value: Uint8Array | string) => createHash('sha256').update(value
 const unique = (values: readonly string[]) => new Set(values).size === values.length
 const scopeKey = (value: { reportId: string; scope: string }) => JSON.stringify([value.reportId, value.scope])
 
-function validateReview(value: ReviewDocument): void {
+export function validateReview(value: ReviewDocument): void {
   const reports = value.reports
   const candidateIds = new Set(reports.map(item => item.report.candidateId))
   if (!unique(reports.map(item => item.report.id)) || candidateIds.size !== reports.length ||
