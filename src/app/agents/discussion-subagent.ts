@@ -8,6 +8,9 @@ import { toolFsReadPluginDefinition } from '@fly-novel/tool-fs'
 import { toolFsSearchPluginDefinition } from '@fly-novel/tool-fs-search'
 import { localSubprocessPluginDefinition } from '@fly-novel/subprocess-local'
 import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.js'
+import type { DiscussionService, DiscussionTarget } from '../../world-init/discussion/service.js'
+import type { ImpactService } from '../../world-init/impact/service.js'
+import { createImpactTools } from './impact-tools.js'
 
 /**
  * 创建只读讨论子 Agent，不接收初始化存储或写工具。
@@ -18,6 +21,7 @@ import { acquireWorldAgentLease } from '../../world-init/workspace/agent-lease.j
 export async function createDiscussionSubagent(config: {
   worldId: string; agentId: string; presetId: string; readRoot: string; sessionRoot: string; sessionId: string
   sessionMode: 'create' | 'resume'; provider: string; model: string; adapter: LlmAdapter; maxSteps?: number
+  impactBinding?: { service: DiscussionService; discussionId: string; impact: ImpactService; additionalTargets?: readonly DiscussionTarget[] }
 }) {
   const release = acquireWorldAgentLease(config.worldId, config.agentId)
   let cleanup: (() => Promise<void>) | undefined
@@ -40,6 +44,8 @@ export async function createDiscussionSubagent(config: {
       llm: { adapters: [{ providers: [config.provider], adapter: config.adapter }] },
       'sandbox-policy': { mode: 'read-only', workspaceRoot: config.readRoot }, 'fs-sandbox': { cwd: config.readRoot },
     } })
+    if (config.impactBinding) for (const tool of await createImpactTools(config.impactBinding.impact, config.impactBinding.service,
+      config.impactBinding.discussionId, agent.info.identity.id, config.impactBinding.additionalTargets)) agent.context.tools.register(tool)
     let disposal: Promise<void> | undefined
     return { agent, dispose: () => disposal ??= (async () => { await cleanup!(); release() })() }
   } catch (error) {

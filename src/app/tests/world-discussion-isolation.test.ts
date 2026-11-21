@@ -8,6 +8,7 @@ import { createWorldInitializationAgentWithWorldWorkspaces } from '../agents/ind
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { DiscussionService, type DiscussionTargetAdapter } from '../../world-init/discussion/service.js'
+import { ImpactService } from '../../world-init/impact/service.js'
 
 class FixedAdapter extends LlmAdapter {
   override async *stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
@@ -134,11 +135,11 @@ test('主 Agent 候选工具绑定讨论目标并保留当前正文', async t =>
   const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })
   const root = await realpath(await mkdtemp(join(parent, 'discussion-binding-')))
   t.after(() => rm(root, { recursive: true, force: true }))
-  const view = join(root, 'world'); const sessions = join(root, 'sessions'); const pending = join(root, 'pending')
-  for (const dir of ['main', 'confirmed', 'catalog']) await mkdir(join(view, dir), { recursive: true })
-  for (const dir of [sessions, pending, join(pending, 'discussions'), join(pending, 'candidates')]) await mkdir(dir)
+  const view = join(root, 'world'); const sessions = join(root, 'sessions'); const pending = join(root, 'pending'); const reports = join(root, 'reports')
+  for (const dir of ['main', 'confirmed', 'catalog', 'map/places', 'map/connections']) await mkdir(join(view, dir), { recursive: true })
+  for (const dir of [sessions, pending, join(pending, 'discussions'), join(pending, 'candidates'), reports]) await mkdir(dir)
   const world = { worldId: 'binding-world', readRoot: view, confirmedRoot: join(view, 'confirmed'), catalogRoot: join(view, 'catalog'),
-    mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [] }
+    mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [{ agentId: 'map', writableRoot: join(view, 'map') }] }
   const source = join(view, 'main', 'plan.md'); await writeFile(source, '当前正文')
   const target = { kind: 'place' as const, id: '11111111-1111-4111-8111-111111111111' }
   const related = { kind: 'character' as const, id: '22222222-2222-4222-8222-222222222222' }
@@ -146,11 +147,29 @@ test('主 Agent 候选工具绑定讨论目标并保留当前正文', async t =>
     async validate() {}, async validateStored() {}, async assertNoLegacyCandidate() {} }
   const context = new Context(); const backend = context.plugin(LocalFileSystem, { cwd: root }); await backend
   const service = await DiscussionService.open({ worldId: world.worldId, root: pending, worldRoots: [view], fs: context.fs, adapter, singleWriterProcess: true })
+  const impact = await ImpactService.open({ workspaces: [world], worldId: world.worldId, root: reports, fs: context.fs, discussion: service, singleWriterProcess: true })
   const record = await service.createDiscussion(target, 'session')
+  class CheckingChild extends LlmAdapter {
+    candidateId = ''; requests: GenerateOptions[] = []
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      this.requests.push(options)
+      if (this.requests.length === 1) {
+        for (const [index, call] of [{ name: 'impact_check', args: { candidateId: this.candidateId } }, { name: 'write', args: { file_path: 'main/plan.md', content: '覆盖' } }].entries()) {
+          yield { type: 'block-end', index, block: { type: 'tool-call', id: call.name as ToolCallId, name: call.name, arguments: JSON.stringify(call.args) } }
+        }
+        yield { type: 'finish', reason: { kind: 'tool-calls' } }
+      } else {
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: '检查线索已返回' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+  }
+  const child = new CheckingChild()
   t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new FixedAdapter() }))
   const agent = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true,
-    discussion: { firstVersionComplete: true, binding: { service, discussionId: record.id, additionalTargets: [related] } },
-    mainSession: { sessionRoot: sessions, sessionId: 'session', sessionMode: 'create' } })
+    discussion: { firstVersionComplete: true, binding: { service, discussionId: record.id, additionalTargets: [related], impact } },
+    mainSession: { sessionRoot: sessions, sessionId: 'session', sessionMode: 'create' },
+    mapAgent: { agentId: 'map', sessionId: 'map', sessionRoot: sessions, sessionMode: 'create', provider: 'test', model: 'test', adapter: child } })
   try {
     const call = async (name: string, args: object) => (await agent.context.tools.execute({
       calls: [{ type: 'tool-call', id: 'call' as ToolCallId, name, arguments: JSON.stringify(args) }], workingDirectory: view,
@@ -161,6 +180,16 @@ test('主 Agent 候选工具绑定讨论目标并保留当前正文', async t =>
     assert.equal((await call('discussion_prepare', { content: '人物候选', summary: '关联修改', targetIndex: 1 })).isError, false)
     assert.equal((await call('discussion_prepare', { content: '越权', summary: '修改', targetIndex: 2 })).isError, true)
     assert.deepEqual(new Set((await service.listCandidates(record.id)).map(item => item.value.content)), new Set(['候选正文', '人物候选']))
+    const candidate = (await service.listCandidates(record.id)).find(item => item.value.target.kind === 'place')!
+    child.candidateId = candidate.value.id
+    const checked = await call('impact_check', { candidateId: candidate.value.id })
+    assert.equal(checked.isError, false); assert.match(JSON.stringify(checked), /人物经历/)
+    assert.equal((await call('delegate_map', { task: '检查影响' })).isError, false)
+    const childResults = child.requests[1]!.messages.flatMap(message => message.content)
+    assert.ok(childResults.some(item => item.type === 'tool-result' && item.toolCallId === 'impact_check' && !item.isError))
+    assert.ok(childResults.some(item => item.type === 'tool-result' && item.toolCallId === 'write' && item.isError))
+    const rogue = await service.createCandidate(record.id, { kind: 'place', id: '33333333-3333-4333-8333-333333333333' }, '其他目标', '未授权')
+    assert.equal((await call('impact_check', { candidateId: rogue.value.id })).isError, true)
     assert.equal(await readFile(source, 'utf8'), '当前正文')
     await agent.run({ prompt: '继续讨论' })
     await agent.dispose()
@@ -172,5 +201,5 @@ test('主 Agent 候选工具绑定讨论目标并保留当前正文', async t =>
         name: 'discussion_read', arguments: '{}' }], workingDirectory: view, session: resumed.context.sessions.list()[0]!, signal: new AbortController().signal })
       assert.match(JSON.stringify(result.results[0]!.result), /候选正文/)
     } finally { await resumed.dispose() }
-  } finally { await agent.dispose(); await service.close(); await backend.dispose() }
+  } finally { await agent.dispose(); await impact.close(); await service.close(); await backend.dispose() }
 })
