@@ -193,7 +193,7 @@ export class DiscussionService {
     if (result.value.id !== id || result.value.worldId !== this.worldId) throw new Error('候选身份不匹配')
     await this.adapter.validateStored(result.value.target, result.value.content)
     const current = await this.adapter.read(result.value.target)
-    return { ...result, current, stale: current.version !== result.value.baseline }
+    return { ...result, intent: 'update' as const, current, stale: current.version !== result.value.baseline }
   }) }
 
   /** 条件更新已有候选；不会修改当前正文。 */
