@@ -5,6 +5,7 @@ import { parseDiscussionTarget, type DiscussionService, type DiscussionTarget } 
 import type { WorldCommitService } from '../impact/commit.js'
 import type { BatchCommitService } from '../impact/batch-commit.js'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
+import { mainSessionPersistenceId } from './main-session-id.js'
 import type { InitializationTaskStore } from './task-store.js'
 
 const digest = (content: string) => createHash('sha256').update(content).digest('hex')
@@ -15,7 +16,7 @@ type Decision = { readonly kind: 'accept-result' | 'accept-baseline'; readonly o
 
 /** 可信恢复装配。观察不会调用可能修改人物索引、候选或发布记录的恢复接口。 */
 export class InitializationRecovery {
-  private constructor(private readonly gate: WorldAccess, private readonly discussions: DiscussionService,
+  private constructor(private readonly world: WorldWorkspaceConfig, private readonly gate: WorldAccess, private readonly discussions: DiscussionService,
     private readonly tasks: InitializationTaskStore, private readonly single?: WorldCommitService,
     private readonly batch?: BatchCommitService, private readonly sessions?: SessionPersistence) {}
 
@@ -27,7 +28,10 @@ export class InitializationRecovery {
     if (!world || !options.tasks.isBoundToRecovery(world, options.gate) || !options.discussions.isBoundToWorld(world) || !options.gate.covers(world.readRoot) ||
       (options.single && !options.single.isBoundToRecovery(world, options.gate, options.discussions)) ||
       (options.batch && !options.batch.isBoundToRecovery(world, options.gate, options.discussions))) throw new Error('恢复服务世界或协调绑定不匹配')
-    return new InitializationRecovery(options.gate, options.discussions, options.tasks, options.single, options.batch, options.sessions)
+    return new InitializationRecovery(world, options.gate, options.discussions, options.tasks, options.single, options.batch, options.sessions)
+  }
+  isBoundTo(world: WorldWorkspaceConfig, gate: WorldAccess, tasks: InitializationTaskStore, discussions: DiscussionService, batch: BatchCommitService): boolean {
+    return this.world.worldId === world.worldId && this.gate === gate && this.tasks === tasks && this.discussions === discussions && this.batch === batch
   }
   private async observe(discussionId: string, candidateId: string, target: DiscussionTarget) {
     let current: Observation
@@ -85,10 +89,10 @@ export class InitializationRecovery {
     })
   }
   /** 只打开可信任务所关联的 Session，调用方负责关闭返回的只读句柄。 */
-  async openSession(taskId: string, sessionId: string) {
+  async openSession(taskId: string, sessionId: string, mode: 'initialization' | 'discussion') {
     if (!this.sessions) throw new Error('未装配 Session 持久化服务')
     const task = await this.tasks.readTask(taskId)
     if (!task.value.sessionIds.includes(sessionId)) throw new Error('Session 不属于所选任务')
-    return this.sessions.open(sessionId, 'read')
+    return this.sessions.open(mainSessionPersistenceId(this.world.worldId, this.world.mainAgent.agentId, sessionId, mode), 'read')
   }
 }

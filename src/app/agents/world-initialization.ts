@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
+import { mainSessionPersistenceId } from '../../world-init/recovery/main-session-id.js'
 import { lstat, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { bootstrapAgents, createSpawnAgentCreator, jsonlSessionPersistencePlugin, type Agent } from '@fly-novel/agents'
@@ -123,7 +124,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     if (discussionBinding && (await isPathUnder(root, discussionBinding.service.rootDirectory) || await isPathUnder(discussionBinding.service.rootDirectory, root))) throw new Error('讨论目录不能与 Session 目录重叠')
     if (discussionBinding?.impact && (await isPathUnder(root, discussionBinding.impact.rootDirectory) || await isPathUnder(discussionBinding.impact.rootDirectory, root))) throw new Error('检查报告目录不能与 Session 目录重叠')
     const prefix = deployment.discussion ? 'world-discussion' : 'world-initialization'
-    const id = `${prefix}-${createHash('sha256').update(JSON.stringify([world.worldId, world.mainAgent.agentId, sessionId])).digest('hex')}`
+    const id = mainSessionPersistenceId(world.worldId, world.mainAgent.agentId, sessionId, deployment.discussion ? 'discussion' : 'initialization')
     mainSession = { root, id, mode: sessionMode }
   }
   let creator: CharacterCreatorConfig | undefined

@@ -10,6 +10,7 @@ import { impactReportSchema } from '../impact/service.js'
 import { confirmationSchema, reviewSchema, validateReview } from '../impact/review.js'
 import { operationSchema } from '../impact/commit.js'
 import { batchSchema, validateBatch } from '../impact/batch-commit.js'
+import { mainSessionPersistenceId } from './main-session-id.js'
 import { taskSchema, judgmentSchema, worldBindingFingerprint } from './task-store.js'
 import { parseDiscussionTarget } from '../discussion/service.js'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
@@ -153,7 +154,7 @@ export async function discoverInitialization(options: {
       else if (JSON.stringify(discussion.target) !== JSON.stringify(candidate.target)) issues.push(`候选 ${candidate.id} 与所属讨论目标不同`)
     }
   }
-  if (sessions.status === 'available') for (const discussion of discussions) if (!sessions.ids.includes(discussion.sessionId)) issues.push(`讨论 ${discussion.id} 的 Session 未找到`)
+  if (sessions.status === 'available') for (const discussion of discussions) if (!sessions.ids.includes(mainSessionPersistenceId(world.worldId, world.mainAgent.agentId, discussion.sessionId, 'discussion'))) issues.push(`讨论 ${discussion.id} 的 Session 未找到`)
   if (scopes.find(scope => scope.kind === 'candidate')?.status === 'complete') for (const value of records('impact')) {
     const report = impactReportSchema.parse(value)
     const candidate = candidates.find(item => item.id === report.candidateId)

@@ -51,6 +51,7 @@ export class InitializationTaskStore {
     return new InitializationTaskStore(world, key, options.fs, options.gate, options.adapter)
   }
 
+  get rootDirectory(): string { return this.root }
   private check(): void { if (this.closed || this.closing) throw new Error('任务服务已关闭') }
   private async file(folder: 'tasks' | 'first-versions', id: string) {
     uuid.parse(id)

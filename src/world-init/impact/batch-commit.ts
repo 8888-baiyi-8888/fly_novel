@@ -150,6 +150,8 @@ export class BatchCommitService {
     })
   }
 
+  get rootDirectory(): string { return this.root }
+
   /** 供可信恢复装配核对同一世界、协调器及讨论服务。 */
   isBoundToRecovery(world: WorldWorkspaceConfig, gate: WorldAccess, discussion: DiscussionService): boolean {
     return this.world.worldId === world.worldId && this.discussion === discussion && this.gate === gate && this.discussion.isBoundToWorld(world)
