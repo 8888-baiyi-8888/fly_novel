@@ -158,4 +158,5 @@ export class InitializationTaskStore {
     return this.closing
   }
   isBoundToWorld(world: WorldWorkspaceConfig): boolean { return sameWorldWorkspace(this.world, world) }
+  isBoundToRecovery(world: WorldWorkspaceConfig, gate: WorldAccess): boolean { return this.gate === gate && this.isBoundToWorld(world) }
 }

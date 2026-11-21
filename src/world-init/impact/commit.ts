@@ -163,6 +163,10 @@ export class WorldCommitService {
     })
   }
 
+  /** 供可信恢复装配核对同一世界、协调器及讨论服务。 */
+  isBoundToRecovery(world: WorldWorkspaceConfig, gate: WorldAccess, discussion: DiscussionService): boolean {
+    return this.world.worldId === world.worldId && this.discussion === discussion && this.gate === gate && this.discussion.isBoundToWorld(world)
+  }
   /** 读取发布记录，不从记录状态单独推断当前正文。 */
   inspect(id: string) { if (this.closed) return Promise.reject(new Error('发布服务已关闭')); return this.gate.run(() => this.read(id)) }
 

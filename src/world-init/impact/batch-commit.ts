@@ -150,6 +150,10 @@ export class BatchCommitService {
     })
   }
 
+  /** 供可信恢复装配核对同一世界、协调器及讨论服务。 */
+  isBoundToRecovery(world: WorldWorkspaceConfig, gate: WorldAccess, discussion: DiscussionService): boolean {
+    return this.world.worldId === world.worldId && this.discussion === discussion && this.gate === gate && this.discussion.isBoundToWorld(world)
+  }
   /** 按实际记录查看各目标状态；完成项不代表整组完成。 */
   inspect(id: string) { if (this.closed) return Promise.reject(new Error('批量发布服务已关闭')); return this.gate.run(() => this.read(id)) }
 
