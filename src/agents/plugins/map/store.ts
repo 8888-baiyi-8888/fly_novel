@@ -231,6 +231,24 @@ export class MapStore {
     })
   }
 
+  /**
+   * 校验已有地点的候选及其在当前地点图中的父级关系，不写入当前资料。
+   * @param value 已有地点的完整候选。
+   * @param signal 可选取消信号。
+   * @throws 地点不存在、世界不匹配、图无效或读取失败时拒绝。
+   */
+  validatePlaceCandidate(value: MapPlace, signal?: AbortSignal): Promise<void> {
+    return this.enqueue(async () => {
+      const candidate = mapPlaceSchema.parse(value)
+      if (candidate.worldId !== this.worldId) throw new MapStoreError('地点世界身份不匹配', 'MAP_INVALID_DOCUMENT')
+      const map = (await this.map(signal)).document
+      const all = await this.places(map, signal)
+      if (!all.has(candidate.id)) throw new MapStoreError('地点不存在', 'MAP_NOT_FOUND')
+      all.set(candidate.id, candidate)
+      this.validateGraph(map, all)
+    })
+  }
+
   private async checkConnection(value: MapConnection, signal?: AbortSignal): Promise<void> {
     const all = await this.places((await this.map(signal)).document, signal)
     if (!all.has(value.fromId) || !all.has(value.toId)) throw new MapStoreError('连通的地点不存在', 'MAP_INVALID_DOCUMENT')

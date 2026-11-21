@@ -78,7 +78,7 @@
 
 `createWorldInitializationAgentWithWorldWorkspaces` 接收可信应用提供的全部世界配置和选定世界 ID，并使用[世界工作区配置校验](../world-init/README.md)检查目录与身份关系。主 Agent 的草稿根绑定该世界主 Agent 的专属目录；角色和基础信息 Agent 的 `agentId` 必须属于该世界的特殊 Agent，各自目录从身份配置取得，模型不能指定这些授权。Session 根不得与任何传入世界的读取根重叠。主 Agent 的普通文件工具只能修改自己的目录；专用 Agent 通过各自工具维护成果，普通文件工具只提供读取和搜索。读取和搜索范围均为该世界读取根。调用方须传入 `{ singleWriterProcess: true }`，声明已确保同一世界只有一个可信应用进程写入；入口不会验证进程外的实际写入，也不提供跨进程锁。主 Agent 与专用 Agent 共用按世界和业务身份的进程内占用，启动到成功释放期间拒绝重复启动；清理失败保留占用。不同身份或世界不因身份相同而互斥。重建时调用方须继续提供相同的目录与 Session 配置。生产使用前须评估路径替换和硬链接风险。
 
-部署配置传入 `discussion: { firstVersionComplete: true }` 可显式选择只读讨论装配；判断由可信调用方提供，不从 Session 或文件推断。该模式暂不装配目录工具或候选保存，同时提供目录配置时拒绝启动。普通文件工具、通用子 Agent 和按需委派的专用 Agent 只能读取与搜索，不借用初始化业务写句柄；初始化总览保存工具不可用。专用 Agent 的讨论 Session 与初始化 Session 分离，恢复 Session 不改变当前工具权限。
+部署配置传入 `discussion: { firstVersionComplete: true }` 可显式选择讨论装配；判断由可信调用方提供，不从 Session 或文件推断。普通文件工具、通用子 Agent 和按需委派的专用 Agent 只能读取与搜索，不借用初始化业务写句柄；初始化总览保存工具不可用。主 Agent 和专用 Agent 的讨论 Session 与初始化 Session 分离，恢复 Session 不改变当前工具权限。可选 `binding` 由可信应用提供讨论服务及讨论 ID，主 Agent 的候选工具绑定该讨论的目标；主 Session ID 必须与讨论记录一致。服务由调用方持有并关闭，候选目录不能与任一世界读取根或 Session 目录重叠。该模式暂不装配目录工具。
 
 世界入口的部署配置可提供 `mainSession: { sessionRoot, sessionId, sessionMode }`，由可信应用使用 `create` 新建或 `resume` 恢复主 Agent 的 JSONL Session。`sessionRoot` 必须是现有绝对真实目录，不能与传入的任何世界读取根重叠；存储身份由世界 ID、主 Agent 身份和 Session ID 派生，重建时必须使用相同的值和目录。未提供配置时使用内存 Session。恢复后用户可在同一会话继续，主 Agent 根据历史和获授权工具核对成果并决定后续操作；中断工具结果未知时不得假设成功或盲目重试。持久化恢复的是会话历史，不保证模型正确排查，也不提供长期记忆。调用方须等待 `dispose()` 完成，后端随主 Agent 释放；已保存的世界成果不会因 Session 关闭而删除。
 

@@ -45,6 +45,8 @@ import type { SituationStore } from '@fly-novel/initial-situation'
 import type { DevelopmentStore } from '@fly-novel/world-development'
 import type { SpecificStore } from '@fly-novel/world-specific'
 import { createDiscussionSubagent } from './discussion-subagent.js'
+import { createDiscussionTools } from './discussion-tools.js'
+import type { DiscussionService } from '../../world-init/discussion/service.js'
 
 /** 此 Agent 除插件自动注册的工具外，还需要的具体工具。 */
 const worldInitializationTools = [readFileTool] as const
@@ -80,7 +82,7 @@ export interface WorldInitializationSessionConfig {
  */
 export async function createWorldInitializationAgentWithWorldWorkspaces(
   workspaces: readonly WorldWorkspaceConfig[], worldId: string, characterCreator: WorkspaceCharacterCreatorConfig | undefined,
-  deployment: { readonly singleWriterProcess: true; readonly discussion?: { readonly firstVersionComplete: true }; readonly mainMaxSteps?: number; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig; readonly organizationAgent?: WorkspaceOrganizationAgentConfig; readonly historyAgent?: WorkspaceHistoryAgentConfig; readonly initialSituationAgent?: WorkspaceInitialSituationAgentConfig; readonly worldDevelopmentAgent?: WorkspaceWorldDevelopmentAgentConfig; readonly worldSpecificAgent?: WorkspaceWorldSpecificAgentConfig },
+  deployment: { readonly singleWriterProcess: true; readonly discussion?: { readonly firstVersionComplete: true; readonly binding?: { readonly service: DiscussionService; readonly discussionId: string } }; readonly mainMaxSteps?: number; readonly catalog?: { readonly maxCatalogBytes?: number; readonly maxSourceBytes?: number; readonly receiptTtlMs?: number; readonly maxReceipts?: number }; readonly mainSession?: WorldInitializationSessionConfig; readonly worldBasics?: WorkspaceWorldBasicsConfig; readonly mapAgent?: WorkspaceMapAgentConfig; readonly organizationAgent?: WorkspaceOrganizationAgentConfig; readonly historyAgent?: WorkspaceHistoryAgentConfig; readonly initialSituationAgent?: WorkspaceInitialSituationAgentConfig; readonly worldDevelopmentAgent?: WorkspaceWorldDevelopmentAgentConfig; readonly worldSpecificAgent?: WorkspaceWorldSpecificAgentConfig },
 ): Promise<Agent> {
   if (deployment?.singleWriterProcess !== true) throw new Error('必须确保同一世界仅由一个可信应用进程写入')
   if (deployment.discussion && deployment.discussion.firstVersionComplete !== true) throw new Error('第一版尚未完整，请继续补做')
@@ -90,6 +92,19 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
   const worlds = await validateWorldWorkspaceConfigs(workspaces)
   const world = worlds.find(item => item.worldId === worldId)
   if (!world) throw new Error('世界配置不存在')
+  const discussionBinding = deployment.discussion?.binding
+  if (discussionBinding) {
+    const { service, discussionId } = discussionBinding
+    if (service.boundWorldId !== world.worldId) throw new Error('讨论服务与世界不匹配')
+    for (const item of worlds) if (await isPathUnder(service.rootDirectory, item.readRoot) || await isPathUnder(item.readRoot, service.rootDirectory)) throw new Error('讨论目录不能与世界读取根重叠')
+    const record = await service.readDiscussion(discussionId)
+    if (!deployment.mainSession || deployment.mainSession.sessionId !== record.sessionId) throw new Error('讨论与主 Agent Session 不匹配')
+    for (const config of [characterCreator, deployment.worldBasics, deployment.mapAgent, deployment.organizationAgent, deployment.historyAgent, deployment.initialSituationAgent, deployment.worldDevelopmentAgent, deployment.worldSpecificAgent]) {
+      if (!config) continue
+      const sessionRoot = await realpath(config.sessionRoot)
+      if (await isPathUnder(sessionRoot, service.rootDirectory) || await isPathUnder(service.rootDirectory, sessionRoot)) throw new Error('讨论目录不能与 Session 目录重叠')
+    }
+  }
   let mainSession: { root: string; id: string; mode: 'create' | 'resume' } | undefined
   if (deployment.mainSession) {
     const { sessionRoot, sessionId, sessionMode } = deployment.mainSession
@@ -100,7 +115,9 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
     for (const item of worlds) {
       if (await isPathUnder(root, item.readRoot) || await isPathUnder(item.readRoot, root)) throw new Error('主 Agent Session 目录不能与任何世界读取根重叠')
     }
-    const id = `world-initialization-${createHash('sha256').update(JSON.stringify([world.worldId, world.mainAgent.agentId, sessionId])).digest('hex')}`
+    if (discussionBinding && (await isPathUnder(root, discussionBinding.service.rootDirectory) || await isPathUnder(discussionBinding.service.rootDirectory, root))) throw new Error('讨论目录不能与 Session 目录重叠')
+    const prefix = deployment.discussion ? 'world-discussion' : 'world-initialization'
+    const id = `${prefix}-${createHash('sha256').update(JSON.stringify([world.worldId, world.mainAgent.agentId, sessionId])).digest('hex')}`
     mainSession = { root, id, mode: sessionMode }
   }
   let creator: CharacterCreatorConfig | undefined
@@ -232,7 +249,7 @@ export async function createWorldInitializationAgentWithWorldWorkspaces(
       historyConfig, catalog && historyConfig ? () => catalog!.bind(historyConfig!.agentId) : undefined,
       situationConfig, catalog && situationConfig ? () => catalog!.bind(situationConfig!.agentId) : undefined,
       developmentConfig, catalog && developmentConfig ? () => catalog!.bind(developmentConfig!.agentId) : undefined,
-      specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined, sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment, sharedSpecific, deployment.mainMaxSteps, Boolean(deployment.discussion))
+      specificConfig, catalog && specificConfig ? () => catalog!.bind(specificConfig!.agentId) : undefined, sharedMap, sharedOrganization, sharedCharacters, sharedHistory, sharedSituation, sharedDevelopment, sharedSpecific, deployment.mainMaxSteps, Boolean(deployment.discussion), discussionBinding)
   } catch (error) {
     if (!(error instanceof AggregateError)) {
       try { await storage.close(); await mainBinding?.close(); await catalog?.close(); releaseIdentity() } catch (cleanup) { throw new AggregateError([error, cleanup], '工作区装配和目录服务清理失败') }
@@ -296,7 +313,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
   historyConfig?: HistoryAgentConfig, createHistoryCatalogBinding?: () => CatalogBinding,
   situationConfig?: InitialSituationAgentConfig, createSituationCatalogBinding?: () => CatalogBinding,
   developmentConfig?: WorldDevelopmentAgentConfig, createDevelopmentCatalogBinding?: () => CatalogBinding,
-  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage, sharedOrganization?: SharedOrganizationStorage, sharedCharacters?: SharedCharacterStorage, sharedHistory?: import('../../world-init/storage/resource.js').SharedResource<HistoryStore>, sharedSituation?: import('../../world-init/storage/resource.js').SharedResource<SituationStore>, sharedDevelopment?: import('../../world-init/storage/resource.js').SharedResource<DevelopmentStore>, sharedSpecific?: import('../../world-init/storage/resource.js').SharedResource<SpecificStore>, mainMaxSteps?: number, discussion = false): Promise<Agent> {
+  specificConfig?: WorldSpecificAgentConfig, createSpecificCatalogBinding?: () => CatalogBinding, sharedMap?: SharedMapStorage, sharedOrganization?: SharedOrganizationStorage, sharedCharacters?: SharedCharacterStorage, sharedHistory?: import('../../world-init/storage/resource.js').SharedResource<HistoryStore>, sharedSituation?: import('../../world-init/storage/resource.js').SharedResource<SituationStore>, sharedDevelopment?: import('../../world-init/storage/resource.js').SharedResource<DevelopmentStore>, sharedSpecific?: import('../../world-init/storage/resource.js').SharedResource<SpecificStore>, mainMaxSteps?: number, discussion = false, discussionBinding?: { readonly service: DiscussionService; readonly discussionId: string }): Promise<Agent> {
   const roots = await validateWorldInitializationWorkspace(workspace)
   const creatorConfig = characterCreator && { ...characterCreator }
   if (creatorConfig) {
@@ -417,6 +434,7 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     if (situationConfig) agent.context.tools.register(createInitialSituationDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (developmentConfig) agent.context.tools.register(createWorldDevelopmentDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (specificConfig) agent.context.tools.register(createWorldSpecificDelegationTool(agent.context.subagents, agent.info.identity.id))
+    if (discussionBinding) for (const tool of await createDiscussionTools(discussionBinding.service, discussionBinding.discussionId, agent.info.identity.id)) agent.context.tools.register(tool)
     const createdAgent = agent
     const draftRelative = relative(roots.viewRoot, roots.draftRoot).split(sep).join('/')
     if (!discussion) agent.context.tools.register(defineTool({

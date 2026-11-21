@@ -5,6 +5,9 @@ import test from 'node:test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../call-llm.js')
 import { createWorldInitializationAgentWithWorldWorkspaces } from '../agents/index.js'
+import { Context } from '@deepseek-ai/cordis'
+import { LocalFileSystem } from '@fly-novel/fs-local'
+import { DiscussionService, type DiscussionTargetAdapter } from '../../world-init/discussion/service.js'
 
 class FixedAdapter extends LlmAdapter {
   override async *stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
@@ -125,4 +128,46 @@ test('讨论父 Agent 关闭会取消子任务并释放身份', async t => {
     ...options, mapAgent: { ...mapAgent, sessionMode: 'resume', adapter: new FixedAdapter() },
   })
   await reopened.dispose()
+})
+
+test('主 Agent 候选工具绑定讨论目标并保留当前正文', async t => {
+  const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })
+  const root = await realpath(await mkdtemp(join(parent, 'discussion-binding-')))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const view = join(root, 'world'); const sessions = join(root, 'sessions'); const pending = join(root, 'pending')
+  for (const dir of ['main', 'confirmed', 'catalog']) await mkdir(join(view, dir), { recursive: true })
+  for (const dir of [sessions, pending, join(pending, 'discussions'), join(pending, 'candidates')]) await mkdir(dir)
+  const world = { worldId: 'binding-world', readRoot: view, confirmedRoot: join(view, 'confirmed'), catalogRoot: join(view, 'catalog'),
+    mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [] }
+  const source = join(view, 'main', 'plan.md'); await writeFile(source, '当前正文')
+  const target = { kind: 'place' as const, id: '11111111-1111-4111-8111-111111111111' }
+  const adapter: DiscussionTargetAdapter = { async read() { return { content: await readFile(source, 'utf8'), version: 'v1' } },
+    async validate() {}, async assertNoLegacyCandidate() {} }
+  const context = new Context(); const backend = context.plugin(LocalFileSystem, { cwd: root }); await backend
+  const service = await DiscussionService.open({ worldId: world.worldId, root: pending, worldRoots: [view], fs: context.fs, adapter, singleWriterProcess: true })
+  const record = await service.createDiscussion(target, 'session')
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new FixedAdapter() }))
+  const agent = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true,
+    discussion: { firstVersionComplete: true, binding: { service, discussionId: record.id } },
+    mainSession: { sessionRoot: sessions, sessionId: 'session', sessionMode: 'create' } })
+  try {
+    const call = async (name: string, args: object) => (await agent.context.tools.execute({
+      calls: [{ type: 'tool-call', id: 'call' as ToolCallId, name, arguments: JSON.stringify(args) }], workingDirectory: view,
+      session: agent.context.sessions.list()[0]!, signal: new AbortController().signal })).results[0]!.result
+    assert.equal((await call('discussion_read', {})).isError, false)
+    assert.equal((await call('discussion_prepare', { content: '候选正文', summary: '修改' })).isError, false)
+    assert.equal((await call('discussion_prepare', { content: '盲目覆盖', summary: '修改' })).isError, true)
+    assert.equal((await service.listCandidates(record.id))[0]!.value.content, '候选正文')
+    assert.equal(await readFile(source, 'utf8'), '当前正文')
+    await agent.run({ prompt: '继续讨论' })
+    await agent.dispose()
+    const resumed = await createWorldInitializationAgentWithWorldWorkspaces([world], world.worldId, undefined, { singleWriterProcess: true,
+      discussion: { firstVersionComplete: true, binding: { service, discussionId: record.id } },
+      mainSession: { sessionRoot: sessions, sessionId: 'session', sessionMode: 'resume' } })
+    try {
+      const result = await resumed.context.tools.execute({ calls: [{ type: 'tool-call', id: 'read' as ToolCallId,
+        name: 'discussion_read', arguments: '{}' }], workingDirectory: view, session: resumed.context.sessions.list()[0]!, signal: new AbortController().signal })
+      assert.match(JSON.stringify(result.results[0]!.result), /候选正文/)
+    } finally { await resumed.dispose() }
+  } finally { await agent.dispose(); await service.close(); await backend.dispose() }
 })
