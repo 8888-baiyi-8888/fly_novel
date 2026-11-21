@@ -11,10 +11,11 @@ import { BatchCommitService } from '../world-init/impact/batch-commit.js'
 import { TargetPublisher } from '../world-init/impact/target-publisher.js'
 import { discoverInitialization } from '../world-init/recovery/discovery.js'
 import { InitializationTaskStore } from '../world-init/recovery/task-store.js'
+import { InitializationDelivery } from '../world-init/recovery/delivery.js'
 import { InitializationRecovery } from '../world-init/recovery/orchestrator.js'
 import { WorldInitializationWorkflow } from './world-initialization-workflow.js'
 
-type Roots = { readonly task: string; readonly discussion: string; readonly impact: string; readonly review: string; readonly commit: string; readonly batch: string }
+type Roots = { readonly task: string; readonly discussion: string; readonly impact: string; readonly review: string; readonly commit: string; readonly batch: string; readonly delivery: string }
 type ImpactOptions = Pick<Parameters<typeof ImpactService.open>[0], 'map' | 'history' | 'organization'>
 type SingleOptions = Pick<Parameters<typeof WorldCommitService.open>[0], 'map' | 'characters'>
 type PublisherOptions = Parameters<typeof TargetPublisher.create>[2]
@@ -53,11 +54,13 @@ export async function openWorldInitializationWorkflow(options: { readonly worlds
     const single = await WorldCommitService.open({ ...options.single, workspaces: worlds, worldId: world.worldId, root: options.roots.commit,
       fs: options.fs, gate, discussion, impact, review, sessionRoots: options.sessionRoots, singleWriterProcess: true }); cleanups.push(() => single.close())
     const tasks = await InitializationTaskStore.open({ worlds, worldId: world.worldId, root: options.roots.task,
-      otherRoots: [options.roots.discussion, options.roots.impact, options.roots.review, options.roots.commit, options.roots.batch, ...options.sessionRoots],
+      otherRoots: [options.roots.discussion, options.roots.impact, options.roots.review, options.roots.commit, options.roots.batch, options.roots.delivery, ...options.sessionRoots],
       fs: options.fs, gate, adapter: options.adapter, singleWriterProcess: true }); cleanups.push(() => tasks.close())
     const recovery = await InitializationRecovery.create({ worlds, worldId: world.worldId, gate, discussions: discussion, tasks, batch, single, sessions: options.sessions })
+    const delivery = await InitializationDelivery.open({ worlds, worldId: world.worldId, roots: options.roots, sessionRoots: options.sessionRoots,
+      fs: options.fs, gate, adapter: options.adapter, tasks, impact, singleWriterProcess: true }); cleanups.push(() => delivery.close())
     workflow = await WorldInitializationWorkflow.create({ worlds, worldId: world.worldId, roots: options.roots, sessionRoots: options.sessionRoots,
-      gate, tasks, discussions: discussion, impact, review, batch, recovery })
+      gate, tasks, discussions: discussion, impact, review, batch, recovery, delivery })
     return { workflow, close: () => { if (!closing) closing = cleanup(); return closing } }
   } catch (error) {
     try { await cleanup() } catch (cleanupError) { throw new AggregateError([error, cleanupError], '初始化应用启动和清理失败') }

@@ -8,6 +8,7 @@ import type { ReviewService } from '../world-init/impact/review.js'
 import type { BatchCommitService } from '../world-init/impact/batch-commit.js'
 import { discoverInitialization, type DiscoveryRoot } from '../world-init/recovery/discovery.js'
 import type { InitializationTaskStore } from '../world-init/recovery/task-store.js'
+import type { InitializationDelivery } from '../world-init/recovery/delivery.js'
 import type { InitializationRecovery } from '../world-init/recovery/orchestrator.js'
 import { createWorldInitializationAgentWithWorldWorkspaces, type WorkspaceCharacterCreatorConfig, type WorldInitializationSessionConfig } from './agents/world-initialization.js'
 import { readWorldReview } from './world-review.js'
@@ -26,21 +27,21 @@ export class WorldInitializationWorkflow {
     private readonly roots: Partial<Record<DiscoveryRoot, string>>, private readonly sessionRoots: readonly string[],
     private readonly gate: WorldAccess, private readonly tasks: InitializationTaskStore, private readonly discussions: DiscussionService,
     private readonly impact: ImpactService, private readonly review: ReviewService, private readonly batch: BatchCommitService,
-    readonly recovery: InitializationRecovery) {}
+    readonly recovery: InitializationRecovery, private readonly delivery: InitializationDelivery) {}
 
   static async create(options: { worlds: readonly WorldWorkspaceConfig[]; worldId: string; roots: Partial<Record<DiscoveryRoot, string>>;
     sessionRoots: readonly string[]; gate: WorldAccess; tasks: InitializationTaskStore; discussions: DiscussionService;
-    impact: ImpactService; review: ReviewService; batch: BatchCommitService; recovery: InitializationRecovery }) {
+    impact: ImpactService; review: ReviewService; batch: BatchCommitService; recovery: InitializationRecovery; delivery: InitializationDelivery }) {
     const worlds = await validateWorldWorkspaceConfigs(options.worlds)
     const world = worlds.find(item => item.worldId === options.worldId)
     if (!world || !options.tasks.isBoundToRecovery(world, options.gate) || !options.discussions.isBoundToWorld(world) ||
       !options.impact.isBoundToWorld(world) || !options.impact.isBoundTo(options.discussions) || !options.review.isBoundToWorld(world) ||
-      !options.review.isBoundTo(options.discussions, options.impact) || !options.batch.isBoundToRecovery(world, options.gate, options.discussions) || !options.recovery.isBoundTo(world, options.gate, options.tasks, options.discussions, options.batch)) throw new Error('应用服务世界或协调绑定不匹配')
+      !options.review.isBoundTo(options.discussions, options.impact) || !options.batch.isBoundToRecovery(world, options.gate, options.discussions) || !options.recovery.isBoundTo(world, options.gate, options.tasks, options.discussions, options.batch) || !options.delivery.isBoundTo(world, options.gate, options.tasks, options.impact)) throw new Error('应用服务世界或协调绑定不匹配')
     if (!samePath(options.roots.task, options.tasks.rootDirectory) || !samePath(options.roots.discussion, options.discussions.rootDirectory) ||
-      !samePath(options.roots.impact, options.impact.rootDirectory) || !samePath(options.roots.review, options.review.rootDirectory) || !samePath(options.roots.batch, options.batch.rootDirectory)) throw new Error('应用业务根与服务不匹配')
+      !samePath(options.roots.impact, options.impact.rootDirectory) || !samePath(options.roots.review, options.review.rootDirectory) || !samePath(options.roots.batch, options.batch.rootDirectory) || !samePath(options.roots.delivery, options.delivery.rootDirectory)) throw new Error('应用业务根与服务不匹配')
     await discoverInitialization({ worlds, worldId: options.worldId, roots: options.roots, sessionRoots: options.sessionRoots })
     return new WorldInitializationWorkflow(worlds, options.worldId, { ...options.roots }, [...options.sessionRoots], options.gate,
-      options.tasks, options.discussions, options.impact, options.review, options.batch, options.recovery)
+      options.tasks, options.discussions, options.impact, options.review, options.batch, options.recovery, options.delivery)
   }
   private check(): void { if (this.closing) throw new Error('初始化应用已关闭') }
   discover() { this.check(); return discoverInitialization({ worlds: this.worlds, worldId: this.worldId, roots: this.roots, sessionRoots: this.sessionRoots }) }
@@ -109,6 +110,10 @@ export class WorldInitializationWorkflow {
   submit(taskId: string, discussionId: string, reviewId: string, confirmationVersion: string, signal?: AbortSignal) {
     this.check(); return this.gate.run(async () => { await this.discussionForTask(taskId, discussionId); return this.batch.submit(discussionId, reviewId, confirmationVersion, signal) })
   }
+  prepareDelivery(input: Parameters<InitializationDelivery['prepare']>[0]) { this.check(); return this.delivery.prepare(input) }
+  readDeliveryReview(id: string) { this.check(); return this.delivery.readReview(id) }
+  completeDelivery(input: Parameters<InitializationDelivery['complete']>[0]) { this.check(); return this.delivery.complete(input) }
+  readDelivery(id: string) { this.check(); return this.delivery.readDelivery(id) }
   cancel(): void { for (const agent of this.agents) agent.cancel() }
   close(): Promise<void> {
     if (!this.closing) this.closing = (async () => {

@@ -18,7 +18,7 @@ import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../wor
 const schemas = { discussion: discussionSchema, candidate: candidateSchema, impact: impactReportSchema,
   review: reviewSchema, confirmation: confirmationSchema, commit: operationSchema, batch: batchSchema, task: taskSchema, judgment: judgmentSchema } as const
 export type DiscoveryKind = keyof typeof schemas
-export type DiscoveryRoot = 'discussion' | 'impact' | 'review' | 'commit' | 'batch' | 'task'
+export type DiscoveryRoot = 'discussion' | 'impact' | 'review' | 'commit' | 'batch' | 'task' | 'delivery'
 export interface DiscoveryEntry {
   readonly kind: DiscoveryKind
   readonly name: string
@@ -117,6 +117,7 @@ export async function discoverInitialization(options: {
         const recordId = 'id' in record ? record.id : record.reviewId
         if (record.worldId !== options.worldId || recordId !== id) { entry.error = '记录世界或身份不匹配'; partial = true; continue }
         try {
+          if (spec.kind === 'impact') parseDiscussionTarget(impactReportSchema.parse(record).target)
           if (spec.kind === 'review') validateReview(reviewSchema.parse(record))
           if (spec.kind === 'batch') validateBatch(batchSchema.parse(record))
           if (spec.kind === 'task') {
@@ -162,7 +163,7 @@ export async function discoverInitialization(options: {
     else if (candidate.discussionId !== report.discussionId) issues.push(`影响报告 ${report.id} 与候选讨论身份不同`)
   }
   return { worldId: options.worldId, scopes, entries, sessions, issues,
-    limitations: ['扫描不是跨文件事务；业务状态须在操作前重新核查。', 'Session 列表未证明其属于所选世界，也不证明任务完成。', '未扫描旧模块候选、人物索引及世界正文。'] }
+    limitations: ['扫描不是跨文件事务；业务状态须在操作前重新核查。', 'Session 列表未证明其属于所选世界，也不证明任务完成。', '未扫描旧模块候选、人物索引及世界正文。', '交付审阅和历史交付记录须按 ID 读取。'] }
 }
 
 /** 对完整扫描结果分页；续页必须使用同一快照摘要，变化后应从头重新扫描。 */

@@ -127,3 +127,5 @@ pnpm run writer-agent-example [provider]
 
 
 [world-initialization-entry.ts](world-initialization-entry.ts) 的 `openWorldInitializationWorkflow` 是可信 Node.js 应用装配入口：调用方提供完整世界、现有隔离目录、本机文件后端、成果适配器、模块存储及全部 Session 根；入口组装协调器、讨论、检查、审阅、发布、任务和恢复服务，并返回交互 API 与异步关闭函数。调用方负责模型配置、借用资源及将确认动作绑定到真实用户；接口不实现独立图形界面。讨论启动前复核任务的第一版判断及 Session 关联，讨论 Agent 使用原有只读装配；检查、确认、发布和恢复通过可信应用显式调用。启动失败回收已打开资源，Agent 清理失败时保留业务资源和协调占用。
+
+最终审阅和交付通过可信交互 API 调用；应用须向用户展示正文、候选和未覆盖项，接收逐项暂留、知悉及明确完成动作。交付记录保留历史正文；完成后修改不会改写该记录。存储目录、拒绝条件和保守限制见[世界初始化业务说明](../world-init/README.md)。
