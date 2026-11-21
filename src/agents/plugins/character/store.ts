@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { z } from 'zod'
+import { CoordinatedOperations, withWorldAccess } from '@fly-novel/util'
 import { characterMetadataSchema, formatCharacterDocument, formatRequirementsDocument, parseCharacterDocument, parseRequirementsDocument, type CharacterDocument, type CharacterMetadata, type Requirements } from './format.js'
 
 const idSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
@@ -36,8 +37,10 @@ async function writeAtomic(path: string, content: string): Promise<void> {
 
 /** 单个可信应用拥有的角色资料根；调用方负责阻止其他进程同时写入。 */
 export class CharacterStore {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve()
   private closed = false
+  private closing?: Promise<void>
   private constructor(private readonly root: string) {}
 
   /** 供可信应用校验角色服务与世界目录的绑定。 */
@@ -45,6 +48,7 @@ export class CharacterStore {
 
   /** 打开现有真实目录；空目录可显式初始化，非空目录不会自动创建索引。 */
   static async open(root: string, initialize = false, recovery = false): Promise<CharacterStore> {
+    return withWorldAccess([root], async () => {
     if (!isAbsolute(root) || await realpath(root) !== resolve(root) || !(await lstat(root)).isDirectory()) throw new Error('角色根必须是现有真实绝对目录')
     if (occupied.has(root)) throw new Error('角色根已被当前进程打开')
     occupied.add(root)
@@ -57,21 +61,22 @@ export class CharacterStore {
       if (!recovery) await store.loadIndex()
       return store
     } catch (error) { occupied.delete(root); throw error }
+    })
   }
 
   private run<T>(action: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new Error('角色资料服务已关闭'))
-    const result = this.tail.then(action)
-    this.tail = result.then(() => undefined, () => undefined)
-    return result
+    return this.operations.run([this.root], () => {
+      const result = this.tail.then(action)
+      this.tail = result.then(() => undefined, () => undefined)
+      return result
+    })
   }
 
   /** 等待已提交操作结束并释放当前进程内的根目录占用。 */
-  async close(): Promise<void> {
-    if (this.closed) return
-    this.closed = true
-    await this.tail
-    occupied.delete(this.root)
+  close(): Promise<void> {
+    if (!this.closing) { this.closed = true; this.closing = this.operations.drain().then(() => { occupied.delete(this.root) }) }
+    return this.closing
   }
 
   private async directory(id: string): Promise<string> {
@@ -150,12 +155,21 @@ export class CharacterStore {
 
   /** 可信初始化入口按摘要更新未确认角色；失败保留恢复依据。 */
   updateInitialization(id: string, expected: string, input: Omit<CharacterMetadata, 'formatVersion' | 'id' | 'contentStatus'> & { body: string }, phase: 'initialization', signal?: AbortSignal): Promise<{ version: string }> {
+    if (phase !== 'initialization') return Promise.reject(new Error('只能在初始化阶段更新角色方案'))
+    return this.updateVersioned(id, expected, input, 'initialization', signal)
+  }
+
+  /** 按摘要发布已审阅的人物正文，保留当前确认状态；调用方负责用户授权和跨模块协调。 */
+  publishReviewed(id: string, expected: string, input: Omit<CharacterMetadata, 'formatVersion' | 'id' | 'contentStatus'> & { body: string }, signal?: AbortSignal): Promise<{ version: string }> {
+    return this.updateVersioned(id, expected, input, 'reviewed', signal)
+  }
+
+  private updateVersioned(id: string, expected: string, input: Omit<CharacterMetadata, 'formatVersion' | 'id' | 'contentStatus'> & { body: string }, mode: 'initialization' | 'reviewed', signal?: AbortSignal): Promise<{ version: string }> {
     return this.run(async () => {
       signal?.throwIfAborted()
-      if (phase !== 'initialization') throw new Error('只能在初始化阶段更新角色方案')
       const index = await this.loadIndex(); const item = index.characters.find(value => value.id === id)
       if (!item) throw new Error('角色不存在')
-      if (item.contentStatus !== 'suggested') throw new Error('已确认角色不能直接覆盖')
+      if (mode === 'initialization' && item.contentStatus !== 'suggested') throw new Error('已确认角色不能直接覆盖')
       const dir = await this.directory(id)
       for (const name of ['pending.md', 'pending.json', 'backup.md', 'operation.json', 'initialization-backup.md', 'initialization-operation.json']) {
         try { await lstat(join(dir, name)); throw new Error('角色存在待审或未完成资料') } catch (error) { if (!missing(error)) throw error }
@@ -163,7 +177,7 @@ export class CharacterStore {
       const original = await regularFile(join(dir, 'profile.md'))
       if (digest(original) !== expected) throw new Error('角色资料已变化')
       const { body, ...fields } = input
-      const metadata = characterMetadataSchema.parse({ ...fields, formatVersion: 1, id, contentStatus: 'suggested' })
+      const metadata = characterMetadataSchema.parse({ ...fields, formatVersion: 1, id, contentStatus: item.contentStatus })
       const candidate = formatCharacterDocument({ metadata, body })
       const operation = initializationOperationSchema.parse({ formatVersion: 1, id, baseline: digest(original), candidate: digest(candidate), phase: 'prepared' })
       const operationPath = join(dir, 'initialization-operation.json'); const backupPath = join(dir, 'initialization-backup.md')
@@ -180,11 +194,12 @@ export class CharacterStore {
   }
 
   /** 检查实际摘要并恢复中断的初始化更新；不修改无法识别的内容。 */
-  recoverInitialization(id: string): Promise<'retry' | 'completed'> {
+  recoverInitialization(id: string, expected?: { baseline: string; candidate: string }): Promise<'retry' | 'completed'> {
     return this.run(async () => {
       const dir = await this.directory(id); const operationPath = join(dir, 'initialization-operation.json'); const backupPath = join(dir, 'initialization-backup.md')
       const operation = initializationOperationSchema.parse(JSON.parse(await regularFile(operationPath)))
       if (operation.id !== id) throw new Error('初始化恢复身份不一致')
+      if (expected && (operation.baseline !== expected.baseline || operation.candidate !== expected.candidate)) throw new Error('初始化恢复摘要与发布记录不匹配')
       const profile = await regularFile(join(dir, 'profile.md')); const current = digest(profile)
       let backup: string | undefined
       try { backup = await regularFile(backupPath) } catch (error) { if (!missing(error)) throw error }

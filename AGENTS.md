@@ -29,7 +29,7 @@ src/app/agents/discussion-tools.ts 绑定讨论目标的读取和候选工具
 src/app/agents/impact-tools.ts 绑定讨论目标的只读影响检查工具
 src/world-init/    世界初始化业务能力目录，测试放在 src/world-init/tests/
 src/world-init/discussion/ 局部讨论记录、候选版本与首批地点和人物适配
-src/world-init/impact/ 影响线索采集、范围版本复核与报告
+src/world-init/impact/ 影响线索采集、审阅确认、受控发布与恢复记录
 src/world-init/storage/ 世界资料共享存储的可信装配和生命周期管理
 src/world-init/workspace/ 多世界工作区配置校验、Agent 身份占用及资料目录
 src/world-init/workspace/catalog/ 资料目录格式、持久化与成果路径校验
@@ -38,6 +38,7 @@ src/app/world-initialization-files-debug.ts 世界初始化受控文件工具的
 src/app/world-review.ts 世界资料审阅正文、差异与建议的可信应用展示入口
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
 src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
+src/util/world-access.ts 进程内世界资料访问协调与已受理操作跟踪
 src/tools/         具体工具实现，测试放在 src/tools/tests/
 src/tools/subagent-character/ 角色专用工具实现
 src/tools/catalog/ 世界工作区资料目录专用工具实现

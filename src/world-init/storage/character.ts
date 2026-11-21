@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises'
+import { withWorldAccess } from '@fly-novel/util'
 import { join } from 'node:path'
 import { CharacterStore, CharacterRelationshipStore } from '@fly-novel/character'
 import type { WorldWorkspaceConfig } from '../workspace/config.js'
@@ -57,7 +58,7 @@ export class SharedCharacterStorage {
     const store = await CharacterStore.open(owner.writableRoot, this.initialize)
     try {
       const root = join(owner.writableRoot, 'relationships')
-      await mkdir(root, { recursive: true })
+      await withWorldAccess([root], async () => { await mkdir(root, { recursive: true }) })
       const resolvePerson = async (id: string, signal?: AbortSignal) => {
         signal?.throwIfAborted()
         const records = await store.query({})

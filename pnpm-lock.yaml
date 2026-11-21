@@ -289,6 +289,9 @@ importers:
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:../tools
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../../../util
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -325,6 +328,9 @@ importers:
       '@fly-novel/fs-patch':
         specifier: workspace:*
         version: link:../fs-patch
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../../../../util
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -423,6 +429,9 @@ importers:
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:../tools
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../../../util
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -490,6 +499,9 @@ importers:
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:../tools
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../../../util
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -508,6 +520,9 @@ importers:
       '@fly-novel/tools':
         specifier: workspace:*
         version: link:../tools
+      '@fly-novel/util':
+        specifier: workspace:*
+        version: link:../../../util
       yaml:
         specifier: ^2.9.1
         version: 2.9.1

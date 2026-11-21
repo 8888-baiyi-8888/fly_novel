@@ -4,6 +4,8 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
 import type { FileSystem, FsVersion } from '@fly-novel/fs'
+import { LocalFileSystem } from '@fly-novel/fs-local'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
 import { kindSchema as developmentKindSchema } from '@fly-novel/world-development'
 import { specificKindSchema } from '@fly-novel/world-specific'
@@ -28,9 +30,12 @@ export type DiscussionTarget = z.infer<typeof targetSchema>
 export function parseDiscussionTarget(value: unknown): DiscussionTarget { return targetSchema.parse(value) }
 const discussionSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), id: uuid,
   target: targetSchema, sessionId: z.string().min(1) }).strict()
-const candidateSchema = z.object({ formatVersion: z.literal(1), worldId: z.string().min(1), id: uuid,
-  discussionId: uuid, target: targetSchema, status: z.enum(['active', 'abandoned']), baseline: z.string().min(1),
-  content: z.string(), summary: z.string().trim().min(1) }).strict()
+const candidateFields = { worldId: z.string().min(1), id: uuid, discussionId: uuid, target: targetSchema,
+  baseline: z.string().min(1), content: z.string(), summary: z.string().trim().min(1) }
+const candidateSchema = z.discriminatedUnion('formatVersion', [
+  z.object({ ...candidateFields, formatVersion: z.literal(1), status: z.enum(['active', 'abandoned']) }).strict(),
+  z.object({ ...candidateFields, formatVersion: z.literal(2), status: z.enum(['publishing', 'committed']), operationId: uuid }).strict(),
+])
 type Candidate = z.infer<typeof candidateSchema>
 const occupiedWorlds = new Set<string>()
 const occupiedRoots = new Set<string>()
@@ -45,6 +50,7 @@ export interface DiscussionTargetAdapter {
 
 /** 单世界讨论记录；调用者负责文件系统和模块适配器的生命周期。 */
 export class DiscussionService {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve()
   private closed = false
   private closing?: Promise<void>
@@ -55,6 +61,8 @@ export class DiscussionService {
   get boundWorldId(): string { return this.worldId }
   /** 供可信应用验证候选根与其他授权范围不重叠。 */
   get rootDirectory(): string { return this.root }
+  /** 供可信发布装配核验候选文件后端。 */
+  hasCoordinatedBackend(): boolean { return this.fs instanceof LocalFileSystem }
 
   /** 打开已准备的隔离目录；调用者必须保证单可信写入进程。 */
   static async open(options: { worldId: string; root: string; worldRoots: readonly string[]; fs: FileSystem;
@@ -74,7 +82,7 @@ export class DiscussionService {
 
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new Error('讨论服务已关闭'))
-    const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result
+    return this.operations.run([this.root], () => { const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result })
   }
 
   private async file(folder: 'discussions' | 'candidates', id: string) {
@@ -179,7 +187,7 @@ export class DiscussionService {
     const current = await this.adapter.read(validTarget)
     await this.adapter.assertNoLegacyCandidate(validTarget)
     await this.adapter.validate(validTarget, content)
-    if ((await this.candidates()).some(item => item.status === 'active' && JSON.stringify(item.target) === JSON.stringify(validTarget))) throw new Error('目标已有有效候选')
+    if ((await this.candidates()).some(item => (item.status === 'active' || item.status === 'publishing') && JSON.stringify(item.target) === JSON.stringify(validTarget))) throw new Error('目标已有有效候选或未完成发布')
     const again = await this.adapter.read(validTarget)
     if (again.version !== current.version) throw new Error('当前资料已变化')
     const value = candidateSchema.parse({ formatVersion: 1, worldId: this.worldId, id: randomUUID(), discussionId,
@@ -216,9 +224,34 @@ export class DiscussionService {
     return { value: next, version: await this.publish('candidates', id, next, old.version) }
   }) }
 
+  /** 可信发布流程先占用候选，避免结果不确定时其他入口放弃或重用。 */
+  markPublishing(discussionId: string, id: string, version: string, operationId: string) { return this.enqueue(async () => {
+    const old = await this.read('candidates', id, candidateSchema); const value = old.value
+    if (value.worldId !== this.worldId || value.id !== id || value.discussionId !== discussionId || value.status !== 'active' || old.version !== version) throw new Error('候选身份、状态或版本不匹配')
+    const next = candidateSchema.parse({ ...value, formatVersion: 2, status: 'publishing', operationId })
+    return { value: next, version: await this.publish('candidates', id, next, old.version) }
+  }) }
+
+  /** 可信发布流程确认未写入后，恢复候选的活动状态。 */
+  restoreActive(discussionId: string, id: string, version: string, operationId: string) { return this.enqueue(async () => {
+    const old = await this.read('candidates', id, candidateSchema); const value = old.value
+    if (value.worldId !== this.worldId || value.id !== id || value.discussionId !== discussionId || value.status !== 'publishing' || value.operationId !== operationId || old.version !== version) throw new Error('候选发布身份或版本不匹配')
+    const { operationId: _operation, ...fields } = value
+    const next = candidateSchema.parse({ ...fields, formatVersion: 1, status: 'active' })
+    return { value: next, version: await this.publish('candidates', id, next, old.version) }
+  }) }
+
+  /** 可信发布流程核实正文后，条件升级候选并记录发布操作。 */
+  markCommitted(discussionId: string, id: string, version: string, operationId: string) { return this.enqueue(async () => {
+    const old = await this.read('candidates', id, candidateSchema); const value = old.value
+    if (value.worldId !== this.worldId || value.id !== id || value.discussionId !== discussionId || value.status !== 'publishing' || value.operationId !== operationId || old.version !== version) throw new Error('候选身份、状态或版本不匹配')
+    const next = candidateSchema.parse({ ...value, formatVersion: 2, status: 'committed', operationId })
+    return { value: next, version: await this.publish('candidates', id, next, old.version) }
+  }) }
+
   /** 停止新请求，等待已受理请求并释放进程内占用。 */
   close(): Promise<void> {
-    if (!this.closing) { this.closed = true; this.closing = (async () => { await this.tail; occupiedWorlds.delete(this.worldId); occupiedRoots.delete(this.root) })() }
+    if (!this.closing) { this.closed = true; this.closing = (async () => { await this.operations.drain(); occupiedWorlds.delete(this.worldId); occupiedRoots.delete(this.root) })() }
     return this.closing
   }
 }

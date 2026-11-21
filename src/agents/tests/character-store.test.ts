@@ -114,10 +114,17 @@ test('初始化按摘要更新未确认角色，保留旧数据并拒绝过期�
   assert.equal((await store.query({ name: '林舟' }))[0]?.id, item.id)
   await store.prepare(item.id, { ...character, body: '待审候选' })
   await assert.rejects(store.updateInitialization(item.id, result.version, character, 'initialization'), /待审/)
+  await assert.rejects(store.publishReviewed(item.id, result.version, character), /待审/)
   assert.equal((await store.readPending(item.id)).document.body, '待审候选\n')
   const candidate = await store.readPending(item.id); await store.commit(item.id, candidate)
   const confirmed = await store.readVersioned(item.id)
   await assert.rejects(store.updateInitialization(item.id, confirmed.version, character, 'initialization'), /已确认/)
+  const reviewed = await store.publishReviewed(item.id, confirmed.version, { ...character, name: '林岚', body: '已审阅的修改' })
+  await assert.rejects(store.publishReviewed(item.id, confirmed.version, character), /变化/)
+  const current = await store.readVersioned(item.id)
+  assert.equal(current.version, reviewed.version)
+  assert.equal(current.document.metadata.contentStatus, 'confirmed')
+  assert.equal((await store.query({ name: '林岚' }))[0]?.id, item.id)
 })
 
 test('初始化更新中断后核验摘要恢复，不能覆盖无法识别的文件', async t => {

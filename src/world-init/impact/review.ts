@@ -4,6 +4,8 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
 import type { FileSystem } from '@fly-novel/fs'
+import { LocalFileSystem } from '@fly-novel/fs-local'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 import type { DiscussionService } from '../discussion/service.js'
@@ -57,6 +59,7 @@ function validateReview(value: ReviewDocument): void {
 
 /** 仅供可信应用调用；用户确认不得由模型工具直接调用。 */
 export class ReviewService {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve()
   private closed = false
   private closing?: Promise<void>
@@ -65,6 +68,10 @@ export class ReviewService {
 
   get boundWorldId(): string { return this.world.worldId }
   get rootDirectory(): string { return this.root }
+  /** 供可信发布装配核验审阅文件后端。 */
+  hasCoordinatedBackend(): boolean { return this.fs instanceof LocalFileSystem }
+  /** 可信装配用于核对审阅、检查和讨论来自同一服务组。 */
+  isBoundTo(discussion: DiscussionService, impact: ImpactService): boolean { return this.discussion === discussion && this.impact === impact }
 
   /**
    * 打开独立审阅目录及其 `reviews`、`confirmations` 子目录。
@@ -93,7 +100,7 @@ export class ReviewService {
 
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new Error('审阅服务已关闭'))
-    const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result
+    return this.operations.run([this.root], () => { const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result })
   }
   private async target(folder: 'reviews' | 'confirmations', id: string) {
     uuid.parse(id); const path = join(this.root, folder, `${id}.json`); const info = await this.fs.lstat(path)
@@ -224,7 +231,7 @@ export class ReviewService {
 
   /** 停止新请求，等待已受理操作并释放进程内占用。 */
   close(): Promise<void> {
-    if (!this.closing) { this.closed = true; this.closing = (async () => { await this.tail; occupiedWorlds.delete(this.world.worldId); occupiedRoots.delete(this.root) })() }
+    if (!this.closing) { this.closed = true; this.closing = (async () => { await this.operations.drain(); occupiedWorlds.delete(this.world.worldId); occupiedRoots.delete(this.root) })() }
     return this.closing
   }
 }

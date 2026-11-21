@@ -2,6 +2,7 @@ import { validateAgentMaxSteps } from './loop-options.js'
 import { isAbsolute, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { mkdir, realpath, stat } from 'node:fs/promises'
+import { withWorldAccess } from '@fly-novel/util'
 import { bootstrapAgents, jsonlSessionPersistencePlugin, type Agent } from '@fly-novel/agents'
 import type { AgentLoopInput, AgentLoopResult } from '@fly-novel/agent-loop'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
@@ -113,7 +114,7 @@ export async function createCharacterCreator(config: CharacterCreatorConfig, bor
     if (borrowed) relationships = borrowed.relationships
     else {
       const relationshipRoot = join(characterRoot, 'relationships')
-      await mkdir(relationshipRoot, { recursive: true })
+      await withWorldAccess([relationshipRoot], async () => { await mkdir(relationshipRoot, { recursive: true }) })
       relationships = await CharacterRelationshipStore.open({ root: relationshipRoot, worldId: config.worldId, phase: 'initialization', singleWriterProcess: true, resolvePerson })
     }
     const framework = await bootstrapAgents()

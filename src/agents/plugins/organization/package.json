@@ -11,6 +11,7 @@
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
     "@fly-novel/fs": "workspace:*",
+    "@fly-novel/util": "workspace:*",
     "@fly-novel/tools": "workspace:*",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"

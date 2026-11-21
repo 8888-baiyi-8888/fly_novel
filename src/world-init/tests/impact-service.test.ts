@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
+import { WorldAccess } from '@fly-novel/util'
 import { MapStore, formatMapDocument } from '@fly-novel/map'
 import { CharacterStore, formatCharacterDocument } from '@fly-novel/character'
 import { HistoryQueries, HistoryStore } from '@fly-novel/history'
@@ -54,6 +55,18 @@ test('影响检查记录真实正文与范围，新增关联使原报告过期',
   await assert.rejects(ImpactService.open({ workspaces: [world], worldId: 'other', root: reports, fs: context.fs, discussion, singleWriterProcess: true }), /世界绑定不匹配/)
   const impact = await ImpactService.open({ workspaces: [world], worldId: world.worldId, root: reports, fs: context.fs, discussion, singleWriterProcess: true,
     map: { agentId: 'map', store: map }, history: { agentId: 'history', store: history }, organization: { agentId: 'organization', store: organization } }); t.after(() => impact.close())
+  const gate = WorldAccess.register([view, pending, reports, reviews]); t.after(() => gate.close())
+  let gateEnter!: () => void; let unlock!: () => void
+  const gateEntered = new Promise<void>(done => { gateEnter = done }); const held = new Promise<void>(done => { unlock = done })
+  const exclusive = gate.run(async () => { gateEnter(); await held; assert.equal((await map.readPlace(city.id)).document.name, '曲水城') })
+  await gateEntered
+  let readFinished = false; let writeFinished = false
+  const waitingRead = map.readPlace(city.id).then(() => { readFinished = true })
+  const fileTarget = await context.fs.resolve(join(view, 'main', 'coordination.txt'))
+  const waitingWrite = context.fs.writeText(fileTarget, '资料', { kind: 'createIfAbsent' }).then(() => { writeFinished = true })
+  await new Promise<void>(done => setImmediate(done)); assert.equal(readFinished, false); assert.equal(writeFinished, false)
+  unlock(); await Promise.all([exclusive, waitingRead, waitingWrite])
+  await gate.close()
   const checked = await impact.check(d.id, candidate.value.id)
   assert.equal(checked.report.status, 'completed')
   assert.equal(checked.report.currentContent.includes('城门开放'), true)

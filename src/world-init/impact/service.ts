@@ -4,10 +4,12 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
 import type { FileSystem } from '@fly-novel/fs'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
 import { MapStore } from '@fly-novel/map'
 import { HistoryQueries, HistoryStore } from '@fly-novel/history'
 import { OrganizationQueries, OrganizationStore } from '@fly-novel/organization'
+import { LocalFileSystem } from '@fly-novel/fs-local'
 import { parseDiscussionTarget, type DiscussionService } from '../discussion/service.js'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 
@@ -26,6 +28,7 @@ const occupiedWorlds = new Set<string>(); const occupiedRoots = new Set<string>(
 
 /** 单世界只读影响线索检查；调用方拥有借用的存储和文件后端。 */
 export class ImpactService {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve()
   private closed = false
   private closing?: Promise<void>
@@ -37,6 +40,10 @@ export class ImpactService {
   get rootDirectory(): string { return this.root }
   /** 用于可信应用验证报告与讨论服务来自同一装配。 */
   isBoundTo(service: DiscussionService): boolean { return this.discussion === service }
+  /** 只认可接入世界协调的本机后端；其他后端不能用于受控发布。 */
+  hasCoordinatedBackends(): boolean {
+    return this.fs instanceof LocalFileSystem && [this.map, this.history, this.organization].every(store => !store || store.fileSystem instanceof LocalFileSystem)
+  }
 
   /**
    * 打开已有报告目录，并核对所有存储和世界负责人绑定。
@@ -66,7 +73,7 @@ export class ImpactService {
 
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new Error('影响检查服务已关闭'))
-    const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result
+    return this.operations.run([this.root], () => { const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result })
   }
   private async target(id: string) {
     uuid.parse(id); const path = join(this.root, `${id}.json`); const info = await this.fs.lstat(path)
@@ -239,7 +246,7 @@ export class ImpactService {
 
   /** 停止新请求并等待已受理检查，释放进程内占用。 */
   close(): Promise<void> {
-    if (!this.closing) { this.closed = true; this.closing = (async () => { await this.tail; occupiedWorlds.delete(this.world.worldId); occupiedRoots.delete(this.root) })() }
+    if (!this.closing) { this.closed = true; this.closing = (async () => { await this.operations.drain(); occupiedWorlds.delete(this.world.worldId); occupiedRoots.delete(this.root) })() }
     return this.closing
   }
 }

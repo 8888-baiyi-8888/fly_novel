@@ -5,6 +5,7 @@
  */
 
 import { applyHunks } from '@fly-novel/fs-patch'
+import { withWorldAccess } from '@fly-novel/util'
 import type { PatchHunk } from '@fly-novel/fs-patch'
 import { Context } from '@deepseek-ai/cordis'
 import { constants as bufferConstants } from 'node:buffer'
@@ -147,7 +148,7 @@ export class LocalFileSystem extends FileSystem {
         if (this.locks.get(key) === tail) this.locks.delete(key)
       }
     }
-    return acquire(0)
+    return withWorldAccess(ordered, () => acquire(0))
   }
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {

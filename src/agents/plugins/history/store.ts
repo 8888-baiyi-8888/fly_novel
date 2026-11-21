@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { FileSystem, FsTarget, FsVersion } from '@fly-novel/fs'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { z } from 'zod'
 import { formatHistoryEvent, historyEventSchema, historyIdSchema, parseHistoryEvent, validateHistoryEventGraph, type HistoryEvent } from './format.js'
 
@@ -19,11 +20,14 @@ const occupiedWorlds = new Set<string>(); const occupiedRoots = new Set<string>(
 
 /** 单世界初始化历史存储；调用方持有文件后端并确保单可信写入进程。 */
 export class HistoryStore {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve(); private closed = false; private closing?: Promise<void>
   private constructor(private readonly config: HistoryStoreConfig, private readonly rootPath: string, private readonly root: FsTarget,
     private readonly maxBytes: number, private readonly maxDocuments: number) {}
   get worldId(): string { return this.config.worldId }
   get rootDirectory(): string { return this.rootPath }
+  /** 供可信装配核验文件后端。 */
+  get fileSystem(): FileSystem { return this.config.fs }
   get writable(): boolean { return this.config.access === 'read-write' }
 
   /** 打开已有真实根目录及 events、candidates 子目录，不创建或迁移资料。 */
@@ -43,7 +47,7 @@ export class HistoryStore {
   }
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new HistoryError('历史存储已关闭', 'HISTORY_CLOSED'))
-    const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result
+    return this.operations.run([this.rootPath], () => { const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result })
   }
   private async directory(name: 'events' | 'candidates'): Promise<FsTarget> {
     const path = join(this.rootPath, name); const info = await this.config.fs.lstat(path)
@@ -198,7 +202,7 @@ export class HistoryStore {
     })
   }
   close(): Promise<void> {
-    if (!this.closing) { this.closed = true; this.closing = this.tail.then(() => { occupiedWorlds.delete(this.config.worldId); occupiedRoots.delete(this.root.targetKey) }) }
+    if (!this.closing) { this.closed = true; this.closing = this.operations.drain().then(() => { occupiedWorlds.delete(this.config.worldId); occupiedRoots.delete(this.root.targetKey) }) }
     return this.closing
   }
 }

@@ -1,4 +1,5 @@
 export { deepFreeze } from './deep-freeze'
+export { WorldAccess, withWorldAccess, CoordinatedOperations } from './world-access'
 export { registerAll } from './register-all'
 export type { Branded,BrandedNumber } from './brand'
 export {brandNumber} from './brand'

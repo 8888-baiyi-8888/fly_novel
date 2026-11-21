@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { FileSystem, FsTarget, FsVersion } from '@fly-novel/fs'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { mapConnectionSchema, mapIdSchema, mapPlaceSchema, worldMapSchema, formatMapDocument, parseMapConnection, parseMapPlace, parseWorldMap,
   type MapConnection, type MapPlace, type WorldMap } from './format.js'
 
@@ -44,6 +45,7 @@ const occupiedRoots = new Set<string>()
  */
 export class MapStore {
   private tail: Promise<void> = Promise.resolve()
+  private readonly operations = new CoordinatedOperations()
   private closed = false
   private closing?: Promise<void>
   private constructor(private readonly fs: FileSystem, private readonly rootPath: string, private readonly root: FsTarget,
@@ -55,6 +57,8 @@ export class MapStore {
   /** 供可信应用核对装配的世界和目录；不提供给模型选择。 */
   get boundWorldId(): string { return this.worldId }
   get rootDirectory(): string { return this.rootPath }
+  /** 供可信装配核验文件后端是否参与世界协调。 */
+  get fileSystem(): FileSystem { return this.fs }
 
   /**
    * 打开现有真实地图根及 places、connections 子目录，不初始化或修改资料。
@@ -82,9 +86,11 @@ export class MapStore {
 
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new MapStoreError('地图存储已关闭', 'MAP_CLOSED'))
-    const result = this.tail.then(fn)
-    this.tail = result.then(() => undefined, () => undefined)
-    return result
+    return this.operations.run([this.rootPath], () => {
+      const result = this.tail.then(fn)
+      this.tail = result.then(() => undefined, () => undefined)
+      return result
+    })
   }
 
   private async directory(name: 'places' | 'connections'): Promise<FsTarget> {
@@ -249,6 +255,22 @@ export class MapStore {
     })
   }
 
+  /** 按已读取版本发布已有地点，重新校验完整地点图；调用方负责用户授权和跨模块协调。 */
+  publishPlaceCandidate(value: MapPlace, expected: FsVersion, signal?: AbortSignal): Promise<{ path: string; version: FsVersion }> {
+    return this.enqueue(async () => {
+      const candidate = mapPlaceSchema.parse(value)
+      if (candidate.worldId !== this.worldId) throw new MapStoreError('地点世界身份不匹配', 'MAP_INVALID_DOCUMENT')
+      const map = (await this.map(signal)).document
+      const all = await this.places(map, signal)
+      if (!all.has(candidate.id)) throw new MapStoreError('地点不存在', 'MAP_NOT_FOUND')
+      all.set(candidate.id, candidate)
+      this.validateGraph(map, all)
+      const path = `places/${candidate.id}.json`
+      const version = await this.write(path, candidate, { kind: 'replaceIfVersion', version: expected }, signal)
+      return { path, version }
+    })
+  }
+
   private async checkConnection(value: MapConnection, signal?: AbortSignal): Promise<void> {
     const all = await this.places((await this.map(signal)).document, signal)
     if (!all.has(value.fromId) || !all.has(value.toId)) throw new MapStoreError('连通的地点不存在', 'MAP_INVALID_DOCUMENT')
@@ -336,7 +358,7 @@ export class MapStore {
   close(): Promise<void> {
     if (!this.closing) {
       this.closed = true
-      this.closing = this.tail.then(() => { occupiedWorlds.delete(this.worldId); occupiedRoots.delete(this.root.targetKey) })
+      this.closing = this.operations.drain().then(() => { occupiedWorlds.delete(this.worldId); occupiedRoots.delete(this.root.targetKey) })
     }
     return this.closing
   }

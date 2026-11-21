@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { z } from 'zod'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { characterRelationshipSchema, formatCharacterRelationship, parseCharacterRelationship, type CharacterRelationship } from './relationship-format.js'
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
@@ -31,6 +32,7 @@ export interface CharacterRelationshipStoreConfig {
 
 /** 初始化关系存储：在单可信写入进程内串行检查配对并保存。 */
 export class CharacterRelationshipStore {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve()
   private closing?: Promise<void>
   private closed = false
@@ -56,11 +58,11 @@ export class CharacterRelationshipStore {
 
   private run<T>(action: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new Error('人物关系存储已关闭'))
-    const result = this.tail.then(action); this.tail = result.then(() => undefined, () => undefined); return result
+    return this.operations.run([this.config.root], () => { const result = this.tail.then(action); this.tail = result.then(() => undefined, () => undefined); return result })
   }
   /** 拒绝新操作，等待已受理操作并释放占用。 */
   close(): Promise<void> {
-    if (!this.closing) { this.closed = true; this.closing = this.tail.then(() => { occupiedWorlds.delete(this.config.worldId); occupiedRoots.delete(this.config.root) }) }
+    if (!this.closing) { this.closed = true; this.closing = this.operations.drain().then(() => { occupiedWorlds.delete(this.config.worldId); occupiedRoots.delete(this.config.root) }) }
     return this.closing
   }
   private async checkRoot(): Promise<void> {

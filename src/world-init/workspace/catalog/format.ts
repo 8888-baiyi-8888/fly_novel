@@ -2,6 +2,7 @@ import { lstat, open, readFile, realpath, stat, writeFile } from 'node:fs/promis
 import { isAbsolute, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
+import { withWorldAccess } from '@fly-novel/util'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../config.js'
 
@@ -51,8 +52,10 @@ async function catalogFile(root: string): Promise<string> {
 
 /** 显式创建新目录文件；若目标已存在则拒绝，不创建目录。 */
 export async function initializeCatalog(root: string, worldId: string): Promise<void> {
-  const file = await catalogFile(root)
-  await writeFile(file, formatCatalogDocument({ formatVersion: 1, worldId: identity.parse(worldId), records: [] }), { flag: 'wx' })
+  await withWorldAccess([root], async () => {
+    const file = await catalogFile(root)
+    await writeFile(file, formatCatalogDocument({ formatVersion: 1, worldId: identity.parse(worldId), records: [] }), { flag: 'wx' })
+  })
 }
 
 /** 读取并校验已有目录及可解析成果的别名；不会自动创建或修复数据。 */

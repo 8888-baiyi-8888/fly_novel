@@ -179,6 +179,7 @@ test('主 Agent 候选工具绑定讨论目标并保留当前正文', async t =>
     assert.equal((await call('discussion_prepare', { content: '盲目覆盖', summary: '修改' })).isError, true)
     assert.equal((await call('discussion_prepare', { content: '人物候选', summary: '关联修改', targetIndex: 1 })).isError, false)
     assert.equal((await call('discussion_prepare', { content: '越权', summary: '修改', targetIndex: 2 })).isError, true)
+    for (const name of ['world_commit', 'review_confirm', 'markPublishing']) assert.equal((await call(name, {})).isError, true)
     assert.deepEqual(new Set((await service.listCandidates(record.id)).map(item => item.value.content)), new Set(['候选正文', '人物候选']))
     const candidate = (await service.listCandidates(record.id)).find(item => item.value.target.kind === 'place')!
     child.candidateId = candidate.value.id

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { FileSystem, FsTarget, FsVersion } from '@fly-novel/fs'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { formatOrganizationDocument, organizationIdSchema, organizationMembershipSchema, organizationRelationSchema, organizationSchema,
   parseOrganization, parseOrganizationMembership, parseOrganizationRelation,
   type Organization, type OrganizationDocument, type OrganizationMembership, type OrganizationRelation } from './format.js'
@@ -46,6 +47,7 @@ const occupiedWorlds = new Set<string>(); const occupiedRoots = new Set<string>(
 
 /** 同一实例串行处理初始化资料；持有者负责单可信写入进程及等待 close。 */
 export class OrganizationStore {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve()
   private closed = false
   private closing?: Promise<void>
@@ -56,6 +58,8 @@ export class OrganizationStore {
   get worldId(): string { return this.config.worldId }
   /** 供可信应用核对组织负责人目录。 */
   get rootDirectory(): string { return this.rootPath }
+  /** 供可信装配核验文件后端。 */
+  get fileSystem(): FileSystem { return this.config.fs }
   /** 表明该句柄允许写入；查询授权由调用方单独绑定。 */
   get writable(): boolean { return this.config.access === 'read-write' }
 
@@ -80,7 +84,7 @@ export class OrganizationStore {
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new OrganizationStoreError('组织存储已关闭', 'ORG_CLOSED'))
-    const result = this.tail.then(operation); this.tail = result.then(() => undefined, () => undefined); return result
+    return this.operations.run([this.rootPath], () => { const result = this.tail.then(operation); this.tail = result.then(() => undefined, () => undefined); return result })
   }
   private async directory(name: Directory): Promise<FsTarget> {
     const path = join(this.rootPath, name); const info = await this.config.fs.lstat(path)
@@ -325,7 +329,7 @@ export class OrganizationStore {
   }
   /** 拒绝新操作并等待已受理工作，释放进程内占用。 */
   close(): Promise<void> {
-    if (!this.closing) { this.closed = true; this.closing = this.tail.then(() => { occupiedWorlds.delete(this.config.worldId); occupiedRoots.delete(this.root.targetKey) }) }
+    if (!this.closing) { this.closed = true; this.closing = this.operations.drain().then(() => { occupiedWorlds.delete(this.config.worldId); occupiedRoots.delete(this.root.targetKey) }) }
     return this.closing
   }
 }

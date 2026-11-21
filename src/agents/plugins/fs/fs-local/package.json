@@ -13,6 +13,7 @@
     "@deepseek-ai/schemastery": "~3.19.0",
     "@fly-novel/fs": "workspace:*",
     "@fly-novel/fs-patch": "workspace:*",
+    "@fly-novel/util": "workspace:*",
     "chokidar": "5.0.0",
     "koffi": "3.1.1"
   }
