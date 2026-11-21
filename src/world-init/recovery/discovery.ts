@@ -10,12 +10,14 @@ import { impactReportSchema } from '../impact/service.js'
 import { confirmationSchema, reviewSchema, validateReview } from '../impact/review.js'
 import { operationSchema } from '../impact/commit.js'
 import { batchSchema, validateBatch } from '../impact/batch-commit.js'
+import { taskSchema, judgmentSchema, worldBindingFingerprint } from './task-store.js'
+import { parseDiscussionTarget } from '../discussion/service.js'
 import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 
 const schemas = { discussion: discussionSchema, candidate: candidateSchema, impact: impactReportSchema,
-  review: reviewSchema, confirmation: confirmationSchema, commit: operationSchema, batch: batchSchema } as const
+  review: reviewSchema, confirmation: confirmationSchema, commit: operationSchema, batch: batchSchema, task: taskSchema, judgment: judgmentSchema } as const
 export type DiscoveryKind = keyof typeof schemas
-export type DiscoveryRoot = 'discussion' | 'impact' | 'review' | 'commit' | 'batch'
+export type DiscoveryRoot = 'discussion' | 'impact' | 'review' | 'commit' | 'batch' | 'task'
 export interface DiscoveryEntry {
   readonly kind: DiscoveryKind
   readonly name: string
@@ -39,6 +41,7 @@ export interface DiscoverySnapshot {
 }
 
 const directories: readonly { kind: DiscoveryKind; root: DiscoveryRoot; subdir?: string }[] = [
+  { kind: 'task', root: 'task', subdir: 'tasks' }, { kind: 'judgment', root: 'task', subdir: 'first-versions' },
   { kind: 'discussion', root: 'discussion', subdir: 'discussions' }, { kind: 'candidate', root: 'discussion', subdir: 'candidates' },
   { kind: 'impact', root: 'impact' }, { kind: 'review', root: 'review', subdir: 'reviews' },
   { kind: 'confirmation', root: 'review', subdir: 'confirmations' }, { kind: 'commit', root: 'commit' }, { kind: 'batch', root: 'batch' },
@@ -56,7 +59,8 @@ export async function discoverInitialization(options: {
   readonly sessions?: SessionPersistence
 }): Promise<DiscoverySnapshot> {
   const worlds = await validateWorldWorkspaceConfigs(options.worlds)
-  if (!worlds.some(world => world.worldId === options.worldId)) throw new Error('未找到可信世界身份')
+  const world = worlds.find(item => item.worldId === options.worldId)
+  if (!world) throw new Error('未找到可信世界身份')
   const roots = Object.values(options.roots)
   for (const root of [...roots, ...options.sessionRoots]) {
     if (!root || !isAbsolute(root) || await realpath(root) !== resolve(root) || !(await lstat(root)).isDirectory()) throw new Error('记录根必须是现有真实绝对目录')
@@ -114,6 +118,15 @@ export async function discoverInitialization(options: {
         try {
           if (spec.kind === 'review') validateReview(reviewSchema.parse(record))
           if (spec.kind === 'batch') validateBatch(batchSchema.parse(record))
+          if (spec.kind === 'task') {
+            const task = taskSchema.parse(record)
+            if (task.worldBinding !== worldBindingFingerprint(world) || new Set(task.sessionIds).size !== task.sessionIds.length) throw new Error('任务世界绑定或 Session 身份无效')
+          }
+          if (spec.kind === 'judgment') {
+            const judgment = judgmentSchema.parse(record)
+            const targets = judgment.artifacts.map(item => JSON.stringify(parseDiscussionTarget(item.target)))
+            if (new Set(targets).size !== targets.length) throw new Error('第一版成果重复')
+          }
         } catch (error) { entry.error = errorText(error); partial = true; continue }
         entry.status = 'valid'; entry.record = record
       } catch (error) { entry.status = 'unreadable'; entry.error = errorText(error); partial = true }
@@ -127,6 +140,10 @@ export async function discoverInitialization(options: {
   }
   const issues: string[] = []
   const records = (kind: DiscoveryKind) => entries.filter(entry => entry.kind === kind && entry.status === 'valid').map(entry => entry.record)
+  if (scopes.find(scope => scope.kind === 'task')?.status === 'complete') {
+    const tasks = records('task').map(value => taskSchema.parse(value))
+    for (const value of records('judgment')) { const judgment = judgmentSchema.parse(value); if (!tasks.some(task => task.id === judgment.taskId)) issues.push('第一版判断 ' + judgment.id + ' 未找到所属任务') }
+  }
   const discussions = records('discussion').map(value => discussionSchema.parse(value))
   const candidates = records('candidate').map(value => candidateSchema.parse(value))
   if (scopes.find(scope => scope.kind === 'discussion')?.status === 'complete') {
