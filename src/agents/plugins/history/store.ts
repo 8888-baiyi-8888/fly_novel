@@ -156,13 +156,20 @@ export class HistoryStore {
   snapshot(signal?: AbortSignal): Promise<HistorySnapshot> { return this.enqueue(() => this.scan(signal)) }
   /** 仅更新未确认事件；已有候选或版本过期时拒绝。 */
   update(id: string, version: string, input: HistoryEventInput, signal?: AbortSignal): Promise<{ path: string; version: FsVersion }> {
+    return this.updateVersioned(id, version, input, false, signal)
+  }
+  /** 发布经可信应用审阅的事件，保留原有确认状态并检查旧候选。 */
+  publishReviewed(id: string, version: string, input: HistoryEventInput, signal?: AbortSignal): Promise<{ path: string; version: FsVersion }> {
+    return this.updateVersioned(id, version, input, true, signal)
+  }
+  private updateVersioned(id: string, version: string, input: HistoryEventInput, reviewed: boolean, signal?: AbortSignal): Promise<{ path: string; version: FsVersion }> {
     return this.enqueue(async () => {
       historyIdSchema.parse(id); const all = await this.scan(signal); const old = all.events.find(item => item.document.id === id)
       if (!old) throw new HistoryError('历史事件不存在', 'HISTORY_NOT_FOUND')
       if (old.version !== version) throw new HistoryError('历史事件版本已变化', 'HISTORY_CONFLICT', old.path)
-      if (old.document.contentStatus !== 'suggested') throw new HistoryError('已确认历史不能直接覆盖', 'HISTORY_FORBIDDEN', old.path)
+      if (!reviewed && old.document.contentStatus !== 'suggested') throw new HistoryError('已确认历史不能直接覆盖', 'HISTORY_FORBIDDEN', old.path)
       if (await this.config.fs.stat(await this.target('candidates', id), signal)) throw new HistoryError('历史事件存在待审候选', 'HISTORY_CONFLICT', `candidates/${id}.json`)
-      const document = historyEventSchema.parse({ ...input, formatVersion: 1, worldId: this.config.worldId, id, contentStatus: 'suggested' })
+      const document = historyEventSchema.parse({ ...input, formatVersion: 1, worldId: this.config.worldId, id, contentStatus: old.document.contentStatus })
       this.graph(all.events.map(item => item.document.id === id ? document : item.document)); await this.verify(document, signal)
       return { path: old.path, version: await this.write('events', id, formatHistoryEvent(document), { kind: 'replaceIfVersion', version: old.version }, signal) }
     })

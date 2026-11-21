@@ -7,7 +7,7 @@ import type { FileSystem } from '@fly-novel/fs'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { CoordinatedOperations } from '@fly-novel/util'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
+import { sameWorldWorkspace, validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 import type { DiscussionService } from '../discussion/service.js'
 import { impactReportSchema, type ImpactService } from './service.js'
 
@@ -72,6 +72,7 @@ export class ReviewService {
   hasCoordinatedBackend(): boolean { return this.fs instanceof LocalFileSystem }
   /** 可信装配用于核对审阅、检查和讨论来自同一服务组。 */
   isBoundTo(discussion: DiscussionService, impact: ImpactService): boolean { return this.discussion === discussion && this.impact === impact }
+  isBoundToWorld(world: WorldWorkspaceConfig): boolean { return sameWorldWorkspace(this.world, world) }
 
   /**
    * 打开独立审阅目录及其 `reviews`、`confirmations` 子目录。
@@ -83,7 +84,7 @@ export class ReviewService {
     discussion: DiscussionService; impact: ImpactService; singleWriterProcess: true }): Promise<ReviewService> {
     if (options.singleWriterProcess !== true) throw new Error('必须确保单可信写入进程')
     const worlds = await validateWorldWorkspaceConfigs(options.workspaces); const world = worlds.find(item => item.worldId === options.worldId)
-    if (!world || options.discussion.boundWorldId !== world.worldId || options.impact.boundWorldId !== world.worldId || !options.impact.isBoundTo(options.discussion)) throw new Error('审阅世界或服务绑定不匹配')
+    if (!world || options.discussion.boundWorldId !== world.worldId || !options.impact.isBoundToWorld(world) || !options.impact.isBoundTo(options.discussion)) throw new Error('审阅世界或服务绑定不匹配')
     if (!isAbsolute(options.root) || await realpath(options.root) !== resolve(options.root) || !(await lstat(options.root)).isDirectory()) throw new Error('审阅根必须是现有真实绝对目录')
     for (const root of [...worlds.map(item => item.readRoot), options.discussion.rootDirectory, options.impact.rootDirectory]) {
       if (await isPathUnder(options.root, root) || await isPathUnder(root, options.root)) throw new Error('审阅根与已有资料根重叠')

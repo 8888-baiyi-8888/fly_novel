@@ -39,8 +39,8 @@ export class WorldCommitService {
     discussion: DiscussionService; impact: ImpactService; review: ReviewService; sessionRoots: readonly string[]; map?: MapStore; characters?: CharacterStore; singleWriterProcess: true }): Promise<WorldCommitService> {
     if (options.singleWriterProcess !== true) throw new Error('必须确保单可信写入进程')
     const worlds = await validateWorldWorkspaceConfigs(options.workspaces); const world = worlds.find(item => item.worldId === options.worldId)
-    if (!world || options.discussion.boundWorldId !== world.worldId || options.impact.boundWorldId !== world.worldId ||
-      options.review.boundWorldId !== world.worldId || !options.review.isBoundTo(options.discussion, options.impact)) throw new Error('发布服务身份不匹配')
+    if (!world || !options.discussion.isBoundToWorld(world) || !options.impact.isBoundToWorld(world) ||
+      !options.review.isBoundToWorld(world) || !options.review.isBoundTo(options.discussion, options.impact)) throw new Error('发布服务身份不匹配')
     if (!(options.fs instanceof LocalFileSystem) || !options.discussion.hasCoordinatedBackend() || !options.review.hasCoordinatedBackend() ||
       !options.impact.hasCoordinatedBackends() || (options.map && !(options.map.fileSystem instanceof LocalFileSystem))) throw new Error('发布只支持已接入世界协调的本机文件后端')
     if (!isAbsolute(options.root) || await realpath(options.root) !== resolve(options.root) || !(await lstat(options.root)).isDirectory()) throw new Error('发布记录根必须是现有真实目录')
@@ -115,7 +115,9 @@ export class WorldCommitService {
       }
       const candidate = await this.discussion.readCandidate(selected)
       if (candidate.value.status !== 'active' || candidate.value.discussionId !== discussionId || candidate.stale || candidate.version !== binding.report.candidateVersion) throw new Error('候选状态或版本已变化')
+      await this.discussion.validateForPublish(discussionId, selected, candidate.version)
       const selectedTarget = target.parse(candidate.value.target)
+      if (!this.discussion.isTargetBoundToWorld(selectedTarget, this.world)) throw new Error('候选目标未绑定当前世界')
       let after: string
       if (selectedTarget.kind === 'place') {
         if (!this.map) throw new Error('地图发布未装配')

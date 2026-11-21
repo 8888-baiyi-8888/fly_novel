@@ -18,6 +18,18 @@ export interface WorldWorkspaceConfig {
   readonly agents: readonly WorldWorkspaceAgent[]
 }
 
+/** 比较已校验的世界目录与完整身份绑定，不依赖特殊 Agent 的排列顺序。 */
+export function sameWorldWorkspace(left: WorldWorkspaceConfig, right: WorldWorkspaceConfig): boolean {
+  const owners = (world: WorldWorkspaceConfig) => [world.mainAgent, ...world.agents].map(item => [item.agentId, item.writableRoot]).sort((a, b) => a[0]!.localeCompare(b[0]!))
+  return left.worldId === right.worldId && left.readRoot === right.readRoot && left.confirmedRoot === right.confirmedRoot && left.catalogRoot === right.catalogRoot &&
+    left.mainAgent.agentId === right.mainAgent.agentId && JSON.stringify(owners(left)) === JSON.stringify(owners(right))
+}
+
+/** 固定已提供的目录及身份值；目录合法性仍由配置校验负责。 */
+export function snapshotWorldWorkspace(world: WorldWorkspaceConfig): WorldWorkspaceConfig {
+  return Object.freeze({ ...world, mainAgent: Object.freeze({ ...world.mainAgent }), agents: Object.freeze(world.agents.map(item => Object.freeze({ ...item }))) })
+}
+
 function identity(value: string, label: string): void {
   if (typeof value !== 'string' || !value || value.trim() !== value) throw new Error(`${label}必须非空且无首尾空白`)
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
+import { WorldAccess } from '@fly-novel/util'
 import { DiscussionService, type DiscussionTargetAdapter } from '../discussion/service.js'
 import { createInitialDiscussionAdapter } from '../discussion/initial-adapters.js'
 import { MapStore, formatMapDocument } from '@fly-novel/map'
@@ -11,6 +12,10 @@ import { CharacterStore, CharacterRelationshipStore, formatCharacterDocument, fo
 import { OrganizationStore, formatOrganizationDocument } from '@fly-novel/organization'
 import { HistoryStore, formatHistoryEvent } from '@fly-novel/history'
 import { withFileDiscussionAdapter } from '../discussion/file-adapter.js'
+import { TargetPublisher } from '../impact/target-publisher.js'
+import { ImpactService } from '../impact/service.js'
+import { ReviewService } from '../impact/review.js'
+import { BatchCommitService } from '../impact/batch-commit.js'
 
 test('讨论候选独占、版本保护、放弃及重启读取', async t => {
   const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })
@@ -98,7 +103,7 @@ test('地点和人物使用所属模块校验，已有角色候选不得覆盖',
   const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })
   const root = await realpath(await mkdtemp(join(parent, 'discussion-real-')))
   t.after(() => rm(root, { recursive: true, force: true }))
-  for (const dir of ['world', 'world/main', 'world/confirmed', 'world/catalog', 'world/map', 'world/map/places', 'world/map/connections', 'world/characters', 'world/organization', 'world/organization/organizations', 'world/organization/relations', 'world/organization/memberships', 'world/history', 'world/history/events', 'world/history/candidates', 'discussion', 'discussion/discussions', 'discussion/candidates']) await mkdir(join(root, dir))
+  for (const dir of ['world', 'world/main', 'world/confirmed', 'world/catalog', 'world/map', 'world/map/places', 'world/map/connections', 'world/characters', 'world/organization', 'world/organization/organizations', 'world/organization/relations', 'world/organization/memberships', 'world/history', 'world/history/events', 'world/history/candidates', 'discussion', 'discussion/discussions', 'discussion/candidates', 'reports', 'reviews', 'reviews/reviews', 'reviews/confirmations', 'batches']) await mkdir(join(root, dir))
   const context = new Context(); const backend = context.plugin(LocalFileSystem, { cwd: root }); await backend
   t.after(() => backend.dispose())
   const map = await MapStore.open({ fs: context.fs, root: join(root, 'world/map'), worldId: 'real-world', access: 'read-write', singleWriterProcess: true })
@@ -167,12 +172,16 @@ test('地点和人物使用所属模块校验，已有角色候选不得覆盖',
   assert.deepEqual((await organization.readMembership(member.id)).document.roles, ['长老'])
   await assert.rejects(service.updateCandidate(p.id, membershipCandidate.value.id, membershipCandidate.version,
     formatOrganizationDocument({ ...membership, person: { kind: 'linked', id: other.id } }), '未核验人物'), /引用不存在/)
+  const historyPath = join(root, 'world/history', event.path)
+  await writeFile(historyPath, (await readFile(historyPath, 'utf8')).replace('"suggested"', '"confirmed"'))
   const historyTarget = { kind: 'history-event' as const, id: event.id }; const historyDocument = (await history.readEvent(event.id)).document
-  const historyCandidate = await service.createCandidate(p.id, historyTarget, formatHistoryEvent({ ...historyDocument, body: '待审旧事' }), '历史修改')
+  const historyCandidate = await service.createCandidate(p.id, historyTarget, formatHistoryEvent({ ...historyDocument, contentStatus: 'suggested', body: '待审旧事' }), '历史修改')
   assert.match((await service.readCandidate(historyCandidate.value.id)).value.content, /待审旧事/)
   assert.equal((await history.readEvent(event.id)).document.body, '原事')
   await writeFile(join(root, 'world/history/candidates', `${event.id}.json`), '旧候选')
   await assert.rejects(service.updateCandidate(p.id, historyCandidate.value.id, historyCandidate.version, historyCandidate.value.content, '再次修改'), /已有候选/)
+  const relationPath = join(root, 'world/characters/relationships', relation.path)
+  await writeFile(relationPath, (await readFile(relationPath, 'utf8')).replace('"suggested"', '"confirmed"'))
   const relationTarget = { kind: 'character-relationship' as const, id: relation.document.id }
   const relationCandidate = formatCharacterRelationship({ ...relation.document, relations: relation.document.relations.map(item => ({ ...item, description: '新关系' })) })
   const savedRelation = await service.createCandidate(p.id, relationTarget, relationCandidate, '关系修改')
@@ -185,4 +194,30 @@ test('地点和人物使用所属模块校验，已有角色候选不得覆盖',
   await service.createCandidate(fileDiscussion.id, fileTarget, '总览候选', '总览调整')
   assert.equal(await readFile(join(root, 'world/main/world.md'), 'utf8'), '第一版总览')
   await assert.rejects(service.createDiscussion({ kind: 'file', ownerAgentId: 'person', path: 'main/world.md' }, 'denied'), /不属于/)
+  await rm(join(root, 'world/history/candidates', `${event.id}.json`))
+  if (!(context.fs instanceof LocalFileSystem)) throw new Error('测试需要本机后端')
+  const publisher = await TargetPublisher.create(world, context.fs, { organization: { agentId: 'organization', store: organization },
+    history: { agentId: 'history', store: history }, relationships: { agentId: 'person', store: relationships } })
+  const impact = await ImpactService.open({ workspaces: [world], worldId: world.worldId, root: join(root, 'reports'), fs: context.fs, discussion: service, singleWriterProcess: true }); t.after(() => impact.close())
+  const review = await ReviewService.open({ workspaces: [world], worldId: world.worldId, root: join(root, 'reviews'), fs: context.fs, discussion: service, impact, singleWriterProcess: true }); t.after(() => review.close())
+  const gate = WorldAccess.register([world.readRoot, join(root, 'discussion'), join(root, 'reports'), join(root, 'reviews'), join(root, 'batches')])
+  const batch = await BatchCommitService.open({ workspaces: [world], worldId: world.worldId, root: join(root, 'batches'), fs: context.fs,
+    gate, discussion: service, impact, review, publisher, sessionRoots: [], singleWriterProcess: true }); t.after(async () => { await batch.close(); await gate.close() })
+  for (const discussionId of [p.id, fileDiscussion.id]) {
+    const items = await service.listCandidates(discussionId)
+    const expected = await Promise.all(items.map(item => publisher.preview(item.value.target, item.value.content)))
+    const reports = await Promise.all(items.map(item => impact.check(discussionId, item.value.id)))
+    const draft = await review.create(discussionId, reports.map(item => item.report.id), { findings: [], dependencies: [] })
+    const confirmation = await review.confirm(discussionId, draft.value.id, { reviewVersion: draft.version, confirmContinue: true,
+      selectedCandidateIds: items.map(item => item.value.id), selections: [], acknowledgedUncovered: reports.flatMap(({ report }) =>
+        report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: report.id, scope: scope.name }))) })
+    const published = await batch.submit(discussionId, draft.value.id, confirmation.version)
+    assert.equal(published.state, 'completed'); assert.ok(published.items.every(item => item.phase === 'committed'))
+    for (const [index, item] of items.entries()) {
+      assert.equal((await service.readRelated(discussionId, item.value.target)).content, expected[index])
+      await assert.rejects(publisher.publish(item.value.target, item.value.content, item.value.baseline), /版本|变化/)
+    }
+  }
+  assert.equal((await history.readEvent(event.id)).document.contentStatus, 'confirmed')
+  assert.equal((await relationships.read(relation.document.id)).document.contentStatus, 'confirmed')
 })

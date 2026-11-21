@@ -29,7 +29,7 @@ src/app/agents/discussion-tools.ts 绑定讨论目标的读取和候选工具
 src/app/agents/impact-tools.ts 绑定讨论目标的只读影响检查工具
 src/world-init/    世界初始化业务能力目录，测试放在 src/world-init/tests/
 src/world-init/discussion/ 局部讨论记录、候选版本与首批地点和人物适配
-src/world-init/impact/ 影响线索采集、审阅确认、受控发布与恢复记录
+src/world-init/impact/ 影响线索采集、审阅确认、单项及多目标受控发布与恢复记录
 src/world-init/storage/ 世界资料共享存储的可信装配和生命周期管理
 src/world-init/workspace/ 多世界工作区配置校验、Agent 身份占用及资料目录
 src/world-init/workspace/catalog/ 资料目录格式、持久化与成果路径校验

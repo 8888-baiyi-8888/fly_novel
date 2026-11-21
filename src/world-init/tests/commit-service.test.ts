@@ -10,16 +10,21 @@ import { CharacterStore, formatCharacterDocument } from '@fly-novel/character'
 import { WorldAccess } from '@fly-novel/util'
 import { DiscussionService } from '../discussion/service.js'
 import { createInitialDiscussionAdapter } from '../discussion/initial-adapters.js'
+import { withFileDiscussionAdapter } from '../discussion/file-adapter.js'
 import { ImpactService } from '../impact/service.js'
 import { ReviewService } from '../impact/review.js'
 import { WorldCommitService } from '../impact/commit.js'
+import { BatchCommitService } from '../impact/batch-commit.js'
+import { TargetPublisher } from '../impact/target-publisher.js'
+import { initializeCatalog } from '../workspace/catalog/format.js'
+import { CatalogService } from '../workspace/catalog/service.js'
 
 test('可信确认只发布一次地点候选并保留可核查记录', async t => {
   const parent = join(process.cwd(), 'tmp'); await mkdir(parent, { recursive: true })
   const root = await realpath(await mkdtemp(join(parent, 'world-commit-'))); t.after(() => rm(root, { recursive: true, force: true }))
-  const view = join(root, 'world'); const pending = join(root, 'pending'); const reports = join(root, 'reports'); const reviews = join(root, 'reviews'); const operations = join(root, 'operations')
+  const view = join(root, 'world'); const pending = join(root, 'pending'); const reports = join(root, 'reports'); const reviews = join(root, 'reviews'); const operations = join(root, 'operations'); const batches = join(root, 'batches')
   for (const path of ['main', 'confirmed', 'catalog', 'map/places', 'map/connections', 'characters']) await mkdir(join(view, path), { recursive: true })
-  for (const path of [join(pending, 'discussions'), join(pending, 'candidates'), reports, join(reviews, 'reviews'), join(reviews, 'confirmations'), operations]) await mkdir(path, { recursive: true })
+  for (const path of [join(pending, 'discussions'), join(pending, 'candidates'), reports, join(reviews, 'reviews'), join(reviews, 'confirmations'), operations, batches]) await mkdir(path, { recursive: true })
   const world = { worldId: 'commit-world', readRoot: view, confirmedRoot: join(view, 'confirmed'), catalogRoot: join(view, 'catalog'),
     mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [{ agentId: 'map', writableRoot: join(view, 'map') }, { agentId: 'character', writableRoot: join(view, 'characters') }] }
   const context = new Context(); const backend = await context.plugin(LocalFileSystem, { cwd: root }); t.after(() => backend.dispose())
@@ -29,13 +34,24 @@ test('可信确认只发布一次地点候选并保留可核查记录', async t 
   await map.createOverview({ name: '河谷', description: '', scale: { width: 100, height: 100, unit: 'km' }, layers: [{ id: 'area', name: '区域' }], orientation: '北', reserved: [] })
   const city = await map.createPlace({ name: '曲水城', aliases: [], description: '昼夜开放', detailLevel: 'overview',
     parents: [{ layerId: 'area', parent: { kind: 'world' }, localBoxes: [[0, 0, 100, 100]], frameBox: null, coverage: 'complete' }], reserved: [] })
-  const adapter = createInitialDiscussionAdapter(world, { map: { agentId: 'map', store: map }, characters: { agentId: 'character', store: characters } })
+  await initializeCatalog(world.catalogRoot, world.worldId)
+  const catalog = await CatalogService.open(world, { singleWriterProcess: true })
+  const mapCatalog = catalog.bind('map'); await mapCatalog.register(`map/places/${city.id}.json`, '城市资料'); await mapCatalog.close()
+  const personCatalog = catalog.bind('character'); await personCatalog.register(`characters/${person.id}/profile.md`, '人物资料'); await personCatalog.close(); await catalog.close()
+  await writeFile(join(view, 'main', 'overview.md'), '原总览')
+  const adapter = withFileDiscussionAdapter(createInitialDiscussionAdapter(world, { map: { agentId: 'map', store: map }, characters: { agentId: 'character', store: characters } }), world, context.fs)
   const discussion = await DiscussionService.open({ worldId: world.worldId, root: pending, worldRoots: [view], fs: context.fs, adapter, singleWriterProcess: true }); t.after(() => discussion.close())
   const impact = await ImpactService.open({ workspaces: [world], worldId: world.worldId, root: reports, fs: context.fs, discussion, map: { agentId: 'map', store: map }, singleWriterProcess: true }); t.after(() => impact.close())
   const review = await ReviewService.open({ workspaces: [world], worldId: world.worldId, root: reviews, fs: context.fs, discussion, impact, singleWriterProcess: true }); t.after(() => review.close())
-  const gate = WorldAccess.register([view, pending, reports, reviews, operations])
+  const gate = WorldAccess.register([view, pending, reports, reviews, operations, batches])
   await assert.rejects(WorldCommitService.open({ workspaces: [world], worldId: world.worldId, root: operations, fs: context.fs, gate, discussion, impact, review, sessionRoots: [reviews], map, characters, singleWriterProcess: true }), /Session 根重叠/)
-  const service = await WorldCommitService.open({ workspaces: [world], worldId: world.worldId, root: operations, fs: context.fs, gate, discussion, impact, review, sessionRoots: [], map, characters, singleWriterProcess: true }); t.after(async () => { await service.close(); await gate.close() })
+  const service = await WorldCommitService.open({ workspaces: [world], worldId: world.worldId, root: operations, fs: context.fs, gate, discussion, impact, review, sessionRoots: [], map, characters, singleWriterProcess: true })
+  if (!(context.fs instanceof LocalFileSystem)) throw new Error('测试需要本机后端')
+  const publisher = await TargetPublisher.create(world, context.fs, { map: { agentId: 'map', store: map }, characters: { agentId: 'character', store: characters } })
+  const wrongBinding = { ...world, mainAgent: { ...world.mainAgent, agentId: 'other-main' } }
+  await assert.rejects(BatchCommitService.open({ workspaces: [wrongBinding], worldId: world.worldId, root: batches, fs: context.fs, gate, discussion, impact, review, publisher, sessionRoots: [], singleWriterProcess: true }), /身份不匹配/)
+  const batch = await BatchCommitService.open({ workspaces: [world], worldId: world.worldId, root: batches, fs: context.fs, gate, discussion, impact, review, publisher, sessionRoots: [], singleWriterProcess: true })
+  t.after(async () => { await batch.close(); await service.close(); await gate.close() })
   const target = { kind: 'place' as const, id: city.id }; const thread = await discussion.createDiscussion(target, 'session')
   const before = await map.readPlace(city.id)
   const candidate = await discussion.createCandidate(thread.id, target, formatMapDocument({ ...before.document, description: '夜间关闭' }), '城门')
@@ -134,6 +150,95 @@ test('可信确认只发布一次地点候选并保留可核查记录', async t 
   assert.equal((await service.reconcile(recoverReview.value.id, { kind: 'accept-result', observedVersion: recoveredVersion.version })).phase, 'committed')
   assert.equal((await characters.read(person.id)).body, '索引故障后恢复\n')
 
+  const grouped = await discussion.createDiscussion(target, 'grouped')
+  const cityBeforeGroup = await map.readPlace(city.id); const personBeforeGroup = await characters.read(person.id)
+  const groupedCity = await discussion.createCandidate(grouped.id, target, formatMapDocument({ ...cityBeforeGroup.document, description: '商队白天入城' }), '城门规则')
+  const groupedPerson = await discussion.createCandidate(grouped.id, personTarget, formatCharacterDocument({ ...personBeforeGroup,
+    metadata: { ...personBeforeGroup.metadata, contentStatus: 'pending' }, body: '商队改为白天入城' }), '人物经历')
+  const fileTarget = { kind: 'file' as const, ownerAgentId: 'main', path: 'main/overview.md' }
+  const groupedFile = await discussion.createCandidate(grouped.id, fileTarget, '待审总览', '总览修改')
+  const cityCheck = await impact.check(grouped.id, groupedCity.value.id); const personCheck = await impact.check(grouped.id, groupedPerson.value.id); const fileCheck = await impact.check(grouped.id, groupedFile.value.id)
+  const groupReview = await review.create(grouped.id, [cityCheck.report.id, personCheck.report.id, fileCheck.report.id], { findings: [],
+    dependencies: [{ candidateIds: [groupedCity.value.id, groupedPerson.value.id], reason: '城门规则和人物经历须一致' }] })
+  const groupUncovered = [cityCheck, personCheck, fileCheck].flatMap(({ report }) => report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: report.id, scope: scope.name })))
+  const groupConfirmation = await review.confirm(grouped.id, groupReview.value.id, { reviewVersion: groupReview.version, confirmContinue: true,
+    selectedCandidateIds: [groupedCity.value.id, groupedPerson.value.id, groupedFile.value.id], selections: [], acknowledgedUncovered: groupUncovered })
+  const groupAbort = new AbortController(); groupAbort.abort()
+  await assert.rejects(batch.submit(grouped.id, groupReview.value.id, groupConfirmation.version, groupAbort.signal))
+  await assert.rejects(batch.inspect(groupReview.value.id), /不存在/)
+  const publishTarget = publisher.publish.bind(publisher)
+  const failure = t.mock.method(publisher, 'publish', async (...args: Parameters<typeof publisher.publish>) => {
+    if (args[0].kind === 'character') throw new Error('模拟人物发布失败')
+    await publishTarget(...args)
+  })
+  const partial = await batch.submit(grouped.id, groupReview.value.id, groupConfirmation.version); failure.mock.restore()
+  assert.equal(partial.state, 'stopped'); assert.deepEqual(partial.items.map(item => item.phase), ['committed', 'publishing', 'ready'])
+  assert.equal(partial.items[0]!.catalogStatus, 'stale')
+  assert.equal((await map.readPlace(city.id)).document.description, '商队白天入城')
+  assert.equal((await characters.read(person.id)).body, personBeforeGroup.body)
+  assert.equal(await readFile(join(view, 'main', 'overview.md'), 'utf8'), '原总览')
+  await assert.rejects(batch.reconcileItem(partial.id, groupedPerson.value.id), /需用户核查/)
+  const personVersion = await characters.readVersioned(person.id)
+  const repaired = await batch.reconcileItem(partial.id, groupedPerson.value.id, { kind: 'accept-baseline', observedVersion: personVersion.version })
+  assert.deepEqual(repaired.items.map(item => item.phase), ['committed', 'failed', 'ready'])
+  assert.equal(repaired.items[1]!.recoveryDecision?.observedVersion, personVersion.version)
+  await assert.rejects(batch.submit(grouped.id, groupReview.value.id, groupConfirmation.version), /已有发布记录/)
+  const remaining = await impact.check(grouped.id, groupedPerson.value.id)
+  const retryReview = await review.create(grouped.id, [remaining.report.id], { findings: [], dependencies: [] })
+  const retryConfirmation = await review.confirm(grouped.id, retryReview.value.id, { reviewVersion: retryReview.version, confirmContinue: true,
+    selectedCandidateIds: [groupedPerson.value.id], selections: [], acknowledgedUncovered: remaining.report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: remaining.report.id, scope: scope.name })) })
+  const retried = await batch.submit(grouped.id, retryReview.value.id, retryConfirmation.version)
+  assert.equal(retried.state, 'completed'); assert.equal(retried.items[0]!.catalogStatus, 'stale')
+  assert.equal((await characters.read(person.id)).body, '商队改为白天入城\n')
+  const refreshedCatalog = await CatalogService.open(world, { singleWriterProcess: true }); const refreshedBinding = refreshedCatalog.bind('character')
+  const personPath = `characters/${person.id}/profile.md`; const entry = await refreshedBinding.read(personPath); assert.ok(entry)
+  const receipt = await refreshedBinding.readSource(personPath, entry.record.revision)
+  await refreshedBinding.update(personPath, '人物资料已更新', entry.record.revision, receipt.receipt)
+  await refreshedBinding.close(); await refreshedCatalog.close()
+  assert.equal((await batch.recheckCatalog(retried.id, groupedPerson.value.id)).items[0]!.catalogStatus, 'current')
+  const cancelPerson = await characters.read(person.id)
+  const cancelCandidate = await discussion.createCandidate(grouped.id, personTarget, formatCharacterDocument({ ...cancelPerson,
+    metadata: { ...cancelPerson.metadata, contentStatus: 'pending' }, body: '停止前已发布' }), '取消示例')
+  const cancelPersonReport = await impact.check(grouped.id, cancelCandidate.value.id); const cancelFileReport = await impact.check(grouped.id, groupedFile.value.id)
+  const cancelReview = await review.create(grouped.id, [cancelPersonReport.report.id, cancelFileReport.report.id], { findings: [], dependencies: [] })
+  const cancelConfirmation = await review.confirm(grouped.id, cancelReview.value.id, { reviewVersion: cancelReview.version, confirmContinue: true,
+    selectedCandidateIds: [cancelCandidate.value.id, groupedFile.value.id], selections: [], acknowledgedUncovered: [cancelPersonReport, cancelFileReport].flatMap(({ report }) =>
+      report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: report.id, scope: scope.name }))) })
+  const cancel = new AbortController(); const publishBeforeCancel = publisher.publish.bind(publisher)
+  const cancelAfterFirst = t.mock.method(publisher, 'publish', async (...args: Parameters<typeof publisher.publish>) => { await publishBeforeCancel(...args); cancel.abort() })
+  const cancelled = await batch.submit(grouped.id, cancelReview.value.id, cancelConfirmation.version, cancel.signal); cancelAfterFirst.mock.restore()
+  assert.equal(cancelled.state, 'stopped'); assert.deepEqual(cancelled.items.map(item => item.phase), ['committed', 'ready'])
+  assert.equal(await readFile(join(view, 'main', 'overview.md'), 'utf8'), '原总览')
+  const fileReport = await impact.check(grouped.id, groupedFile.value.id)
+  const fileReview = await review.create(grouped.id, [fileReport.report.id], { findings: [], dependencies: [] })
+  const fileConfirmation = await review.confirm(grouped.id, fileReview.value.id, { reviewVersion: fileReview.version, confirmContinue: true,
+    selectedCandidateIds: [groupedFile.value.id], selections: [], acknowledgedUncovered: fileReport.report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: fileReport.report.id, scope: scope.name })) })
+  const writeBatch = context.fs.writeText.bind(context.fs)
+  const batchLostResponse = t.mock.method(context.fs, 'writeText', async (...args: Parameters<typeof context.fs.writeText>) => {
+    const result = await writeBatch(...args)
+    if (args[0].displayPath.includes('batches') && args[1].includes('"phase": "locking"')) throw new Error('模拟批量记录写入后响应丢失')
+    return result
+  })
+  await assert.rejects(batch.submit(grouped.id, fileReview.value.id, fileConfirmation.version), /结果需要核查/)
+  batchLostResponse.mock.restore()
+  assert.equal((await batch.inspect(fileReview.value.id)).value.state, 'running')
+  assert.equal((await batch.stopAfterInterrupt(fileReview.value.id)).state, 'stopped')
+  assert.equal((await batch.reconcileItem(fileReview.value.id, groupedFile.value.id)).items[0]!.phase, 'failed')
+  assert.equal(await readFile(join(view, 'main', 'overview.md'), 'utf8'), '原总览')
+  const fileRetryReport = await impact.check(grouped.id, groupedFile.value.id)
+  const fileRetryReview = await review.create(grouped.id, [fileRetryReport.report.id], { findings: [], dependencies: [] })
+  const fileRetryConfirmation = await review.confirm(grouped.id, fileRetryReview.value.id, { reviewVersion: fileRetryReview.version, confirmContinue: true,
+    selectedCandidateIds: [groupedFile.value.id], selections: [], acknowledgedUncovered: fileRetryReport.report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: fileRetryReport.report.id, scope: scope.name })) })
+  const filePublish = publisher.publish.bind(publisher)
+  const fileLostResponse = t.mock.method(publisher, 'publish', async (...args: Parameters<typeof publisher.publish>) => { await filePublish(...args); throw new Error('模拟文件写入后响应丢失') })
+  const fileUncertain = await batch.submit(grouped.id, fileRetryReview.value.id, fileRetryConfirmation.version); fileLostResponse.mock.restore()
+  assert.equal(fileUncertain.items[0]!.phase, 'publishing')
+  await assert.rejects(batch.reconcileItem(fileUncertain.id, groupedFile.value.id), /需用户核查/)
+  const observedFile = await discussion.readRelated(grouped.id, fileTarget)
+  const fileRecovered = await batch.reconcileItem(fileUncertain.id, groupedFile.value.id, { kind: 'accept-result', observedVersion: observedFile.version })
+  assert.equal(fileRecovered.items[0]!.phase, 'committed'); assert.equal(fileRecovered.items[0]!.catalogStatus, 'unregistered')
+  assert.equal(await readFile(join(view, 'main', 'overview.md'), 'utf8'), '待审总览')
+
   const outdated = await prepare('子夜开放', 'outdated')
   const concurrent = await map.readPlace(city.id)
   await map.publishPlaceCandidate({ ...concurrent.document, description: '另一次修改' }, concurrent.version)
@@ -163,9 +268,29 @@ test('可信确认只发布一次地点候选并保留可核查记录', async t 
   await assert.rejects(service.reconcile(changedAfterPublish.nextReview.value.id), /正文已变化/)
   assert.equal((await map.readPlace(city.id)).document.description, '后续资料')
   assert.equal((await discussion.readCandidate(changedAfterPublish.nextCandidate.value.id)).value.status, 'publishing')
+  const catalogFile = join(world.catalogRoot, 'catalog.json'); const catalogBeforeFailure = await readFile(catalogFile, 'utf8')
+  await writeFile(catalogFile, '{broken')
+  const catalogThread = await discussion.createDiscussion(personTarget, 'catalog-failure')
+  const catalogPerson = await characters.read(person.id)
+  const catalogCandidate = await discussion.createCandidate(catalogThread.id, personTarget, formatCharacterDocument({ ...catalogPerson,
+    metadata: { ...catalogPerson.metadata, contentStatus: 'pending' }, body: '目录失败时保留正文' }), '目录失败')
+  const catalogReport = await impact.check(catalogThread.id, catalogCandidate.value.id)
+  const catalogReview = await review.create(catalogThread.id, [catalogReport.report.id], { findings: [], dependencies: [] })
+  const catalogConfirmation = await review.confirm(catalogThread.id, catalogReview.value.id, { reviewVersion: catalogReview.version, confirmContinue: true,
+    selectedCandidateIds: [catalogCandidate.value.id], selections: [], acknowledgedUncovered: catalogReport.report.scopes.filter(scope => scope.status === 'uncovered').map(scope => ({ reportId: catalogReport.report.id, scope: scope.name })) })
+  const catalogFailed = await batch.submit(catalogThread.id, catalogReview.value.id, catalogConfirmation.version)
+  assert.equal(catalogFailed.state, 'stopped'); assert.equal(catalogFailed.items[0]!.phase, 'committed'); assert.equal(catalogFailed.items[0]!.catalogStatus, 'failed')
+  assert.equal((await characters.read(person.id)).body, '目录失败时保留正文\n')
+  await writeFile(catalogFile, catalogBeforeFailure)
+  assert.equal((await batch.recheckCatalog(catalogFailed.id, catalogCandidate.value.id)).items[0]!.catalogStatus, 'stale')
   const recordPath = join(operations, `${draft.value.id}.json`)
   const unknown = (await readFile(recordPath, 'utf8')).replace('"formatVersion": 1', '"formatVersion": 99')
   await writeFile(recordPath, unknown)
   await assert.rejects(service.inspect(draft.value.id))
   assert.equal(await readFile(recordPath, 'utf8'), unknown)
+  const batchPath = join(batches, `${groupReview.value.id}.json`)
+  const unknownBatch = (await readFile(batchPath, 'utf8')).replace('"formatVersion": 1', '"formatVersion": 99')
+  await writeFile(batchPath, unknownBatch)
+  await assert.rejects(batch.inspect(groupReview.value.id))
+  assert.equal(await readFile(batchPath, 'utf8'), unknownBatch)
 })

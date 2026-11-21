@@ -9,6 +9,7 @@ import { CoordinatedOperations } from '@fly-novel/util'
 import { isPathUnder } from '@fly-novel/fs-sandbox'
 import { kindSchema as developmentKindSchema } from '@fly-novel/world-development'
 import { specificKindSchema } from '@fly-novel/world-specific'
+import { sameWorldWorkspace, type WorldWorkspaceConfig } from '../workspace/config.js'
 
 const uuid = z.string().uuid()
 const targetSchema = z.discriminatedUnion('kind', [
@@ -42,6 +43,8 @@ const occupiedRoots = new Set<string>()
 
 /** 由所属模块装配的读取、旧候选检查及正文校验能力。 */
 export interface DiscussionTargetAdapter {
+  readonly worldBinding?: WorldWorkspaceConfig
+  isTargetBoundToWorld?(target: DiscussionTarget, world: WorldWorkspaceConfig): boolean
   read(target: DiscussionTarget): Promise<{ content: string; version: string }>
   assertNoLegacyCandidate(target: DiscussionTarget): Promise<void>
   validateStored(target: DiscussionTarget, content: string): Promise<void>
@@ -61,6 +64,10 @@ export class DiscussionService {
   get boundWorldId(): string { return this.worldId }
   /** 供可信应用验证候选根与其他授权范围不重叠。 */
   get rootDirectory(): string { return this.root }
+  /** 核对候选适配器的完整世界及负责人绑定。 */
+  isBoundToWorld(world: WorldWorkspaceConfig): boolean { return this.adapter.worldBinding !== undefined && sameWorldWorkspace(this.adapter.worldBinding, world) }
+  /** 未明确绑定的目标不能进入受控发布。 */
+  isTargetBoundToWorld(target: DiscussionTarget, world: WorldWorkspaceConfig): boolean { return this.adapter.isTargetBoundToWorld?.(target, world) === true }
   /** 供可信发布装配核验候选文件后端。 */
   hasCoordinatedBackend(): boolean { return this.fs instanceof LocalFileSystem }
 
@@ -68,6 +75,7 @@ export class DiscussionService {
   static async open(options: { worldId: string; root: string; worldRoots: readonly string[]; fs: FileSystem;
     adapter: DiscussionTargetAdapter; singleWriterProcess: true }): Promise<DiscussionService> {
     if (options.singleWriterProcess !== true || !options.worldId.trim()) throw new Error('讨论世界或单进程写入保证无效')
+    if (options.adapter.worldBinding && (options.adapter.worldBinding.worldId !== options.worldId || !options.worldRoots.includes(options.adapter.worldBinding.readRoot))) throw new Error('讨论适配器世界绑定不匹配')
     if (!isAbsolute(options.root) || await realpath(options.root) !== resolve(options.root) || !(await lstat(options.root)).isDirectory()) throw new Error('讨论根必须是现有真实绝对目录')
     for (const root of options.worldRoots) if (await isPathUnder(root, options.root) || await isPathUnder(options.root, root)) throw new Error('讨论根不能与世界读取根重叠')
     for (const name of ['discussions', 'candidates']) {
@@ -202,6 +210,17 @@ export class DiscussionService {
     await this.adapter.validateStored(result.value.target, result.value.content)
     const current = await this.adapter.read(result.value.target)
     return { ...result, intent: 'update' as const, current, stale: current.version !== result.value.baseline }
+  }) }
+
+  /** 在可信发布协调边界内复核候选、旧候选和所属模块约束。 */
+  validateForPublish(discussionId: string, id: string, version: string) { return this.enqueue(async () => {
+    const result = await this.read('candidates', id, candidateSchema); const value = result.value
+    if (value.id !== id || value.worldId !== this.worldId || value.discussionId !== discussionId || value.status !== 'active' || result.version !== version) throw new Error('候选身份、状态或版本不匹配')
+    const current = await this.adapter.read(value.target)
+    if (current.version !== value.baseline) throw new Error('候选基线已过期')
+    await this.adapter.assertNoLegacyCandidate(value.target)
+    await this.adapter.validate(value.target, value.content)
+    return { ...result, current }
   }) }
 
   /** 条件更新已有候选；不会修改当前正文。 */

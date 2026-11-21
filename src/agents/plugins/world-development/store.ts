@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { FileSystem, FsTarget, FsVersion } from '@fly-novel/fs'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { z } from 'zod'
 import { contentSchema, documentSchema, idSchema, kindSchema, parseDocumentJson, type DevelopmentContent, type DevelopmentDocument, type DevelopmentKind } from './format.js'
 
@@ -16,10 +17,12 @@ const occupiedWorlds = new Set<string>(); const occupiedRoots = new Set<string>(
 
 /** 由可信应用持有的初始化规划存储；只保证单进程内串行。 */
 export class DevelopmentStore {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve(); private closed = false; private closing?: Promise<void>
   private constructor(private readonly config: DevelopmentStoreConfig, private readonly rootPath: string, private readonly root: FsTarget, private readonly maxBytes: number, private readonly maxDocuments: number) {}
   get worldId() { return this.config.worldId }
   get rootDirectory() { return this.rootPath }
+  get fileSystem(): FileSystem { return this.config.fs }
   get writable() { return this.config.access === 'read-write' }
   static async open(config: DevelopmentStoreConfig): Promise<DevelopmentStore> {
     if (!config?.fs || config.phase !== 'initialization' || config.singleWriterProcess !== true || typeof config.worldId !== 'string' || !config.worldId || config.worldId.trim() !== config.worldId || typeof config.root !== 'string' || !isAbsolute(config.root) || !['read-only', 'read-write'].includes(config.access) || [config.resolveReference, config.resolveSituation].some(value => value !== undefined && typeof value !== 'function')) throw new DevelopmentError('规划存储配置无效', 'DEVELOPMENT_INVALID_CONFIG')
@@ -33,7 +36,7 @@ export class DevelopmentStore {
     try { for (const folder of [...Object.values(folders), 'candidates']) await store.directory(folder); return store }
     catch (error) { occupiedWorlds.delete(config.worldId); occupiedRoots.delete(root.targetKey); throw error }
   }
-  private enqueue<T>(fn: () => Promise<T>): Promise<T> { if (this.closed) return Promise.reject(new DevelopmentError('规划存储已关闭', 'DEVELOPMENT_CLOSED')); const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result }
+  private enqueue<T>(fn: () => Promise<T>): Promise<T> { if (this.closed) return Promise.reject(new DevelopmentError('规划存储已关闭', 'DEVELOPMENT_CLOSED')); return this.operations.run([this.rootPath], () => { const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result }) }
   private async directory(folder: string): Promise<FsTarget> {
     const path = join(this.rootPath, folder); const info = await this.config.fs.lstat(path); const target = await this.config.fs.resolve(path)
     if (!info || info.type !== 'directory' || !this.config.fs.contains(this.root, target) || this.config.fs.processPath(target) !== path) throw new DevelopmentError('规划目录无效或超出授权范围', 'DEVELOPMENT_FORBIDDEN', folder)
@@ -134,15 +137,18 @@ export class DevelopmentStore {
     this.validateGraph(snapshot.items.map(item => item.document.id === doc.id ? doc : item.document)); await this.verify(doc, signal)
   }) }
   snapshot(signal?: AbortSignal) { return this.enqueue(() => this.scan(signal)) }
-  update(kind: DevelopmentKind, id: string, version: string, input: DevelopmentContent, signal?: AbortSignal) { return this.enqueue(async () => {
+  update(kind: DevelopmentKind, id: string, version: string, input: DevelopmentContent, signal?: AbortSignal) { return this.updateVersioned(kind, id, version, input, false, signal) }
+  /** 发布经可信应用审阅的规划并保留原确认状态。 */
+  publishReviewed(kind: DevelopmentKind, id: string, version: string, input: DevelopmentContent, signal?: AbortSignal) { return this.updateVersioned(kind, id, version, input, true, signal) }
+  private updateVersioned(kind: DevelopmentKind, id: string, version: string, input: DevelopmentContent, reviewed: boolean, signal?: AbortSignal) { return this.enqueue(async () => {
     kindSchema.parse(kind); idSchema.parse(id); const snapshot = await this.scan(signal); const old = snapshot.items.find(item => item.document.kind === kind && item.document.id === id)
     if (!old) throw new DevelopmentError('规划不存在', 'DEVELOPMENT_NOT_FOUND'); if (old.version !== version) throw new DevelopmentError('规划版本变化', 'DEVELOPMENT_CONFLICT')
-    if (old.document.contentStatus !== 'suggested') throw new DevelopmentError('已确认规划不能覆盖', 'DEVELOPMENT_FORBIDDEN')
+    if (!reviewed && old.document.contentStatus !== 'suggested') throw new DevelopmentError('已确认规划不能覆盖', 'DEVELOPMENT_FORBIDDEN')
     if (await this.config.fs.stat(await this.target('candidates', id), signal)) throw new DevelopmentError('已有候选', 'DEVELOPMENT_CONFLICT')
     const content = contentSchema.parse(input)
     if (old.document.person?.kind === 'unresolved' && content.person?.kind === 'linked') content.person.originalClue = old.document.person.description
     if (old.document.person?.kind === 'linked' && content.person?.kind === 'linked' && old.document.person.id === content.person.id && old.document.person.originalClue) content.person.originalClue = old.document.person.originalClue
-    const doc = documentSchema.parse({ ...content, formatVersion: 1, worldId: this.worldId, id, kind, contentStatus: 'suggested' })
+    const doc = documentSchema.parse({ ...content, formatVersion: 1, worldId: this.worldId, id, kind, contentStatus: old.document.contentStatus })
     this.validateGraph(snapshot.items.map(item => item.document.id === id ? doc : item.document)); await this.verify(doc, signal)
     return { path: old.path, version: await this.write(folders[kind], id, doc, { kind: 'replaceIfVersion', version: old.version }, signal) }
   }) }
@@ -180,5 +186,5 @@ export class DevelopmentStore {
     if (found.worldId !== this.worldId || found.overviewId !== overviewId || found.situationId !== situationId) throw new DevelopmentError('局势身份或世界不符', 'DEVELOPMENT_INVALID_DOCUMENT')
     return { status: 'verified' as const, version: found.version ?? null }
   }) }
-  close(): Promise<void> { if (!this.closing) { this.closed = true; this.closing = this.tail.then(() => { occupiedWorlds.delete(this.worldId); occupiedRoots.delete(this.root.targetKey) }) } return this.closing }
+  close(): Promise<void> { if (!this.closing) { this.closed = true; this.closing = this.operations.drain().then(() => { occupiedWorlds.delete(this.worldId); occupiedRoots.delete(this.root.targetKey) }) } return this.closing }
 }

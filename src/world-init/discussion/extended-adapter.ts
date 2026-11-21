@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { parseJson, startSchema, overviewSchema, situationSchema, type SituationStore } from '@fly-novel/initial-situation'
 import { parseDocumentJson, documentSchema, type DevelopmentStore } from '@fly-novel/world-development'
 import { parseSpecificJson, specificDocumentSchema, type SpecificStore } from '@fly-novel/world-specific'
-import type { WorldWorkspaceConfig } from '../workspace/config.js'
+import { sameWorldWorkspace, snapshotWorldWorkspace, type WorldWorkspaceConfig } from '../workspace/config.js'
 import type { DiscussionTargetAdapter } from './service.js'
 
 type Owned<T> = { agentId: string; store: T }
@@ -12,6 +12,10 @@ type Owned<T> = { agentId: string; store: T }
 export function withExtendedDiscussionAdapter(base: DiscussionTargetAdapter, world: WorldWorkspaceConfig, options: {
   situation?: Owned<SituationStore>; development?: Owned<DevelopmentStore>; specific?: Owned<SpecificStore>
 }): DiscussionTargetAdapter {
+  world = snapshotWorldWorkspace(world)
+  options = { ...options, ...(options.situation ? { situation: { ...options.situation } } : {}),
+    ...(options.development ? { development: { ...options.development } } : {}), ...(options.specific ? { specific: { ...options.specific } } : {}) }
+  if (base.worldBinding && !sameWorldWorkspace(base.worldBinding, world)) throw new Error('候选适配器世界绑定不匹配')
   for (const item of [options.situation, options.development, options.specific]) {
     if (item && (item.store.worldId !== world.worldId || !world.agents.some(agent => agent.agentId === item.agentId && agent.writableRoot === item.store.rootDirectory))) throw new Error('候选存储与世界负责人不匹配')
   }
@@ -20,6 +24,14 @@ export function withExtendedDiscussionAdapter(base: DiscussionTargetAdapter, wor
   const specific = () => { if (!options.specific) throw new Error('尚未装配专有内容候选能力'); return options.specific.store }
   const content = (document: unknown) => `${JSON.stringify(document, null, 2)}\n`
   return {
+    worldBinding: snapshotWorldWorkspace(world),
+    isTargetBoundToWorld(target, expected) {
+      if (!sameWorldWorkspace(world, expected)) return false
+      if (target.kind === 'situation' || target.kind === 'situation-start') return options.situation !== undefined
+      if (target.kind === 'development') return options.development !== undefined
+      if (target.kind === 'specific') return options.specific !== undefined
+      return base.isTargetBoundToWorld?.(target, expected) === true
+    },
     async validateStored(target, text) {
       if (target.kind === 'situation-start') { if (parseJson(text, startSchema).worldId !== world.worldId) throw new Error('世界起点候选身份不匹配'); return }
       if (target.kind === 'situation') { const doc = target.documentKind === 'overview' ? parseJson(text, overviewSchema) : parseJson(text, situationSchema); if (doc.id !== target.id || doc.worldId !== world.worldId || doc.contentStatus !== 'suggested') throw new Error('局势候选身份不匹配'); return }

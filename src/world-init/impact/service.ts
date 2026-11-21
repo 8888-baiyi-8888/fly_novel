@@ -11,7 +11,7 @@ import { HistoryQueries, HistoryStore } from '@fly-novel/history'
 import { OrganizationQueries, OrganizationStore } from '@fly-novel/organization'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { parseDiscussionTarget, type DiscussionService } from '../discussion/service.js'
-import { validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
+import { sameWorldWorkspace, validateWorldWorkspaceConfigs, type WorldWorkspaceConfig } from '../workspace/config.js'
 
 const uuid = z.string().uuid()
 const sourceSchema = z.object({ kind: z.string(), id: z.string(), version: z.string(), content: z.string() }).strict()
@@ -40,6 +40,7 @@ export class ImpactService {
   get rootDirectory(): string { return this.root }
   /** 用于可信应用验证报告与讨论服务来自同一装配。 */
   isBoundTo(service: DiscussionService): boolean { return this.discussion === service }
+  isBoundToWorld(world: WorldWorkspaceConfig): boolean { return sameWorldWorkspace(this.world, world) }
   /** 只认可接入世界协调的本机后端；其他后端不能用于受控发布。 */
   hasCoordinatedBackends(): boolean {
     return this.fs instanceof LocalFileSystem && [this.map, this.history, this.organization].every(store => !store || store.fileSystem instanceof LocalFileSystem)

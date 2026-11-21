@@ -171,13 +171,21 @@ export class CharacterRelationshipStore {
   }
   /** 更新初始化方案；旧摘要、确认状态和配对冲突均拒绝覆盖。 */
   update(id: string, version: string, content: Content, signal?: AbortSignal): Promise<Stored> {
+    return this.updateVersioned(id, version, content, false, signal)
+  }
+  /** 发布经可信应用审阅的关系；不新增条目并保留原确认状态。 */
+  publishReviewed(id: string, version: string, content: Content, signal?: AbortSignal): Promise<Stored> {
+    return this.updateVersioned(id, version, content, true, signal)
+  }
+  private updateVersioned(id: string, version: string, content: Content, reviewed: boolean, signal?: AbortSignal): Promise<Stored> {
     return this.run(async () => {
       const all = await this.scan(signal); const old = all.find(value => value.document.id === id)
       if (!old) throw new Error('人物关系不存在')
       if (old.version !== version) throw new Error('人物关系版本已变化')
-      if (old.document.contentStatus !== 'suggested') throw new Error('已确认关系不能直接覆盖')
+      if (!reviewed && old.document.contentStatus !== 'suggested') throw new Error('已确认关系不能直接覆盖')
       const oldIds = new Set(old.document.relations.map(item => item.id))
       if (content.relations.some(item => item.id !== undefined && !oldIds.has(item.id))) throw new Error('新关系条目不能指定 ID')
+      if (reviewed && content.relations.some(item => item.id === undefined)) throw new Error('人物关系候选暂不支持新增条目')
       const document = characterRelationshipSchema.parse({ ...old.document, ...content,
         relations: content.relations.map(item => ({ ...item, id: item.id ?? randomUUID() })) })
       this.validateParticipants(old.document, document)

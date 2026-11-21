@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { FileSystem, FsTarget, FsVersion } from '@fly-novel/fs'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { z } from 'zod'
 import { overviewSchema, parseJson, situationIdSchema, situationSchema, startSchema, type Overview, type Situation, type Start } from './format.js'
 
@@ -20,10 +21,12 @@ const worlds = new Set<string>(); const roots = new Set<string>()
 
 /** 初始化局势文件存储；调用方管理文件后端并保证单可信写入进程。 */
 export class SituationStore {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve(); private closed = false; private closing?: Promise<void>
   private constructor(private readonly config: SituationStoreConfig, private readonly rootPath: string, private readonly root: FsTarget, private readonly maxBytes: number, private readonly maxDocuments: number) {}
   get worldId() { return this.config.worldId }
   get rootDirectory() { return this.rootPath }
+  get fileSystem(): FileSystem { return this.config.fs }
   get writable() { return this.config.access === 'read-write' }
   static async open(config: SituationStoreConfig): Promise<SituationStore> {
     if (!config?.fs || config.phase !== 'initialization' || config.singleWriterProcess !== true || !config.worldId || config.worldId.trim() !== config.worldId || !isAbsolute(config.root) || !['read-only', 'read-write'].includes(config.access)) throw new SituationError('局势存储配置无效', 'SITUATION_INVALID_CONFIG')
@@ -39,7 +42,7 @@ export class SituationStore {
   }
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new SituationError('局势存储已关闭', 'SITUATION_CLOSED'))
-    const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result
+    return this.operations.run([this.rootPath], () => { const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result })
   }
   private async directory(name: Folder): Promise<FsTarget> {
     const path = join(this.rootPath, name); const info = await this.config.fs.lstat(path); const target = await this.config.fs.resolve(path)
@@ -152,17 +155,20 @@ export class SituationStore {
   }) }
   private folder(kind: Kind): 'overviews' | 'situations' { return kind === 'overview' ? 'overviews' : 'situations' }
   private async readDoc(kind: Kind, id: string, signal?: AbortSignal): Promise<Stored<Doc>> { return kind === 'overview' ? this.read('overviews', id, overviewSchema, signal) : this.read('situations', id, situationSchema, signal) }
-  private async makeDoc(kind: Kind, id: string, input: OverviewInput | SituationInput, old: Doc, signal?: AbortSignal): Promise<Doc> {
-    const value = { ...input, formatVersion: 1, worldId: this.worldId, id, contentStatus: 'suggested' }
+  private async makeDoc(kind: Kind, id: string, input: OverviewInput | SituationInput, old: Doc, signal?: AbortSignal, status: Doc['contentStatus'] = 'suggested'): Promise<Doc> {
+    const value = { ...input, formatVersion: 1, worldId: this.worldId, id, contentStatus: status }
     if (kind === 'overview') return overviewSchema.parse(value)
     const doc = situationSchema.parse(value); if (!('overviewId' in old) || doc.overviewId !== old.overviewId) throw new SituationError('不能把局势移到另一方案', 'SITUATION_FORBIDDEN')
     await this.read('overviews', doc.overviewId, overviewSchema, signal); this.checkRelations(doc, (await this.list('situations', situationSchema, signal)).map(item => item.document)); await this.checkReferences(doc, signal); return doc
   }
-  update(kind: Kind, id: string, version: string, input: OverviewInput | SituationInput, signal?: AbortSignal) { return this.enqueue(async () => {
+  update(kind: Kind, id: string, version: string, input: OverviewInput | SituationInput, signal?: AbortSignal) { return this.updateVersioned(kind, id, version, input, false, signal) }
+  /** 发布经可信应用审阅的局势并保留原确认状态。 */
+  publishReviewed(kind: Kind, id: string, version: string, input: OverviewInput | SituationInput, signal?: AbortSignal) { return this.updateVersioned(kind, id, version, input, true, signal) }
+  private updateVersioned(kind: Kind, id: string, version: string, input: OverviewInput | SituationInput, reviewed: boolean, signal?: AbortSignal) { return this.enqueue(async () => {
     const old = await this.readDoc(kind, id, signal); if (old.version !== version) throw new SituationError('局势版本已变化', 'SITUATION_CONFLICT')
-    if (old.document.contentStatus !== 'suggested') throw new SituationError('已确认资料不能直接覆盖', 'SITUATION_FORBIDDEN')
+    if (!reviewed && old.document.contentStatus !== 'suggested') throw new SituationError('已确认资料不能直接覆盖', 'SITUATION_FORBIDDEN')
     if (await this.config.fs.stat(await this.target('candidates', id), signal)) throw new SituationError('局势已有待审候选', 'SITUATION_CONFLICT')
-    const doc = await this.makeDoc(kind, id, input, old.document, signal); return { path: old.path, version: await this.write(this.folder(kind), id, doc, { kind: 'replaceIfVersion', version: old.version }, signal) }
+    const doc = await this.makeDoc(kind, id, input, old.document, signal, old.document.contentStatus); return { path: old.path, version: await this.write(this.folder(kind), id, doc, { kind: 'replaceIfVersion', version: old.version }, signal) }
   }) }
   prepare(kind: Kind, id: string, version: string, input: OverviewInput | SituationInput, signal?: AbortSignal) { return this.enqueue(async () => {
     const old = await this.readDoc(kind, id, signal); if (old.version !== version) throw new SituationError('局势版本已变化', 'SITUATION_CONFLICT')
@@ -175,5 +181,5 @@ export class SituationStore {
     if (doc.kind !== kind || doc.document.id !== id || doc.document.worldId !== this.worldId || doc.document.contentStatus !== 'suggested' || (kind === 'situation') !== ('overviewId' in doc.document)) throw new SituationError('局势候选身份无效', 'SITUATION_INVALID_DOCUMENT')
     return { ...candidate, stale: old.version !== doc.baseline }
   }) }
-  close(): Promise<void> { if (!this.closing) { this.closed = true; this.closing = this.tail.then(() => { worlds.delete(this.worldId); roots.delete(this.root.targetKey) }) } return this.closing }
+  close(): Promise<void> { if (!this.closing) { this.closed = true; this.closing = this.operations.drain().then(() => { worlds.delete(this.worldId); roots.delete(this.root.targetKey) }) } return this.closing }
 }

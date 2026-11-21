@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { formatMapDocument, parseMapPlace, type MapStore } from '@fly-novel/map'
 import { formatCharacterDocument, parseCharacterDocument, formatCharacterRelationship, parseCharacterRelationship, type CharacterStore, type CharacterRelationshipStore } from '@fly-novel/character'
 import type { DiscussionTargetAdapter } from './service.js'
-import type { WorldWorkspaceConfig } from '../workspace/config.js'
+import { sameWorldWorkspace, snapshotWorldWorkspace, type WorldWorkspaceConfig } from '../workspace/config.js'
 import { formatOrganizationDocument, parseOrganization, parseOrganizationRelation, parseOrganizationMembership, type OrganizationStore } from '@fly-novel/organization'
 import { formatHistoryEvent, parseHistoryEvent, type HistoryStore } from '@fly-novel/history'
 
@@ -18,6 +18,9 @@ export function createInitialDiscussionAdapter(world: WorldWorkspaceConfig, opti
   map?: { agentId: string; store: MapStore }; characters?: { agentId: string; store: CharacterStore }
   organization?: { agentId: string; store: OrganizationStore }; history?: { agentId: string; store: HistoryStore }; relationships?: CharacterRelationshipStore
 }): DiscussionTargetAdapter {
+  world = snapshotWorldWorkspace(world)
+  options = { ...options, ...(options.map ? { map: { ...options.map } } : {}), ...(options.characters ? { characters: { ...options.characters } } : {}),
+    ...(options.organization ? { organization: { ...options.organization } } : {}), ...(options.history ? { history: { ...options.history } } : {}) }
   const { organization, history, relationships } = options
   const mapOwner = world.agents.find(item => item.agentId === options.map?.agentId)
   const characterOwner = world.agents.find(item => item.agentId === options.characters?.agentId)
@@ -29,6 +32,16 @@ export function createInitialDiscussionAdapter(world: WorldWorkspaceConfig, opti
   const map = () => { if (!options.map) throw new Error('尚未装配地图候选能力'); return options.map.store }
   const characters = () => { if (!options.characters) throw new Error('尚未装配人物候选能力'); return options.characters.store }
   return {
+    worldBinding: snapshotWorldWorkspace(world),
+    isTargetBoundToWorld(target, expected) {
+      if (!sameWorldWorkspace(world, expected)) return false
+      if (target.kind === 'place') return options.map !== undefined
+      if (target.kind === 'character') return options.characters !== undefined
+      if (target.kind === 'character-relationship') return relationships !== undefined
+      if (target.kind === 'history-event') return history !== undefined
+      if (target.kind === 'organization' || target.kind === 'organization-relation' || target.kind === 'organization-membership') return organization !== undefined
+      return false
+    },
     async validateStored(target, content) {
       if (target.kind === 'place') { const doc = parseMapPlace(content); if (doc.id !== target.id || doc.worldId !== world.worldId) throw new Error('地点候选身份不匹配'); return }
       if (target.kind === 'character') { const doc = parseCharacterDocument(content); if (doc.metadata.id !== target.id || doc.metadata.contentStatus !== 'pending') throw new Error('人物候选身份或状态不匹配'); return }

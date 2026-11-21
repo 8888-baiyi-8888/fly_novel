@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { FileSystem, FsTarget, FsVersion } from '@fly-novel/fs'
+import { CoordinatedOperations } from '@fly-novel/util'
 import { z } from 'zod'
 import { parseSpecificJson, specificContentSchema, specificDocumentSchema, specificIdSchema, specificKindSchema, type SpecificContent, type SpecificDocument, type SpecificKind } from './format.js'
 
@@ -15,10 +16,12 @@ const worlds = new Set<string>(); const roots = new Set<string>()
 
 /** 世界专有内容初始化存储；由可信调用方持有后端并保证单进程写入。 */
 export class SpecificStore {
+  private readonly operations = new CoordinatedOperations()
   private tail: Promise<void> = Promise.resolve(); private closed = false; private closing?: Promise<void>
   private constructor(private readonly config: SpecificStoreConfig, private readonly rootPath: string, private readonly root: FsTarget, private readonly maxBytes: number, private readonly maxDocuments: number) {}
   get worldId() { return this.config.worldId }
   get rootDirectory() { return this.rootPath }
+  get fileSystem(): FileSystem { return this.config.fs }
   get writable() { return this.config.access === 'read-write' }
   static async open(config: SpecificStoreConfig): Promise<SpecificStore> {
     if (!config?.fs || config.phase !== 'initialization' || config.singleWriterProcess !== true || typeof config.worldId !== 'string' || !config.worldId || config.worldId.trim() !== config.worldId || typeof config.root !== 'string' || !isAbsolute(config.root) || !['read-only', 'read-write'].includes(config.access) || (config.resolveReference !== undefined && typeof config.resolveReference !== 'function')) throw new SpecificError('专有内容存储配置无效', 'SPECIFIC_INVALID_CONFIG')
@@ -32,7 +35,7 @@ export class SpecificStore {
     try { for (const folder of ['topics', 'items', 'candidates']) await store.directory(folder); return store }
     catch (error) { worlds.delete(config.worldId); roots.delete(root.targetKey); throw error }
   }
-  private enqueue<T>(fn: () => Promise<T>): Promise<T> { if (this.closed) return Promise.reject(new SpecificError('专有内容存储已关闭', 'SPECIFIC_CLOSED')); const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result }
+  private enqueue<T>(fn: () => Promise<T>): Promise<T> { if (this.closed) return Promise.reject(new SpecificError('专有内容存储已关闭', 'SPECIFIC_CLOSED')); return this.operations.run([this.rootPath], () => { const result = this.tail.then(fn); this.tail = result.then(() => undefined, () => undefined); return result }) }
   private async directory(folder: string): Promise<FsTarget> {
     const path = join(this.rootPath, folder); const info = await this.config.fs.lstat(path); const target = await this.config.fs.resolve(path)
     if (!info || info.type !== 'directory' || !this.config.fs.contains(this.root, target) || this.config.fs.processPath(target) !== path) throw new SpecificError('专有内容目录无效或越界', 'SPECIFIC_FORBIDDEN', folder)
@@ -120,12 +123,15 @@ export class SpecificStore {
     this.graph(snapshot.items.map(item => item.document.id === doc.id ? doc : item.document)); await this.verify(doc, signal)
   }) }
   snapshot(signal?: AbortSignal) { return this.enqueue(() => this.scan(signal)) }
-  update(kind: SpecificKind, id: string, version: string, input: SpecificContent, signal?: AbortSignal) { return this.enqueue(async () => {
+  update(kind: SpecificKind, id: string, version: string, input: SpecificContent, signal?: AbortSignal) { return this.updateVersioned(kind, id, version, input, false, signal) }
+  /** 发布经可信应用审阅的内容并保留原确认状态。 */
+  publishReviewed(kind: SpecificKind, id: string, version: string, input: SpecificContent, signal?: AbortSignal) { return this.updateVersioned(kind, id, version, input, true, signal) }
+  private updateVersioned(kind: SpecificKind, id: string, version: string, input: SpecificContent, reviewed: boolean, signal?: AbortSignal) { return this.enqueue(async () => {
     specificKindSchema.parse(kind); specificIdSchema.parse(id); const snapshot = await this.scan(signal); const old = snapshot.items.find(value => value.document.kind === kind && value.document.id === id)
     if (!old) throw new SpecificError('专有内容不存在', 'SPECIFIC_NOT_FOUND'); if (old.version !== version) throw new SpecificError('专有内容版本变化', 'SPECIFIC_CONFLICT')
-    if (old.document.contentStatus !== 'suggested') throw new SpecificError('已确认内容不能覆盖', 'SPECIFIC_FORBIDDEN')
+    if (!reviewed && old.document.contentStatus !== 'suggested') throw new SpecificError('已确认内容不能覆盖', 'SPECIFIC_FORBIDDEN')
     if (await this.config.fs.stat(await this.target('candidates', id), signal)) throw new SpecificError('已有待审候选', 'SPECIFIC_CONFLICT')
-    const doc = specificDocumentSchema.parse({ ...specificContentSchema.parse(input), formatVersion: 1, worldId: this.worldId, id, kind, contentStatus: 'suggested' })
+    const doc = specificDocumentSchema.parse({ ...specificContentSchema.parse(input), formatVersion: 1, worldId: this.worldId, id, kind, contentStatus: old.document.contentStatus })
     this.graph(snapshot.items.map(value => value.document.id === id ? doc : value.document)); await this.verify(doc, signal)
     return { path: old.path, version: await this.write(folders[kind], id, doc, { kind: 'replaceIfVersion', version: old.version }, signal) }
   }) }
@@ -151,5 +157,5 @@ export class SpecificStore {
     if (!observedVersion || !found.version) return { status: 'version_unknown' as const }
     return { status: found.version === observedVersion ? 'current' as const : 'changed' as const }
   }) }
-  close(): Promise<void> { if (!this.closing) { this.closed = true; this.closing = this.tail.then(() => { worlds.delete(this.worldId); roots.delete(this.root.targetKey) }) } return this.closing }
+  close(): Promise<void> { if (!this.closing) { this.closed = true; this.closing = this.operations.drain().then(() => { worlds.delete(this.worldId); roots.delete(this.root.targetKey) }) } return this.closing }
 }
