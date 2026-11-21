@@ -50,7 +50,7 @@ test('可信确认只发布一次地点候选并保留可核查记录', async t 
   const publisher = await TargetPublisher.create(world, context.fs, { map: { agentId: 'map', store: map }, characters: { agentId: 'character', store: characters } })
   const wrongBinding = { ...world, mainAgent: { ...world.mainAgent, agentId: 'other-main' } }
   await assert.rejects(BatchCommitService.open({ workspaces: [wrongBinding], worldId: world.worldId, root: batches, fs: context.fs, gate, discussion, impact, review, publisher, sessionRoots: [], singleWriterProcess: true }), /身份不匹配/)
-  const batch = await BatchCommitService.open({ workspaces: [world], worldId: world.worldId, root: batches, fs: context.fs, gate, discussion, impact, review, publisher, sessionRoots: [], singleWriterProcess: true })
+  let batch = await BatchCommitService.open({ workspaces: [world], worldId: world.worldId, root: batches, fs: context.fs, gate, discussion, impact, review, publisher, sessionRoots: [], singleWriterProcess: true })
   t.after(async () => { await batch.close(); await service.close(); await gate.close() })
   const target = { kind: 'place' as const, id: city.id }; const thread = await discussion.createDiscussion(target, 'session')
   const before = await map.readPlace(city.id)
@@ -221,6 +221,8 @@ test('可信确认只发布一次地点候选并保留可核查记录', async t 
   })
   await assert.rejects(batch.submit(grouped.id, fileReview.value.id, fileConfirmation.version), /结果需要核查/)
   batchLostResponse.mock.restore()
+  await batch.close()
+  batch = await BatchCommitService.open({ workspaces: [world], worldId: world.worldId, root: batches, fs: context.fs, gate, discussion, impact, review, publisher, sessionRoots: [], singleWriterProcess: true })
   assert.equal((await batch.inspect(fileReview.value.id)).value.state, 'running')
   assert.equal((await batch.stopAfterInterrupt(fileReview.value.id)).state, 'stopped')
   assert.equal((await batch.reconcileItem(fileReview.value.id, groupedFile.value.id)).items[0]!.phase, 'failed')
