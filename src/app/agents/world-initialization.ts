@@ -435,6 +435,11 @@ async function createWorldInitializationAgentWithWorkspaceInternal(workspace: Wo
     if (developmentConfig) agent.context.tools.register(createWorldDevelopmentDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (specificConfig) agent.context.tools.register(createWorldSpecificDelegationTool(agent.context.subagents, agent.info.identity.id))
     if (discussionBinding) for (const tool of await createDiscussionTools(discussionBinding.service, discussionBinding.discussionId, agent.info.identity.id, discussionBinding.additionalTargets)) agent.context.tools.register(tool)
+    if (discussion) agent.context.systemPrompt.section({ name: 'world-initialization:discussion', order: 20, interpolate: false,
+      text: `当前为局部讨论阶段。当前方案、对话和待审候选是独立状态；保存候选不等于用户确认或提交。
+先读取授权目标的实际正文和版本，按需委派对应专用 Agent 分析；它们的回复只是建议。用户只询问可能性时回答问题，不主动保存修改。
+用户要求修改且提供讨论工具时，使用 discussion_read 核对目标及现有候选，再按工具要求保存完整候选；继续修改时使用读取所得候选版本。跨模块内容按授权目标逐项处理并分别报告结果，不把一个结果当作全部成功。
+展示当前资料、候选和基线状态；资料过期、目标未授权、模块不支持、工具失败或结果不确定时明确说明，不直接写当前资料、不盲目重试。停止生成不等于放弃候选，放弃由可信应用按用户明确意图处理。不要声称完成影响检查或提交。` })
     const createdAgent = agent
     const draftRelative = relative(roots.viewRoot, roots.draftRoot).split(sep).join('/')
     if (!discussion) agent.context.tools.register(defineTool({

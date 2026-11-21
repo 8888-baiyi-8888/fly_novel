@@ -80,6 +80,8 @@
 
 部署配置传入 `discussion: { firstVersionComplete: true }` 可显式选择讨论装配；判断由可信调用方提供，不从 Session 或文件推断。普通文件工具、通用子 Agent 和按需委派的专用 Agent 只能读取与搜索，不借用初始化业务写句柄；初始化总览保存工具不可用。主 Agent 和专用 Agent 的讨论 Session 与初始化 Session 分离，恢复 Session 不改变当前工具权限。可选 `binding` 由可信应用提供讨论服务、讨论 ID 和可选关联目标，主 Agent 的候选工具只能使用这些目标；主 Session ID 必须与讨论记录一致。服务由调用方持有并关闭，候选目录不能与任一世界读取根或 Session 目录重叠。该模式暂不装配目录工具。
 
+应用切换目标时关闭当前 Agent，并以另一讨论记录及其 Session 配置创建 Agent；返回原讨论时使用原 Session ID 和 `resume`。关联目标授权由可信应用重新提供；候选可通过讨论服务查询，显式放弃时调用服务的条件放弃操作。取消本轮、切换、子任务失败或关闭不会自动放弃已有候选；结果不确定时先按讨论查询。
+
 世界入口的部署配置可提供 `mainSession: { sessionRoot, sessionId, sessionMode }`，由可信应用使用 `create` 新建或 `resume` 恢复主 Agent 的 JSONL Session。`sessionRoot` 必须是现有绝对真实目录，不能与传入的任何世界读取根重叠；存储身份由世界 ID、主 Agent 身份和 Session ID 派生，重建时必须使用相同的值和目录。未提供配置时使用内存 Session。恢复后用户可在同一会话继续，主 Agent 根据历史和获授权工具核对成果并决定后续操作；中断工具结果未知时不得假设成功或盲目重试。持久化恢复的是会话历史，不保证模型正确排查，也不提供长期记忆。调用方须等待 `dispose()` 完成，后端随主 Agent 释放；已保存的世界成果不会因 Session 关闭而删除。
 
 旧的 `createWorldInitializationAgentWithWorkspace` 主 Agent 没有世界业务身份，不参与新入口的身份占用；应用不能通过同时使用旧入口绕过同一世界目录的写入协调。角色资料服务和角色 Agent 的 `read_file` 直接访问文件，不产生普通文件工具的观察事件；观察策略本身不授予路径权限。角色 Session 恢复的是对话历史，不代表恢复长期记忆。
