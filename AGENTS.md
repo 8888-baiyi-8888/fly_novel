@@ -37,6 +37,8 @@ src/world-init/workspace/catalog/ 资料目录格式、持久化与成果路径�
 src/world-init/workspace/catalog/service.ts 世界级资料目录服务与可信身份绑定
 src/app/world-initialization-files-debug.ts 世界初始化受控文件工具的真实模型交互调试入口
 src/app/world-initialization-entry.ts 世界初始化可信应用及业务服务装配入口
+src/app/world-initialization-full-example.ts 世界初始化全流程真实模型样例，用户输入由文件顶部字符串模拟
+src/app/world-initialization-progress.ts 世界初始化样例的主 Agent 实时进度提示
 src/app/world-initialization-workflow.ts 世界初始化任务、讨论、审阅与发布的可信交互 API
 src/app/world-review.ts 世界资料审阅正文、差异与建议的可信应用展示入口
 src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests

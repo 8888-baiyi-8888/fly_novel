@@ -21,3 +21,5 @@ pnpm test
 - [应用入口与 Agent 调试](src/app/README.md)
 - [世界初始化工作流方案](docs/workflows/word-initialization/world-initialization.md)
 - [项目目录架构](docs/architecture.md)
+
+真实模型完整流程样例可通过 `pnpm run world-initialization-full-example` 启动；输入字符串与确认动作可在[样例源码](src/app/world-initialization-full-example.ts)中修改。样例使用隔离目录并模拟用户确认，具体范围及限制见[应用说明](src/app/README.md)。
