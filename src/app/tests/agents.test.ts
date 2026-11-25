@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
+import { LlmAdapter, LlmError, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import { ToolsService, type ToolDefinition } from '@fly-novel/tools'
 import configured = require('../call-llm.js')
 import { createCharacterAgent, createDirectorAgent, createWorldInitializationAgent, createWriterAgent } from '../agents/index.js'
@@ -13,6 +13,66 @@ class Adapter extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
+
+test('导演应用入口传递故事背景并在使用后释放实例', async (t) => {
+  const adapter = new Adapter()
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter }))
+  const director = await createDirectorAgent()
+  const session = director.context.sessions.list()[0]!
+  const prompt = '事实：夜间城门关闭。方向：城防与商贸可能趋紧。未知：城门地形。请规划故事。'
+  try {
+    assert.deepEqual(await director.run({ prompt }), { content: '完成' })
+    assert.match(JSON.stringify(adapter.requests[0]?.messages), /夜间城门关闭/)
+    assert.match(JSON.stringify(adapter.requests[0]?.messages), /发展方向/)
+  } finally {
+    await director.dispose()
+  }
+  assert.equal(director.state, 'disposed')
+  assert.throws(() => session.read(), /已关闭/)
+})
+
+test('导演应用入口传播模型失败并允许释放实例', async (t) => {
+  class FailingAdapter extends LlmAdapter {
+    override async *stream(): AsyncIterable<StreamChunk> {
+      yield { type: 'finish', reason: { kind: 'error', failure: { message: '模型不可用', code: 'PROVIDER_ERROR' } } }
+    }
+  }
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter: new FailingAdapter() }))
+  const director = await createDirectorAgent()
+  try {
+    await assert.rejects(director.run({ prompt: '规划故事' }), (error) => error instanceof LlmError && error.code === 'PROVIDER_ERROR')
+  } finally {
+    await director.dispose()
+  }
+  assert.equal(director.state, 'disposed')
+})
+
+test('导演应用入口取消活动请求并释放实例', async (t) => {
+  class WaitingAdapter extends LlmAdapter {
+    private notifyStarted: () => void = () => undefined
+    readonly started = new Promise<void>((resolve) => { this.notifyStarted = resolve })
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      this.notifyStarted()
+      await new Promise<void>((resolve) => {
+        if (options.signal?.aborted) resolve()
+        else options.signal?.addEventListener('abort', () => resolve(), { once: true })
+      })
+      yield { type: 'finish', reason: { kind: 'aborted', failure: { message: '请求已取消', code: 'ABORTED' } } }
+    }
+  }
+  const adapter = new WaitingAdapter()
+  t.mock.method(configured, 'loadConfiguredAdapter', async (provider: string) => ({ provider, model: 'test', adapter }))
+  const director = await createDirectorAgent()
+  try {
+    const run = director.run({ prompt: '规划故事' })
+    await adapter.started
+    director.cancel()
+    await assert.rejects(run, (error) => error instanceof LlmError && error.code === 'ABORTED')
+  } finally {
+    await director.dispose()
+  }
+  assert.equal(director.state, 'disposed')
+})
 
 test('各 Agent 创建函数自行读取配置并创建独立实例', async (t) => {
   const adapter = new Adapter()

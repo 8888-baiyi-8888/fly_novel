@@ -5,6 +5,7 @@
 - `character-creator.ts`：角色创建 Agent 的独立应用装配与生命周期入口。
 - `discussion-subagent.ts`：局部讨论专用 Agent 的只读装配与生命周期。
 - `discussion-tools.ts`：绑定讨论目标的读取和候选工具。
+- `director.ts`：导演 Agent 的基础应用创建入口。
 - `history-agent.ts`：历史 Agent 的独立应用装配与生命周期入口。
 - `impact-tools.ts`：绑定讨论目标的只读影响检查工具。
 - `index.ts`：模块入口和导出。

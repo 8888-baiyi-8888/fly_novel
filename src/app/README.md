@@ -54,6 +54,8 @@
 
 `agents/` 分别提供世界初始化主 Agent、角色 Agent、导演 Agent 和写作 Agent 的创建函数。各创建函数从本机 DeepSeek 配置创建适配器，以当前工作目录为授权目录，并按各自工具列表逐项注册；单项失败时记录错误并继续创建。每次创建独立实例，调用方使用完毕后调用返回的 `agent.dispose()`。世界初始化主 Agent 使用当前目录下 `src/agents/world-initialization-main-agent/skills`，要求以仓库根目录启动；Skill 样例不随构建自动复制。
 
+导演入口接收调用方通过 `agent.run({ prompt })` 提供的故事任务和背景，返回建议文本；失败或取消会向调用方报错，调用方仍须等待 `agent.dispose()`。该入口不自动读取世界资料、调用角色或保存故事。
+
 `createWorldInitializationAgentWithWorkspace` 接收可信应用显式指定的现有 `viewRoot`、`draftRoot` 和 `confirmedRoot` 绝对目录；创建前校验其真实路径与可写范围。它注册文件、搜索和委派工具，主 Agent 只能修改草稿根，通用子 Agent 只读；可选的角色创建 Agent 使用下文所述角色资料服务。已确认根不能与上游平台临时可写根重叠。内置 Skill 来源单独授权，Skill 正文可加载，但其资源路径不会因此自动成为文件工具的读取范围。该入口要求以仓库根目录启动，并适用于可信本地工作区；路径检查不能抵御恶意并发替换或硬链接。它不实现世界资料确认和持久化流程。
 
 受控工作区为主 Agent 注册 `save_first_world_plan`：接收完整方案正文，在主 Agent 草稿根以独立名称创建带待审标题的 Markdown 文件，返回相对路径；创建条件禁止覆盖已有文件。结果为 `unknown` 时保留目标路径和错误信息，调用方须先核查实际状态，不能直接断定保存失败或成功。工具不会确认世界事实，也不验证正文完整性；是否在完整整合后调用及如何引用角色成果由主 Agent 决定。
