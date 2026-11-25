@@ -14,123 +14,26 @@
 
 ## 仓库结构
 
-当前已存在的项目文件：
+根目录只列出直接子目录和重要文件。下级目录按需使用 `AGENTS.md` 说明结构或专属规则；未设置的目录遵循上级规则，目录职责也可查阅对应 README。
 
 ```text
-.agents/           Agent 决策记录目录，存放非简单变更的重要工程决定
-.fly-novel/        模型配置样例与本机配置，仅样例提交 Git（见 src/config/README.md）
-docs/              开发文档目录，存放架构、模块设计、开发流程、决策背景、接口约定和排障记录（见 docs/AGENTS.md）
-docs/cookbook/     可重复执行的本地调试与验证步骤
-src/               源码目录，包含应用组装、LLM 调用、Agent 运行框架及工具（见 src/README.md）
-src/app/agents/    各类 Agent 的应用层创建入口
-src/app/agents/loop-options.ts 世界初始化 Agent 的可信步数限制校验
-src/app/agents/discussion-subagent.ts 局部讨论专用 Agent 的只读装配与生命周期
-src/app/agents/discussion-tools.ts 绑定讨论目标的读取和候选工具
-src/app/agents/impact-tools.ts 绑定讨论目标的只读影响检查工具
-src/world-init/    世界初始化业务能力目录，测试放在 src/world-init/tests/
-src/world-init/discussion/ 局部讨论记录、候选版本与首批地点和人物适配
-src/world-init/impact/ 影响线索采集、审阅确认、单项及多目标受控发布与恢复记录
-src/world-init/storage/ 世界资料共享存储的可信装配和生命周期管理
-src/world-init/recovery/ 世界初始化记录的只读发现与恢复能力
-src/world-init/workspace/ 多世界工作区配置校验、Agent 身份占用及资料目录
-src/world-init/workspace/catalog/ 资料目录格式、持久化与成果路径校验
-src/world-init/workspace/catalog/service.ts 世界级资料目录服务与可信身份绑定
-src/app/world-initialization-files-debug.ts 世界初始化受控文件工具的真实模型交互调试入口
-src/app/world-initialization-entry.ts 世界初始化可信应用及业务服务装配入口
-src/app/world-initialization-full-example.ts 世界初始化全流程真实模型样例，用户输入由文件顶部字符串模拟
-src/app/world-initialization-progress.ts 世界初始化样例的主 Agent 实时进度提示
-src/app/world-initialization-resume.ts 世界初始化样例既有任务、会话与成果的续跑前核查
-src/app/world-initialization-workflow.ts 世界初始化任务、讨论、审阅与发布的可信交互 API
-src/app/world-review.ts 世界资料审阅正文、差异与建议的可信应用展示入口
-src/*/tests/       按 src 一级模块归属的自动化测试，不在更深的源码子目录中另设 tests
-src/util/          跨模块共用的基础工具，测试放在 src/util/tests/
-src/util/world-access.ts 进程内世界资料访问协调与已受理操作跟踪
-src/tools/         具体工具实现，测试放在 src/tools/tests/
-src/tools/subagent-character/ 角色专用工具实现
-src/tools/catalog/ 世界工作区资料目录专用工具实现
-src/tools/subagent-world-basics/ 世界基础信息 Agent 的专用委派工具
-src/tools/subagent-organization/ 组织 Agent 的专用委派工具
-src/tools/subagent-history/ 历史 Agent 的专用委派工具
-src/tools/subagent-initial-situation/ 初始局势 Agent 的专用委派工具
-src/tools/subagent-world-development/ 世界发展规划 Agent 的专用委派工具
-src/tools/subagent-world-specific/ 世界专有内容 Agent 的专用委派工具
-src/tools/subagent-character/delegate-character-creator.ts 角色创建 Agent 的专用委派工具
-src/agents/plugins/fs/ 文件系统能力工作区包目录，包含基础库、服务、后端与工具插件
-src/agents/plugins/fs/fs/ `@fly-novel/fs` 独立工作区包，定义文件系统服务契约和事件
-src/agents/plugins/fs/fs-patch/ `@fly-novel/fs-patch` 独立工作区包，提供补丁解析和文本修改
-src/agents/plugins/fs/fs-local/ `@fly-novel/fs-local` 独立工作区包，提供显式装配的本机文件后端
-src/agents/plugins/fs/tool-fs-search/ `@fly-novel/tool-fs-search` 独立工作区包，提供受读取范围约束的文件搜索工具
-src/agents/plugins/subprocess/subprocess/ `@fly-novel/subprocess` 独立工作区包，定义受管理前台子进程契约
-src/agents/plugins/subprocess/subprocess-local/ `@fly-novel/subprocess-local` 独立工作区包，提供显式装配的本机子进程后端
-src/agents/plugins/subprocess/timeout/ `@fly-novel/timeout` 独立工作区包，提供可释放的期限信号
-src/agents/plugins/fs/fs-observation-policy/ 文件观察策略独立工作区包，提供显式装配的事件监听插件
-src/agents/plugins/fs/fs-sandbox/ 文件修改路径边界独立工作区包
-src/agents/plugins/fs/tool-fs/ 文件工具和读取授权独立工作区包
-src/agents/plugins/sandbox/sandbox/ 沙箱文件模式和可写根计算独立工作区包
-src/agents/plugins/sandbox/sandbox-policy/ Agent 文件修改策略服务独立工作区包
-src/tools/skill/   `@fly-novel/skill-tool-core` 独立工作区包，提供 Skill 加载工具定义
-src/tools/skill/   Skill 加载工具及其文件系统提供方
-src/llm/adapters/  各供应商的 LLM 适配器实现，共用 src/llm/adapter.ts 契约
-src/agents/        写作 Agent 工作区包；core/ 定义 Cordis Harness 实例与注册契约，runtime/ 管理装配和生命周期，plugins/ 提供 Harness 插件适配；Session、SystemPrompt 与 Agent Loop 分别位于独立工作区包；保留各业务 Agent 实现
-src/agents/world-initialization-main-agent/plugins/system-prompt/ 世界初始化主 Agent 的专有提示词插件独立工作区包
-src/agents/world-initialization-main-agent/skills/ 世界初始化主 Agent 的专属 Skill 内容
-src/agents/map-agent/ 地图与空间专用 Agent 的 Preset 和职责提示词
-src/agents/organization-agent/ 组织专用 Agent 的 Preset 和职责提示词
-src/agents/history-agent/ 历史专用 Agent 的 Preset 和职责提示词
-src/agents/initial-situation-agent/ 初始局势专用 Agent 的 Preset 和职责提示词
-src/agents/world-development-agent/ 世界发展规划专用 Agent 的 Preset 和职责提示词
-src/agents/world-specific-agent/ 世界专有内容 Agent 的 Preset 和职责提示词
-src/agents/character/plugins/system-prompt/、src/agents/director/plugins/system-prompt/ 角色和导演的专有提示词插件独立工作区包
-src/agents/character-creator/plugins/system-prompt/ 角色设定创建专有提示词插件独立工作区包
-src/agents/character-creator/preset.ts 角色创建 Agent 的 Harness Preset
-src/agents/world-basics/ 世界基础信息 Agent 的 Harness Preset 与专有提示词插件
-src/app/agents/character-creator.ts 角色创建 Agent 的独立应用装配与生命周期入口
-src/app/agents/map-agent.ts 地图 Agent 的独立应用装配与生命周期入口
-src/app/agents/organization-agent.ts 组织 Agent 的独立应用装配与生命周期入口
-src/app/agents/history-agent.ts 历史 Agent 的独立应用装配与生命周期入口
-src/app/agents/initial-situation-agent.ts 初始局势 Agent 的独立应用装配与生命周期入口
-src/app/agents/world-development-agent.ts 世界发展规划 Agent 的独立应用装配与生命周期入口
-src/app/agents/world-specific-agent.ts 世界专有内容 Agent 的独立应用装配与生命周期入口
-src/world-init/storage/history-references.ts 历史对同世界人物、地图和组织的可信引用解析
-src/app/agents/world-basics.ts 世界基础信息 Agent 的独立应用装配与受控成果保存入口
-src/agents/generic-subagent/ 通用子 Agent 的 Preset 和职责提示词插件
-src/agents/plugins/llm/ LLM 服务插件，按 Agent 实例注册适配器路由并随插件作用域清理
-src/agents/plugins/tools/ `@fly-novel/tools` 独立工作区包，提供工具定义、注册与执行服务
-src/agents/plugins/subagent/subagent/ `@fly-novel/subagent` 独立工作区包，提供子 Agent 委派服务及 Cordis 插件
-src/agents/plugins/subagent/subagent-in-process-driver/ `@fly-novel/subagent-in-process-driver` 独立工作区包，提供进程内子 Agent 一次性运行驱动
-src/agents/plugins/subagent/subagent-persistent-in-process/ `@fly-novel/subagent-persistent-in-process` 独立工作区包，提供持续身份子 Agent Provider 与可信创建绑定
-src/agents/plugins/subagent/subagent-fork-in-process/ 进程内 Fork Provider，继承父会话已结束轮次
-src/agents/plugins/skill/ `@fly-novel/skill` 独立工作区包，提供 Skill 来源注册、查询与 Cordis 服务插件
-src/agents/plugins/map/ `@fly-novel/map` 独立工作区包，提供地图 JSON 格式、受控文档存储、查询及工具定义
-src/agents/plugins/history/ `@fly-novel/history` 独立工作区包，提供历史事件格式、受控存储、查询及工具
-src/agents/plugins/initial-situation/ `@fly-novel/initial-situation` 独立工作区包，提供初始局势 JSON 格式、受控存储和工具
-src/agents/plugins/world-development/ `@fly-novel/world-development` 独立工作区包，提供世界发展规划 JSON 格式、受控存储、查询与工具
-src/agents/plugins/world-specific/ `@fly-novel/world-specific` 独立工作区包，提供世界专有内容 JSON 格式、受控存储、查询和工具
-src/agents/plugins/character/ `@fly-novel/character` 独立工作区包，提供人物及关系格式、受控存储、查询和工具
-src/agents/plugins/organization/ `@fly-novel/organization` 独立工作区包，提供组织 JSON 存储、身份绑定查询和工具
-src/agents/plugins/organization/ `@fly-novel/organization` 独立工作区包，提供组织与关系 JSON 格式和受控文档存储
-src/agents/plugins/skill-filesystem/ `@fly-novel/skill-filesystem` 独立工作区包，提供文件系统 Skill 来源及插件
-src/agents/plugins/tool-skill/ `@fly-novel/tool-skill` 独立工作区包，装配 Skill 工具和模型目录
-src/agents/plugins/subagent/ SubAgent 核心服务、进程内运行驱动和 Spawn Provider 工作区包
-src/agents/plugins/subagent/tool-subagent/ 通用子 Agent 委派工具工作区包
-src/agents/plugins/session/ `@fly-novel/session` 独立工作区包；当前只有包骨架与开发说明，尚未实现或注册插件
-src/agents/plugins/session-persistence/ `@fly-novel/session-persistence` 独立工作区包，提供 Session 持久化服务与句柄契约；具体存储由后端提供
-src/agents/plugins/session-persistence-jsonl/ Session JSONL 文件持久化后端
-src/agents/plugins/loop/ `@fly-novel/agent-loop` 独立工作区包，提供 AgentLoop 契约、Runtime 与 Cordis 插件
-src/agents/plugins/system-prompt/ `@fly-novel/system-prompt` 独立工作区包，提供通用提示词核心、Cordis 服务插件及注册定义
-.gitignore         Git 忽略规则
-AGENTS.md          开发协作与工程约束
-pnpm-lock.yaml     pnpm 依赖锁文件
-pnpm-workspace.yaml 本地工作区成员清单；Session、SystemPrompt、Agent Loop 与 Tools 包位于 src/agents/plugins/ 下，包清单与构建配置位于各包内
-package.json       Node.js 项目配置、依赖与脚本
-README.md          项目介绍
-tsconfig.json      编辑器与类型检查配置，覆盖源码和测试，不生成产物
-tsconfig.build.json 正式构建配置，排除测试，产物输出到 dist/
-tsconfig.test.json 测试编译配置，产物输出到 .test-dist/
+.agents/            Agent 决策记录
+.fly-novel/         模型配置样例与本机配置
+artifacts/          项目产物与样例资料
+docs/               开发文档
+src/                源码、应用入口与测试
+.gitignore          Git 忽略规则
+AGENTS.md           项目协作规则与根目录结构
+package.json        项目依赖与脚本
+pnpm-lock.yaml      依赖锁文件
+pnpm-workspace.yaml 工作区成员清单
+README.md           项目介绍与入口
+tsconfig.json       源码及测试类型检查配置
+tsconfig.build.json 正式构建配置
+tsconfig.test.json  测试编译配置
 ```
 
-新增源码、测试、脚本和第三方源码目录时，应在本节同步登记职责。目录划分应体现本项目的模块职责，不创建无用途的空目录。`docs/` 下新增开发文档时，同时遵循 [docs/AGENTS.md](docs/AGENTS.md)。
-
+新增或调整源码、测试、脚本和第三方源码时，在已有结构说明中维护受影响的重要直接子项。仅在需要说明专属规则或有助于理解模块边界、定位入口时新建目录级 `AGENTS.md`，避免重复 README 或添加占位说明。目录划分应体现模块职责，不创建无用途的空目录。各模块测试位于对应的 `src/*/tests/`，不在更深源码子目录另设测试目录。新增开发文档时遵循 [docs/AGENTS.md](docs/AGENTS.md)。
 
 ### 宿主沙箱失败
 
