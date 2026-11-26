@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { PlanInput } from '../story-workflow/types.js'
+import type { StoryTreeOptions } from '../story-workflow/workflow.js'
+export type { StoryTreeOptions } from '../story-workflow/workflow.js'
 import { createStoryPlan as createPlan, runStoryCollaboration as runCollaboration, runStorySiblings as runSiblings, runStoryTree as runTree, type OpenDirectors, type StoryPlanningOptions, type StoryCollaborationOptions } from '../story-workflow/workflow.js'
 export type { StoryPlanningOptions, StoryCollaborationOptions } from '../story-workflow/workflow.js'
 export { readStoryPlan, readStoryCollaboration, readStorySimulation, readStorySiblingDecision } from '../story-workflow/workflow.js'
@@ -30,6 +32,11 @@ export function runStorySiblings(options: StoryCollaborationOptions, planId: str
 }
 
 /** 逐层推进一轮故事，演绎仍由调用方提供模拟器。 */
-export function runStoryTree(options: StoryCollaborationOptions, planId: string, signal?: AbortSignal) {
+export function runStoryTree(options: StoryTreeOptions, planId: string, signal?: AbortSignal) {
   return runTree(options, directors(options), planId, signal)
+}
+
+/** 从上次返回的暂停批次继续。本次可重新指定演绎数量。 */
+export function continueStoryTree(options: StoryTreeOptions, planId: string, batch: number, signal?: AbortSignal) {
+  return runTree(options, directors(options), planId, signal, batch)
 }

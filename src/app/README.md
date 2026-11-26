@@ -64,6 +64,8 @@
 
 `runStoryTree` 基于已有规划逐层拆分和顺序推进故事，下级结束后回报直接上级；最小故事由调用方提供的模拟器演绎。它与 `runStorySiblings` 使用同一规划的独占运行记录，同一规划不能重复启动。失败后保留文件供核查，不自动恢复。
 
+`runStoryTree` 和 `continueStoryTree` 接受可选的 `limit`，默认每批完成 5 个最小子故事。收到 `kind: 'paused'` 时，将返回的 `batch` 和原规划 ID 传给 `continueStoryTree`，可重新指定本次数量。收到 `kind: 'result'` 表示整轮已结束。两种结果的 `completedCount` 都表示本批完成数量。
+
 `createWorldInitializationAgentWithWorkspace` 接收可信应用显式指定的现有 `viewRoot`、`draftRoot` 和 `confirmedRoot` 绝对目录；创建前校验其真实路径与可写范围。它注册文件、搜索和委派工具，主 Agent 只能修改草稿根，通用子 Agent 只读；可选的角色创建 Agent 使用下文所述角色资料服务。已确认根不能与上游平台临时可写根重叠。内置 Skill 来源单独授权，Skill 正文可加载，但其资源路径不会因此自动成为文件工具的读取范围。该入口要求以仓库根目录启动，并适用于可信本地工作区；路径检查不能抵御恶意并发替换或硬链接。它不实现世界资料确认和持久化流程。
 
 受控工作区为主 Agent 注册 `save_first_world_plan`：接收完整方案正文，在主 Agent 草稿根以独立名称创建带待审标题的 Markdown 文件，返回相对路径；创建条件禁止覆盖已有文件。结果为 `unknown` 时保留目标路径和错误信息，调用方须先核查实际状态，不能直接断定保存失败或成功。工具不会确认世界事实，也不验证正文完整性；是否在完整整合后调用及如何引用角色成果由主 Agent 决定。

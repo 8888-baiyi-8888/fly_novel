@@ -1,6 +1,7 @@
 import { lstat, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import { storyProgressSchema, type StoryProgress } from './types.js'
 import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, storyNodeSchema, storyStepSchema, storyChoiceSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision, type StoryNode, type StoryStep, type StoryChoice } from './types.js'
 
 const uuid = z.string().uuid()
@@ -69,6 +70,39 @@ export class CollaborationStore {
 
   private path(planId: string, childStoryId: string, kind: 'claim' | 'simulation' | 'result'): string {
     return join(this.root, `${uuid.parse(planId)}.${uuid.parse(childStoryId)}.${kind}.json`)
+  }
+
+  private progressPath(runId: string, batch: number, kind: 'paused' | 'continued'): string {
+    return join(this.root, `${uuid.parse(runId)}.${z.number().int().positive().parse(batch)}.${kind}.story.json`)
+  }
+
+  /** 保存本次正常暂停的推进位置。 */
+  async saveStoryProgress(progress: StoryProgress): Promise<void> {
+    const value = storyProgressSchema.parse(progress)
+    const content = `${JSON.stringify(value, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('故事暂停记录超过大小限制')
+    await writeFile(this.progressPath(value.runId, value.batch, 'paused'), content, { flag: 'wx', encoding: 'utf8' })
+  }
+
+  /** 读取有版本的暂停记录并核对所属运行及批次。 */
+  async readStoryProgress(runId: string, batch: number): Promise<StoryProgress> {
+    const value = storyProgressSchema.parse(await this.readFile(this.progressPath(runId, batch, 'paused')))
+    const run = siblingRunSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.siblings.json`)))
+    if (value.runId !== runId || value.batch !== batch || run.planId !== runId || value.frames[0]?.node.storyId !== run.parentStoryId) throw new Error('故事暂停记录身份不匹配')
+    return value
+  }
+
+  /** 每个暂停位置只允许开始一次继续操作，失败后保留标记供核查。 */
+  async claimStoryProgress(runId: string, batch: number): Promise<void> {
+    try { await writeFile(this.progressPath(runId, batch, 'continued'), '', { flag: 'wx' }) }
+    catch (error) { throw new Error(`故事暂停位置已使用或占用结果不明，请核查批次 ${batch}`, { cause: error }) }
+  }
+
+  /** 读取已处理子故事的决定并核对身份。 */
+  async readStoryChoice(runId: string, childStoryId: string): Promise<StoryChoice> {
+    const value = storyChoiceSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.${uuid.parse(childStoryId)}.choice.story.json`)))
+    if (value.runId !== runId || value.childStoryId !== childStoryId) throw new Error('故事决定身份不匹配')
+    return value
   }
 
   /** 独占保存故事及其直接上级，确保上级属于同一轮运行。 */

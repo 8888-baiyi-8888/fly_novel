@@ -96,6 +96,25 @@ export const storyStepSchema = z.discriminatedUnion('kind', [
     value: z.object({ id: uuid, description: text, reason: text }).strict() }).strict(),
 ])
 export type StoryStep = z.infer<typeof storyStepSchema>
+const completedStorySchema = z.object({
+  formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('result'),
+  value: reportSchema, receipt: text, assessment: storyAssessmentSchema.optional(),
+}).strict()
+export const storyProgressSchema = z.object({
+  formatVersion: z.literal(1),
+  runId: uuid,
+  batch: z.number().int().positive(),
+  planHash: z.string().regex(/^[0-9a-f]{64}$/),
+  frames: z.array(z.object({
+    node: storyNodeSchema,
+    children: z.array(z.object({ id: uuid, description: text }).strict()).min(1),
+    index: z.number().int().nonnegative(),
+    results: z.array(completedStorySchema),
+    decisions: z.array(directorDecisionSchema.extend({ description: text })),
+    supplement: z.object({ id: uuid, description: text, reason: text }).strict().optional(),
+  }).strict()).min(1),
+}).strict()
+export type StoryProgress = z.infer<typeof storyProgressSchema>
 export const storyChoiceSchema = z.object({ formatVersion: z.literal(1), runId: uuid, parentStoryId: uuid, childStoryId: uuid, description: text, decision: z.enum(['continue', 'adjust', 'cancel']), reason: text }).strict()
 export type StoryChoice = z.infer<typeof storyChoiceSchema>
 
