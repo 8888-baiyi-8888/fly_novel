@@ -115,6 +115,20 @@ export const storyProgressSchema = z.object({
   }).strict()).min(1),
 }).strict()
 export type StoryProgress = z.infer<typeof storyProgressSchema>
+export const storyNoticeInputSchema = z.object({ id: uuid, situation: text }).strict()
+export const storyNoticeDecisionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('continue'), reason: text }).strict(),
+  z.object({ action: z.literal('adjust'), reason: text, direction: text }).strict(),
+  z.object({ action: z.literal('terminate'), reason: text }).strict(),
+])
+const noticeIdentity = { formatVersion: z.literal(1), runId: uuid, storyId: uuid, parentStoryId: uuid, noticeId: uuid }
+export const storyNoticeSchema = z.discriminatedUnion('kind', [
+  z.object({ ...noticeIdentity, kind: z.literal('report'), value: reportSchema }).strict(),
+  z.object({ ...noticeIdentity, kind: z.literal('decision'), value: storyNoticeDecisionSchema }).strict(),
+])
+export type StoryNoticeInput = z.infer<typeof storyNoticeInputSchema>
+export type StoryNoticeDecision = z.infer<typeof storyNoticeDecisionSchema>
+export type StoryNotice = z.infer<typeof storyNoticeSchema>
 export const storyChoiceSchema = z.object({ formatVersion: z.literal(1), runId: uuid, parentStoryId: uuid, childStoryId: uuid, description: text, decision: z.enum(['continue', 'adjust', 'cancel']), reason: text }).strict()
 export type StoryChoice = z.infer<typeof storyChoiceSchema>
 

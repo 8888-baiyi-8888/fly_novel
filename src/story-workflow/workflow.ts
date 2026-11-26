@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import type { StoryProgress } from './types.js'
+import { storyNoticeDecisionSchema, storyNoticeInputSchema, type StoryNoticeDecision, type StoryNoticeInput } from './types.js'
 import type { Agent } from '@fly-novel/agents'
 import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyAdvanceSchema, storyCompletionSchema, storyDecisionSchema, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
 import { CollaborationStore } from './store.js'
@@ -197,6 +198,12 @@ export async function readStorySiblingDecision(options: Pick<StoryCollaborationO
 export interface StoryTreeOptions extends StoryCollaborationOptions {
   /** 本次最多完成多少个直接演绎的子故事，默认 5。 */
   limit?: number
+  /** 模拟器须等待提前汇报的决定。终止时结束演绎并返回已发生的模拟经过。 */
+  simulate(input: {
+    task: StoryTask
+    preparation: string
+    reportEarly(notice: StoryNoticeInput): Promise<StoryNoticeDecision>
+  }, signal: AbortSignal): Promise<Simulation>
 }
 type StoryTreeResult =
   | (Extract<StoryStep, { kind: 'result' }> & { completedCount: number })
@@ -231,13 +238,12 @@ async function verifyStoryProgress(store: CollaborationStore, progress: StoryPro
       const child = await store.readStoryNode(runId, result.storyId)
       const decision = await store.readStoryStep(runId, result.storyId, 'decision')
       if (child.parentStoryId !== node.storyId || decision.kind !== 'decision') throw new Error('暂停记录的已完成子故事关系不匹配')
-      if (decision.value.kind === 'split') {
+      if (decision.value.kind === 'split' || assessment?.status === 'terminated') {
         const saved = await store.readStoryStep(runId, result.storyId, 'assessment')
         if (saved.kind !== 'assessment' || !isDeepStrictEqual(saved.value, assessment)) throw new Error('暂停记录的子故事评估不匹配')
-      } else {
-        if (assessment) throw new Error('暂停记录包含多余的子故事评估')
-        await store.readStoryStep(runId, result.storyId, 'simulation')
       }
+      if (decision.value.kind === 'direct' && assessment && assessment.status !== 'terminated') throw new Error('暂停记录包含无效的子故事评估')
+      if (decision.value.kind === 'direct') await store.readStoryStep(runId, result.storyId, 'simulation')
     }
   }
 }
@@ -275,25 +281,25 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     frames = progress.frames
   }
   let completedCount = 0
-  const call = async (prompt: string): Promise<string> => {
-    signal?.throwIfAborted()
+  const call = async (prompt: string, callSignal = signal): Promise<string> => {
+    callSignal?.throwIfAborted()
     const scope = await openDirectors()
     let output: string | undefined
     let failure: unknown
     try {
-      signal?.throwIfAborted()
+      callSignal?.throwIfAborted()
       const agent = await scope.create('director')
       const cancel = () => agent.cancel()
-      signal?.addEventListener('abort', cancel, { once: true })
-      try { signal?.throwIfAborted(); output = (await agent.run({ prompt })).content }
-      finally { signal?.removeEventListener('abort', cancel) }
+      callSignal?.addEventListener('abort', cancel, { once: true })
+      try { callSignal?.throwIfAborted(); output = (await agent.run({ prompt })).content }
+      finally { callSignal?.removeEventListener('abort', cancel) }
     } catch (error) { failure = error }
     try { await scope.dispose() } catch (error) {
       if (failure !== undefined) throw new AggregateError([failure, error], '导演运行与清理失败')
       throw error
     }
     if (failure !== undefined) throw failure
-    signal?.throwIfAborted()
+    callSignal?.throwIfAborted()
     if (output === undefined || !output.trim()) throw new Error('导演没有返回结果')
     return output
   }
@@ -314,6 +320,63 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     return result
   }
   const reportFormat = '{"summary":"结果","changes":["变化"],"unresolved":["未解决"],"evidence":"依据"}'
+  const simulateStory = async (node: StoryNode, parent: StoryNode, preparation: string) => {
+    const lifecycle = new AbortController()
+    const simSignal = signal ? AbortSignal.any([signal, lifecycle.signal]) : lifecycle.signal
+    const notices = new Map<string, { situation: string; response: Promise<StoryNoticeDecision> }>()
+    let accepting = true
+    let waiting = false
+    let termination: Extract<StoryNoticeDecision, { action: 'terminate' }> | undefined
+    let protocolError: Error | undefined
+    const decideNotice = async (input: StoryNoticeInput): Promise<StoryNoticeDecision> => {
+      if (!accepting) throw new Error('演绎已经结束，不能提前汇报')
+      simSignal.throwIfAborted()
+      const parsed = storyNoticeInputSchema.safeParse(input)
+      if (!parsed.success) {
+        protocolError = new Error('提前汇报输入无效', { cause: parsed.error })
+        throw protocolError
+      }
+      const { id, situation } = parsed.data
+      const previous = notices.get(id)
+      if (previous?.situation === situation) return previous.response
+      if (previous || waiting || termination) {
+        protocolError = new Error(previous ? '重复通知的内容不一致' : '当前故事不能接受新的提前汇报')
+        throw protocolError
+      }
+      waiting = true
+      const response = (async () => {
+        const identity = { formatVersion: 1 as const, runId: planId, storyId: node.storyId, parentStoryId: parent.storyId, noticeId: id }
+        const report = reportSchema.parse(parseStrictJson(await call(`你是当前子导演。将模拟演绎中影响父故事的重大情况整理成提前汇报，保留已发生的模拟经过及依据。只返回 JSON：${reportFormat}。资料：${JSON.stringify({ node, situation })}`, simSignal)))
+        await store.saveStoryNotice({ ...identity, kind: 'report', value: report })
+        const answer = storyNoticeDecisionSchema.parse(parseStrictJson(await call(`你是当前子故事的直接上级导演。根据提前汇报决定继续、调整或终止当前子故事。只返回严格 JSON，包含 action（continue、adjust 或 terminate）及 reason，adjust 还须包含 direction。资料：${JSON.stringify({ parent, node, report })}`, simSignal)))
+        await store.saveStoryNotice({ ...identity, kind: 'decision', value: answer })
+        simSignal.throwIfAborted()
+        if (answer.action === 'terminate') termination = answer
+        return answer
+      })().finally(() => { waiting = false })
+      notices.set(id, { situation, response })
+      return response
+    }
+    const reportEarly = (notice: StoryNoticeInput) => {
+      const delivery = decideNotice(notice).then(answer => structuredClone(answer))
+      // 模拟器即使未等待，工作流也会检查并回收汇报调用。
+      void delivery.catch(() => {})
+      return delivery
+    }
+    let simulation: Simulation
+    try {
+      simulation = simulationSchema.parse(await options.simulate({ task: node.task, preparation, reportEarly }, simSignal))
+      if (waiting) throw new Error('模拟器在收到上级决定前结束演绎')
+      if (protocolError) throw protocolError
+      simSignal.throwIfAborted()
+      const decisions = await Promise.all([...notices.values()].map(notice => notice.response))
+      return { simulation, decisions, termination }
+    } finally {
+      accepting = false
+      if (waiting) lifecycle.abort()
+      await Promise.allSettled([...notices.values()].map(notice => notice.response))
+    }
+  }
   while (frames.length) {
     signal?.throwIfAborted()
     if (JSON.stringify(await plans.read(planId)) !== JSON.stringify(plan)) throw new Error(`规划已变化，请核查运行 ${planId}`)
@@ -362,13 +425,18 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
       continue
     }
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
-    const simSignal = signal ?? new AbortController().signal
-    const simulation = simulationSchema.parse(await options.simulate({ task, preparation: decision.preparation }, simSignal))
-    simSignal.throwIfAborted()
+    const { simulation, decisions, termination } = await simulateStory(node, frame.node, decision.preparation)
+    signal?.throwIfAborted()
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'simulation', value: simulation })
-    const report = reportSchema.parse(parseStrictJson(await call(`你是子导演，根据任务和模拟经过形成回报，不将模拟当作真实世界事实。只返回 JSON：{"summary":"结果","changes":["变化"],"unresolved":["未解决"],"evidence":"依据"}。${JSON.stringify({ node, simulation })}`)))
-    frame.results.push(await finish(node, report))
-    completedCount++
+    const report = reportSchema.parse(parseStrictJson(await call(`你是子导演，根据任务和已发生的模拟经过形成最终回报，并考虑提前汇报后的决定。只返回 JSON：${reportFormat}。${JSON.stringify({ node, simulation, decisions })}`)))
+    if (termination) {
+      const assessment: Assessment = { status: 'terminated', reason: termination.reason, report }
+      await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'assessment', value: assessment })
+      frame.results.push({ ...await finish(node, report, assessment), assessment })
+    } else {
+      frame.results.push(await finish(node, report))
+      completedCount++
+    }
   }
   throw new Error('故事运行未产生结果')
 }

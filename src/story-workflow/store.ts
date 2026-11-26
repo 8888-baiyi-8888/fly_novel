@@ -1,7 +1,7 @@
 import { lstat, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { storyProgressSchema, type StoryProgress } from './types.js'
+import { storyNoticeSchema, storyProgressSchema, type StoryNotice, type StoryProgress } from './types.js'
 import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, storyNodeSchema, storyStepSchema, storyChoiceSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision, type StoryNode, type StoryStep, type StoryChoice } from './types.js'
 
 const uuid = z.string().uuid()
@@ -74,6 +74,29 @@ export class CollaborationStore {
 
   private progressPath(runId: string, batch: number, kind: 'paused' | 'continued'): string {
     return join(this.root, `${uuid.parse(runId)}.${z.number().int().positive().parse(batch)}.${kind}.story.json`)
+  }
+
+  /** 独占保存提前汇报或上级决定，决定必须对应已保存的汇报。 */
+  async saveStoryNotice(notice: StoryNotice): Promise<void> {
+    const value = storyNoticeSchema.parse(notice)
+    const { runId, storyId, parentStoryId, noticeId, kind } = value
+    const node = await this.readStoryNode(runId, storyId)
+    if (node.parentStoryId !== parentStoryId) throw new Error('提前汇报的上级身份不匹配')
+    if (kind === 'decision') {
+      const report = await this.readStoryNotice(runId, storyId, noticeId, 'report')
+      if (report.parentStoryId !== parentStoryId) throw new Error('提前汇报与决定的上级身份不匹配')
+    }
+    const content = `${JSON.stringify(value, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('提前汇报记录超过大小限制')
+    await writeFile(join(this.root, `${runId}.${storyId}.${noticeId}.notice-${kind}.json`), content, { flag: 'wx', encoding: 'utf8' })
+  }
+
+  /** 读取提前汇报或上级决定，并核对故事和通知身份。 */
+  async readStoryNotice(runId: string, storyId: string, noticeId: string, kind: StoryNotice['kind']): Promise<StoryNotice> {
+    const path = join(this.root, `${uuid.parse(runId)}.${uuid.parse(storyId)}.${uuid.parse(noticeId)}.notice-${kind}.json`)
+    const value = storyNoticeSchema.parse(await this.readFile(path))
+    if (value.runId !== runId || value.storyId !== storyId || value.noticeId !== noticeId || value.kind !== kind) throw new Error('提前汇报记录身份不匹配')
+    return value
   }
 
   /** 保存本次正常暂停的推进位置。 */
