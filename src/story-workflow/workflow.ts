@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import type { StoryProgress } from './types.js'
-import { storyNoticeDecisionSchema, storyNoticeInputSchema, type StoryNoticeDecision, type StoryNoticeInput } from './types.js'
+import { restoreStoryProgress } from './progress.js'
+import { simulateStory, type StorySimulationInput } from './simulation.js'
 import type { Agent } from '@fly-novel/agents'
 import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyAdvanceSchema, storyCompletionSchema, storyDecisionSchema, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
 import { CollaborationStore } from './store.js'
@@ -199,11 +200,7 @@ export interface StoryTreeOptions extends StoryCollaborationOptions {
   /** 本次最多完成多少个直接演绎的子故事，默认 5。 */
   limit?: number
   /** 模拟器须等待提前汇报的决定。终止时结束演绎并返回已发生的模拟经过。 */
-  simulate(input: {
-    task: StoryTask
-    preparation: string
-    reportEarly(notice: StoryNoticeInput): Promise<StoryNoticeDecision>
-  }, signal: AbortSignal): Promise<Simulation>
+  simulate(input: StorySimulationInput, signal: AbortSignal): Promise<Simulation>
 }
 type StoryTreeResult =
   | (Extract<StoryStep, { kind: 'result' }> & { completedCount: number })
@@ -235,45 +232,6 @@ export async function createNextStoryPlan(options: StoryPlanningOptions & { coll
   return createStoryPlan({ ...options, protectedRoots: [...options.protectedRoots, options.collaborationRoot] }, openDirectors, input, signal)
 }
 
-async function verifyStoryProgress(store: CollaborationStore, progress: StoryProgress): Promise<void> {
-  const { runId, frames } = progress
-  for (const [depth, frame] of frames.entries()) {
-    const { node, index, decisions, results, supplement } = frame
-    const parent = frames[depth - 1]
-    if (node.runId !== runId || node.parentStoryId !== (parent?.node.storyId ?? null) ||
-      (parent && parent.children[parent.index - 1]?.id !== node.storyId) ||
-      !isDeepStrictEqual(await store.readStoryNode(runId, node.storyId), node)) throw new Error('暂停记录的父子关系不匹配')
-    const split = await store.readStoryStep(runId, node.storyId, 'decision')
-    if (split.kind !== 'decision' || split.value.kind !== 'split') throw new Error('暂停记录的拆分安排无效')
-    if (supplement) {
-      const saved = await store.readStoryStep(runId, node.storyId, 'supplement')
-      if (saved.kind !== 'supplement' || !isDeepStrictEqual(saved.value, supplement)) throw new Error('暂停记录的补充安排不匹配')
-    }
-    const children = supplement ? [...split.value.children, { id: supplement.id, description: supplement.description }] : split.value.children
-    if (!isDeepStrictEqual(frame.children.map(({ id, description }) => ({ id, description })), children) || index > children.length || index !== decisions.length) throw new Error('暂停记录的推进位置不匹配')
-    const expectedResults: string[] = []
-    for (const [position, decision] of decisions.entries()) {
-      const child = children[position]!
-      const saved = await store.readStoryChoice(runId, child.id)
-      if (saved.parentStoryId !== node.storyId || saved.description !== child.description || !isDeepStrictEqual(decision, { description: saved.description, decision: saved.decision, reason: saved.reason })) throw new Error('暂停记录的子故事决定不匹配')
-      if (decision.decision !== 'cancel' && child.id !== frames[depth + 1]?.node.storyId) expectedResults.push(child.id)
-    }
-    if (!isDeepStrictEqual(results.map(result => result.storyId), expectedResults)) throw new Error('暂停记录的子故事结果不完整')
-    for (const { assessment, ...result } of results) {
-      if (!isDeepStrictEqual(await store.readStoryStep(runId, result.storyId, 'result'), result)) throw new Error('暂停记录的子故事结果不匹配')
-      const child = await store.readStoryNode(runId, result.storyId)
-      const decision = await store.readStoryStep(runId, result.storyId, 'decision')
-      if (child.parentStoryId !== node.storyId || decision.kind !== 'decision') throw new Error('暂停记录的已完成子故事关系不匹配')
-      if (decision.value.kind === 'split' || assessment?.status === 'terminated') {
-        const saved = await store.readStoryStep(runId, result.storyId, 'assessment')
-        if (saved.kind !== 'assessment' || !isDeepStrictEqual(saved.value, assessment)) throw new Error('暂停记录的子故事评估不匹配')
-      }
-      if (decision.value.kind === 'direct' && assessment && assessment.status !== 'terminated') throw new Error('暂停记录包含无效的子故事评估')
-      if (decision.value.kind === 'direct') await store.readStoryStep(runId, result.storyId, 'simulation')
-    }
-  }
-}
-
 /** 逐层推进故事，达到本次数量时保存暂停位置；传入批次继续已有暂停。 */
 export async function runStoryTree(options: StoryTreeOptions, openDirectors: OpenDirectors, planId: string, signal?: AbortSignal, resumeBatch?: number): Promise<StoryTreeResult> {
   if (!options.provider.trim() || !options.model.trim()) throw new Error('模型配置不能为空')
@@ -299,12 +257,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     frames = [{ node: root, children, index: 0, results: [], decisions: [] }]
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: rootId, kind: 'decision', value: { kind: 'split', children } })
   } else {
-    const progress = await store.readStoryProgress(planId, resumeBatch)
-    if (progress.planHash !== planHash) throw new Error(`规划已变化，请核查运行 ${planId}`)
-    await verifyStoryProgress(store, progress)
-    signal?.throwIfAborted()
-    await store.claimStoryProgress(planId, resumeBatch)
-    frames = progress.frames
+    frames = await restoreStoryProgress(store, planId, resumeBatch, planHash, signal)
   }
   let completedCount = 0
   const call = async (prompt: string, callSignal = signal): Promise<string> => {
@@ -346,63 +299,6 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     return result
   }
   const reportFormat = '{"summary":"结果","changes":["变化"],"unresolved":["未解决"],"evidence":"依据"}'
-  const simulateStory = async (node: StoryNode, parent: StoryNode, preparation: string) => {
-    const lifecycle = new AbortController()
-    const simSignal = signal ? AbortSignal.any([signal, lifecycle.signal]) : lifecycle.signal
-    const notices = new Map<string, { situation: string; response: Promise<StoryNoticeDecision> }>()
-    let accepting = true
-    let waiting = false
-    let termination: Extract<StoryNoticeDecision, { action: 'terminate' }> | undefined
-    let protocolError: Error | undefined
-    const decideNotice = async (input: StoryNoticeInput): Promise<StoryNoticeDecision> => {
-      if (!accepting) throw new Error('演绎已经结束，不能提前汇报')
-      simSignal.throwIfAborted()
-      const parsed = storyNoticeInputSchema.safeParse(input)
-      if (!parsed.success) {
-        protocolError = new Error('提前汇报输入无效', { cause: parsed.error })
-        throw protocolError
-      }
-      const { id, situation } = parsed.data
-      const previous = notices.get(id)
-      if (previous?.situation === situation) return previous.response
-      if (previous || waiting || termination) {
-        protocolError = new Error(previous ? '重复通知的内容不一致' : '当前故事不能接受新的提前汇报')
-        throw protocolError
-      }
-      waiting = true
-      const response = (async () => {
-        const identity = { formatVersion: 1 as const, runId: planId, storyId: node.storyId, parentStoryId: parent.storyId, noticeId: id }
-        const report = reportSchema.parse(parseStrictJson(await call(`你是当前子导演。将模拟演绎中影响父故事的重大情况整理成提前汇报，保留已发生的模拟经过及依据。只返回 JSON：${reportFormat}。资料：${JSON.stringify({ node, situation })}`, simSignal)))
-        await store.saveStoryNotice({ ...identity, kind: 'report', value: report })
-        const answer = storyNoticeDecisionSchema.parse(parseStrictJson(await call(`你是当前子故事的直接上级导演。根据提前汇报决定继续、调整或终止当前子故事。只返回严格 JSON，包含 action（continue、adjust 或 terminate）及 reason，adjust 还须包含 direction。资料：${JSON.stringify({ parent, node, report })}`, simSignal)))
-        await store.saveStoryNotice({ ...identity, kind: 'decision', value: answer })
-        simSignal.throwIfAborted()
-        if (answer.action === 'terminate') termination = answer
-        return answer
-      })().finally(() => { waiting = false })
-      notices.set(id, { situation, response })
-      return response
-    }
-    const reportEarly = (notice: StoryNoticeInput) => {
-      const delivery = decideNotice(notice).then(answer => structuredClone(answer))
-      // 模拟器即使未等待，工作流也会检查并回收汇报调用。
-      void delivery.catch(() => {})
-      return delivery
-    }
-    let simulation: Simulation
-    try {
-      simulation = simulationSchema.parse(await options.simulate({ task: node.task, preparation, reportEarly }, simSignal))
-      if (waiting) throw new Error('模拟器在收到上级决定前结束演绎')
-      if (protocolError) throw protocolError
-      simSignal.throwIfAborted()
-      const decisions = await Promise.all([...notices.values()].map(notice => notice.response))
-      return { simulation, decisions, termination }
-    } finally {
-      accepting = false
-      if (waiting) lifecycle.abort()
-      await Promise.allSettled([...notices.values()].map(notice => notice.response))
-    }
-  }
   while (frames.length) {
     signal?.throwIfAborted()
     if (JSON.stringify(await plans.read(planId)) !== JSON.stringify(plan)) throw new Error(`规划已变化，请核查运行 ${planId}`)
@@ -451,7 +347,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
       continue
     }
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
-    const { simulation, decisions, termination } = await simulateStory(node, frame.node, decision.preparation)
+    const { simulation, decisions, termination } = await simulateStory(node, frame.node, decision.preparation, { store, options, call, signal })
     signal?.throwIfAborted()
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'simulation', value: simulation })
     const report = reportSchema.parse(parseStrictJson(await call(`你是子导演，根据任务和已发生的模拟经过形成最终回报，并考虑提前汇报后的决定。只返回 JSON：${reportFormat}。${JSON.stringify({ node, simulation, decisions })}`)))
