@@ -77,10 +77,23 @@ const savedStoryDecisionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('direct'), preparation: text }).strict(),
   z.object({ kind: z.literal('split'), children: z.array(z.object({ id: uuid, description: text }).strict()).min(1) }).strict(),
 ])
+const assessmentFields = { reason: text, report: reportSchema }
+const terminatedAssessmentSchema = z.object({ status: z.literal('terminated'), ...assessmentFields }).strict()
+export const storyAssessmentSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('achieved'), ...assessmentFields }).strict(),
+  z.object({ status: z.literal('unmet'), ...assessmentFields, adjustment: text }).strict(),
+  terminatedAssessmentSchema,
+])
+export const storyAdvanceSchema = z.union([directorDecisionSchema, terminatedAssessmentSchema])
+export const supplementProposalSchema = z.object({ status: z.literal('supplement'), reason: text, description: text }).strict()
+export const storyCompletionSchema = z.union([storyAssessmentSchema, supplementProposalSchema])
 export const storyStepSchema = z.discriminatedUnion('kind', [
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('decision'), value: savedStoryDecisionSchema }).strict(),
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('simulation'), value: simulationSchema }).strict(),
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('result'), value: reportSchema, receipt: text }).strict(),
+  z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('assessment'), value: storyAssessmentSchema }).strict(),
+  z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('supplement'),
+    value: z.object({ id: uuid, description: text, reason: text }).strict() }).strict(),
 ])
 export type StoryStep = z.infer<typeof storyStepSchema>
 export const storyChoiceSchema = z.object({ formatVersion: z.literal(1), runId: uuid, parentStoryId: uuid, childStoryId: uuid, description: text, decision: z.enum(['continue', 'adjust', 'cancel']), reason: text }).strict()

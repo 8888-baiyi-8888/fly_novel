@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Agent } from '@fly-novel/agents'
-import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyDecisionSchema, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
+import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyAdvanceSchema, storyCompletionSchema, storyDecisionSchema, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
 import { CollaborationStore } from './store.js'
 
 export interface DirectorScope { create(role: string): Promise<Agent>; dispose(): Promise<void> }
@@ -205,8 +205,16 @@ export async function runStoryTree(options: StoryCollaborationOptions, openDirec
   const root: StoryNode = { formatVersion: 1, runId: planId, storyId: rootId, parentStoryId: null, description: plan.input.task, task: { background: JSON.stringify({ facts: plan.input.facts, directions: plan.input.directions }), goal: plan.input.task, constraints: [] } }
   await store.saveStoryNode(root)
   type Result = Extract<StoryStep, { kind: 'result' }>
-  type Frame = { node: StoryNode; children: { id: string; description: string }[]; index: number; results: Result[]; decisions: { description: string; decision: string; reason: string }[] }
-  const frames: Frame[] = [{ node: root, children: plan.outcome.events.map(event => ({ id: event.id, description: event.description })), index: 0, results: [], decisions: [] }]
+  type Assessment = Extract<StoryStep, { kind: 'assessment' }>['value']
+  type Frame = {
+    node: StoryNode
+    children: { id: string; description: string }[]
+    index: number
+    results: (Result & { assessment?: Assessment })[]
+    decisions: { description: string; decision: string; reason: string }[]
+    supplement?: { id: string; description: string; reason: string }
+  }
+  const frames: Frame[] = [{ node: root, children: plan.outcome.events, index: 0, results: [], decisions: [] }]
   await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: rootId, kind: 'decision', value: { kind: 'split', children: frames[0]!.children } })
   const call = async (prompt: string): Promise<string> => {
     signal?.throwIfAborted()
@@ -230,30 +238,52 @@ export async function runStoryTree(options: StoryCollaborationOptions, openDirec
     if (output === undefined || !output.trim()) throw new Error('导演没有返回结果')
     return output
   }
-  const finish = async (node: StoryNode, report: Result['value']): Promise<Result> => {
+  const finish = async (node: StoryNode, report: Result['value'], assessment?: Assessment): Promise<Result> => {
     const parent = node.parentStoryId === null ? null : await store.readStoryNode(planId, node.parentStoryId)
-    const receipt = parent === null ? '根故事回报已记录' : (await call(`你是直接上级导演，请接收下级模拟故事回报并简述进展，不编造已发生的事实：${JSON.stringify({ parent, node, report })}`)).trim()
+    const receipt = parent === null ? '根故事回报已记录' : (await call(`你是直接上级导演，请接收下级模拟故事回报并简述进展，不编造已发生的事实：${JSON.stringify({ parent, node, report, assessment })}`)).trim()
     const value: Result = { formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'result', value: report, receipt }
     await store.saveStoryStep(value)
     const saved = await store.readStoryStep(planId, node.storyId, 'result')
     if (saved.kind !== 'result') throw new Error('故事结果类型不匹配')
     return saved
   }
+  const closeFrame = async (frame: Frame, assessment: Assessment) => {
+    await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: frame.node.storyId, kind: 'assessment', value: assessment })
+    const result = await finish(frame.node, assessment.report, assessment)
+    frames.pop()
+    frames.at(-1)?.results.push({ ...result, assessment })
+    return result
+  }
+  const reportFormat = '{"summary":"结果","changes":["变化"],"unresolved":["未解决"],"evidence":"依据"}'
   while (frames.length) {
     signal?.throwIfAborted()
     if (JSON.stringify(await plans.read(planId)) !== JSON.stringify(plan)) throw new Error(`规划已变化，请核查运行 ${planId}`)
     const frame = frames[frames.length - 1]!
     if (frame.index >= frame.children.length) {
-      const report = reportSchema.parse(parseStrictJson(await call(`你是本层导演。根据已经完成的下级模拟结果形成回报；只返回严格 JSON：{"summary":"结果","changes":["变化"],"unresolved":["未解决"],"evidence":"依据"}。${JSON.stringify({ story: frame.node, results: frame.results, decisions: frame.decisions })}`)))
-      const result = await finish(frame.node, report)
-      frames.pop()
+      const supplementRule = frame.supplement
+        ? '已经安排过补充故事，禁止再补充。'
+        : '仅在目标未达成且补充有意义时，可以返回 {"status":"supplement","reason":"尚未达成的原因","description":"一个补充故事"}。'
+      const assessment = storyCompletionSchema.parse(parseStrictJson(await call(`你是本层父导演。依据下级已保存的模拟回报和决定评估当前目标，保留实际经过。只返回严格 JSON，结束时返回 status（achieved、unmet 或 terminated）、reason 和 report（${reportFormat}）。unmet 时须另给 adjustment，说明根据实际结果怎样调整父故事。条件变化无法继续时用 terminated，并记录未解决事项。${supplementRule} 资料：${JSON.stringify({ story: frame.node, results: frame.results, decisions: frame.decisions, supplement: frame.supplement })}`)))
+      if (assessment.status === 'supplement') {
+        if (frame.supplement) throw new Error(`父故事最多补充一个子故事，请核查故事 ${frame.node.storyId}`)
+        const supplement = { id: randomUUID(), description: assessment.description, reason: assessment.reason }
+        await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: frame.node.storyId, kind: 'supplement', value: supplement })
+        frame.supplement = supplement
+        frame.children = [...frame.children, supplement]
+        continue
+      }
+      const result = await closeFrame(frame, assessment)
       if (!frames.length) return result
-      frames[frames.length - 1]!.results.push(result)
       continue
     }
     const child = frame.children[frame.index++]!
     const context = { parent: frame.node, child, prior: frame.results, decisions: frame.decisions }
-    const choice = directorDecisionSchema.parse(parseStrictJson(await call(`你是父导演。根据上级故事与此前模拟结果判断当前子故事继续、调整或取消；只返回 JSON：{"decision":"continue 或 adjust 或 cancel","reason":"原因及调整方向"}。${JSON.stringify(context)}`)))
+    const choice = storyAdvanceSchema.parse(parseStrictJson(await call(`你是父导演。根据上级故事与此前模拟结果判断当前子故事继续、调整或取消。只返回 JSON：{"decision":"continue 或 adjust 或 cancel","reason":"原因及调整方向"}。若条件变化导致整个父故事需要提前结束，返回 {"status":"terminated","reason":"终止原因","report":${reportFormat}}。${JSON.stringify(context)}`)))
+    if ('status' in choice) {
+      const result = await closeFrame(frame, choice)
+      if (!frames.length) return result
+      continue
+    }
     await store.saveStoryChoice({ formatVersion: 1, runId: planId, parentStoryId: frame.node.storyId, childStoryId: child.id, description: child.description, ...choice })
     frame.decisions.push({ description: child.description, ...choice })
     if (choice.decision === 'cancel') continue
