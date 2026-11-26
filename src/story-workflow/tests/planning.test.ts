@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { AgentInstance } from '@fly-novel/agents'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
-import { createStoryPlan, readStoryPlan } from '../../app/story-planning.js'
+import { createStoryPlan, readStoryPlan } from '../../app/story-workflow.js'
 import { PlanStore } from '../store.js'
 
 class FixedAdapter extends LlmAdapter {

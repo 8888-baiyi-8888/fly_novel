@@ -38,3 +38,26 @@ export function createPlanRecord(input: PlanInput, response: string): PlanRecord
       ? { kind: result.kind, events: result.events.map(description => ({ id: randomUUID(), description })) }
       : result })
 }
+
+export const taskSchema = z.object({ background: text, goal: text, constraints: z.array(text) }).strict()
+export const simulationSchema = z.object({ kind: z.literal('simulation'), summary: text, changes: z.array(text), unresolved: z.array(text), evidence: text }).strict()
+export const reportSchema = z.object({ summary: text, changes: z.array(text), unresolved: z.array(text), evidence: text }).strict()
+export const simulationRecordSchema = z.object({ formatVersion: z.literal(1), collaborationId: uuid, planId: uuid, childStoryId: uuid,
+  task: taskSchema, preparation: text, simulation: simulationSchema }).strict()
+export type SimulationRecord = z.infer<typeof simulationRecordSchema>
+export const collaborationSchema = z.object({ formatVersion: z.literal(1), id: uuid, parentStoryId: uuid, childStoryId: uuid,
+  plan: planRecordSchema, task: taskSchema, preparation: text, simulation: simulationSchema, report: reportSchema, parentReceipt: text }).strict().superRefine((record, ctx) => {
+  if (record.plan.outcome.kind !== 'planned' || !record.plan.outcome.events.some(event => event.id === record.childStoryId) ||
+      new Set([record.id, record.parentStoryId, record.childStoryId, record.plan.id]).size !== 4) ctx.addIssue({ code: 'custom', message: '协作故事身份不匹配' })
+})
+export type StoryTask = z.infer<typeof taskSchema>
+export type Simulation = z.infer<typeof simulationSchema>
+export type Collaboration = z.infer<typeof collaborationSchema>
+
+/** 为已有规划内的一个事件生成独立的父故事与协作身份。 */
+export function collaborationIdentity(plan: PlanRecord, childStoryId: string) {
+  const valid = planRecordSchema.parse(plan)
+  uuid.parse(childStoryId)
+  if (valid.outcome.kind !== 'planned' || !valid.outcome.events.some(event => event.id === childStoryId)) throw new Error('事件不属于所选规划')
+  return { id: randomUUID(), parentStoryId: randomUUID(), childStoryId }
+}

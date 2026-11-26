@@ -1,7 +1,7 @@
 import { lstat, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { parseStrictJson, planRecordSchema, type PlanRecord } from './plan.js'
+import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, type Collaboration, type PlanRecord, type SimulationRecord } from './types.js'
 
 const uuid = z.string().uuid()
 const key = (path: string) => process.platform === 'win32' ? path.toLowerCase() : path
@@ -52,5 +52,79 @@ export class PlanStore {
     const value = planRecordSchema.parse(parseStrictJson(new TextDecoder('utf-8', { fatal: true }).decode(bytes)))
     if (value.id !== id) throw new Error('规划运行身份不匹配')
     return value
+  }
+}
+
+const claimSchema = z.object({ formatVersion: z.literal(1), planId: uuid, childStoryId: uuid, collaborationId: uuid }).strict()
+
+/** 使用独立目录保存单个事件的独占尝试及最终协作记录。 */
+export class CollaborationStore {
+  private constructor(private readonly root: string) {}
+
+  /** 调用方提供全部受保护目录；记录根不得与规划根重叠。 */
+  static async open(root: string, planRoot: string, protectedRoots: readonly string[]): Promise<CollaborationStore> {
+    await PlanStore.open(root, [...protectedRoots, planRoot])
+    return new CollaborationStore(await realpath(root))
+  }
+
+  private path(planId: string, childStoryId: string, kind: 'claim' | 'simulation' | 'result'): string {
+    return join(this.root, `${uuid.parse(planId)}.${uuid.parse(childStoryId)}.${kind}.json`)
+  }
+
+  /** 保存模拟经过供中断后核查；不代表子故事完成。 */
+  async saveSimulation(record: SimulationRecord): Promise<void> {
+    const valid = simulationRecordSchema.parse(record)
+    const claim = claimSchema.parse(await this.readFile(this.path(valid.planId, valid.childStoryId, 'claim')))
+    if (claim.planId !== valid.planId || claim.childStoryId !== valid.childStoryId || claim.collaborationId !== valid.collaborationId) throw new Error('协作占用身份不匹配')
+    const content = `${JSON.stringify(valid, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('模拟记录超过大小限制')
+    try { await writeFile(this.path(valid.planId, valid.childStoryId, 'simulation'), content, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) { throw new Error(`模拟记录写入失败或不明，请核查事件 ${valid.childStoryId}`, { cause: error }) }
+  }
+
+  /** 读取模拟经过并核对占用身份。 */
+  async readSimulation(planId: string, childStoryId: string): Promise<SimulationRecord> {
+    const claim = claimSchema.parse(await this.readFile(this.path(planId, childStoryId, 'claim')))
+    const record = simulationRecordSchema.parse(await this.readFile(this.path(planId, childStoryId, 'simulation')))
+    if (claim.planId !== planId || claim.childStoryId !== childStoryId || record.planId !== planId || record.childStoryId !== childStoryId || record.collaborationId !== claim.collaborationId) throw new Error('模拟记录身份不匹配')
+    return record
+  }
+
+  /** 在执行导演或模拟器之前独占占用；失败后保留，禁止自动重试。 */
+  async claim(planId: string, childStoryId: string, collaborationId: string): Promise<void> {
+    const claim = claimSchema.parse({ formatVersion: 1, planId, childStoryId, collaborationId })
+    try { await writeFile(this.path(planId, childStoryId, 'claim'), `${JSON.stringify(claim, null, 2)}\n`, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) { throw new Error(`事件已有尝试或占用结果不明，请核查事件 ${childStoryId}`, { cause: error }) }
+  }
+
+  private async readFile(path: string): Promise<unknown> {
+    const info = await lstat(path)
+    if (!info.isFile() || info.isSymbolicLink() || key(await realpath(path)) !== key(path) || info.size > 1024 * 1024) throw new Error('协作记录文件无效')
+    const bytes = await readFile(path)
+    if (bytes.length > 1024 * 1024) throw new Error('协作记录超过大小限制')
+    return parseStrictJson(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
+  }
+
+  /** 独占保存最终结果；失败时保留文件和占用供核查。 */
+  async save(record: Collaboration): Promise<void> {
+    const valid = collaborationSchema.parse(record)
+    const claim = claimSchema.parse(await this.readFile(this.path(valid.plan.id, valid.childStoryId, 'claim')))
+    if (claim.planId !== valid.plan.id || claim.childStoryId !== valid.childStoryId || claim.collaborationId !== valid.id) throw new Error('协作占用身份不匹配')
+    const simulation = await this.readSimulation(valid.plan.id, valid.childStoryId)
+    if (JSON.stringify(simulation.simulation) !== JSON.stringify(valid.simulation) || JSON.stringify(simulation.task) !== JSON.stringify(valid.task) || simulation.preparation !== valid.preparation) throw new Error('模拟经过与协作结果不一致')
+    const content = `${JSON.stringify(valid, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('协作记录超过大小限制')
+    try { await writeFile(this.path(valid.plan.id, valid.childStoryId, 'result'), content, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) { throw new Error(`协作结果写入失败或不明，请核查事件 ${valid.childStoryId}`, { cause: error }) }
+  }
+
+  /** 读取并核对记录与占用身份；未知版本或损坏保留原文件。 */
+  async read(planId: string, childStoryId: string): Promise<Collaboration> {
+    const claim = claimSchema.parse(await this.readFile(this.path(planId, childStoryId, 'claim')))
+    const record = collaborationSchema.parse(await this.readFile(this.path(planId, childStoryId, 'result')))
+    if (claim.planId !== planId || claim.childStoryId !== childStoryId || record.plan.id !== planId || record.childStoryId !== childStoryId || record.id !== claim.collaborationId) throw new Error('协作记录身份不匹配')
+    const simulation = await this.readSimulation(planId, childStoryId)
+    if (JSON.stringify(simulation.simulation) !== JSON.stringify(record.simulation) || JSON.stringify(simulation.task) !== JSON.stringify(record.task) || simulation.preparation !== record.preparation) throw new Error('模拟经过与协作结果不一致')
+    return record
   }
 }
