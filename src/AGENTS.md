@@ -7,6 +7,7 @@
 - `app/`：应用入口、业务装配和示例。
 - `config/`：应用配置与凭据管理。
 - `llm/`：工作区包 @fly-novel/llm。
+- `story-workflow/`：故事级业务数据和运行能力，测试放在 `src/story-workflow/tests/`。
 - `tools/`：具体工具实现，测试放在 src/tools/tests/。
 - `util/`：跨模块共用的基础工具，测试放在 src/util/tests/。
 - `world-init/`：世界初始化业务能力目录，测试放在 src/world-init/tests/。

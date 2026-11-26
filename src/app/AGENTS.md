@@ -4,6 +4,7 @@
 
 - `README.md`：目录职责和使用说明。
 - `agents/`：各类 Agent 的应用层创建入口。
+- `story-planning.ts`：单导演故事规划的可信应用装配入口。
 - `tests/`：所属模块的自动化测试。
 - `world-initialization-entry.ts`：世界初始化可信应用及业务服务装配入口。
 - `world-initialization-files-debug.ts`：世界初始化受控文件工具的真实模型交互调试入口。
