@@ -1,7 +1,7 @@
 import { lstat, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, type Collaboration, type PlanRecord, type SimulationRecord } from './types.js'
+import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision } from './types.js'
 
 const uuid = z.string().uuid()
 const key = (path: string) => process.platform === 'win32' ? path.toLowerCase() : path
@@ -69,6 +69,30 @@ export class CollaborationStore {
 
   private path(planId: string, childStoryId: string, kind: 'claim' | 'simulation' | 'result'): string {
     return join(this.root, `${uuid.parse(planId)}.${uuid.parse(childStoryId)}.${kind}.json`)
+  }
+
+  /** 独占创建本轮父故事身份，避免将已有尝试自动当成可恢复进度。 */
+  async startSiblings(planId: string, parentStoryId: string): Promise<void> {
+    const value = siblingRunSchema.parse({ formatVersion: 1, planId, parentStoryId })
+    try { await writeFile(join(this.root, `${value.planId}.siblings.json`), `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) { throw new Error(`兄弟故事已有运行或创建结果不明，请核查规划 ${planId}`, { cause: error }) }
+  }
+
+  /** 保存每个未发生事件的导演决定；已保存决定不会被覆盖。 */
+  async saveSiblingDecision(decision: SiblingDecision): Promise<void> {
+    const value = siblingDecisionSchema.parse(decision)
+    const run = siblingRunSchema.parse(await this.readFile(join(this.root, `${value.planId}.siblings.json`)))
+    if (run.planId !== value.planId || run.parentStoryId !== value.parentStoryId) throw new Error('兄弟故事身份不匹配')
+    try { await writeFile(join(this.root, `${value.planId}.${value.childStoryId}.decision.json`), `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) { throw new Error(`决定保存失败或结果不明，请核查事件 ${value.childStoryId}`, { cause: error }) }
+  }
+
+  /** 读取并核对兄弟故事决定与本轮父故事身份。 */
+  async readSiblingDecision(planId: string, childStoryId: string): Promise<SiblingDecision> {
+    const run = siblingRunSchema.parse(await this.readFile(join(this.root, `${uuid.parse(planId)}.siblings.json`)))
+    const value = siblingDecisionSchema.parse(await this.readFile(join(this.root, `${uuid.parse(planId)}.${uuid.parse(childStoryId)}.decision.json`)))
+    if (run.planId !== planId || value.planId !== planId || value.childStoryId !== childStoryId || value.parentStoryId !== run.parentStoryId) throw new Error('兄弟故事决定身份不匹配')
+    return value
   }
 
   /** 保存模拟经过供中断后核查；不代表子故事完成。 */

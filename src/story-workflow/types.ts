@@ -54,6 +54,12 @@ export type StoryTask = z.infer<typeof taskSchema>
 export type Simulation = z.infer<typeof simulationSchema>
 export type Collaboration = z.infer<typeof collaborationSchema>
 
+export const siblingRunSchema = z.object({ formatVersion: z.literal(1), planId: uuid, parentStoryId: uuid }).strict()
+export const siblingDecisionSchema = z.object({ formatVersion: z.literal(1), planId: uuid, parentStoryId: uuid, childStoryId: uuid,
+  decision: z.enum(['continue', 'adjust', 'cancel']), reason: text }).strict()
+export const directorDecisionSchema = z.object({ decision: z.enum(['continue', 'adjust', 'cancel']), reason: text }).strict()
+export type SiblingDecision = z.infer<typeof siblingDecisionSchema>
+
 /** 为已有规划内的一个事件生成独立的父故事与协作身份。 */
 export function collaborationIdentity(plan: PlanRecord, childStoryId: string) {
   const valid = planRecordSchema.parse(plan)

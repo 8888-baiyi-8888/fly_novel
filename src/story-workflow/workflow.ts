@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import type { Agent } from '@fly-novel/agents'
-import { collaborationIdentity, collaborationSchema, parseStrictJson, reportSchema, simulationSchema, taskSchema, type Collaboration, type Simulation, type StoryTask } from './types.js'
+import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision } from './types.js'
 import { CollaborationStore } from './store.js'
 
 export interface DirectorScope { create(role: string): Promise<Agent>; dispose(): Promise<void> }
@@ -75,13 +76,14 @@ export interface StoryCollaborationOptions {
  * @returns 已保存的模拟协作结果，不表示世界事件发生。
  * @throws 规划、模型、模拟、保存或清理失败时抛错。
  */
-export async function runStoryCollaboration(options: StoryCollaborationOptions, openDirectors: OpenDirectors, planId: string, eventId: string, signal?: AbortSignal): Promise<Collaboration> {
+export async function runStoryCollaboration(options: StoryCollaborationOptions, openDirectors: OpenDirectors, planId: string, eventId: string, signal?: AbortSignal, siblings?: { parentStoryId: string; prior: Collaboration[]; decision: SiblingDecision }): Promise<Collaboration> {
   if (!options.provider.trim() || !options.model.trim()) throw new Error('模型配置不能为空')
   signal?.throwIfAborted()
   const planStore = await PlanStore.open(options.planRoot, [...options.protectedRoots, options.collaborationRoot])
   const store = await CollaborationStore.open(options.collaborationRoot, options.planRoot, options.protectedRoots)
   const plan = await planStore.read(planId)
-  const identity = collaborationIdentity(plan, eventId)
+  const generated = collaborationIdentity(plan, eventId)
+  const identity = siblings ? { ...generated, parentStoryId: siblings.parentStoryId } : generated
   if (plan.outcome.kind !== 'planned') throw new Error('规划没有事件')
   const event = plan.outcome.events.find(item => item.id === eventId)
   if (!event) throw new Error('事件不属于所选规划')
@@ -107,7 +109,7 @@ export async function runStoryCollaboration(options: StoryCollaborationOptions, 
   try {
     controller.signal.throwIfAborted()
     const parent = await framework.create('parent-director')
-    const task = taskSchema.parse(parseStrictJson(await call(parent, `你是父导演。根据所选初步事件制定子故事任务，不指定角色行动；只返回严格 JSON：{"background":"背景","goal":"目标","constraints":["约束"]}。资料：${JSON.stringify({ input: plan.input, event })}`)))
+    const task = taskSchema.parse(parseStrictJson(await call(parent, `你是父导演。根据所选初步事件制定子故事任务，不指定角色行动；只返回严格 JSON：{"background":"背景","goal":"目标","constraints":["约束"]}。资料：${JSON.stringify({ input: plan.input, event, ...(siblings ? { prior: siblings.prior.map(item => ({ report: item.report, parentReceipt: item.parentReceipt })), decision: siblings.decision } : {}) })}`)))
     controller.signal.throwIfAborted()
     const child = await framework.create('child-director')
     const preparation = (await call(child, `你是子导演，接受父导演交付的子故事，组织可供模拟演绎的处境，不声称已经发生。任务：${JSON.stringify(task)}`)).trim()
@@ -135,6 +137,59 @@ export async function runStoryCollaboration(options: StoryCollaborationOptions, 
   controller.signal.throwIfAborted()
   await store.save(record)
   return record
+}
+
+/** 顺序处理同一计划的兄弟故事，失败时停止并保留已经写入的记录。 */
+export async function runStorySiblings(options: StoryCollaborationOptions, openDirectors: OpenDirectors, planId: string, signal?: AbortSignal): Promise<{ decisions: SiblingDecision[]; results: Collaboration[] }> {
+  if (!options.provider.trim() || !options.model.trim()) throw new Error('模型配置不能为空')
+  signal?.throwIfAborted()
+  const plans = await PlanStore.open(options.planRoot, [...options.protectedRoots, options.collaborationRoot])
+  const store = await CollaborationStore.open(options.collaborationRoot, options.planRoot, options.protectedRoots)
+  const plan = await plans.read(planId)
+  if (plan.outcome.kind !== 'planned') throw new Error('规划没有事件')
+  const parentStoryId = randomUUID()
+  await store.startSiblings(planId, parentStoryId)
+  const decisions: SiblingDecision[] = []
+  const results: Collaboration[] = []
+  for (const event of plan.outcome.events) {
+    signal?.throwIfAborted()
+    if (JSON.stringify(await plans.read(planId)) !== JSON.stringify(plan)) throw new Error(`规划已变化，请核查事件 ${event.id}`)
+    const scope = await openDirectors()
+    let answer: string | undefined
+    let failure: unknown
+    try {
+      signal?.throwIfAborted()
+      const director = await scope.create('parent-director')
+      const cancel = () => director.cancel()
+      signal?.addEventListener('abort', cancel, { once: true })
+      try {
+        signal?.throwIfAborted()
+        answer = (await director.run({ prompt: `你是父导演。根据初步事件和已完成的模拟结果，判断此事件继续、调整或取消。不得改写已发生的模拟经过。只返回严格 JSON：{"decision":"continue 或 adjust 或 cancel","reason":"原因及调整方向"}。资料：${JSON.stringify({ input: plan.input, event, prior: results.map(item => ({ report: item.report, parentReceipt: item.parentReceipt })), decisions })}` })).content
+      } finally { signal?.removeEventListener('abort', cancel) }
+    } catch (error) { failure = error }
+    try { await scope.dispose() } catch (error) {
+      if (failure !== undefined) throw new AggregateError([failure, error], `导演判断和清理失败，请核查事件 ${event.id}`)
+      throw error
+    }
+    if (failure !== undefined) throw failure
+    signal?.throwIfAborted()
+    if (answer === undefined) throw new Error('导演没有返回事件决定')
+    const choice = directorDecisionSchema.parse(parseStrictJson(answer))
+    if (JSON.stringify(await plans.read(planId)) !== JSON.stringify(plan)) throw new Error(`规划已变化，请核查事件 ${event.id}`)
+    signal?.throwIfAborted()
+    const decision: SiblingDecision = { formatVersion: 1, planId, parentStoryId, childStoryId: event.id, ...choice }
+    await store.saveSiblingDecision(decision)
+    decisions.push(decision)
+    if (decision.decision === 'cancel') continue
+    const result = await runStoryCollaboration(options, openDirectors, planId, event.id, signal, { parentStoryId, prior: results, decision })
+    results.push(await store.read(planId, result.childStoryId))
+  }
+  return { decisions, results }
+}
+
+/** 读取某个兄弟故事的已保存决定。 */
+export async function readStorySiblingDecision(options: Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>, planId: string, eventId: string): Promise<SiblingDecision> {
+  return (await CollaborationStore.open(options.collaborationRoot, options.planRoot, options.protectedRoots)).readSiblingDecision(planId, eventId)
 }
 
 /**

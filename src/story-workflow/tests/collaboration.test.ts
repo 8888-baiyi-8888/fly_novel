@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import { AgentFactory, AgentInstance } from '@fly-novel/agents'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 import { createStoryPlan } from '../../app/story-workflow.js'
-import { readStoryCollaboration, readStorySimulation, runStoryCollaboration } from '../../app/story-workflow.js'
+import { readStoryCollaboration, readStorySimulation, readStorySiblingDecision, runStoryCollaboration, runStorySiblings } from '../../app/story-workflow.js'
 
 class ScriptedAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
@@ -161,4 +161,49 @@ test('保存记录时发现规划变化则停止，已损坏记录不会被覆�
   await assert.rejects(runStoryCollaboration(options, plan.id, eventId), /规划已变化/)
   assert.match(await readFile(path, 'utf8'), /可能恶化/)
   await assert.rejects(readStoryCollaboration(options, plan.id, eventId))
+})
+
+test('兄弟故事顺序使用前一项的模拟回报，调整决定和父故事身份得到保存', async t => {
+  const { base, baseOptions, plan } = await setup()
+  t.after(() => rm(base, { recursive: true, force: true }))
+  if (plan.outcome.kind !== 'planned') throw new Error('预期计划')
+  const adapter = new ScriptedAdapter([
+    '{"decision":"continue","reason":"先处理商队抵达"}', task, '准备城门交涉', report, '收到商队在城外扎营',
+    '{"decision":"adjust","reason":"商队在城外，改为处理城外货物"}',
+    '{"background":"商队在城外扎营","goal":"处理城外货物","constraints":["夜间城门关闭"]}', '准备城外货物', report, '收到货物处理回报',
+  ])
+  const goals: string[] = []
+  const options = { ...baseOptions, adapter, simulate: async (input: { task: { goal: string } }) => { goals.push(input.task.goal); return simulation } }
+  const output = await runStorySiblings(options, plan.id)
+  assert.deepEqual(goals, ['处理入城请求', '处理城外货物'])
+  assert.equal(output.results.length, 2)
+  assert.equal(output.results[0]?.parentStoryId, output.results[1]?.parentStoryId)
+  assert.equal(output.decisions[1]?.decision, 'adjust')
+  assert.deepEqual(await readStorySiblingDecision(options, plan.id, plan.outcome.events[1]!.id), output.decisions[1])
+  assert.match(JSON.stringify(adapter.requests[5]?.messages), /商队扎营/)
+  assert.match(JSON.stringify(adapter.requests[6]?.messages), /商队扎营/)
+  await assert.rejects(runStorySiblings(options, plan.id), /已有运行/)
+})
+
+test('取消的兄弟故事不演绎；前项失败时不启动后项', async t => {
+  for (const mode of ['cancel', 'failure'] as const) {
+    const { base, baseOptions, plan } = await setup()
+    t.after(() => rm(base, { recursive: true, force: true }))
+    if (plan.outcome.kind !== 'planned') throw new Error('预期计划')
+    const responses = mode === 'cancel'
+      ? ['{"decision":"cancel","reason":"已不适合发生"}', '{"decision":"continue","reason":"继续处理"}', task, '准备交涉', report, '收到回报']
+      : ['{"decision":"continue","reason":"继续"}', task, '准备交涉']
+    let simulations = 0
+    const options = { ...baseOptions, adapter: new ScriptedAdapter(responses), simulate: async () => { simulations++; if (mode === 'failure') throw new Error('模拟失败'); return simulation } }
+    if (mode === 'cancel') {
+      const result = await runStorySiblings(options, plan.id)
+      assert.equal(result.results.length, 1)
+      assert.equal(result.results[0]?.childStoryId, plan.outcome.events[1]?.id)
+      assert.equal((await readStorySiblingDecision(options, plan.id, plan.outcome.events[0]!.id)).decision, 'cancel')
+    } else {
+      await assert.rejects(runStorySiblings(options, plan.id), /未完成/)
+      await assert.rejects(readStorySiblingDecision(options, plan.id, plan.outcome.events[1]!.id))
+    }
+    assert.equal(simulations, 1)
+  }
 })
