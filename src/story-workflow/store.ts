@@ -1,7 +1,7 @@
 import { lstat, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision } from './types.js'
+import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, storyNodeSchema, storyStepSchema, storyChoiceSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision, type StoryNode, type StoryStep, type StoryChoice } from './types.js'
 
 const uuid = z.string().uuid()
 const key = (path: string) => process.platform === 'win32' ? path.toLowerCase() : path
@@ -69,6 +69,52 @@ export class CollaborationStore {
 
   private path(planId: string, childStoryId: string, kind: 'claim' | 'simulation' | 'result'): string {
     return join(this.root, `${uuid.parse(planId)}.${uuid.parse(childStoryId)}.${kind}.json`)
+  }
+
+  /** 独占保存故事及其直接上级，确保上级属于同一轮运行。 */
+  async saveStoryNode(node: StoryNode): Promise<void> {
+    const value = storyNodeSchema.parse(node)
+    if (value.parentStoryId !== null) {
+      await this.readStoryNode(value.runId, value.parentStoryId)
+    }
+    const content = `${JSON.stringify(value, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('故事记录超过大小限制')
+    try { await writeFile(join(this.root, `${value.runId}.${value.storyId}.story.json`), content, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) { throw new Error(`故事保存失败或结果不明，请核查故事 ${value.storyId}`, { cause: error }) }
+  }
+
+  /** 读取故事并核对运行及故事身份；损坏或未知版本不会被覆盖。 */
+  async readStoryNode(runId: string, storyId: string): Promise<StoryNode> {
+    const value = storyNodeSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.${uuid.parse(storyId)}.story.json`)))
+    if (value.runId !== runId || value.storyId !== storyId) throw new Error('故事记录身份不匹配')
+    return value
+  }
+
+  /** 依次独占保存拆分判断、模拟经过或回报。 */
+  async saveStoryStep(step: StoryStep): Promise<void> {
+    const value = storyStepSchema.parse(step)
+    await this.readStoryNode(value.runId, value.storyId)
+    const content = `${JSON.stringify(value, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('故事步骤记录超过大小限制')
+    try { await writeFile(join(this.root, `${value.runId}.${value.storyId}.${value.kind}.story.json`), content, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) { throw new Error(`故事步骤保存失败或结果不明，请核查故事 ${value.storyId}`, { cause: error }) }
+  }
+
+  /** 读取步骤并核对身份及版本。 */
+  async readStoryStep(runId: string, storyId: string, kind: StoryStep['kind']): Promise<StoryStep> {
+    const value = storyStepSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.${uuid.parse(storyId)}.${kind}.story.json`)))
+    if (value.runId !== runId || value.storyId !== storyId || value.kind !== kind) throw new Error('故事步骤身份不匹配')
+    return value
+  }
+
+  /** 记录上级对当前未执行子故事的决定，包括取消。 */
+  async saveStoryChoice(choice: StoryChoice): Promise<void> {
+    const value = storyChoiceSchema.parse(choice)
+    await this.readStoryNode(value.runId, value.parentStoryId)
+    const content = `${JSON.stringify(value, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('故事决定超过大小限制')
+    try { await writeFile(join(this.root, `${value.runId}.${value.childStoryId}.choice.story.json`), content, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) { throw new Error(`故事决定保存失败或结果不明，请核查故事 ${value.childStoryId}`, { cause: error }) }
   }
 
   /** 独占创建本轮父故事身份，避免将已有尝试自动当成可恢复进度。 */

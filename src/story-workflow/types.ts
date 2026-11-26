@@ -60,6 +60,32 @@ export const siblingDecisionSchema = z.object({ formatVersion: z.literal(1), pla
 export const directorDecisionSchema = z.object({ decision: z.enum(['continue', 'adjust', 'cancel']), reason: text }).strict()
 export type SiblingDecision = z.infer<typeof siblingDecisionSchema>
 
+/** 多层推进的单个故事记录；父故事为空表示本轮根故事。 */
+export const storyNodeSchema = z.object({
+  formatVersion: z.literal(1), runId: uuid, storyId: uuid, parentStoryId: uuid.nullable(),
+  description: text, task: taskSchema,
+}).strict().superRefine((value, ctx) => {
+  if (value.storyId === value.parentStoryId) ctx.addIssue({ code: 'custom', message: '故事不能是自己的父故事' })
+})
+export type StoryNode = z.infer<typeof storyNodeSchema>
+
+export const storyDecisionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('direct'), preparation: text }).strict(),
+  z.object({ kind: z.literal('split'), children: z.array(text).min(1) }).strict(),
+])
+const savedStoryDecisionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('direct'), preparation: text }).strict(),
+  z.object({ kind: z.literal('split'), children: z.array(z.object({ id: uuid, description: text }).strict()).min(1) }).strict(),
+])
+export const storyStepSchema = z.discriminatedUnion('kind', [
+  z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('decision'), value: savedStoryDecisionSchema }).strict(),
+  z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('simulation'), value: simulationSchema }).strict(),
+  z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('result'), value: reportSchema, receipt: text }).strict(),
+])
+export type StoryStep = z.infer<typeof storyStepSchema>
+export const storyChoiceSchema = z.object({ formatVersion: z.literal(1), runId: uuid, parentStoryId: uuid, childStoryId: uuid, description: text, decision: z.enum(['continue', 'adjust', 'cancel']), reason: text }).strict()
+export type StoryChoice = z.infer<typeof storyChoiceSchema>
+
 /** 为已有规划内的一个事件生成独立的父故事与协作身份。 */
 export function collaborationIdentity(plan: PlanRecord, childStoryId: string) {
   const valid = planRecordSchema.parse(plan)
