@@ -209,6 +209,32 @@ type StoryTreeResult =
   | (Extract<StoryStep, { kind: 'result' }> & { completedCount: number })
   | { kind: 'paused'; runId: string; storyId: string; batch: number; completedCount: number }
 
+/** 读取已结束的整轮结果。暂停、旧入口的协作记录或部分写入无法通过核对。 */
+export async function readStoryRoundResult(options: Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>, planId: string) {
+  const plans = await PlanStore.open(options.planRoot, [...options.protectedRoots, options.collaborationRoot])
+  const store = await CollaborationStore.open(options.collaborationRoot, options.planRoot, options.protectedRoots)
+  const plan = await plans.read(planId)
+  const rootId = await store.readRootStoryId(planId)
+  const root = await store.readStoryNode(planId, rootId)
+  if (root.parentStoryId !== null) throw new Error('整轮结果的根故事身份不匹配')
+  const decision = await store.readStoryStep(planId, rootId, 'decision')
+  if (plan.outcome.kind !== 'planned' || decision.kind !== 'decision' || decision.value.kind !== 'split' ||
+    !isDeepStrictEqual(decision.value.children, plan.outcome.events) ||
+    root.task.goal !== plan.input.task ||
+    root.task.background !== JSON.stringify({ facts: plan.input.facts, directions: plan.input.directions })) throw new Error('整轮结果与原规划不一致')
+  const result = await store.readStoryStep(planId, rootId, 'result')
+  const assessment = await store.readStoryStep(planId, rootId, 'assessment')
+  if (result.kind !== 'result' || assessment.kind !== 'assessment' || !isDeepStrictEqual(result.value, assessment.value.report)) throw new Error('整轮结果与评估不一致')
+  return { result, assessment: assessment.value }
+}
+
+/** 用户选择继续演化时，核对上一轮结束记录，再用调用方提供的新资料独立规划。 */
+export async function createNextStoryPlan(options: StoryPlanningOptions & { collaborationRoot: string }, openDirectors: OpenDirectors, previousPlanId: string, input: PlanInput, signal?: AbortSignal): Promise<PlanRecord> {
+  signal?.throwIfAborted()
+  await readStoryRoundResult({ planRoot: options.root, collaborationRoot: options.collaborationRoot, protectedRoots: options.protectedRoots }, previousPlanId)
+  return createStoryPlan({ ...options, protectedRoots: [...options.protectedRoots, options.collaborationRoot] }, openDirectors, input, signal)
+}
+
 async function verifyStoryProgress(store: CollaborationStore, progress: StoryProgress): Promise<void> {
   const { runId, frames } = progress
   for (const [depth, frame] of frames.entries()) {

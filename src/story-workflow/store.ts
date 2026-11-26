@@ -110,9 +110,16 @@ export class CollaborationStore {
   /** 读取有版本的暂停记录并核对所属运行及批次。 */
   async readStoryProgress(runId: string, batch: number): Promise<StoryProgress> {
     const value = storyProgressSchema.parse(await this.readFile(this.progressPath(runId, batch, 'paused')))
-    const run = siblingRunSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.siblings.json`)))
-    if (value.runId !== runId || value.batch !== batch || run.planId !== runId || value.frames[0]?.node.storyId !== run.parentStoryId) throw new Error('故事暂停记录身份不匹配')
+    const rootId = await this.readRootStoryId(runId)
+    if (value.runId !== runId || value.batch !== batch || value.frames[0]?.node.storyId !== rootId) throw new Error('故事暂停记录身份不匹配')
     return value
+  }
+
+  /** 从运行记录取得本轮根故事身份。 */
+  async readRootStoryId(runId: string): Promise<string> {
+    const run = siblingRunSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.siblings.json`)))
+    if (run.planId !== runId) throw new Error('故事运行记录身份不匹配')
+    return run.parentStoryId
   }
 
   /** 每个暂停位置只允许开始一次继续操作，失败后保留标记供核查。 */
