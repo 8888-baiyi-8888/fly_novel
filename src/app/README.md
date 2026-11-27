@@ -64,6 +64,8 @@
 
 世界绑定故事的子导演可以返回 `mapNeed`。可信模拟器在创建场景前调用 `inspectStoryMapScene`，将需求与计划和直接演绎决定核对，按明确授权的城市与层面读取地图。核查记录由 `readStoryMapCheck` 按故事和核查 ID 重读。地图存储由调用方持有，范围外地点的正文不进入核查结果。见[场景地图入口](story-map-scene.ts)。
 
+`requestStoryMapProposal` 重查缺口来源版本后启动一次临时地图 Agent。只把授权城市和已核实城门的正文传给 Agent，模型无地图、目录或文件工具。调用方提供模型、超时和取消信号。`readStoryMapProposal` 重读结果。只有占用而没有结果时报告 `pending`，保留核查线索。见[地图提案入口](story-map-scene.ts)。
+
 `runStoryCollaboration` 由可信调用方指定已有规划及其中一个事件、独立记录目录、模型和模拟器；程序创建独立父子导演实例，由父导演交付任务，子导演组织模拟并根据模拟经过形成回报，父导演接收后保存结果。`readStorySimulation` 可核查已保存的模拟经过，`readStoryCollaboration` 读取完整协作结果；记录、失败及不自动重试的边界见[故事模块说明](../story-workflow/README.md)。本入口不接入真实角色、场景演绎或世界状态，也不推进下一个兄弟故事。
 
 `runStorySiblings` 在同一规划中顺序处理兄弟故事，将之前的模拟回报提供给父导演决定是否继续、调整或取消；`readStorySiblingDecision` 读取已保存的决定。中断或失败后不会自动重试，同一规划也不会自动再次启动兄弟推进。

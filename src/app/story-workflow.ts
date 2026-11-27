@@ -11,7 +11,7 @@ export { readStory } from '../story-workflow/story-query.js'
 export { inspectStoryProgress } from '../story-workflow/progress.js'
 export { createStoryScene, listStoryScenes, readStoryScene } from '../story-workflow/scenes.js'
 export { bindStoryWorld, prepareStoryWorldInput } from './story-world-materials.js'
-export { inspectStoryMapScene, readStoryMapCheck, type StoryMapScope } from './story-map-scene.js'
+export { inspectStoryMapScene, readStoryMapCheck, readStoryMapProposal, requestStoryMapProposal, type StoryMapScope } from './story-map-scene.js'
 export type { SceneResultInput, SceneSetupInput } from '../story-workflow/types.js'
 
 function directors(options: StoryPlanningOptions | StoryCollaborationOptions): OpenDirectors {

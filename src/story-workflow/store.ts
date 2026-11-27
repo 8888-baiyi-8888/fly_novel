@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { mapSceneCheckSchema, type MapSceneCheck } from './map-scene.js'
+import { mapProposalKeySchema, mapProposalRecordSchema, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck } from './map-scene.js'
 import { storyNoticeSchema, storyProgressSchema, type StoryNotice, type StoryProgress } from './types.js'
 import { sceneOrderSchema, sceneResultRecordSchema, sceneSetupRecordSchema, type SceneResultInput, type SceneResultRecord, type SceneSetupRecord } from './types.js'
 import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, storyNodeSchema, storyStepSchema, storyChoiceSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision, type StoryNode, type StoryStep, type StoryChoice } from './types.js'
@@ -77,6 +77,35 @@ export class CollaborationStore {
     const check = mapSceneCheckSchema.parse(await this.readFile(this.mapCheckPath(runId, storyId, id)))
     if (check.runId !== runId || check.storyId !== storyId || check.id !== id) throw new Error('场景地图核查身份不匹配')
     return check
+  }
+
+  private mapProposalPath(runId: string, storyId: string, checkId: string, suffix: 'claim' | 'result'): string {
+    return join(this.root, `${uuid.parse(runId)}.${uuid.parse(storyId)}.${uuid.parse(checkId)}.map-proposal-${suffix}.json`)
+  }
+
+  async claimMapProposal(runId: string, storyId: string, checkId: string): Promise<void> {
+    const key = mapProposalKeySchema.parse({ formatVersion: 1, runId, storyId, checkId })
+    await writeFile(this.mapProposalPath(runId, storyId, checkId, 'claim'), `${JSON.stringify(key)}\n`, { flag: 'wx', encoding: 'utf8' })
+  }
+
+  async saveMapProposal(record: MapProposalRecord): Promise<void> {
+    const value = mapProposalRecordSchema.parse(record)
+    const { runId, storyId, checkId } = value
+    await writeFile(this.mapProposalPath(runId, storyId, checkId, 'result'), `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', encoding: 'utf8' })
+  }
+
+  async readMapProposal(runId: string, storyId: string, checkId: string) {
+    const claim = mapProposalKeySchema.parse(await this.readFile(this.mapProposalPath(runId, storyId, checkId, 'claim')))
+    if (claim.runId !== runId || claim.storyId !== storyId || claim.checkId !== checkId) throw new Error('地图提案占用身份不匹配')
+    let raw: unknown
+    try { raw = await this.readFile(this.mapProposalPath(runId, storyId, checkId, 'result')) }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return { ...claim, result: { status: 'pending' as const } }
+      throw error
+    }
+    const value = mapProposalRecordSchema.parse(raw)
+    if (value.runId !== runId || value.storyId !== storyId || value.checkId !== checkId) throw new Error('地图提案结果身份不匹配')
+    return value
   }
 
   /** 调用方提供全部受保护目录；记录根不得与规划根重叠。 */

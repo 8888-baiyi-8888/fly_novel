@@ -10,7 +10,7 @@ import { MapStore } from '@fly-novel/map'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
-import { bindStoryWorld, createStoryPlan, inspectStoryMapScene, prepareStoryWorldInput, readStoryMapCheck, readStoryPlan, runStoryTree } from '../../app/story-workflow.js'
+import { bindStoryWorld, createStoryPlan, inspectStoryMapScene, prepareStoryWorldInput, readStoryMapCheck, readStoryMapProposal, readStoryPlan, requestStoryMapProposal, runStoryTree } from '../../app/story-workflow.js'
 import { advance, ScriptedAdapter as DirectorAdapter, task } from '../../story-workflow/tests/fixtures.js'
 import { CatalogService } from '../workspace/catalog/service.js'
 import { initializeCatalog } from '../workspace/catalog/format.js'
@@ -145,13 +145,23 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const scope = { binding: storyWorld, store: map, ownerAgentId: 'map', cityId: city.id, layerId: 'admin' }
     await assert.rejects(runStoryTree({ ...sceneRoots, provider: 'test', model: 'test',
       adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed })]),
-      async simulate({ runId, storyId, mapNeed: requested }) {
+      async simulate({ runId, storyId, mapNeed: requested }, signal) {
         assert.deepEqual(requested, mapNeed)
         const denied = await inspectStoryMapScene(sceneRoots, runId, storyId, { ...scope, cityId: randomUUID() }, mapNeed)
         assert.equal(denied.result.status, 'forbidden')
         const checked = await inspectStoryMapScene(sceneRoots, runId, storyId, scope, mapNeed)
         assert.equal(checked.result.status, 'missing')
         assert.deepEqual(await readStoryMapCheck(sceneRoots, runId, storyId, checked.id), checked)
+        const mapDirector = new DirectorAdapter([JSON.stringify({ status: 'proposed', cityId: city.id, layerId: 'admin',
+          gate: { kind: 'proposed', description: '拟将城门置于北侧' }, waiting: { name: '北门外高地', description: '临时停放车队', relativeToGate: '城门以北' } })])
+        const proposalModel = { provider: 'test', model: 'test', adapter: mapDirector, timeoutMs: 5000 }
+        const proposal = await requestStoryMapProposal(sceneRoots, runId, storyId, checked.id, scope, proposalModel, signal)
+        assert.equal(proposal.result.status, 'proposed')
+        assert.deepEqual(await readStoryMapProposal(sceneRoots, runId, storyId, checked.id), proposal)
+        assert.equal(mapDirector.requests[0]?.tools?.length ?? 0, 0)
+        assert.doesNotMatch(JSON.stringify(mapDirector.requests), /城门夜间关闭|商队已抵达城外/)
+        await assert.rejects(requestStoryMapProposal(sceneRoots, runId, storyId, checked.id, scope, proposalModel, signal), { code: 'EEXIST' })
+        assert.equal(mapDirector.requests.length, 1)
         throw new Error('等候点待补充')
       },
     }, plan.id), /等候点待补充/)
