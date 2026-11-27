@@ -9,6 +9,7 @@ import { LocalFileSystem } from '@fly-novel/fs-local'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
+import { bindStoryWorld } from '../../app/story-workflow.js'
 import { withFileDiscussionAdapter } from '../discussion/file-adapter.js'
 import { candidateSchema, type DiscussionTargetAdapter } from '../discussion/service.js'
 
@@ -106,8 +107,20 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     }
     opened = await openWorldInitializationWorkflow(options)
     if (world.worldId === names[0]) assert.equal((await opened.workflow.completeDelivery(interruptedInput)).value.id, interruptedInput.id)
-    assert.equal((await opened.workflow.readDelivery(done.value.id)).value.review.artifacts[0]?.content, '城门夜间关闭')
+    const absent = { ...target, path: 'main/absent.md' }
+    const binding = { worlds, worldId: world.worldId, initialization: opened.workflow, deliveryId: done.value.id, targets: [target, absent] }
+    const storyWorld = await bindStoryWorld(binding)
+    const snapshot = await storyWorld.readDelivery([target])
+    assert.equal(snapshot.artifacts[0]?.content, '城门夜间关闭')
+    assert.equal(snapshot.artifacts[0]?.version, done.value.review.artifacts[0]?.version)
+    assert.deepEqual(snapshot.uncovered, done.value.review.uncovered)
+    await assert.rejects(storyWorld.readDelivery([absent]), /未覆盖/)
+    await assert.rejects(storyWorld.readDelivery([{ ...target, path: 'main/forbidden.md' }]), /无权/)
+    await assert.rejects(bindStoryWorld({ ...binding, worldId: names.find(name => name !== world.worldId)! }), /世界绑定不匹配/)
+    const unknownDelivery = await bindStoryWorld({ ...binding, deliveryId: randomUUID() })
+    await assert.rejects(unknownDelivery.readDelivery([target]), /不存在/)
     await opened.close()
+    await assert.rejects(storyWorld.readDelivery([target]), /已关闭/)
   }
   assert.equal(await readFile(join(configs[0]!.world.readRoot, 'main', 'city.md'), 'utf8'), '城门夜间关闭')
   assert.equal(await readFile(join(configs[1]!.world.readRoot, 'main', 'city.md'), 'utf8'), '城门夜间关闭')

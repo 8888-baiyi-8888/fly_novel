@@ -1,7 +1,7 @@
 import type { Agent } from '@fly-novel/agents'
 import type { WorldAccess } from '@fly-novel/util'
 import type { WorldWorkspaceConfig } from '../world-init/workspace/config.js'
-import { validateWorldWorkspaceConfigs } from '../world-init/workspace/config.js'
+import { sameWorldWorkspace, validateWorldWorkspaceConfigs } from '../world-init/workspace/config.js'
 import type { DiscussionService, DiscussionTarget } from '../world-init/discussion/service.js'
 import type { ImpactService } from '../world-init/impact/service.js'
 import type { ReviewService } from '../world-init/impact/review.js'
@@ -114,6 +114,14 @@ export class WorldInitializationWorkflow {
   readDeliveryReview(id: string) { this.check(); return this.delivery.readReview(id) }
   completeDelivery(input: Parameters<InitializationDelivery['complete']>[0]) { this.check(); return this.delivery.complete(input) }
   readDelivery(id: string) { this.check(); return this.delivery.readDelivery(id) }
+
+  /** 借出指定世界的交付读取权限。句柄的生命周期仍由初始化应用管理。 */
+  bindDeliveryReader(world: WorldWorkspaceConfig): (id: string) => ReturnType<InitializationDelivery['readDelivery']> {
+    this.check()
+    const bound = this.worlds.find(item => item.worldId === this.worldId)
+    if (!bound || !sameWorldWorkspace(bound, world)) throw new Error('交付读取世界绑定不匹配')
+    return id => this.readDelivery(id)
+  }
   cancel(): void { for (const agent of this.agents) agent.cancel() }
   close(): Promise<void> {
     if (!this.closing) this.closing = (async () => {

@@ -5,6 +5,7 @@
 - `README.md`：目录职责和使用说明。
 - `agents/`：各类 Agent 的应用层创建入口。
 - `story-workflow.ts`：故事工作流的模型和导演装配、记录查询、进度核查和场景设置入口。
+- `story-world-materials.ts`：绑定故事使用的可信世界与交付读取范围。
 - `story-workflow-debug.ts`：使用本机真实模型与模拟演绎运行整轮故事的调试入口。
 - `tests/`：所属模块的自动化测试。
 - `world-initialization-entry.ts`：世界初始化可信应用及业务服务装配入口。
