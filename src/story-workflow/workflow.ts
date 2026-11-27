@@ -39,7 +39,7 @@ export async function createStoryPlan(options: StoryPlanningOptions, openDirecto
     signal?.addEventListener('abort', cancel, { once: true })
     try {
       signal?.throwIfAborted()
-      output = (await agent.run({ prompt: `根据以下任务、已知事实和发展方向，规划本轮事件初步安排。计划不是已经发生的事实。只返回严格 JSON：有安排时为 {"kind":"planned","events":["事件描述"]}；没有可推进事件时为 {"kind":"no_events","reason":"原因"}。输入：${JSON.stringify(data)}` })).content
+      output = (await agent.run({ prompt: `根据以下任务、已知事实和发展方向，规划本轮事件初步安排。计划不是已经发生的事实。只返回严格 JSON：有安排时为 {"kind":"planned","events":["事件描述"]}；没有可推进事件时为 {"kind":"no_events","reason":"原因"}。输入：${JSON.stringify(data)}${'world' in data ? '\n世界资料按 category 使用：setting 为设定，direction 为未来方向，current 为可信当前状态，event 为可信已发生事件。留白、未覆盖和暂留候选保持原有状态。' : ''}` })).content
     } finally { signal?.removeEventListener('abort', cancel) }
   } catch (error) { failure = error }
   try { await framework.dispose() } catch (error) {
@@ -105,7 +105,7 @@ export async function runStoryCollaboration(options: StoryCollaborationOptions, 
     controller.signal.throwIfAborted()
     const abortAgent = () => agent.cancel()
     controller.signal.addEventListener('abort', abortAgent, { once: true })
-    try { controller.signal.throwIfAborted(); return (await agent.run({ prompt })).content }
+    try { controller.signal.throwIfAborted(); return (await agent.run({ prompt: prompt + directorWorldContext(plan) })).content }
     finally { controller.signal.removeEventListener('abort', abortAgent) }
   }
   let record: Collaboration | undefined
@@ -270,7 +270,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
       const agent = await scope.create('director')
       const cancel = () => agent.cancel()
       callSignal?.addEventListener('abort', cancel, { once: true })
-      try { callSignal?.throwIfAborted(); output = (await agent.run({ prompt })).content }
+      try { callSignal?.throwIfAborted(); output = (await agent.run({ prompt: prompt + directorWorldContext(plan) })).content }
       finally { callSignal?.removeEventListener('abort', cancel) }
     } catch (error) { failure = error }
     try { await scope.dispose() } catch (error) {
@@ -366,6 +366,12 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     }
   }
   throw new Error('故事运行未产生结果')
+}
+
+function directorWorldContext(plan: PlanRecord): string {
+  return plan.formatVersion === 2
+    ? `\n本轮规划保存的世界资料（按 category 区分设定、方向、当前局势和已发生事件；留白、未覆盖和暂留候选保持原有状态）：${JSON.stringify(plan.input.world)}`
+    : ''
 }
 
 /**

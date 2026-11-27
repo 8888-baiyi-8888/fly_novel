@@ -9,7 +9,8 @@ import { LocalFileSystem } from '@fly-novel/fs-local'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
-import { bindStoryWorld } from '../../app/story-workflow.js'
+import { bindStoryWorld, createStoryPlan, prepareStoryWorldInput, readStoryPlan } from '../../app/story-workflow.js'
+import { ScriptedAdapter as DirectorAdapter } from '../../story-workflow/tests/fixtures.js'
 import { withFileDiscussionAdapter } from '../discussion/file-adapter.js'
 import { candidateSchema, type DiscussionTargetAdapter } from '../discussion/service.js'
 
@@ -114,6 +115,15 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     assert.equal(snapshot.artifacts[0]?.content, '城门夜间关闭')
     assert.equal(snapshot.artifacts[0]?.version, done.value.review.artifacts[0]?.version)
     assert.deepEqual(snapshot.uncovered, done.value.review.uncovered)
+    const input = await prepareStoryWorldInput(storyWorld, { task: '处理入城请求', delivery: [{ target, category: 'setting' }],
+      fixed: [{ id: 'merchant-arrived', version: 'fixture-1', category: 'event', content: '商队已抵达城外' }] })
+    const planRoot = join(base, 'plans'); await mkdir(planRoot)
+    const director = new DirectorAdapter(['{"kind":"planned","events":["处理入城请求"]}'])
+    const planOptions = { root: planRoot, protectedRoots: [world.readRoot, roots.delivery], provider: 'test', model: 'test', adapter: director }
+    const plan = await createStoryPlan(planOptions, input)
+    assert.equal(plan.formatVersion, 2)
+    assert.deepEqual(await readStoryPlan(planOptions, plan.id), plan)
+    assert.match(JSON.stringify(director.requests), /商队已抵达城外/)
     await assert.rejects(storyWorld.readDelivery([absent]), /未覆盖/)
     await assert.rejects(storyWorld.readDelivery([{ ...target, path: 'main/forbidden.md' }]), /无权/)
     await assert.rejects(bindStoryWorld({ ...binding, worldId: names.find(name => name !== world.worldId)! }), /世界绑定不匹配/)

@@ -1,10 +1,27 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
 
 const text = z.string().trim().min(1)
 const uuid = z.string().uuid()
-export const planInputSchema = z.object({ task: text, facts: z.array(text), directions: z.array(text) }).strict()
+const independentPlanInput = z.object({ task: text, facts: z.array(text), directions: z.array(text) }).strict()
+const worldSource = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('delivery'), target: z.json() }).strict(),
+  z.object({ kind: z.literal('catalog'), ownerAgentId: text, path: text, revision: uuid }).strict(),
+  z.object({ kind: z.literal('fixed'), id: text }).strict(),
+])
+export const storyWorldContextSchema = z.object({
+  worldId: text, deliveryId: uuid, deliveryVersion: text, reviewVersion: text,
+  materials: z.array(z.object({
+    category: z.enum(['setting', 'direction', 'current', 'event']), source: worldSource, version: text,
+    content: z.string().min(1), digest: z.string().regex(/^[a-f0-9]{64}$/),
+  }).strict().refine(item => createHash('sha256').update(item.content).digest('hex') === item.digest, '故事资料摘要不匹配')).min(1),
+  notes: z.array(text), uncovered: z.array(text),
+  deferred: z.array(z.object({ id: uuid, target: z.json(), version: text, summary: text }).strict()),
+}).strict()
+export type StoryWorldContext = z.infer<typeof storyWorldContextSchema>
+const worldPlanInput = independentPlanInput.extend({ world: storyWorldContextSchema })
+export const planInputSchema = z.union([independentPlanInput, worldPlanInput])
 const proposal = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('planned'), events: z.array(text).min(1) }).strict(),
   z.object({ kind: z.literal('no_events'), reason: text }).strict(),
@@ -13,7 +30,10 @@ const outcome = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('planned'), events: z.array(z.object({ id: uuid, description: text }).strict()).min(1) }).strict(),
   z.object({ kind: z.literal('no_events'), reason: text }).strict(),
 ])
-export const planRecordSchema = z.object({ formatVersion: z.literal(1), id: uuid, input: planInputSchema, outcome }).strict().superRefine((value, ctx) => {
+export const planRecordSchema = z.discriminatedUnion('formatVersion', [
+  z.object({ formatVersion: z.literal(1), id: uuid, input: independentPlanInput, outcome }).strict(),
+  z.object({ formatVersion: z.literal(2), id: uuid, input: worldPlanInput, outcome }).strict(),
+]).superRefine((value, ctx) => {
   if (value.outcome.kind === 'planned') {
     const ids = value.outcome.events.map(event => event.id)
     if (new Set(ids).size !== ids.length || ids.includes(value.id)) ctx.addIssue({ code: 'custom', message: '规划身份重复' })
@@ -33,7 +53,7 @@ export function parseStrictJson(source: string): unknown {
 export function createPlanRecord(input: PlanInput, response: string): PlanRecord {
   const validated = planInputSchema.parse(input)
   const result = proposal.parse(parseStrictJson(response))
-  return planRecordSchema.parse({ formatVersion: 1, id: randomUUID(), input: validated,
+  return planRecordSchema.parse({ formatVersion: 'world' in validated ? 2 : 1, id: randomUUID(), input: validated,
     outcome: result.kind === 'planned'
       ? { kind: result.kind, events: result.events.map(description => ({ id: randomUUID(), description })) }
       : result })
