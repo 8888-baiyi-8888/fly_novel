@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import { openStoryEvents } from '../../app/story-workflow.js'
+import { openStoryConvoyState, openStoryEvents } from '../../app/story-workflow.js'
 import { decideStorySceneInteraction, judgeStorySceneActions, openStorySceneInteraction, runStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
 import type {} from '@fly-novel/system-prompt'
 import { LocalFileSystem } from '@fly-novel/fs-local'
@@ -151,6 +151,13 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     assert.match(JSON.stringify(director.requests), /商队已抵达城外/)
     const collaborationRoot = join(base, 'collaborations'); await mkdir(collaborationRoot)
     const sceneRoots = { planRoot, collaborationRoot, protectedRoots: planOptions.protectedRoots }
+    const stateRoot = join(base, 'state'); await mkdir(stateRoot)
+    const convoyId = randomUUID(); const operationId = randomUUID()
+    const stateOptions = { worldId: world.worldId, runId: plan.id, convoyId, stateRoot, worldRoot: world.readRoot }
+    const state = await openStoryConvoyState(sceneRoots, { ...stateOptions, async authorize({ proposal, event, action }) {
+      return action.observable === '车队已在城门外等候点停稳' && proposal.locationId === `${event.sceneId}:waiting-point` ? '核对商队和本场景临时等候点' : undefined
+    } })
+    const baseline = await state.initialize({ sourceId: 'merchant-arrived', version: 'fixture-1' })
     const mapNeed = { cityId: city.id, layerId: 'admin', purpose: '寻找可停放货车的城门外等候点' }
     const scope = { binding: storyWorld, store: map, ownerAgentId: 'map', cityId: city.id, layerId: 'admin' }
     let savedScene: { storyId: string; sceneId: string } | undefined
@@ -350,7 +357,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         assert.deepEqual(await interaction.trace(), [{ event, decision }])
         const nextActor = new DirectorAdapter([JSON.stringify({ kind: 'respond', speech: [{ text: '请先在门外等候', channel: 'normal', intendedCharacterIds: [] },
           { text: '隔门听不到的暗号', channel: 'whisper', intendedCharacterIds: [leader.id] }],
-          actions: ['尝试把货车移入城门', '尝试清理门外空地', '尝试确认其余车辆可以掉头'] })])
+          actions: ['尝试把货车移入城门', '尝试清理门外空地', '尝试确认其余车辆可以掉头', '引导车队在获准的城外位置停稳'] })])
         const sceneRuntime = await openStoryCharacterRuntime(participants, characterId => {
           assert.equal(characterId, guard.id)
           return { provider: 'test', model: 'test', version: 'interaction-1', timeoutMs: 5000, adapter: nextActor }
@@ -376,13 +383,15 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         await assert.rejects(judgeStorySceneActions(interaction, 2, { ...selectOptions, adapter: new DirectorAdapter([JSON.stringify([
           { index: 0, status: 'succeeded', reason: '越过闭门规则' },
           { index: 1, status: 'succeeded', reason: '空地可清理' }, { index: 2, status: 'unresolved', reason: '未核实' },
+          { index: 3, status: 'succeeded', reason: '已安置' },
         ])]) }, judge, signal), /不匹配/)
         const actions = await judgeStorySceneActions(interaction, 2, { ...selectOptions, adapter: new DirectorAdapter([JSON.stringify([
           { index: 0, status: 'blocked', reason: '城门关闭', observable: '货车停在门外' },
           { index: 1, status: 'succeeded', reason: '守卫清理成功', observable: '门外空地已清理' },
           { index: 2, status: 'unresolved', reason: '尚未确认车辆掉头空间' },
+          { index: 3, status: 'succeeded', reason: '已在获准地点停稳', observable: '车队已在城门外等候点停稳' },
         ])]) }, judge, signal)
-        assert.deepEqual(actions.outcomes.map(item => item.status), ['blocked', 'succeeded', 'unresolved'])
+        assert.deepEqual(actions.outcomes.map(item => item.status), ['blocked', 'succeeded', 'unresolved', 'succeeded'])
         const publicSpeechAdapter = new DirectorAdapter([JSON.stringify({ perceptions: [
           { characterId: guard.id, status: 'received', reason: '在门外', observations: [speech] },
           { characterId: leader.id, status: 'received', reason: '在门外现场', observations: [speech, { kind: 'effect', index: 0 }] },
@@ -458,10 +467,23 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         const adopted = await storyEvents.adopt(identity)
         assert.deepEqual(await storyEvents.adopt(identity), adopted)
         assert.deepEqual(await storyEvents.read(identity), adopted)
-        assert.deepEqual(adopted.sequence[1]?.actions.map(item => item.status), ['blocked', 'succeeded', 'unresolved'])
+        assert.deepEqual(adopted.sequence[1]?.actions.map(item => item.status), ['blocked', 'succeeded', 'unresolved', 'succeeded'])
         assert.doesNotMatch(JSON.stringify(adopted), /领队本轮秘密|守卫第一轮私有测试标记/)
         const outsideWorld = openStoryEvents(sceneRoots, { worldId: '另一个世界', runId })
         await assert.rejects(outsideWorld.adopt(identity), /授权世界/)
+        const stateProposal = { worldId: world.worldId, convoyId, operationId, expectedRevision: 0, locationId: `${scene.sceneId}:waiting-point`,
+          evidence: { ...identity, eventId: adopted.eventId, sequence: 2, actionIndex: 3 } }
+        await assert.rejects(state.prepare({ ...stateProposal, worldId: '另一个世界' }), /身份不匹配/)
+        await assert.rejects(state.prepare({ ...stateProposal, expectedRevision: 1 }), /预期版本/)
+        await assert.rejects(state.prepare({ ...stateProposal, evidence: { ...stateProposal.evidence, actionIndex: 0 } }), /缺少已经确认/)
+        await assert.rejects(state.prepare({ ...stateProposal, evidence: { ...stateProposal.evidence, actionIndex: 1 } }), /未获授权/)
+        const withoutAuthority = await openStoryConvoyState(sceneRoots, stateOptions)
+        await assert.rejects(withoutAuthority.prepare(stateProposal), /无权/)
+        const change = await state.prepare(stateProposal)
+        assert.deepEqual(await state.readChange(operationId), change)
+        assert.deepEqual(await state.prepare(stateProposal), change)
+        await assert.rejects(state.prepare({ ...stateProposal, locationId: '替换地点' }), /内容已变化/)
+        assert.deepEqual(await state.read(), baseline)
         return simulation
       },
     }, plan.id)
