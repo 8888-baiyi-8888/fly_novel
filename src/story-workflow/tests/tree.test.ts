@@ -1,12 +1,71 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { AgentFactory, AgentInstance } from '@fly-novel/agents'
-import { runStoryTree } from '../../app/story-workflow.js'
+import { readStory, runStoryTree } from '../../app/story-workflow.js'
 import { CollaborationStore } from '../store.js'
-import { ScriptedAdapter, achieved, report, setup, simulation, task } from './fixtures.js'
+import { ScriptedAdapter, achieved, advance, leaf, report, setup, simulation, task } from './fixtures.js'
+
+test('只读查询从曲水城规划重读三层故事及取消、待启动和已完成子项', async t => {
+  const { baseOptions, plan } = await setup(t)
+  const adapter = new ScriptedAdapter([
+    advance, task, '{"kind":"split","children":["改走侧门","交涉入城"]}',
+    '{"decision":"cancel","reason":"侧门关闭"}', ...leaf('交涉入城'), achieved, '收到入城回报',
+  ])
+  const pause = await runStoryTree({ ...baseOptions, limit: 1, adapter, simulate: async () => simulation }, plan.id)
+  assert.equal(pause.kind, 'paused')
+  const root = await readStory(baseOptions, plan.id)
+  assert.equal(root.node.storyId, pause.storyId)
+  assert.equal(root.parent, null)
+  assert.equal(root.siblingIndex, null)
+  assert.equal(root.result, undefined)
+  assert.deepEqual(root.children.map(child => [child.description, child.status]), [
+    ['商队夜间抵达', 'completed'], ['处理货物', 'planned'],
+  ])
+
+  const parent = await readStory(baseOptions, plan.id, root.children[0]!.id)
+  assert.equal(parent.parent?.storyId, root.node.storyId)
+  assert.equal(parent.siblingIndex, 0)
+  assert.deepEqual(parent.children.map(child => [child.description, child.status]), [
+    ['改走侧门', 'cancelled'], ['交涉入城', 'completed'],
+  ])
+  const child = await readStory(baseOptions, plan.id, parent.children[1]!.id)
+  assert.equal(child.parent?.storyId, parent.node.storyId)
+  assert.equal(child.siblingIndex, 1)
+  assert.equal(child.node.task.goal, '处理入城请求')
+  assert.equal(child.result?.value.summary, '守卫拒绝开门')
+  assert.deepEqual(child.children, [])
+
+  const before = await readdir(baseOptions.collaborationRoot)
+  assert.ok(!before.some(file => file.endsWith('.continued.story.json')))
+  const other = await setup(t)
+  await runStoryTree({
+    ...other.baseOptions, adapter: new ScriptedAdapter([...leaf('处理商队'), ...leaf('处理货物'), achieved]),
+    simulate: async () => simulation,
+  }, other.plan.id)
+  await assert.rejects(readStory(other.baseOptions, other.plan.id, child.node.storyId), { code: 'ENOENT' })
+  await assert.rejects(readStory(baseOptions, plan.id, root.children[1]!.id), { code: 'ENOENT' })
+  assert.deepEqual(await readdir(baseOptions.collaborationRoot), before)
+
+  const nodePath = join(baseOptions.collaborationRoot, `${plan.id}.${child.node.storyId}.story.json`)
+  const original = await readFile(nodePath, 'utf8')
+  await writeFile(nodePath, JSON.stringify({ ...child.node, parentStoryId: root.node.storyId }))
+  await assert.rejects(readStory(baseOptions, plan.id, child.node.storyId), /上级安排不匹配/)
+  await assert.rejects(readStory(baseOptions, plan.id, parent.node.storyId), /上级安排不匹配/)
+  await writeFile(nodePath, original)
+
+  const simulationPath = join(baseOptions.collaborationRoot, `${plan.id}.${child.node.storyId}.simulation.story.json`)
+  await rename(simulationPath, `${simulationPath}.bak`)
+  assert.equal((await readStory(baseOptions, plan.id, child.node.storyId)).result, undefined)
+  assert.equal((await readStory(baseOptions, plan.id, parent.node.storyId)).children[1]?.status, 'incomplete')
+
+  const parentPath = join(baseOptions.collaborationRoot, `${plan.id}.${parent.node.storyId}.story.json`)
+  await rename(parentPath, `${parentPath}.bak`)
+  await assert.rejects(readStory(baseOptions, plan.id, child.node.storyId), { code: 'ENOENT' })
+  assert.equal((await readStory(baseOptions, plan.id)).children[0]?.status, 'incomplete')
+})
 
 test('故事记录保存三层父子关系，拒绝缺失上级和覆盖已有记录', async t => {
   const { baseOptions } = await setup(t)

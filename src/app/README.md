@@ -70,6 +70,8 @@
 
 `readStoryRoundResult` 重新读取并核对已结束整轮的结果及评估。用户选择继续演化时，调用 `createNextStoryPlan`，传入上一轮规划 ID 和更新的 `PlanInput`。入口先核对上一轮的根故事、结果和评估，再用新资料建立独立规划。暂停的轮次应使用 `continueStoryTree`。调用方负责提供新一轮已知事实和发展方向。
 
+`readStory` 从可信记录根按规划和故事 ID 重读任务、直接上级、同层位置及下级进展。省略故事 ID 时读取根故事。参数及状态见[读取父子故事](../story-workflow/README.md#读取父子故事)。
+
 从仓库根目录运行 `pnpm run story-workflow-debug`，可用本机配置的 DeepSeek 测试整轮导演调用。样例每批最多完成一个最小子故事，并自动接续暂停批次。终端会显示运行记录目录，按 Ctrl+C 可取消。默认限时十分钟，也可用 `pnpm run story-workflow-debug deepseek 20` 改为二十分钟。场景由调试模拟器提供，导演回复来自真实模型。 [调试入口](story-workflow-debug.ts)
 
 `createWorldInitializationAgentWithWorkspace` 接收可信应用显式指定的现有 `viewRoot`、`draftRoot` 和 `confirmedRoot` 绝对目录；创建前校验其真实路径与可写范围。它注册文件、搜索和委派工具，主 Agent 只能修改草稿根，通用子 Agent 只读；可选的角色创建 Agent 使用下文所述角色资料服务。已确认根不能与上游平台临时可写根重叠。内置 Skill 来源单独授权，Skill 正文可加载，但其资源路径不会因此自动成为文件工具的读取范围。该入口要求以仓库根目录启动，并适用于可信本地工作区；路径检查不能抵御恶意并发替换或硬链接。它不实现世界资料确认和持久化流程。

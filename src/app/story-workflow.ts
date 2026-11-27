@@ -7,6 +7,7 @@ export type { StoryTreeOptions } from '../story-workflow/workflow.js'
 import { createStoryPlan as createPlan, runStoryCollaboration as runCollaboration, runStorySiblings as runSiblings, runStoryTree as runTree, type OpenDirectors, type StoryPlanningOptions, type StoryCollaborationOptions } from '../story-workflow/workflow.js'
 export type { StoryPlanningOptions, StoryCollaborationOptions } from '../story-workflow/workflow.js'
 export { readStoryPlan, readStoryCollaboration, readStorySimulation, readStorySiblingDecision, readStoryRoundResult } from '../story-workflow/workflow.js'
+export { readStory } from '../story-workflow/story-query.js'
 
 function directors(options: StoryPlanningOptions | StoryCollaborationOptions): OpenDirectors {
   return async () => {
