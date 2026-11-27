@@ -154,8 +154,9 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const stateRoot = join(base, 'state'); await mkdir(stateRoot)
     const convoyId = randomUUID(); const operationId = randomUUID()
     const stateOptions = { worldId: world.worldId, runId: plan.id, convoyId, stateRoot, worldRoot: world.readRoot }
+    let allowConvoy = true
     const state = await openStoryConvoyState(sceneRoots, { ...stateOptions, async authorize({ proposal, event, action }) {
-      return action.observable === '车队已在城门外等候点停稳' && proposal.locationId === `${event.sceneId}:waiting-point` ? '核对商队和本场景临时等候点' : undefined
+      return allowConvoy && action.observable === '车队已在城门外等候点停稳' && proposal.locationId === `${event.sceneId}:waiting-point` ? '核对商队和本场景临时等候点' : undefined
     } })
     const baseline = await state.initialize({ sourceId: 'merchant-arrived', version: 'fixture-1' })
     const mapNeed = { cityId: city.id, layerId: 'admin', purpose: '寻找可停放货车的城门外等候点' }
@@ -484,6 +485,27 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         assert.deepEqual(await state.prepare(stateProposal), change)
         await assert.rejects(state.prepare({ ...stateProposal, locationId: '替换地点' }), /内容已变化/)
         assert.deepEqual(await state.read(), baseline)
+        const competing = randomUUID()
+        await state.prepare({ ...stateProposal, operationId: competing })
+        assert.equal((await state.inspect(operationId)).status, 'not-applied')
+        allowConvoy = false
+        assert.equal((await state.apply(operationId)).status, 'not-applied')
+        assert.deepEqual(await state.read(), baseline)
+        allowConvoy = true
+        await assert.rejects(withoutAuthority.apply(operationId), /无权/)
+        const [firstApply, duplicateApply] = await Promise.all([state.apply(operationId), state.apply(operationId)])
+        assert.equal(firstApply.status, 'applied')
+        assert.deepEqual(duplicateApply, firstApply)
+        assert.equal((await state.apply(competing)).status, 'conflict')
+        assert.deepEqual(await withoutAuthority.inspect(operationId), firstApply)
+        const committedPath = join(stateRoot, 'convoy-1.json')
+        const committedBytes = await readFile(committedPath)
+        try {
+          await writeFile(committedPath, '{')
+          assert.equal((await state.inspect(operationId)).status, 'unknown')
+          assert.equal((await state.apply(operationId)).status, 'unknown')
+        } finally { await writeFile(committedPath, committedBytes) }
+        assert.deepEqual(await state.inspect(operationId), firstApply)
         return simulation
       },
     }, plan.id)

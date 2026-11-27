@@ -21,6 +21,15 @@ export const convoyChangeSchema = z.object({ formatVersion: z.literal(1), propos
   expectedDigest: sceneEventDigestSchema, eventDigest: sceneEventDigestSchema, authorization: text,
 }).strict()
 export type ConvoyChange = z.infer<typeof convoyChangeSchema>
+export const convoyCommittedSchema = convoyIdentitySchema.extend({
+  formatVersion: z.literal(1), revision: z.literal(1), status: z.literal('waiting'), locationId: text, change: convoyChangeSchema,
+}).refine(item => item.change.proposal.worldId === item.worldId && item.change.proposal.convoyId === item.convoyId &&
+  item.change.proposal.locationId === item.locationId && item.change.proposal.expectedRevision === 0, '已应用商队操作与状态不匹配')
+export type ConvoyCommitted = z.infer<typeof convoyCommittedSchema>
+export type ConvoyState = ConvoyBaseline | ConvoyCommitted
+export type ConvoyReceipt =
+  | { status: 'applied'; operationId: string; state: ConvoyCommitted }
+  | { status: 'not-applied' | 'conflict' | 'unknown'; operationId: string; reason: string }
 
 const maxBytes = 1024 * 1024
 
