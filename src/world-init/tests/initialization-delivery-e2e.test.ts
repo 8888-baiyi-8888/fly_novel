@@ -170,7 +170,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const leader = await characters.create({ name: '领队', summary: '带队抵达', categories: {}, body: '领队私料：货物容易变质' })
     const aide = await characters.create({ name: '副手', summary: '门内等候', categories: {}, body: '副手档案：负责登记' })
     const candidates = await Promise.all([guard, leader, aide].map(async ({ id }) => ({ characterId: id, version: (await characters.readVersioned(id)).version, presence: '在场' })))
-    const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test', limit: 1,
+    const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test', limit: 1, worldProgress: state.progress,
       adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收']),
       async simulate({ runId, storyId, mapNeed: requested, recordSceneResult }, signal) {
         const storyEvents = openStoryEvents(sceneRoots, { worldId: world.worldId, runId })
@@ -488,6 +488,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         const competing = randomUUID()
         await state.prepare({ ...stateProposal, operationId: competing })
         assert.equal((await state.inspect(operationId)).status, 'not-applied')
+        await assert.rejects(state.progress.current(), /尚未应用/)
         allowConvoy = false
         assert.equal((await state.apply(operationId)).status, 'not-applied')
         assert.deepEqual(await state.read(), baseline)
@@ -570,15 +571,19 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'needs-review')
     await writeFile(proofPath, originalProof)
     const continuation = new DirectorAdapter([...leaf('天亮后再议'), achieved])
-    const ended = await continueStoryTree({ ...sceneRoots, provider: 'test', model: 'test', adapter: continuation,
+    const continuationOptions = { ...sceneRoots, provider: 'test', model: 'test', adapter: continuation,
       async simulate({ storyId, mapNeed: requested }) {
         assert.notEqual(storyId, completedStoryId)
         assert.equal(requested, undefined)
         return simulation
       },
-    }, plan.id, round.batch)
+    } satisfies Parameters<typeof continueStoryTree>[0]
+    await assert.rejects(continueStoryTree(continuationOptions, plan.id, round.batch), /需要原世界状态来源/)
+    const ended = await continueStoryTree({ ...continuationOptions, worldProgress: state.progress }, plan.id, round.batch)
     assert.equal(ended.kind, 'result')
+    assert.equal(ended.kind === 'result' && ended.formatVersion, 3)
     assert.match(JSON.stringify(continuation.requests), /城防与商贸可能趋紧/)
+    assert.match(JSON.stringify(continuation.requests), /商队状态已更新|waiting-point/)
     assert.equal((await readStoryRoundResult(sceneRoots, plan.id)).assessment.status, 'achieved')
   }
   assert.equal(await readFile(join(configs[0]!.world.readRoot, 'main', 'city.md'), 'utf8'), '城门夜间关闭')

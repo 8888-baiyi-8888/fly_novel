@@ -1,9 +1,10 @@
-import { realpath } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import { isDeepStrictEqual } from 'node:util'
 import { convoyBaselineSchema, convoyBaselineSourceSchema, convoyChangeSchema, convoyCommittedSchema, convoyIdentitySchema, convoyOperationName, convoyProposalSchema,
   isMissingStoryFile, publishConvoyRecord, readConvoyRecord, type ConvoyBaseline, type ConvoyChange, type ConvoyProposal, type ConvoyReceipt, type ConvoyState } from '../story-workflow/convoy-state.js'
 import type { SceneEvent } from '../story-workflow/scene-event.js'
 import { sceneInteractionDigest } from '../story-workflow/scene-interaction.js'
+import { eventAssessmentEvidence, type StoryWorldProgressSource } from '../story-workflow/world-progress.js'
 import { PlanStore } from '../story-workflow/store.js'
 import { openStoryEvents } from './story-event.js'
 
@@ -107,7 +108,29 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
     return inspect(operationId)
   }
 
-  return Object.freeze({ worldId: identity.worldId, convoyId: identity.convoyId, runId, read, readChange, inspect, apply,
+  const progress: StoryWorldProgressSource = Object.freeze({
+    worldId: identity.worldId, runId,
+    async current() {
+      const current = await read()
+      const stamp = { ...identity, digest: sceneInteractionDigest(current) }
+      if (current.status === 'waiting') {
+        const { proposal } = current.change
+        const receipt = await inspect(proposal.operationId)
+        if (receipt.status !== 'applied' || !isDeepStrictEqual(receipt.state, current)) throw new Error('当前商队状态的应用回执待核查')
+        return { ...stamp, status: 'waiting' as const, revision: 1 as const, locationId: current.locationId,
+          operationId: proposal.operationId, eventId: proposal.evidence.eventId }
+      }
+      const operations = (await readdir(root)).filter(name => name.startsWith('operation-') && name.endsWith('.json'))
+      if (operations.length) throw new Error('商队已有尚未应用的获准操作，请先核查')
+      return { ...stamp, status: 'arrived' as const, revision: 0 as const }
+    },
+    async event(storyId: string, sceneId: string) {
+      const event = await events.read({ runId, storyId, sceneId })
+      return eventAssessmentEvidence(event, sceneInteractionDigest(event))
+    },
+  })
+
+  return Object.freeze({ worldId: identity.worldId, convoyId: identity.convoyId, runId, read, readChange, inspect, apply, progress,
     async initialize(source: ConvoyBaseline['source']) {
       const baseline: ConvoyBaseline = { ...identity, formatVersion: 1, revision: 0, status: 'arrived', source: convoyBaselineSourceSchema.parse(source) }
       if (!await publishConvoyRecord(root, baselineFile, baseline) && !isDeepStrictEqual(await readBaseline(), baseline)) throw new Error('商队已有不同初始状态')

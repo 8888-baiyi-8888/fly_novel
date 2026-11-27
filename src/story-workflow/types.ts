@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
+import { storyWorldEvidenceSchema } from './world-progress.js'
 import { mapSceneNeedSchema, sceneMapEvidenceSchema } from './map-scene.js'
 
 const text = z.string().trim().min(1)
@@ -149,6 +150,7 @@ export const storyCompletionSchema = z.union([storyAssessmentSchema, supplementP
 const storyResultFields = { runId: uuid, storyId: uuid, kind: z.literal('result'), value: reportSchema, receipt: text }
 const legacyStoryResultSchema = z.object({ formatVersion: z.literal(1), ...storyResultFields }).strict()
 const sceneStoryResultSchema = z.object({ formatVersion: z.literal(2), ...storyResultFields, sceneIds: z.array(text).min(1) }).strict()
+const worldStoryResultSchema = z.object({ formatVersion: z.literal(3), ...storyResultFields, sceneIds: z.array(text), worldEvidence: storyWorldEvidenceSchema }).strict()
 
 export const storyStepSchema = z.union([
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('decision'), value: savedStoryDecisionSchema }).strict(),
@@ -156,6 +158,7 @@ export const storyStepSchema = z.union([
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('simulation'), value: simulationSchema }).strict(),
   legacyStoryResultSchema,
   sceneStoryResultSchema,
+  worldStoryResultSchema,
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('assessment'), value: storyAssessmentSchema }).strict(),
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('supplement'),
     value: z.object({ id: uuid, description: text, reason: text }).strict() }).strict(),
@@ -164,9 +167,14 @@ export type StoryStep = z.infer<typeof storyStepSchema>
 const completedStorySchema = z.union([
   legacyStoryResultSchema.extend({ assessment: storyAssessmentSchema.optional() }),
   sceneStoryResultSchema.extend({ assessment: storyAssessmentSchema.optional() }),
+  worldStoryResultSchema.extend({ assessment: storyAssessmentSchema.optional() }),
 ])
+export function storyProgressVersion(frames: readonly { results: readonly { formatVersion: 1 | 2 | 3 }[] }[]): 1 | 2 | 3 {
+  if (frames.some(frame => frame.results.some(result => result.formatVersion === 3))) return 3
+  return frames.some(frame => frame.results.some(result => result.formatVersion === 2)) ? 2 : 1
+}
 export const storyProgressSchema = z.object({
-  formatVersion: z.union([z.literal(1), z.literal(2)]),
+  formatVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   runId: uuid,
   batch: z.number().int().positive(),
   planHash: z.string().regex(/^[0-9a-f]{64}$/),
@@ -179,7 +187,7 @@ export const storyProgressSchema = z.object({
     supplement: z.object({ id: uuid, description: text, reason: text }).strict().optional(),
   }).strict()).min(1),
 }).strict().refine(
-  value => value.formatVersion === (value.frames.some(frame => frame.results.some(result => result.formatVersion === 2)) ? 2 : 1),
+  value => value.formatVersion === storyProgressVersion(value.frames),
   { message: '暂停记录版本与回报格式不一致', path: ['formatVersion'] },
 )
 export type StoryProgress = z.infer<typeof storyProgressSchema>

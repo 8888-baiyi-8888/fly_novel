@@ -2,6 +2,7 @@ import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { sceneEventIdentity, sceneEventSchema, type SceneEvent } from './scene-event.js'
+import { eventAssessmentEvidence } from './world-progress.js'
 import { interactionObservationContent, interactionObservationSource, resolveInteractionPerceptions, sceneActionRecordSchema, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionDispatchSchema, sceneInteractionEventSchema, verifySceneActions, visibleCharacterResponse, type SceneActionRecord, type SceneInteractionDecision, type SceneInteractionDispatch, type SceneInteractionEvent } from './scene-interaction.js'
 import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, projectCharacterParticipation, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
@@ -537,14 +538,30 @@ export class CollaborationStore {
   }
 
   private async verifySceneReferences(step: StoryStep): Promise<void> {
-    if (step.kind !== 'result' || step.formatVersion !== 2) return
+    if (step.kind !== 'result' || step.formatVersion === 1) return
     const decision = await this.readStoryStep(step.runId, step.storyId, 'decision')
-    if (decision.kind !== 'decision' || decision.value.kind !== 'direct') {
+    if (decision.kind !== 'decision' || (decision.value.kind !== 'direct' && (step.formatVersion === 2 || step.sceneIds.length))) {
       throw new Error(`场景回报须归属直接演绎的故事：${step.storyId}`)
     }
-    const results = await this.readSettledScenes(step.runId, step.storyId)
+    const results = decision.value.kind === 'direct' ? await this.readSettledScenes(step.runId, step.storyId) : []
     if (results.length !== step.sceneIds.length || results.some((result, index) => result.sceneId !== step.sceneIds[index])) {
       throw new Error(`子故事回报的场景引用不匹配：${step.storyId}`)
+    }
+    if (step.formatVersion !== 3) return
+    const { current, events } = step.worldEvidence
+    if (decision.value.kind === 'direct' && !isDeepStrictEqual(events.map(event => event.sceneId), results.filter(result => result.formatVersion === 2).map(result => result.sceneId))) {
+      throw new Error('子故事事件未覆盖已结算的互动场景')
+    }
+    for (const reference of events) {
+      let story = await this.readStoryNode(step.runId, reference.storyId)
+      const seen = new Set<string>()
+      while (story.storyId !== step.storyId) {
+        if (!story.parentStoryId || seen.has(story.storyId)) throw new Error('回报事件超出当前故事分支')
+        seen.add(story.storyId)
+        story = await this.readStoryNode(step.runId, story.parentStoryId)
+      }
+      const event = await this.readSceneEvent(current.worldId, step.runId, reference.storyId, reference.sceneId)
+      if (!isDeepStrictEqual(eventAssessmentEvidence(event, sceneInteractionDigest(event)), reference)) throw new Error('故事回报事件依据已变化')
     }
   }
 

@@ -84,6 +84,8 @@
 
 `openStoryEvents` 采用绑定世界及运行中已有完整互动证据的结算场景。`openStoryConvoyState` 绑定独立状态根和单支商队，`prepare` 查已采用事件中的成功行动及期望版本，由可信调用方验证是否为指定商队和地点。获准操作另行保存，以操作 ID 重读。见[事件记录](../story-workflow/README.md#已采用的场景事件)。
 
+调用方可显式 `apply` 已获准的操作，并用 `inspect` 按操作 ID 核查实际版本与结果。向 `runStoryTree` 和 `continueStoryTree` 提供状态句柄的 `progress`，父子导演会依据已采用事件及核实过的当前状态推进。与所选状态有关的获准操作尚未应用或回执无法核实时，程序在发起相关评估前停止。见[故事状态证据](../story-workflow/README.md#商队运行状态)。
+
 `runStoryCollaboration` 由可信调用方指定已有规划及其中一个事件、独立记录目录、模型和模拟器；程序创建独立父子导演实例，由父导演交付任务，子导演组织模拟并根据模拟经过形成回报，父导演接收后保存结果。`readStorySimulation` 可核查已保存的模拟经过，`readStoryCollaboration` 读取完整协作结果；记录、失败及不自动重试的边界见[故事模块说明](../story-workflow/README.md)。本入口不接入真实角色、场景演绎或世界状态，也不推进下一个兄弟故事。
 
 `runStorySiblings` 在同一规划中顺序处理兄弟故事，将之前的模拟回报提供给父导演决定是否继续、调整或取消；`readStorySiblingDecision` 读取已保存的决定。中断或失败后不会自动重试，同一规划也不会自动再次启动兄弟推进。
