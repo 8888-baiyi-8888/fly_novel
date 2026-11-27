@@ -6,7 +6,7 @@ import { simulateStory, type StorySimulationInput } from './simulation.js'
 import type { Agent } from '@fly-novel/agents'
 import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyAdvanceSchema, storyCompletionSchema, storyDecisionSchema, storyProgressVersion, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
 import { CollaborationStore } from './store.js'
-import { evaluateWorldObjectives, storyWorldEvidenceSchema, worldObjectivesSchema, type EventEvidence, type StoryWorldEvidence, type StoryWorldProgressSource, type WorldObjective } from './world-progress.js'
+import { evaluateWorldObjectives, storyWorldEvidenceSchema, verifyWorldAssessment, worldObjectivesSchema, type EventEvidence, type StoryWorldEvidence, type StoryWorldProgressSource, type WorldObjective } from './world-progress.js'
 
 export interface DirectorScope { create(role: string): Promise<Agent>; dispose(): Promise<void> }
 export type OpenDirectors = () => Promise<DirectorScope>
@@ -227,6 +227,10 @@ export async function readStoryRoundResult(options: Pick<StoryCollaborationOptio
   const result = await store.readStoryStep(planId, rootId, 'result')
   const assessment = await store.readStoryStep(planId, rootId, 'assessment')
   if (result.kind !== 'result' || assessment.kind !== 'assessment' || !isDeepStrictEqual(result.value, assessment.value.report)) throw new Error('整轮结果与评估不一致')
+  if (result.formatVersion === 3) {
+    if (plan.formatVersion !== 2 || plan.input.world.worldId !== result.worldEvidence.current.worldId) throw new Error('整轮结果的世界证据不匹配')
+    verifyWorldAssessment(assessment.value.status, result.worldEvidence)
+  }
   return { result, assessment: assessment.value }
 }
 
@@ -341,10 +345,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
         : '仅在目标未达成且补充有意义时，可以返回 {"status":"supplement","reason":"尚未达成的原因","description":"一个补充故事"}。'
       const assessment = storyCompletionSchema.parse(parseStrictJson(await call(`你是本层父导演。依据下级已保存的回报、事件与已核对状态评估当前目标，保留实际经过。只返回严格 JSON，结束时返回 status（achieved、unmet 或 terminated）、reason 和 report（${reportFormat}）。unmet 时须另给 adjustment，说明根据实际结果怎样调整父故事。条件变化无法继续时用 terminated，并记录未解决事项。${supplementRule} 资料：${JSON.stringify({ story: frame.node, results: frame.results, decisions: frame.decisions, supplement: frame.supplement, worldEvidence })}`)))
       await verifyCurrent(worldEvidence)
-      const findings = worldEvidence?.objectives
-      if (findings && assessment.status !== 'terminated' && (assessment.status === 'achieved') !== findings.every(item => item.evidence.kind !== 'unmet')) {
-        throw new Error('父导演的评估或补充与目标证据不一致')
-      }
+      verifyWorldAssessment(assessment.status, worldEvidence)
       if (assessment.status === 'supplement') {
         if (frame.supplement) throw new Error(`父故事最多补充一个子故事，请核查故事 ${frame.node.storyId}`)
         const supplement = { id: randomUUID(), description: assessment.description, reason: assessment.reason }

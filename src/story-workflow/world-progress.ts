@@ -53,6 +53,13 @@ export function evaluateWorldObjectives(input: Pick<StoryWorldEvidence, 'current
   })
 }
 
+export function verifyWorldAssessment(status: 'achieved' | 'unmet' | 'terminated' | 'supplement', evidence?: StoryWorldEvidence): void {
+  const findings = evidence?.objectives
+  if (findings && status !== 'terminated' && (status === 'achieved') !== findings.every(item => item.evidence.kind !== 'unmet')) {
+    throw new Error('父导演的评估或补充与目标证据不一致')
+  }
+}
+
 export interface StoryWorldProgressSource {
   readonly worldId: string
   readonly runId: string

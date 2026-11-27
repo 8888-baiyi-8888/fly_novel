@@ -81,3 +81,13 @@
 
 - **输入与动作。** 从已结算的城门演绎进入事件写入、单目标状态应用、子故事回报和父导演评估。重开后按商队、事件或父子故事身份双向核对。运行状态未写、冲突和回执缺失分支，核对父导演只采用可证明的结果。
 - **交付及验收。** 提供一条可独立重跑的集成用例及应用入口说明，覆盖状态写入失败、未知结果、重试和历史证据保留。运行相关测试、类型检查和正式构建入口冒烟测试，记录实际命令与结果。固定替身结果与任何真实模型观察分别报告。
+
+#### 固定替身验证
+
+[双世界集成用例](../../../src/world-init/tests/initialization-delivery-e2e.test.ts)贯通曲水城场景采用、商队状态授权、独占发布、回执重开、分批继续和父故事评估。写入前注入失败时保留版本 0；发布后注入回执丢失时，从版本 1 重建原操作回执；同一操作并发应用返回同一结果。竞争操作的版本冲突与证据损坏导致的结果未知分别核对。安全等候有状态证据，入城仍未达成，验证一次补充、调整和提前终止后原事件未变化。另有[故事推进测试](../../../src/story-workflow/tests/tree.test.ts)验证没有状态证据时拒绝导演的达成结论。
+
+`pnpm run build`、`pnpm run typecheck`、`pnpm exec tsc -p tsconfig.test.json` 和正式入口加载均通过。以下命令通过 48 项测试。验收使用固定替身。
+
+```powershell
+node --test ".test-dist/story-workflow/tests/*.test.js" .test-dist/world-init/tests/initialization-delivery-e2e.test.js .test-dist/agents/tests/character-store.test.js .test-dist/agents/tests/character-system-prompt.test.js
+```

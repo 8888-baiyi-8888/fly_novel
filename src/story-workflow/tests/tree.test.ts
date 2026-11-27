@@ -1,12 +1,37 @@
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
-import { readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { AgentFactory, AgentInstance } from '@fly-novel/agents'
-import { readStory, runStoryTree } from '../../app/story-workflow.js'
+import { createStoryPlan, readStory, runStoryTree } from '../../app/story-workflow.js'
 import { CollaborationStore } from '../store.js'
-import { ScriptedAdapter, achieved, advance, leaf, report, setup, simulation, task } from './fixtures.js'
+import { ScriptedAdapter, achieved, advance, createTestDirectory, leaf, report, setup, simulation, task } from './fixtures.js'
+
+test('父导演不能仅凭回报把尚未应用的状态目标判为达成', async t => {
+  const root = await createTestDirectory(t, 'world-assessment-')
+  const planRoot = join(root, 'plans'); const collaborationRoot = join(root, 'collaborations')
+  await Promise.all([mkdir(planRoot), mkdir(collaborationRoot)])
+  const worldId = '曲水城验收世界'
+  const content = '商队已抵达，尚未安置'
+  const digest = createHash('sha256').update(content).digest('hex')
+  const providerOptions = { protectedRoots: [], provider: 'test', model: 'test' }
+  const plan = await createStoryPlan({ ...providerOptions, root: planRoot, adapter: new ScriptedAdapter(['{"kind":"planned","events":["尝试安置商队"]}']) }, {
+    task: '安全安置商队', facts: [], directions: [], world: { worldId, deliveryId: randomUUID(), deliveryVersion: 'fixture', reviewVersion: 'fixture',
+      materials: [{ category: 'current', source: { kind: 'fixed', id: 'convoy-start' }, version: '1', content, digest }], notes: [], uncovered: [], deferred: [] },
+  })
+  const convoyId = randomUUID()
+  const roots = { planRoot, collaborationRoot, protectedRoots: [] }
+  const adapter = new ScriptedAdapter([...leaf('尝试安置'), achieved])
+  await assert.rejects(runStoryTree({ ...providerOptions, ...roots, adapter, simulate: async () => simulation,
+    worldProgress: { worldId, runId: plan.id, current: async () => ({ worldId, convoyId, digest, revision: 0, status: 'arrived' }),
+      event: async () => { throw new Error('独立验收不读取场景事件') } },
+    worldObjectives: [{ id: 'safe-wait', description: '车队已安全停稳', criterion: { kind: 'convoy-waiting' } }],
+  }, plan.id), /目标证据不一致/)
+  const story = await readStory(roots, plan.id)
+  assert.equal(story.result, undefined)
+  assert.equal(story.children[0]?.status, 'completed')
+})
 
 test('只读查询从曲水城规划重读三层故事及取消、待启动和已完成子项', async t => {
   const { baseOptions, plan } = await setup(t)

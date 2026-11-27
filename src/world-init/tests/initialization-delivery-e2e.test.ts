@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, realpath, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import fsPromises = require('node:fs/promises')
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { openStoryConvoyState, openStoryEvents, type WorldObjective } from '../../app/story-workflow.js'
@@ -498,12 +499,26 @@ test('双世界隔离从初始化交付到城门互动、事件与故事评估',
         assert.deepEqual(await state.read(), baseline)
         allowConvoy = true
         await assert.rejects(withoutAuthority.apply(operationId), /无权/)
-        const [firstApply, duplicateApply] = await Promise.all([state.apply(operationId), state.apply(operationId)])
+        const committedPath = join(stateRoot, 'convoy-1.json')
+        const actualLink = fsPromises.link
+        let failBeforePublication = true
+        const publication = t.mock.method(fsPromises, 'link', async (...args: Parameters<typeof actualLink>) => {
+          if (args[1] !== committedPath) return actualLink(...args)
+          if (failBeforePublication) throw new Error('测试发布前写入失败')
+          await actualLink(...args)
+          throw new Error('测试发布后回执丢失')
+        })
+        let firstApply, duplicateApply
+        try {
+          assert.equal((await state.apply(operationId)).status, 'not-applied')
+          assert.deepEqual(await state.read(), baseline)
+          failBeforePublication = false
+          ;[firstApply, duplicateApply] = await Promise.all([state.apply(operationId), state.apply(operationId)])
+        } finally { publication.mock.restore() }
         assert.equal(firstApply.status, 'applied')
         assert.deepEqual(duplicateApply, firstApply)
         assert.equal((await state.apply(competing)).status, 'conflict')
         assert.deepEqual(await withoutAuthority.inspect(operationId), firstApply)
-        const committedPath = join(stateRoot, 'convoy-1.json')
         const committedBytes = await readFile(committedPath)
         try {
           await writeFile(committedPath, '{')
@@ -574,6 +589,14 @@ test('双世界隔离从初始化交付到城门互动、事件与故事评估',
     await assert.rejects(readStorySceneWorldEvidence(sceneRoots, plan.id, savedScene.storyId, savedScene.sceneId), /地图核查证据不匹配/)
     assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'needs-review')
     await writeFile(proofPath, originalProof)
+    const adoptedPath = join(collaborationRoot, `${savedScene.sceneId}.adopted-event.json`)
+    const adoptedBytes = await readFile(adoptedPath, 'utf8')
+    try {
+      await writeFile(adoptedPath, JSON.stringify({ ...JSON.parse(adoptedBytes), formatVersion: 999 }))
+      assert.equal((await state.inspect(operationId)).status, 'unknown')
+      await assert.rejects(state.progress.current(), /回执待核查/)
+      assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'needs-review')
+    } finally { await writeFile(adoptedPath, adoptedBytes) }
     const early = world.worldId === names[1]
     const adjustment = '保留门外等候，入城留待交通恢复后处理'
     const continuation = new DirectorAdapter(early ? [JSON.stringify({ status: 'terminated', reason: '暴雨封路，入城条件已变化', report: JSON.parse(directorReport) })] : [
@@ -602,7 +625,19 @@ test('双世界隔离从初始化交付到城门互动、事件与故事评估',
     assert.equal(evaluated.assessment.status, early ? 'terminated' : 'unmet')
     if (evaluated.assessment.status === 'unmet') assert.equal(evaluated.assessment.adjustment, adjustment)
     assert.ok(evaluated.assessment.report.unresolved.includes('处理并实际完成入城'))
-    assert.equal((await state.inspect(operationId)).status, 'applied')
+    const reopenedState = await openStoryConvoyState(sceneRoots, stateOptions)
+    const reopenedReceipt = await reopenedState.inspect(operationId)
+    assert.equal(reopenedReceipt.status, 'applied')
+    assert.deepEqual(await reopenedState.read(), await state.read())
+    assert.equal(await readFile(adoptedPath, 'utf8'), adoptedBytes)
+    if (!early) {
+      const assessmentPath = join(collaborationRoot, `${plan.id}.${ended.storyId}.assessment.story.json`)
+      const assessmentBytes = await readFile(assessmentPath, 'utf8')
+      try {
+        await writeFile(assessmentPath, JSON.stringify({ ...JSON.parse(assessmentBytes), value: { status: 'achieved', reason: '被误写为全部完成', report: evaluated.assessment.report } }))
+        await assert.rejects(readStoryRoundResult(sceneRoots, plan.id), /目标证据不一致/)
+      } finally { await writeFile(assessmentPath, assessmentBytes) }
+    }
   }
   assert.equal(await readFile(join(configs[0]!.world.readRoot, 'main', 'city.md'), 'utf8'), '城门夜间关闭')
   assert.equal(await readFile(join(configs[1]!.world.readRoot, 'main', 'city.md'), 'utf8'), '城门夜间关闭')
