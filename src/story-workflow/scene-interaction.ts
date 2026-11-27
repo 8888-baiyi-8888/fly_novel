@@ -46,6 +46,17 @@ export const sceneInteractionDecisionSchema = sceneInteractionDecisionInputSchem
 }).strict()
 export type SceneInteractionDecision = z.infer<typeof sceneInteractionDecisionSchema>
 
+export const interactionObservationIdSchema = z.object({ sequence: z.number().int().positive(), index: z.number().int().nonnegative() }).strict()
+export type InteractionObservationId = z.infer<typeof interactionObservationIdSchema>
+export function interactionObservationSource(sceneId: string, reference: InteractionObservationId): string {
+  return `${sceneId}:interaction:${reference.sequence}:${reference.index}`
+}
+export const sceneInteractionDispatchSchema = z.object({ formatVersion: z.literal(1), sequence: z.number().int().positive(),
+  characterId: id, participationId: id, decisionDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  observations: z.array(interactionObservationIdSchema).max(32),
+}).strict().refine(value => new Set(value.observations.map(item => `${item.sequence}:${item.index}`)).size === value.observations.length, '投递观察引用重复')
+export type SceneInteractionDispatch = z.infer<typeof sceneInteractionDispatchSchema>
+
 /** 核对所有投递引用与调度依据，并从原发言截取实际文本。 */
 export function resolveInteractionPerceptions(event: SceneInteractionEvent, input: z.infer<typeof sceneInteractionDecisionInputSchema>) {
   const actors = new Map(event.conditions.participants.map(item => [item.characterId, item]))
@@ -76,7 +87,7 @@ export function resolveInteractionPerceptions(event: SceneInteractionEvent, inpu
   if (input.next.kind === 'respond') {
     const { characterId, trigger } = input.next
     if (!actors.has(characterId) || (trigger.kind === 'observation'
-      ? !resolved.find(item => item.characterId === characterId)?.observations[trigger.index]
+      ? characterId === event.characterId || !resolved.find(item => item.characterId === characterId)?.observations[trigger.index]
       : actors.get(characterId)?.initiative?.id !== trigger.id)) throw new Error('下一位回应者缺少可用触发依据')
   }
   return resolved

@@ -1,8 +1,8 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { resolveInteractionPerceptions, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionEventSchema, visibleCharacterResponse, type SceneInteractionDecision, type SceneInteractionEvent } from './scene-interaction.js'
-import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
+import { interactionObservationSource, resolveInteractionPerceptions, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionDispatchSchema, sceneInteractionEventSchema, visibleCharacterResponse, type SceneInteractionDecision, type SceneInteractionDispatch, type SceneInteractionEvent } from './scene-interaction.js'
+import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, projectCharacterParticipation, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
 import { mapProposalKeySchema, mapProposalRecordSchema, mapRecordDigest, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck, type SceneMapEvidence } from './map-scene.js'
 import { storyNoticeSchema, storyProgressSchema, type StoryNotice, type StoryProgress } from './types.js'
@@ -120,7 +120,7 @@ export class CollaborationStore {
     return (await readdir(this.root)).filter(name => name.startsWith(prefix) && name.endsWith(suffix)).map(name => uuid.parse(name.slice(prefix.length, -suffix.length))).sort()
   }
 
-  private interactionPath(sceneId: string, sequence: number, kind: 'event' | 'decision'): string {
+  private interactionPath(sceneId: string, sequence: number, kind: 'event' | 'decision' | 'dispatch'): string {
     return join(this.root, `${sceneId}.interaction-${z.number().int().positive().max(10000).parse(sequence)}.${kind}.json`)
   }
 
@@ -133,6 +133,15 @@ export class CollaborationStore {
     await this.verifyInteractionEvent(setup, value)
     const prior = await this.listInteractionEvents(runId, storyId, sceneId)
     if (sequence !== prior.length + 1 || prior.some(item => item.participationId === participationId)) throw new Error('互动序号或参与来源已经占用')
+    const previous = prior.at(-1)
+    if (previous) {
+      const decision = await this.readInteractionDecision(previous)
+      if (!decision || decision.next.kind === 'end' || decision.next.kind === 'review') throw new Error('场景互动尚未允许继续')
+      if (decision.next.kind === 'respond') {
+        const dispatch = await this.readInteractionDispatch(previous)
+        if (dispatch?.record.participationId !== participationId || dispatch.participation?.outcome.status !== 'responded') throw new Error('互动事件不匹配已完成调度')
+      }
+    }
     const content = `${JSON.stringify(value)}\n`
     if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景互动事件超过大小限制')
     await writeFile(this.interactionPath(sceneId, sequence, 'event'), content, { flag: 'wx', encoding: 'utf8' })
@@ -182,6 +191,13 @@ export class CollaborationStore {
     const event = events.at(-1)
     if (!event || event.sequence !== value.sequence || sceneInteractionDigest(event) !== value.eventDigest) throw new Error('互动决定的事件版本已变化')
     resolveInteractionPerceptions(event, value)
+    const { next } = value
+    if (next.kind === 'respond' && next.trigger.kind === 'initiative') {
+      const triggerId = next.trigger.id
+      const previous = await Promise.all(events.slice(0, -1).map(item => this.readInteractionDecision(item)))
+      if (previous.some(item => item?.next.kind === 'respond' && item.next.characterId === next.characterId &&
+        item.next.trigger.kind === 'initiative' && item.next.trigger.id === triggerId)) throw new Error('独立触发依据已用')
+    }
     const content = `${JSON.stringify(value)}\n`
     if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景互动决定超过大小限制')
     await writeFile(this.interactionPath(sceneId, value.sequence, 'decision'), content, { flag: 'wx', encoding: 'utf8' })
@@ -198,6 +214,60 @@ export class CollaborationStore {
     const decision = sceneInteractionDecisionSchema.parse(raw)
     if (decision.sequence !== sequence || decision.eventDigest !== sceneInteractionDigest(event)) throw new Error('互动决定的事件引用不匹配')
     return { ...decision, perceptions: resolveInteractionPerceptions(event, decision) }
+  }
+
+  async claimInteractionDispatch(event: SceneInteractionEvent, input: SceneInteractionDispatch) {
+    const { runId, storyId, sceneId } = event
+    const record = sceneInteractionDispatchSchema.parse(input)
+    await this.assertSceneSetupOpen(runId, storyId)
+    const setup = await this.readSceneSetup(runId, storyId, sceneId)
+    if (await this.readSceneResult(setup)) throw new Error('已结算场景不能调度角色')
+    const events = await this.listInteractionEvents(runId, storyId, sceneId)
+    if (!isDeepStrictEqual(events.at(-1), event)) throw new Error('只允许调度当前场景事件')
+    await this.verifyInteractionDispatch(event, record)
+    try { await writeFile(this.interactionPath(sceneId, event.sequence, 'dispatch'), `${JSON.stringify(record)}\n`, { flag: 'wx', encoding: 'utf8' }); return true }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return false
+      throw error
+    }
+  }
+
+  private async verifyInteractionDispatch(event: SceneInteractionEvent, record: SceneInteractionDispatch) {
+    const decision = await this.readInteractionDecision(event)
+    if (record.sequence !== event.sequence || decision?.next.kind !== 'respond' || decision.next.characterId !== record.characterId ||
+      record.decisionDigest !== sceneInteractionDigest(decision)) throw new Error('互动调度的决定引用不匹配')
+    for (const reference of record.observations) {
+      if (reference.sequence > event.sequence) throw new Error('互动调度不能引用未来感知')
+      const source = reference.sequence === event.sequence ? event : await this.readInteractionEvent(event.runId, event.storyId, event.sceneId, reference.sequence)
+      const verdict = await this.readInteractionDecision(source)
+      if (!verdict?.perceptions.find(item => item.characterId === record.characterId)?.observations[reference.index]) throw new Error('互动调度的观察引用不匹配')
+    }
+    if (decision.next.trigger.kind === 'observation') {
+      const index = decision.next.trigger.index
+      if (!record.observations.some(item => item.sequence === event.sequence && item.index === index)) throw new Error('调度缺少本轮获准触发观察')
+    }
+  }
+
+  async readInteractionDispatch(event: SceneInteractionEvent) {
+    const { runId, storyId, sceneId, sequence } = event
+    let raw: unknown
+    try { raw = await this.readFile(this.interactionPath(sceneId, sequence, 'dispatch')) }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+      throw error
+    }
+    const record = sceneInteractionDispatchSchema.parse(raw)
+    await this.verifyInteractionDispatch(event, record)
+    try {
+      const { claim, result } = await this.readCharacterParticipation(runId, storyId, sceneId, record.participationId)
+      if (claim.request.characterId !== record.characterId) throw new Error('互动调度的参与角色不匹配')
+      const actual = claim.entries.filter(item => item.source.kind === 'fixed' && item.source.id.startsWith(`${sceneId}:interaction:`)).map(item => item.source.id)
+      if (!isDeepStrictEqual(actual, record.observations.map(item => interactionObservationSource(sceneId, item)))) throw new Error('实际角色输入与调度观察不匹配')
+      return { record, participation: projectCharacterParticipation(claim, result) }
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return { record, participation: undefined }
+      throw error
+    }
   }
 
   private mapCheckPath(runId: string, storyId: string, id: string): string {

@@ -104,6 +104,7 @@ export async function openStoryCharacterRuntime(scope: StoryCharacterScope, conf
   }
 
   return Object.freeze({
+    isBoundTo(candidate: StoryCharacterScope) { return candidate === scope },
     async respond(request: Request, grants: readonly CharacterKnowledgeGrant[], signal?: AbortSignal) {
       if (closing) throw new Error('角色运行器已关闭')
       if (cleanupFailures.has(request.characterId)) throw new Error('角色实例清理结果待核查', { cause: cleanupFailures.get(request.characterId) })

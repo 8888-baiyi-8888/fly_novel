@@ -1,9 +1,14 @@
+import { randomUUID } from 'node:crypto'
 import { openStory } from '../story-workflow/story-query.js'
-import { sceneInteractionConditionsSchema, sceneInteractionDecisionInputSchema, sceneInteractionDigest, visibleCharacterResponse, type SceneInteractionConditions } from '../story-workflow/scene-interaction.js'
+import { interactionObservationSource, sceneInteractionConditionsSchema, sceneInteractionDecisionInputSchema, sceneInteractionDigest, visibleCharacterResponse, type InteractionObservationId, type SceneInteractionConditions, type SceneInteractionDispatch } from '../story-workflow/scene-interaction.js'
+import type { CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
 import { parseStrictJson } from '../story-workflow/types.js'
+import type { StoryCharacterScope } from './story-character-participation.js'
+import type { openStoryCharacterRuntime } from './story-character-runtime.js'
 
 type Roots = Parameters<typeof openStory>[0]
 export interface SceneInteractionIdentity { runId: string; storyId: string; sceneId: string }
+type CharacterRuntime = Awaited<ReturnType<typeof openStoryCharacterRuntime>>
 
 /** 场景互动的可信应用入口。业务读取按运行、故事及场景核对。 */
 export function openStorySceneInteraction(roots: Roots, identity: SceneInteractionIdentity) {
@@ -17,6 +22,16 @@ export function openStorySceneInteraction(roots: Roots, identity: SceneInteracti
       throw new Error('场景互动的世界证据不匹配')
     }
     return { store: story.store, setup, worldId: story.plan.input.world.worldId }
+  }
+
+  async function trace() {
+    const { store } = await open()
+    const events = await store.listInteractionEvents(runId, storyId, sceneId)
+    return Promise.all(events.map(async event => {
+      const decision = await store.readInteractionDecision(event)
+      const dispatch = await store.readInteractionDispatch(event)
+      return { event, decision, ...(dispatch ? { dispatch } : {}) }
+    }))
   }
 
   return Object.freeze({
@@ -49,10 +64,47 @@ export function openStorySceneInteraction(roots: Roots, identity: SceneInteracti
       await store.saveInteractionDecision(runId, storyId, sceneId, { formatVersion: 1, sequence, eventDigest: sceneInteractionDigest(event), ...input })
       return (await store.readInteractionDecision(event))!
     },
-    async trace() {
-      const { store } = await open()
-      const events = await store.listInteractionEvents(runId, storyId, sceneId)
-      return Promise.all(events.map(async event => ({ event, decision: await store.readInteractionDecision(event) })))
+    trace,
+    async findParticipation(participationId: string) {
+      return (await trace()).filter(item => item.event.participationId === participationId || item.dispatch?.record.participationId === participationId)
+    },
+    /** 只执行已保存决定选中的角色。调用方重新批准该角色的观察。 */
+    async dispatch(sequence: number, scope: StoryCharacterScope, runtime: CharacterRuntime, grants: readonly CharacterKnowledgeGrant[],
+      allowObservation: (subject: { characterId: string; reference: InteractionObservationId; content: string }) => boolean, signal?: AbortSignal) {
+      signal?.throwIfAborted()
+      const { store, worldId } = await open()
+      if (scope.worldId !== worldId || scope.runId !== runId || scope.storyId !== storyId || !runtime.isBoundTo(scope)) throw new Error('角色运行器与当前场景互动不匹配')
+      const event = await store.readInteractionEvent(runId, storyId, sceneId, sequence)
+      const existing = await store.readInteractionDispatch(event)
+      if (existing) return existing
+      const decision = await store.readInteractionDecision(event)
+      if (decision?.next.kind !== 'respond') throw new Error('场景没有可执行的角色调度')
+      const { characterId, trigger } = decision.next
+      const participationId = randomUUID()
+      const request = await scope.issueScheduled(sceneId, characterId, participationId, event.setupDigest)
+      const observations: InteractionObservationId[] = []
+      const input = [...grants]
+      for (const item of (await trace()).filter(item => item.event.sequence <= sequence && item.event.characterId !== characterId)) {
+        const received = item.decision?.perceptions.find(entry => entry.characterId === characterId)
+        for (const [index, observation] of (received?.observations ?? []).entries()) {
+          const reference = { sequence: item.event.sequence, index }
+          if (!allowObservation({ characterId, reference, content: observation.content })) continue
+          observations.push(reference)
+          input.push({ characterId, sceneId, category: 'observation', content: `听见发言：${observation.content}`, basis: received!.basis,
+            source: { kind: 'fixed', id: interactionObservationSource(sceneId, reference), version: item.decision!.eventDigest } })
+        }
+      }
+      if (trigger.kind === 'initiative') {
+        const initiative = event.conditions.participants.find(item => item.characterId === characterId)!.initiative!
+        input.push({ characterId, sceneId, category: 'goal', content: initiative.description, basis: '场景已核准的独立触发',
+          source: { kind: 'fixed', id: initiative.id, version: event.conditions.version } })
+      }
+      await scope.prepare(request, input)
+      const record: SceneInteractionDispatch = { formatVersion: 1, sequence, characterId, participationId, decisionDigest: sceneInteractionDigest(decision), observations }
+      signal?.throwIfAborted()
+      if (!await store.claimInteractionDispatch(event, record)) return (await store.readInteractionDispatch(event))!
+      const participation = await runtime.respond(request, input, signal)
+      return { record, participation }
     },
   })
 }

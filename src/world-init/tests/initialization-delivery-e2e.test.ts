@@ -346,6 +346,21 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         assert.equal(decision.perceptions[1]?.observations[0]?.content, '货物快坏了')
         assert.deepEqual(decision.perceptions[2]?.observations, [])
         assert.deepEqual(await interaction.trace(), [{ event, decision }])
+        const nextActor = new DirectorAdapter([JSON.stringify({ kind: 'respond', speech: [{ text: '请先在门外等候', channel: 'normal', intendedCharacterIds: [] }], actions: [] })])
+        const sceneRuntime = await openStoryCharacterRuntime(participants, characterId => {
+          assert.equal(characterId, guard.id)
+          return { provider: 'test', model: 'test', version: 'interaction-1', timeoutMs: 5000, adapter: nextActor }
+        })
+        try {
+          await assert.rejects(interaction.dispatch(1, participants, sceneRuntime, guardGrants, () => false, signal), /缺少本轮获准触发/)
+          const dispatched = await interaction.dispatch(1, participants, sceneRuntime, guardGrants, () => true, signal)
+          assert.equal(dispatched.participation?.outcome.status, 'responded')
+          assert.deepEqual(await interaction.dispatch(1, participants, sceneRuntime, guardGrants, () => true, signal), dispatched)
+          assert.equal(nextActor.requests.length, 1)
+          assert.match(JSON.stringify(nextActor.requests), /听见发言：货物快坏了/)
+          assert.doesNotMatch(JSON.stringify(nextActor.requests), /领队本轮秘密|领队私料/)
+          assert.equal((await interaction.findParticipation(dispatched.record.participationId))[0]?.event.participationId, captain.participationId)
+        } finally { await sceneRuntime.close() }
         assert.equal(installations.closed, installations.guard + installations.leader)
         assert.doesNotMatch(JSON.stringify(views), /privateThought|守卫私料|领队私料|导演私料/)
         await assert.rejects(participants.readPrivate(scene.sceneId, leader.id, captain.participationId), /无权读取/)
@@ -384,7 +399,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
       const reloaded = bindStoryCharacters(sceneRoots, { runId: plan.id, storyId: savedScene.storyId }, {
         binding: storyWorld, ownerAgentId: 'characters', store: reopenedCharacters, candidates, privateCharacterIds: [guard.id],
       })
-      assert.equal((await reloaded.list(savedScene.sceneId)).length, 10)
+      assert.equal((await reloaded.list(savedScene.sceneId)).length, 11)
       const privateRecord = await reloaded.readPrivate(savedScene.sceneId, guard.id, savedGuardParticipation)
       assert.equal(privateRecord.claim.request.profileVersion, (await reopenedCharacters.readVersioned(guard.id)).version)
       assert.equal((await reopenedCharacters.readVersioned(leader.id)).version, candidates[1]?.version)

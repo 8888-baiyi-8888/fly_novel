@@ -4,6 +4,7 @@ import { characterClaimDigest, characterKnowledgeGrantSchema, characterParticipa
 import { openStory, readIfPresent } from '../story-workflow/story-query.js'
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { bindStoryWorld } from './story-world-materials.js'
+import { sceneInteractionDigest } from '../story-workflow/scene-interaction.js'
 
 type Roots = Parameters<typeof openStory>[0]
 type Binding = Awaited<ReturnType<typeof bindStoryWorld>>
@@ -58,6 +59,15 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
 
   return Object.freeze({
     worldId: world.worldId, runId, storyId,
+    /** 可信调度已选定角色及参与 ID，仍须核对当前场景和档案。 */
+    async issueScheduled(sceneId: string, characterId: string, participationId: string, setupDigest: string) {
+      const { scene } = await pendingScene(sceneId)
+      if (sceneInteractionDigest(scene) !== setupDigest) throw new Error('调度与角色范围的场景版本不匹配')
+      const { version } = await readCandidate(characterId, new Set([characterId]))
+      const request = Object.freeze({ participationId, characterId, worldId: world.worldId, runId, storyId, sceneId, profileVersion: version, invitation: '回应已核验的场景变化' })
+      issued.add(request)
+      return request
+    },
     /** 调用方选择本场景的候选子集。导演只收到最小候选信息。 */
     async select(sceneId: string, characterIds: readonly string[], choose: (prompt: string) => Promise<string>) {
       const { scene } = await pendingScene(sceneId)
