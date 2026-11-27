@@ -195,7 +195,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         }, signal)
         assert.equal(scene.formatVersion, 2)
         assert.deepEqual(await readStoryScene(sceneRoots, runId, storyId, scene.sceneId), scene)
-        const participants = bindStoryCharacters(sceneRoots, { runId, storyId }, { binding: storyWorld, ownerAgentId: 'characters', store: characters, candidates })
+        const participants = bindStoryCharacters(sceneRoots, { runId, storyId }, { binding: storyWorld, ownerAgentId: 'characters', store: characters, candidates, privateCharacterIds: [guard.id] })
         const choice = new DirectorAdapter([JSON.stringify({ participants: [{ characterId: guard.id, invitation: '回应城外车队' }] })])
         const selectOptions = { provider: 'test', model: 'test', adapter: choice }
         const requests = await selectStoryCharacters(participants, scene.sceneId, [guard.id, leader.id], selectOptions, signal)
@@ -228,20 +228,32 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
           adapter: characterId === guard.id ? guardAdapter : leaderAdapter,
         }))
         try {
-          assert.equal((await runtime.respond(guardRequest, guardGrants, signal)).outcome.status, 'responded')
+          const first = await runtime.respond(guardRequest, guardGrants, signal)
+          assert.equal(first.outcome.status, 'responded')
+          assert.deepEqual(await runtime.respond(guardRequest, guardGrants, signal), first)
+          assert.equal(guardAdapter.requests.length, 1)
+          await assert.rejects(runtime.respond(guardRequest, guardGrants.slice(0, 2), signal), /请求内容已变化/)
           const leaderGrants: CharacterKnowledgeGrant[] = [
             { ...guardGrants[0]!, characterId: leader.id, content: '领队私料：货物容易变质' },
             { ...guardGrants[1]!, characterId: leader.id, basis: '本人随队抵达' },
           ]
           assert.equal((await runtime.respond(captain, leaderGrants, signal)).outcome.status, 'responded')
-          assert.deepEqual((await runtime.respond(guardAgain, guardGrants, signal)).history, [guardRequest.participationId])
-          assert.deepEqual((await runtime.respond(guardAfterRevocation, guardGrants.slice(0, 2), signal)).history, [])
+          await runtime.respond(guardAgain, guardGrants, signal)
+          const next = await participants.readPrivate(scene.sceneId, guard.id, guardAgain.participationId)
+          assert.deepEqual(next.result?.history, [{ participationId: guardRequest.participationId, sceneId: scene.sceneId }])
+          await runtime.respond(guardAfterRevocation, guardGrants.slice(0, 2), signal)
+          assert.deepEqual((await participants.readPrivate(scene.sceneId, guard.id, guardAfterRevocation.participationId)).result?.history, [])
           assert.match(JSON.stringify(guardAdapter.requests[1]?.messages), /守卫第一轮私有测试标记/)
           assert.doesNotMatch(JSON.stringify(guardAdapter.requests[2]?.messages), /守卫第一轮私有测试标记|城门夜间关闭/)
           assert.doesNotMatch(JSON.stringify(leaderAdapter.requests), /守卫私料|守卫第一轮私有测试标记|城门夜间关闭|导演私料/)
           assert.doesNotMatch(JSON.stringify(guardAdapter.requests), /领队私料|导演私料/)
         } finally { await runtime.close() }
         await assert.rejects(runtime.respond(guardRequest, guardGrants), /已关闭/)
+        const views = await participants.list(scene.sceneId)
+        assert.equal(views.length, 4)
+        assert.doesNotMatch(JSON.stringify(views), /privateThought|守卫私料|领队私料|导演私料/)
+        await assert.rejects(participants.readPrivate(scene.sceneId, leader.id, captain.participationId), /无权读取/)
+        await assert.rejects(participants.readPrivate(scene.sceneId, guard.id, captain.participationId), /授权角色不匹配/)
         savedScene = { storyId, sceneId: scene.sceneId }
         await recordSceneResult(scene.sceneId, { status: 'completed', simulation })
         return simulation

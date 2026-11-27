@@ -76,6 +76,8 @@
 
 `openStoryCharacterRuntime` 在子故事内按角色惰性装配实例并持有内存 Session。调用方提供每个角色的可信插件配置和版本，配置变化时更新版本。响应前重新检查认知，历史来源的授权不能确认时重新装配并开启新会话。`respond` 返回结构化结果，调用方在子故事退出前等待 `close()`。见[角色运行器](story-character-runtime.ts)。
 
+`respond` 启动前独占保存参与请求，重复提交相同请求只重读结果。场景使用绑定的 `list(sceneId)` 读取获准角色的参与状态及响应，包含发言渠道和目标受话者。是否被其他角色感知由后续场景处理决定。`readPrivate` 需要调用方在绑定时明确授予角色权限，才能读取认知片段、原邀请与私有响应。见[记录格式](../story-workflow/README.md#角色参与记录)。
+
 `runStoryCollaboration` 由可信调用方指定已有规划及其中一个事件、独立记录目录、模型和模拟器；程序创建独立父子导演实例，由父导演交付任务，子导演组织模拟并根据模拟经过形成回报，父导演接收后保存结果。`readStorySimulation` 可核查已保存的模拟经过，`readStoryCollaboration` 读取完整协作结果；记录、失败及不自动重试的边界见[故事模块说明](../story-workflow/README.md)。本入口不接入真实角色、场景演绎或世界状态，也不推进下一个兄弟故事。
 
 `runStorySiblings` 在同一规划中顺序处理兄弟故事，将之前的模拟回报提供给父导演决定是否继续、调整或取消；`readStorySiblingDecision` 读取已保存的决定。中断或失败后不会自动重试，同一规划也不会自动再次启动兄弟推进。

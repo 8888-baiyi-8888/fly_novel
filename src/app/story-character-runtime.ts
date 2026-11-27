@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { bootstrapAgents, type Agent, type AgentPluginDefinition } from '@fly-novel/agents'
 import type { LlmAdapter } from '@fly-novel/llm'
-import { characterResponseSchema, type CharacterKnowledgeGrant, type CharacterOutcome } from '../story-workflow/character-participation.js'
+import { characterResponseSchema, type CharacterKnowledgeGrant, type CharacterOutcome, type CharacterParticipationResult } from '../story-workflow/character-participation.js'
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { StoryCharacterScope } from './story-character-participation.js'
 
@@ -17,7 +17,7 @@ export interface StoryCharacterConfig {
 
 type Preparation = Awaited<ReturnType<StoryCharacterScope['prepare']>>
 type Request = Preparation['request']
-interface Slot { agent: Agent; version: string; entries: Set<string>; history: string[] }
+interface Slot { agent: Agent; version: string; entries: Set<string>; history: CharacterParticipationResult['history'] }
 
 /** 当前子故事持有的角色运行器。调用方须在退出时等待 close。 */
 export async function openStoryCharacterRuntime(scope: StoryCharacterScope, configure: (characterId: string) => StoryCharacterConfig) {
@@ -60,13 +60,13 @@ export async function openStoryCharacterRuntime(scope: StoryCharacterScope, conf
     return slot
   }
 
-  async function run(preparation: Preparation, config: StoryCharacterConfig, signal?: AbortSignal) {
+  async function run(preparation: Preparation, config: StoryCharacterConfig, signal?: AbortSignal): Promise<Pick<CharacterParticipationResult, 'outcome' | 'history'>> {
     const { request, entries } = preparation
     const { characterId } = request
     const timeout = AbortSignal.timeout(config.timeoutMs)
     const requestSignal = AbortSignal.any(signal ? [lifecycle.signal, signal, timeout] : [lifecycle.signal, timeout])
     const allowed = new Set(entries.map(item => JSON.stringify(item)))
-    let history: string[] = []
+    let history: CharacterParticipationResult['history'] = []
     let outcome: CharacterOutcome
     try {
       requestSignal.throwIfAborted()
@@ -90,14 +90,14 @@ export async function openStoryCharacterRuntime(scope: StoryCharacterScope, conf
         if (Buffer.byteLength(text) > 64 * 1024) throw new Error('角色响应超过大小限制')
         outcome = { status: 'responded', response: characterResponseSchema.parse(parseStrictJson(text)) }
         slot.entries = allowed
-        slot.history.push(request.participationId)
+        slot.history.push({ participationId: request.participationId, sceneId: request.sceneId })
       } catch { outcome = { status: 'invalid' } }
     } catch {
       if (cleanupFailures.has(characterId)) throw new Error('角色实例清理失败', { cause: cleanupFailures.get(characterId) })
       outcome = { status: signal?.aborted || lifecycle.signal.aborted ? 'cancelled' : timeout.aborted ? 'timeout' : 'failed' }
     }
     if (outcome.status !== 'responded') await disposeSlot(characterId)
-    return { outcome, history, configVersion: config.version, preparation }
+    return { outcome, history }
   }
 
   return Object.freeze({
@@ -110,7 +110,19 @@ export async function openStoryCharacterRuntime(scope: StoryCharacterScope, conf
         const config = configure(request.characterId)
         if (!config.provider.trim() || !config.model.trim() || !config.version.trim() || !Number.isSafeInteger(config.timeoutMs) ||
           config.timeoutMs < 1 || config.timeoutMs > 2_147_483_647) throw new Error('角色运行配置无效')
-        return run(preparation, config, signal)
+        let started = false
+        try {
+          return await scope.record(preparation, config.version, () => {
+            started = true
+            return run(preparation, config, signal)
+          })
+        } catch (error) {
+          if (started) {
+            try { await disposeSlot(request.characterId) }
+            catch (cleanup) { throw new AggregateError([error, cleanup], '角色参与记录及会话清理失败') }
+          }
+          throw error
+        }
       })()
       active.set(request.characterId, operation)
       try { return await operation } finally { active.delete(request.characterId) }

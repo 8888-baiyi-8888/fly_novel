@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { CharacterStore } from '@fly-novel/character'
-import { characterKnowledgeGrantSchema, characterSelectionSchema, type CharacterKnowledgeEntry, type CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
+import { characterClaimDigest, characterKnowledgeGrantSchema, characterParticipationClaimSchema, characterSelectionSchema, projectCharacterParticipation, type CharacterKnowledgeEntry, type CharacterKnowledgeGrant, type CharacterParticipationRequest, type CharacterParticipationResult } from '../story-workflow/character-participation.js'
 import { openStory, readIfPresent } from '../story-workflow/story-query.js'
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { bindStoryWorld } from './story-world-materials.js'
@@ -15,7 +15,7 @@ export interface StoryCharacterCandidate {
 
 /** 固定当前子故事的角色候选范围，人物存储由调用方所有。 */
 export function bindStoryCharacters(roots: Roots, identity: { runId: string; storyId: string }, options: {
-  binding: Binding; ownerAgentId: string; store: CharacterStore; candidates: readonly StoryCharacterCandidate[]
+  binding: Binding; ownerAgentId: string; store: CharacterStore; candidates: readonly StoryCharacterCandidate[]; privateCharacterIds?: readonly string[]
 }) {
   const { world, deliveryId } = options.binding
   const { runId, storyId } = identity
@@ -26,18 +26,26 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
   const recordRoots = { ...roots, protectedRoots }
   const candidates = new Map(options.candidates.map(candidate => [candidate.characterId, { ...candidate }]))
   if (candidates.size !== options.candidates.length) throw new Error('场景角色候选重复')
-  interface Request { participationId: string; worldId: string; runId: string; storyId: string; sceneId: string; characterId: string; profileVersion: string; invitation: string }
-  const issued = new WeakSet<Request>()
+  const privateIds = new Set(options.privateCharacterIds ?? [])
+  if ([...privateIds].some(id => !candidates.has(id))) throw new Error('私有记录授权角色不在候选内')
+  const issued = new WeakSet<CharacterParticipationRequest>()
+  type Preparation = { readonly request: CharacterParticipationRequest; readonly entries: readonly CharacterKnowledgeEntry[] }
+  const prepared = new WeakSet<Preparation>()
 
-  async function pendingScene(sceneId: string) {
+  async function openBoundScene(sceneId: string) {
     const story = await openStory(recordRoots, runId, storyId)
     if (story.decision?.kind !== 'direct' || story.plan.formatVersion !== 2 || story.plan.input.world.worldId !== world.worldId ||
       story.plan.input.world.deliveryId !== deliveryId) throw new Error('角色参与须归属所选世界的直接演绎故事')
     const scene = await story.store.readSceneSetup(runId, storyId, sceneId)
     if (scene.formatVersion === 2 && (scene.mapEvidence.worldId !== world.worldId || scene.mapEvidence.deliveryId !== deliveryId ||
       scene.mapEvidence.deliveryVersion !== story.plan.input.world.deliveryVersion)) throw new Error('角色参与的场景世界证据不匹配')
-    if (await story.store.readSceneResult(scene) || await readIfPresent(story.store.readStoryStep(runId, storyId, 'simulation'))) throw new Error('角色参与要求待演绎场景')
     return { ...story, scene }
+  }
+
+  async function pendingScene(sceneId: string) {
+    const story = await openBoundScene(sceneId)
+    if (await story.store.readSceneResult(story.scene) || await readIfPresent(story.store.readStoryStep(runId, storyId, 'simulation'))) throw new Error('角色参与要求待演绎场景')
+    return story
   }
 
   async function readCandidate(characterId: string, allowed: ReadonlySet<string>) {
@@ -49,7 +57,7 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
   }
 
   return Object.freeze({
-    worldId: world.worldId, runId, storyId, pendingScene,
+    worldId: world.worldId, runId, storyId,
     /** 调用方选择本场景的候选子集。导演只收到最小候选信息。 */
     async select(sceneId: string, characterIds: readonly string[], choose: (prompt: string) => Promise<string>) {
       const { scene } = await pendingScene(sceneId)
@@ -69,7 +77,7 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
       }))
     },
     /** 调用方在当前场景逐角色授予片段。持久来源的版本及实际文本在调用前复核。 */
-    async prepare(request: Request, grants: readonly CharacterKnowledgeGrant[]) {
+    async prepare(request: CharacterParticipationRequest, grants: readonly CharacterKnowledgeGrant[]) {
       if (!issued.has(request)) throw new Error('角色参与请求未由当前子故事签发')
       if (grants.length > 32) throw new Error('角色认知条目超过数量限制')
       const { scene, plan } = await pendingScene(request.sceneId)
@@ -101,7 +109,39 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
       if (!entries.some(item => item.source.kind === 'profile' && item.category === 'profile')) throw new Error('角色认知缺少获准的人物档案')
       if (!entries.some(item => item.category === 'observation')) throw new Error('角色认知缺少当前处境')
       if (Buffer.byteLength(JSON.stringify(entries)) > 64 * 1024) throw new Error('角色认知材料超过大小限制')
-      return Object.freeze({ request, entries: Object.freeze(entries) })
+      const preparation = Object.freeze({ request, entries: Object.freeze(entries) })
+      prepared.add(preparation)
+      return preparation
+    },
+    async record(preparation: Preparation, configVersion: string, execute: () => Promise<Pick<CharacterParticipationResult, 'outcome' | 'history'>>) {
+      if (!prepared.has(preparation)) throw new Error('参与输入未由当前子故事核准')
+      const { request, entries } = preparation
+      const { sceneId, participationId } = request
+      const { store: records } = await pendingScene(sceneId)
+      const claim = characterParticipationClaimSchema.parse({ formatVersion: 1, request, entries, configVersion })
+      if (!await records.claimCharacterParticipation(claim)) {
+        const saved = await records.readCharacterParticipation(runId, storyId, sceneId, participationId)
+        if (characterClaimDigest(saved.claim) !== characterClaimDigest(claim)) throw new Error('同一参与身份的请求内容已变化')
+        return projectCharacterParticipation(saved.claim, saved.result)
+      }
+      const result = await records.saveCharacterParticipation(claim, await execute())
+      return projectCharacterParticipation(claim, result)
+    },
+    /** 场景视图只返回获准角色的参与状态、可感知响应及身份。 */
+    async list(sceneId: string) {
+      const { store: records } = await openBoundScene(sceneId)
+      const ids = await records.listCharacterParticipationIds(runId, storyId, sceneId)
+      const entries = await Promise.all(ids.map(id => records.readCharacterParticipation(runId, storyId, sceneId, id)))
+      if (entries.some(item => item.claim.request.worldId !== world.worldId)) throw new Error('角色参与记录世界不匹配')
+      return entries.filter(item => candidates.has(item.claim.request.characterId)).map(({ claim, result }) => projectCharacterParticipation(claim, result))
+    },
+    /** 只有调用方明确授予私有记录读取权限的角色才能读取完整记录。 */
+    async readPrivate(sceneId: string, characterId: string, participationId: string) {
+      if (!privateIds.has(characterId)) throw new Error('无权读取角色私有参与记录')
+      const { store: records } = await openBoundScene(sceneId)
+      const entry = await records.readCharacterParticipation(runId, storyId, sceneId, participationId)
+      if (entry.claim.request.worldId !== world.worldId || entry.claim.request.characterId !== characterId) throw new Error('参与记录与授权角色不匹配')
+      return entry
     },
   })
 }

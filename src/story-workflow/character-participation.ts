@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { createHash } from 'node:crypto'
 
 const characterId = z.string().uuid()
 export const characterInvitationSchema = z.object({ characterId, invitation: z.string().trim().min(1).max(1500) }).strict()
@@ -37,3 +38,30 @@ export const characterOutcomeSchema = z.discriminatedUnion('status', [
   z.object({ status: z.enum(['invalid', 'failed', 'cancelled', 'timeout']) }).strict(),
 ])
 export type CharacterOutcome = z.infer<typeof characterOutcomeSchema>
+
+export const characterParticipationRequestSchema = characterInvitationSchema.extend({
+  participationId: characterId, worldId: description, runId: characterId, storyId: characterId, sceneId: description, profileVersion: description,
+})
+export type CharacterParticipationRequest = z.infer<typeof characterParticipationRequestSchema>
+export const characterParticipationClaimSchema = z.object({
+  formatVersion: z.literal(1), request: characterParticipationRequestSchema, configVersion: description,
+  entries: z.array(characterKnowledgeEntrySchema).min(1).max(32),
+}).strict().refine(({ request, entries }) => entries.every(item => item.sceneId === request.sceneId && item.characterId === request.characterId), '参与记录中的认知身份不匹配')
+export type CharacterParticipationClaim = z.infer<typeof characterParticipationClaimSchema>
+export const characterParticipationResultSchema = z.object({
+  formatVersion: z.literal(1), participationId: characterId, claimDigest: z.string().regex(/^[0-9a-f]{64}$/),
+  history: z.array(z.object({ participationId: characterId, sceneId: description }).strict()), outcome: characterOutcomeSchema,
+}).strict().refine(data => new Set(data.history.map(item => item.participationId)).size === data.history.length && !data.history.some(item => item.participationId === data.participationId), '角色历史引用重复')
+export type CharacterParticipationResult = z.infer<typeof characterParticipationResultSchema>
+export function characterClaimDigest(value: CharacterParticipationClaim): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
+
+export function projectCharacterParticipation(claim: CharacterParticipationClaim, result?: CharacterParticipationResult) {
+  const { participationId, characterId, worldId, runId, storyId, sceneId } = claim.request
+  const identity = { participationId, characterId, worldId, runId, storyId, sceneId }
+  if (!result) return { ...identity, outcome: { status: 'pending' as const } }
+  if (result.outcome.status !== 'responded') return { ...identity, outcome: result.outcome }
+  const { privateThought: _privateThought, ...response } = result.outcome.response
+  return { ...identity, outcome: { status: 'responded' as const, response } }
+}

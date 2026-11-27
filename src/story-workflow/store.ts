@@ -1,6 +1,7 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
 import { mapProposalKeySchema, mapProposalRecordSchema, mapRecordDigest, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck, type SceneMapEvidence } from './map-scene.js'
 import { storyNoticeSchema, storyProgressSchema, type StoryNotice, type StoryProgress } from './types.js'
@@ -64,6 +65,59 @@ const claimSchema = z.object({ formatVersion: z.literal(1), planId: uuid, childS
 /** 使用独立目录保存单个事件的独占尝试及最终协作记录。 */
 export class CollaborationStore {
   private constructor(private readonly root: string) {}
+
+  private participationPath(sceneId: string, participationId: string, suffix: 'claim' | 'result') {
+    return join(this.root, `${sceneId}.${uuid.parse(participationId)}.character-${suffix}.json`)
+  }
+
+  async claimCharacterParticipation(claim: CharacterParticipationClaim) {
+    const checked = characterParticipationClaimSchema.parse(claim)
+    const { runId, storyId, sceneId, participationId } = checked.request
+    const scene = await this.readSceneSetup(runId, storyId, sceneId)
+    if (await this.readSceneResult(scene)) throw new Error('场景已有结果，不能启动角色')
+    await this.assertSceneSetupOpen(runId, storyId)
+    const text = `${JSON.stringify(checked)}\n`
+    if (Buffer.byteLength(text) > 1024 * 1024) throw new Error('角色参与请求超过大小限制')
+    try { await writeFile(this.participationPath(sceneId, participationId, 'claim'), text, { flag: 'wx', encoding: 'utf8' }); return true }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return false
+      throw error
+    }
+  }
+
+  async saveCharacterParticipation(claim: CharacterParticipationClaim, input: Omit<CharacterParticipationResult, 'formatVersion' | 'participationId' | 'claimDigest'>) {
+    const { runId, storyId, sceneId, participationId, characterId } = claim.request
+    const existing = await this.readCharacterParticipation(runId, storyId, sceneId, participationId)
+    if (existing.claim.request.characterId !== characterId || characterClaimDigest(existing.claim) !== characterClaimDigest(claim)) throw new Error('角色参与占用不匹配')
+    const result = characterParticipationResultSchema.parse({ ...input, formatVersion: 1, participationId, claimDigest: characterClaimDigest(claim) })
+    const content = `${JSON.stringify(result)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('角色参与结果超过大小限制')
+    await writeFile(this.participationPath(sceneId, participationId, 'result'), content, { flag: 'wx', encoding: 'utf8' })
+    return result
+  }
+
+  async readCharacterParticipation(runId: string, storyId: string, sceneId: string, participationId: string) {
+    await this.readSceneSetup(runId, storyId, sceneId)
+    const claim = characterParticipationClaimSchema.parse(await this.readFile(this.participationPath(sceneId, participationId, 'claim')))
+    const request = claim.request
+    if (request.runId !== runId || request.storyId !== storyId || request.sceneId !== sceneId || request.participationId !== participationId) throw new Error('角色参与记录身份不匹配')
+    let raw: unknown
+    try { raw = await this.readFile(this.participationPath(sceneId, participationId, 'result')) }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return { claim, result: undefined }
+      throw error
+    }
+    const result = characterParticipationResultSchema.parse(raw)
+    if (result.participationId !== participationId || result.claimDigest !== characterClaimDigest(claim)) throw new Error('角色参与结果身份或摘要不匹配')
+    return { claim, result }
+  }
+
+  async listCharacterParticipationIds(runId: string, storyId: string, sceneId: string) {
+    await this.readSceneSetup(runId, storyId, sceneId)
+    const prefix = `${sceneId}.`
+    const suffix = '.character-claim.json'
+    return (await readdir(this.root)).filter(name => name.startsWith(prefix) && name.endsWith(suffix)).map(name => uuid.parse(name.slice(prefix.length, -suffix.length))).sort()
+  }
 
   private mapCheckPath(runId: string, storyId: string, id: string): string {
     return join(this.root, `${uuid.parse(runId)}.${uuid.parse(storyId)}.${uuid.parse(id)}.map-check.json`)
