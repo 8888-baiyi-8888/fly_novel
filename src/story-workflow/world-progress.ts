@@ -17,9 +17,41 @@ export const eventEvidenceSchema = z.object({ eventId: sceneEventDigestSchema, s
 }).strict()
 export type EventEvidence = z.infer<typeof eventEvidenceSchema>
 
-export const storyWorldEvidenceSchema = z.object({ current: currentConvoyEvidenceSchema, events: z.array(eventEvidenceSchema) }).strict()
+export const worldObjectiveSchema = z.object({ id: text, description: text, criterion: z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('convoy-waiting') }).strict(),
+  z.object({ kind: z.literal('confirmed-action'), observable: text }).strict(),
+]) }).strict()
+export const worldObjectivesSchema = z.array(worldObjectiveSchema).min(1).max(16)
+  .refine(items => new Set(items.map(item => item.id)).size === items.length, '故事评估目标重复')
+export type WorldObjective = z.infer<typeof worldObjectiveSchema>
+
+const objectiveFindingSchema = z.object({ objective: worldObjectiveSchema, evidence: z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('state'), eventId: sceneEventDigestSchema, operationId: uuid, digest: sceneEventDigestSchema }).strict(),
+  z.object({ kind: z.literal('action'), eventId: sceneEventDigestSchema, sequence: z.number().int().positive(), index: z.number().int().nonnegative() }).strict(),
+  z.object({ kind: z.literal('unmet') }).strict(),
+]) }).strict()
+
+export const storyWorldEvidenceSchema = z.object({ current: currentConvoyEvidenceSchema, events: z.array(eventEvidenceSchema),
+  objectives: z.array(objectiveFindingSchema).min(1).max(16).optional() }).strict()
   .refine(item => new Set(item.events.map(event => event.eventId)).size === item.events.length, '故事事件依据重复')
 export type StoryWorldEvidence = z.infer<typeof storyWorldEvidenceSchema>
+
+export function evaluateWorldObjectives(input: Pick<StoryWorldEvidence, 'current' | 'events'>, objectives: readonly WorldObjective[]): NonNullable<StoryWorldEvidence['objectives']> {
+  return objectives.map(objective => {
+    const { current, events } = input
+    const { criterion } = objective
+    if (criterion.kind === 'convoy-waiting' && current.status === 'waiting' && events.some(event => event.eventId === current.eventId)) {
+      return { objective, evidence: { kind: 'state', eventId: current.eventId, operationId: current.operationId, digest: current.digest } }
+    }
+    if (criterion.kind === 'confirmed-action') {
+      for (const event of events) {
+        const match = event.outcomes.find(action => action.status === 'succeeded' && action.observable === criterion.observable)
+        if (match) return { objective, evidence: { kind: 'action', eventId: event.eventId, sequence: match.sequence, index: match.index } }
+      }
+    }
+    return { objective, evidence: { kind: 'unmet' } }
+  })
+}
 
 export interface StoryWorldProgressSource {
   readonly worldId: string

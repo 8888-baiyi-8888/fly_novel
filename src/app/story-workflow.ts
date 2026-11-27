@@ -20,6 +20,7 @@ export { openStoryCharacterRuntime, type StoryCharacterConfig } from './story-ch
 export { openStoryEvents } from './story-event.js'
 export { openStoryConvoyState, type AuthorizeConvoyChange } from './story-convoy-state.js'
 export type { ConvoyProposal } from '../story-workflow/convoy-state.js'
+export type { WorldObjective } from '../story-workflow/world-progress.js'
 export { openStorySceneInteraction, type SceneInteractionIdentity, type SceneWorldRuleJudge, type StorySceneInteraction } from './story-scene-interaction.js'
 export type { SceneInteractionConditions } from '../story-workflow/scene-interaction.js'
 export { createStorySceneWithMap, inspectStoryMapScene, readStoryMapCheck, readStoryMapProposal, readStorySceneWorldEvidence, requestStoryMapProposal, type StoryMapScope } from './story-map-scene.js'

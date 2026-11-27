@@ -2,7 +2,7 @@ import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { sceneEventIdentity, sceneEventSchema, type SceneEvent } from './scene-event.js'
-import { eventAssessmentEvidence } from './world-progress.js'
+import { evaluateWorldObjectives, eventAssessmentEvidence, worldObjectivesSchema } from './world-progress.js'
 import { interactionObservationContent, interactionObservationSource, resolveInteractionPerceptions, sceneActionRecordSchema, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionDispatchSchema, sceneInteractionEventSchema, verifySceneActions, visibleCharacterResponse, type SceneActionRecord, type SceneInteractionDecision, type SceneInteractionDispatch, type SceneInteractionEvent } from './scene-interaction.js'
 import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, projectCharacterParticipation, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
@@ -549,6 +549,10 @@ export class CollaborationStore {
     }
     if (step.formatVersion !== 3) return
     const { current, events } = step.worldEvidence
+    if (step.worldEvidence.objectives) {
+      const objectives = worldObjectivesSchema.parse(step.worldEvidence.objectives.map(item => item.objective))
+      if (!isDeepStrictEqual(evaluateWorldObjectives(step.worldEvidence, objectives), step.worldEvidence.objectives)) throw new Error('故事目标结果与证据不匹配')
+    }
     if (decision.value.kind === 'direct' && !isDeepStrictEqual(events.map(event => event.sceneId), results.filter(result => result.formatVersion === 2).map(result => result.sceneId))) {
       throw new Error('子故事事件未覆盖已结算的互动场景')
     }

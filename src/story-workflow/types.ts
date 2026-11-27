@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
-import { storyWorldEvidenceSchema } from './world-progress.js'
+import { storyWorldEvidenceSchema, worldObjectivesSchema } from './world-progress.js'
 import { mapSceneNeedSchema, sceneMapEvidenceSchema } from './map-scene.js'
 
 const text = z.string().trim().min(1)
@@ -178,6 +178,7 @@ export const storyProgressSchema = z.object({
   runId: uuid,
   batch: z.number().int().positive(),
   planHash: z.string().regex(/^[0-9a-f]{64}$/),
+  worldObjectives: worldObjectivesSchema.optional(),
   frames: z.array(z.object({
     node: storyNodeSchema,
     children: z.array(z.object({ id: uuid, description: text }).strict()).min(1),
@@ -187,7 +188,7 @@ export const storyProgressSchema = z.object({
     supplement: z.object({ id: uuid, description: text, reason: text }).strict().optional(),
   }).strict()).min(1),
 }).strict().refine(
-  value => value.formatVersion === storyProgressVersion(value.frames),
+  value => value.formatVersion === storyProgressVersion(value.frames) && (value.worldObjectives === undefined || value.formatVersion === 3),
   { message: '暂停记录版本与回报格式不一致', path: ['formatVersion'] },
 )
 export type StoryProgress = z.infer<typeof storyProgressSchema>

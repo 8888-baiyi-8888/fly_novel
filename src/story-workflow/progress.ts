@@ -5,7 +5,7 @@ import { CollaborationStore, PlanStore } from './store.js'
 import { readArrangement, readChildChoice, readIfPresent, readOutcome, readStoryRoot } from './story-query.js'
 import type { PlanRecord, StoryNode, StoryProgress, StoryStep } from './types.js'
 import type { StoryCollaborationOptions } from './workflow.js'
-import type { StoryWorldProgressSource } from './world-progress.js'
+import type { StoryWorldProgressSource, WorldObjective } from './world-progress.js'
 
 type StoryLocation = Pick<StoryNode, 'storyId' | 'parentStoryId' | 'description'>
 type ReviewPoint = {
@@ -183,7 +183,7 @@ export async function inspectStoryProgress(
 }
 
 /** 核对原规划和已保存的推进记录，独占取得本次继续的位置。 */
-export async function restoreStoryProgress(store: CollaborationStore, plan: PlanRecord, resumeBatch: number, signal?: AbortSignal, worldProgress?: StoryWorldProgressSource): Promise<StoryProgress['frames']> {
+export async function restoreStoryProgress(store: CollaborationStore, plan: PlanRecord, resumeBatch: number, signal?: AbortSignal, worldProgress?: StoryWorldProgressSource, objectives?: WorldObjective[]): Promise<StoryProgress['frames']> {
   if (await store.hasContinuedStoryProgress(plan.id, resumeBatch)) throw new Error(`故事暂停位置已使用，请核查批次 ${resumeBatch}`)
   let progress: StoryProgress
   try {
@@ -200,10 +200,15 @@ export async function restoreStoryProgress(store: CollaborationStore, plan: Plan
   if (progress.formatVersion === 3) {
     if (!worldProgress) throw new Error('继续此批故事需要原世界状态来源')
     const current = await worldProgress.current()
-    if (progress.frames.some(frame => frame.results.some(item => item.formatVersion === 3 &&
-      (item.worldEvidence.current.worldId !== current.worldId || item.worldEvidence.current.convoyId !== current.convoyId)))) {
+    if (progress.frames.some(frame => frame.results.some(item => {
+      if (item.formatVersion !== 3) return false
+      const previous = item.worldEvidence.current
+      return previous.worldId !== current.worldId || previous.convoyId !== current.convoyId || previous.revision > current.revision ||
+        (previous.revision === current.revision && previous.digest !== current.digest)
+    }))) {
       throw new Error('继续故事的商队状态身份不匹配')
     }
+    if (!isDeepStrictEqual(progress.worldObjectives, objectives)) throw new Error('继续故事的评估目标已变化')
   }
   signal?.throwIfAborted()
   await store.claimStoryProgress(plan.id, resumeBatch)

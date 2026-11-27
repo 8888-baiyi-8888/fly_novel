@@ -6,7 +6,7 @@ import { simulateStory, type StorySimulationInput } from './simulation.js'
 import type { Agent } from '@fly-novel/agents'
 import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyAdvanceSchema, storyCompletionSchema, storyDecisionSchema, storyProgressVersion, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
 import { CollaborationStore } from './store.js'
-import { storyWorldEvidenceSchema, type EventEvidence, type StoryWorldEvidence, type StoryWorldProgressSource } from './world-progress.js'
+import { evaluateWorldObjectives, storyWorldEvidenceSchema, worldObjectivesSchema, type EventEvidence, type StoryWorldEvidence, type StoryWorldProgressSource, type WorldObjective } from './world-progress.js'
 
 export interface DirectorScope { create(role: string): Promise<Agent>; dispose(): Promise<void> }
 export type OpenDirectors = () => Promise<DirectorScope>
@@ -202,6 +202,8 @@ export interface StoryTreeOptions extends StoryCollaborationOptions {
   limit?: number
   /** 由可信应用绑定的本轮事件与世界状态来源。 */
   worldProgress?: StoryWorldProgressSource
+  /** 调用方为根故事提供可按事件或状态核查的目标。 */
+  worldObjectives?: readonly WorldObjective[]
   /** 模拟器须等待提前汇报的决定。终止时结束演绎并返回已发生的模拟经过。 */
   simulate(input: StorySimulationInput, signal: AbortSignal): Promise<Simulation>
 }
@@ -247,6 +249,8 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
   if (plan.outcome.kind !== 'planned') throw new Error('规划没有事件')
   const source = options.worldProgress
   if (source && (source.runId !== planId || plan.formatVersion !== 2 || plan.input.world.worldId !== source.worldId)) throw new Error('故事状态来源与本轮世界不匹配')
+  const objectives = options.worldObjectives ? worldObjectivesSchema.parse(options.worldObjectives) : undefined
+  if (objectives && !source) throw new Error('世界评估目标需要可信的状态来源')
   const planHash = createHash('sha256').update(JSON.stringify(plan)).digest('hex')
   type Result = Extract<StoryStep, { kind: 'result' }>
   type Assessment = Extract<StoryStep, { kind: 'assessment' }>['value']
@@ -262,7 +266,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     frames = [{ node: root, children, index: 0, results: [], decisions: [] }]
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: rootId, kind: 'decision', value: { kind: 'split', children } })
   } else {
-    frames = await restoreStoryProgress(store, plan, resumeBatch, signal, source)
+    frames = await restoreStoryProgress(store, plan, resumeBatch, signal, source, objectives)
   }
   let completedCount = 0
   const call = async (prompt: string, callSignal = signal): Promise<string> => {
@@ -293,7 +297,13 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     if (current.worldId !== source.worldId) throw new Error('当前状态世界与来源不匹配')
     return storyWorldEvidenceSchema.parse({ current, events })
   }
-  const frameEvidence = (frame: Frame) => currentEvidence(frame.results.flatMap(item => item.formatVersion === 3 ? item.worldEvidence.events : []))
+  const frameEvidence = async (frame: Frame) => {
+    const evidence = await currentEvidence(frame.results.flatMap(item => item.formatVersion === 3 ? item.worldEvidence.events : []))
+    if (evidence && objectives && frame.node.parentStoryId === null) {
+      return { ...evidence, objectives: evaluateWorldObjectives(evidence, objectives) }
+    }
+    return evidence
+  }
   const verifyCurrent = async (evidence?: StoryWorldEvidence) => {
     if (evidence && !isDeepStrictEqual(await source!.current(), evidence.current)) throw new Error('导演采用的当前状态已变化')
   }
@@ -331,6 +341,10 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
         : '仅在目标未达成且补充有意义时，可以返回 {"status":"supplement","reason":"尚未达成的原因","description":"一个补充故事"}。'
       const assessment = storyCompletionSchema.parse(parseStrictJson(await call(`你是本层父导演。依据下级已保存的回报、事件与已核对状态评估当前目标，保留实际经过。只返回严格 JSON，结束时返回 status（achieved、unmet 或 terminated）、reason 和 report（${reportFormat}）。unmet 时须另给 adjustment，说明根据实际结果怎样调整父故事。条件变化无法继续时用 terminated，并记录未解决事项。${supplementRule} 资料：${JSON.stringify({ story: frame.node, results: frame.results, decisions: frame.decisions, supplement: frame.supplement, worldEvidence })}`)))
       await verifyCurrent(worldEvidence)
+      const findings = worldEvidence?.objectives
+      if (findings && assessment.status !== 'terminated' && (assessment.status === 'achieved') !== findings.every(item => item.evidence.kind !== 'unmet')) {
+        throw new Error('父导演的评估或补充与目标证据不一致')
+      }
       if (assessment.status === 'supplement') {
         if (frame.supplement) throw new Error(`父故事最多补充一个子故事，请核查故事 ${frame.node.storyId}`)
         const supplement = { id: randomUUID(), description: assessment.description, reason: assessment.reason }
@@ -346,7 +360,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     if (completedCount === limit) {
       signal?.throwIfAborted()
       const formatVersion = storyProgressVersion(frames)
-      await store.saveStoryProgress({ formatVersion, runId: planId, batch, planHash, frames })
+      await store.saveStoryProgress({ formatVersion, runId: planId, batch, planHash, frames, ...(formatVersion === 3 && objectives ? { worldObjectives: objectives } : {}) })
       return { kind: 'paused', runId: planId, storyId: frames[0]!.node.storyId, batch, completedCount }
     }
     const child = frame.children[frame.index++]!
@@ -407,7 +421,8 @@ function withWorldFacts(report: ReturnType<typeof reportSchema.parse>, evidence?
   const { current, events } = evidence
   const changes = current.status === 'waiting' && events.some(item => item.eventId === current.eventId)
     ? [`商队状态已更新为在 ${current.locationId} 等候（版本 ${current.revision}）`] : []
-  const unresolved = [...new Set([...report.unresolved, ...events.flatMap(item => item.outcomes.filter(action => action.status === 'unresolved').map(action => action.reason))])]
+  const unmet = evidence.objectives?.filter(item => item.evidence.kind === 'unmet').map(item => item.objective.description) ?? []
+  const unresolved = [...new Set([...report.unresolved, ...unmet, ...events.flatMap(item => item.outcomes.filter(action => action.status === 'unresolved').map(action => action.reason))])]
   return { ...report, changes, unresolved }
 }
 
