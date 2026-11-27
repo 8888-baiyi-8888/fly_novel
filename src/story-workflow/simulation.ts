@@ -2,6 +2,9 @@ import type { CollaborationStore } from './store.js'
 import { parseStrictJson, reportSchema, sceneResultInputSchema, simulationSchema, storyNoticeDecisionSchema, storyNoticeInputSchema, type SceneResultInput, type Simulation, type StoryNode, type StoryNoticeDecision, type StoryNoticeInput, type StoryTask } from './types.js'
 
 export interface StorySimulationInput {
+  /** 当前运行及直接演绎故事的业务身份，用于创建对应场景。 */
+  readonly runId: string
+  readonly storyId: string
   task: StoryTask
   preparation: string
   reportEarly(notice: StoryNoticeInput): Promise<StoryNoticeDecision>
@@ -74,7 +77,8 @@ export async function simulateStory(node: StoryNode, parent: StoryNode, preparat
   }
   let simulation: Simulation
   try {
-    simulation = simulationSchema.parse(await options.simulate({ task: node.task, preparation, reportEarly, recordSceneResult }, simSignal))
+    const { runId, storyId, task } = node
+    simulation = simulationSchema.parse(await options.simulate({ runId, storyId, task, preparation, reportEarly, recordSceneResult }, simSignal))
     accepting = false
     if (sceneWrites.size) throw new Error('模拟器在场景结果写入结束前返回')
     if (waiting) throw new Error('模拟器在收到上级决定前结束演绎')
