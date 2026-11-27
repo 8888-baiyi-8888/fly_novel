@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import { decideStorySceneInteraction, openStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
+import { decideStorySceneInteraction, judgeStorySceneActions, openStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
 import type {} from '@fly-novel/system-prompt'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
@@ -346,7 +346,8 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         assert.equal(decision.perceptions[1]?.observations[0]?.content, '货物快坏了')
         assert.deepEqual(decision.perceptions[2]?.observations, [])
         assert.deepEqual(await interaction.trace(), [{ event, decision }])
-        const nextActor = new DirectorAdapter([JSON.stringify({ kind: 'respond', speech: [{ text: '请先在门外等候', channel: 'normal', intendedCharacterIds: [] }], actions: [] })])
+        const nextActor = new DirectorAdapter([JSON.stringify({ kind: 'respond', speech: [{ text: '请先在门外等候', channel: 'normal', intendedCharacterIds: [] }],
+          actions: ['尝试把货车移入城门', '尝试清理门外空地', '尝试确认其余车辆可以掉头'] })])
         const sceneRuntime = await openStoryCharacterRuntime(participants, characterId => {
           assert.equal(characterId, guard.id)
           return { provider: 'test', model: 'test', version: 'interaction-1', timeoutMs: 5000, adapter: nextActor }
@@ -360,7 +361,28 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
           assert.match(JSON.stringify(nextActor.requests), /听见发言：货物快坏了/)
           assert.doesNotMatch(JSON.stringify(nextActor.requests), /领队本轮秘密|领队私料/)
           assert.equal((await interaction.findParticipation(dispatched.record.participationId))[0]?.event.participationId, captain.participationId)
+          await interaction.append(2, dispatched.record.participationId, { ...conditions, version: 'gate-2' })
         } finally { await sceneRuntime.close() }
+        await assert.rejects(recordSceneResult(scene.sceneId, { status: 'completed', simulation }), /未判定的互动事件/)
+        const judge = async ({ index }: { index: number }) => ({ allowed: index !== 0, basis: index === 0 ? '闭门时不得进车' : '现场检查通过' })
+        await assert.rejects(judgeStorySceneActions(interaction, 2, { ...selectOptions, adapter: new DirectorAdapter([JSON.stringify([
+          { index: 0, status: 'succeeded', reason: '越过闭门规则' },
+          { index: 1, status: 'succeeded', reason: '空地可清理' }, { index: 2, status: 'unresolved', reason: '未核实' },
+        ])]) }, judge, signal), /不匹配/)
+        const actions = await judgeStorySceneActions(interaction, 2, { ...selectOptions, adapter: new DirectorAdapter([JSON.stringify([
+          { index: 0, status: 'blocked', reason: '城门关闭', observable: '货车停在门外' },
+          { index: 1, status: 'succeeded', reason: '守卫清理成功', observable: '门外空地已清理' },
+          { index: 2, status: 'unresolved', reason: '尚未确认车辆掉头空间' },
+        ])]) }, judge, signal)
+        assert.deepEqual(actions.outcomes.map(item => item.status), ['blocked', 'succeeded', 'unresolved'])
+        const endAdapter = new DirectorAdapter([JSON.stringify({ perceptions: [
+          { characterId: guard.id, status: 'received', reason: '在门外', observations: [speech] },
+          { characterId: leader.id, status: 'received', reason: '在门外现场', observations: [speech, { kind: 'effect', index: 0 }] },
+          { characterId: aide.id, status: 'not-received', reason: '仍在门内', observations: [] },
+        ], next: { kind: 'end', reason: '商队在门外等候，入城未决' } })])
+        const end = await decideStorySceneInteraction(interaction, 2, 'gate-2', { ...selectOptions, adapter: endAdapter }, signal)
+        assert.equal(end.perceptions[1]?.observations[1]?.content, '货车停在门外')
+        assert.doesNotMatch(JSON.stringify(endAdapter.requests), /尝试把货车移入城门|尚未确认车辆掉头空间/)
         assert.equal(installations.closed, installations.guard + installations.leader)
         assert.doesNotMatch(JSON.stringify(views), /privateThought|守卫私料|领队私料|导演私料/)
         await assert.rejects(participants.readPrivate(scene.sceneId, leader.id, captain.participationId), /无权读取/)
@@ -368,6 +390,9 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         savedScene = { storyId, sceneId: scene.sceneId }
         savedGuardParticipation = guardRequest.participationId
         await recordSceneResult(scene.sceneId, { status: 'completed', simulation })
+        const closedScene = await readStoryScene(sceneRoots, runId, storyId, scene.sceneId)
+        if (closedScene.status === 'pending') throw new Error('预期场景结果已经保存')
+        assert.equal(closedScene.result.formatVersion, 2)
         return simulation
       },
     }, plan.id)

@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { interactionObservationSource, resolveInteractionPerceptions, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionDispatchSchema, sceneInteractionEventSchema, visibleCharacterResponse, type SceneInteractionDecision, type SceneInteractionDispatch, type SceneInteractionEvent } from './scene-interaction.js'
+import { interactionObservationSource, resolveInteractionPerceptions, sceneActionRecordSchema, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionDispatchSchema, sceneInteractionEventSchema, verifySceneActions, visibleCharacterResponse, type SceneActionRecord, type SceneInteractionDecision, type SceneInteractionDispatch, type SceneInteractionEvent } from './scene-interaction.js'
 import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, projectCharacterParticipation, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
 import { mapProposalKeySchema, mapProposalRecordSchema, mapRecordDigest, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck, type SceneMapEvidence } from './map-scene.js'
@@ -120,7 +120,7 @@ export class CollaborationStore {
     return (await readdir(this.root)).filter(name => name.startsWith(prefix) && name.endsWith(suffix)).map(name => uuid.parse(name.slice(prefix.length, -suffix.length))).sort()
   }
 
-  private interactionPath(sceneId: string, sequence: number, kind: 'event' | 'decision' | 'dispatch'): string {
+  private interactionPath(sceneId: string, sequence: number, kind: 'event' | 'decision' | 'dispatch' | 'actions'): string {
     return join(this.root, `${sceneId}.interaction-${z.number().int().positive().max(10000).parse(sequence)}.${kind}.json`)
   }
 
@@ -190,7 +190,7 @@ export class CollaborationStore {
     const events = await this.listInteractionEvents(runId, storyId, sceneId)
     const event = events.at(-1)
     if (!event || event.sequence !== value.sequence || sceneInteractionDigest(event) !== value.eventDigest) throw new Error('互动决定的事件版本已变化')
-    resolveInteractionPerceptions(event, value)
+    await this.resolveInteractionDecision(event, value)
     const { next } = value
     if (next.kind === 'respond' && next.trigger.kind === 'initiative') {
       const triggerId = next.trigger.id
@@ -213,7 +213,37 @@ export class CollaborationStore {
     }
     const decision = sceneInteractionDecisionSchema.parse(raw)
     if (decision.sequence !== sequence || decision.eventDigest !== sceneInteractionDigest(event)) throw new Error('互动决定的事件引用不匹配')
-    return { ...decision, perceptions: resolveInteractionPerceptions(event, decision) }
+    return { ...decision, perceptions: await this.resolveInteractionDecision(event, decision) }
+  }
+
+  private async resolveInteractionDecision(event: SceneInteractionEvent, decision: SceneInteractionDecision) {
+    const actions = await this.readInteractionActions(event)
+    if ((event.actions.length > 0 && !actions) || decision.actionDigest !== (actions ? sceneInteractionDigest(actions) : undefined)) throw new Error('互动决定缺少匹配的行动判断')
+    return resolveInteractionPerceptions(event, decision, actions)
+  }
+
+  async saveInteractionActions(event: SceneInteractionEvent, input: SceneActionRecord) {
+    const record = sceneActionRecordSchema.parse(input)
+    const { runId, storyId, sceneId, sequence } = event
+    await this.assertSceneSetupOpen(runId, storyId)
+    const setup = await this.readSceneSetup(runId, storyId, sceneId)
+    if (await this.readSceneResult(setup)) throw new Error('已结算场景不能判断行动')
+    if (!isDeepStrictEqual((await this.listInteractionEvents(runId, storyId, sceneId)).at(-1), event)) throw new Error('行动尝试的场景版本已变化')
+    verifySceneActions(event, record)
+    await writeFile(this.interactionPath(sceneId, sequence, 'actions'), `${JSON.stringify(record)}\n`, { flag: 'wx', encoding: 'utf8' })
+  }
+
+  async readInteractionActions(event: SceneInteractionEvent) {
+    const { sceneId, sequence } = event
+    let raw: unknown
+    try { raw = await this.readFile(this.interactionPath(sceneId, sequence, 'actions')) }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+      throw error
+    }
+    const record = sceneActionRecordSchema.parse(raw)
+    verifySceneActions(event, record)
+    return record
   }
 
   async claimInteractionDispatch(event: SceneInteractionEvent, input: SceneInteractionDispatch) {
@@ -552,8 +582,9 @@ export class CollaborationStore {
 
   /** 仅为已保存的设置独占写入一份模拟结果。 */
   async saveSceneResult(runId: string, storyId: string, sceneId: string, input: SceneResultInput): Promise<SceneResultRecord> {
-    await this.readSceneSetup(runId, storyId, sceneId)
-    const record = sceneResultRecordSchema.parse({ ...input, formatVersion: 1, runId, storyId, sceneId })
+    const setup = await this.readSceneSetup(runId, storyId, sceneId)
+    const interaction = await this.interactionEvidence(setup, input.status)
+    const record = sceneResultRecordSchema.parse({ ...input, runId, storyId, sceneId, ...(interaction ? { formatVersion: 2, interaction } : { formatVersion: 1 }) })
     const content = `${JSON.stringify(record, null, 2)}\n`
     if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景结果超过大小限制')
     try {
@@ -582,7 +613,30 @@ export class CollaborationStore {
     if (result.sceneId !== sceneId || result.runId !== runId || result.storyId !== storyId) {
       throw new Error(`场景结果身份不匹配：${sceneId}`)
     }
+    const evidence = await this.interactionEvidence(setup, result.status)
+    if (!isDeepStrictEqual(evidence, result.formatVersion === 2 ? result.interaction : undefined)) throw new Error('场景结果与互动证据不匹配')
     return result
+  }
+
+  private async interactionEvidence(setup: SceneSetupRecord, status: SceneResultInput['status']) {
+    const events = await this.listInteractionEvents(setup.runId, setup.storyId, setup.sceneId)
+    if (!events.length) return undefined
+    const steps = []
+    for (const [index, event] of events.entries()) {
+      const decision = await this.readInteractionDecision(event)
+      if (!decision) throw new Error('场景存在未判定的互动事件')
+      const dispatch = await this.readInteractionDispatch(event)
+      const next = events[index + 1]
+      if (next && (decision.next.kind === 'end' || decision.next.kind === 'review' ||
+        (decision.next.kind === 'respond' && (dispatch?.record.participationId !== next.participationId || dispatch?.participation?.outcome.status !== 'responded')))) {
+        throw new Error('场景互动顺序或参与结果不匹配')
+      }
+      if (!next && (status === 'unresolved' ? decision.next.kind !== 'review' && decision.next.kind !== 'wait' : decision.next.kind !== 'end')) {
+        throw new Error('场景互动尚无对应的结束或待核查决定')
+      }
+      steps.push({ event, decision, dispatch })
+    }
+    return { sequence: events.length, digest: sceneInteractionDigest(steps) }
   }
 
   /** 读取按顺序结算的场景。缺少结果或结果未决时拒绝形成回报。 */

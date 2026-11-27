@@ -27,9 +27,11 @@ export function visibleCharacterResponse(response: CharacterResponse) {
   return { responseKind: value.kind, speech: value.kind === 'respond' ? value.speech : [], actions: value.kind === 'respond' ? value.actions : [] }
 }
 
-const observationReference = z.object({ kind: z.literal('speech'), index: z.number().int().nonnegative(),
-  range: z.tuple([z.number().int().nonnegative(), z.number().int().positive()]).optional(),
-}).strict()
+const index = z.number().int().nonnegative()
+const observationReference = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('speech'), index, range: z.tuple([index, z.number().int().positive()]).optional() }).strict(),
+  z.object({ kind: z.literal('effect'), index }).strict(),
+])
 const perception = z.object({ characterId: id, status: z.enum(['received', 'partial', 'not-received', 'uncertain']),
   reason: text, observations: z.array(observationReference).max(8),
 }).strict()
@@ -43,8 +45,30 @@ const next = z.discriminatedUnion('kind', [
 export const sceneInteractionDecisionInputSchema = z.object({ perceptions: z.array(perception).max(16), next }).strict()
 export const sceneInteractionDecisionSchema = sceneInteractionDecisionInputSchema.extend({
   formatVersion: z.literal(1), sequence: z.number().int().positive(), eventDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  actionDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict()
 export type SceneInteractionDecision = z.infer<typeof sceneInteractionDecisionSchema>
+
+export const sceneActionAnswerSchema = z.array(z.discriminatedUnion('status', [
+  z.object({ index, status: z.enum(['succeeded', 'blocked']), reason: text, observable: text.optional() }).strict(),
+  z.object({ index, status: z.literal('unresolved'), reason: text }).strict(),
+])).min(1).max(8)
+export const sceneActionRuleSchema = z.object({ index, allowed: z.boolean(), basis: text }).strict()
+export const sceneActionRecordSchema = z.object({ formatVersion: z.literal(1), sequence: z.number().int().positive(),
+  eventDigest: z.string().regex(/^[a-f0-9]{64}$/), rules: z.array(sceneActionRuleSchema).min(1).max(8), outcomes: sceneActionAnswerSchema,
+}).strict()
+export type SceneActionRecord = z.infer<typeof sceneActionRecordSchema>
+
+export function verifySceneActions(event: SceneInteractionEvent, record: SceneActionRecord): void {
+  if (record.sequence !== event.sequence || record.eventDigest !== sceneInteractionDigest(event) || record.rules.length !== event.actions.length || record.outcomes.length !== event.actions.length ||
+    record.rules.some((rule, index) => rule.index !== index) || record.outcomes.some((outcome, index) => outcome.index !== index || (outcome.status === 'succeeded' && !record.rules[index]!.allowed))) {
+    throw new Error('互动行动结果与尝试或规则判断不匹配')
+  }
+}
+
+export function sceneActionEffects(record?: SceneActionRecord) {
+  return record?.outcomes.flatMap(item => 'observable' in item && item.observable ? [{ index: item.index, content: item.observable }] : []) ?? []
+}
 
 export const interactionObservationIdSchema = z.object({ sequence: z.number().int().positive(), index: z.number().int().nonnegative() }).strict()
 export type InteractionObservationId = z.infer<typeof interactionObservationIdSchema>
@@ -58,7 +82,8 @@ export const sceneInteractionDispatchSchema = z.object({ formatVersion: z.litera
 export type SceneInteractionDispatch = z.infer<typeof sceneInteractionDispatchSchema>
 
 /** 核对所有投递引用与调度依据，并从原发言截取实际文本。 */
-export function resolveInteractionPerceptions(event: SceneInteractionEvent, input: z.infer<typeof sceneInteractionDecisionInputSchema>) {
+export function resolveInteractionPerceptions(event: SceneInteractionEvent, input: z.infer<typeof sceneInteractionDecisionInputSchema>, actions?: SceneActionRecord) {
+  const effects = sceneActionEffects(actions)
   const actors = new Map(event.conditions.participants.map(item => [item.characterId, item]))
   const perceptions = new Map(input.perceptions.map(item => [item.characterId, item]))
   if (perceptions.size !== actors.size || perceptions.size !== input.perceptions.length || [...actors.keys()].some(id => !perceptions.has(id))) {
@@ -67,12 +92,19 @@ export function resolveInteractionPerceptions(event: SceneInteractionEvent, inpu
   const resolved = input.perceptions.map(({ characterId, status, observations, reason }) => {
     const actor = actors.get(characterId)!
     if (['not-received', 'uncertain'].includes(status) ? observations.length !== 0 : observations.length === 0) throw new Error('感知状态与投递内容不匹配')
-    if (actor.hearing === 'unknown' && event.speech.length && status === 'not-received') throw new Error('听闻条件待确认')
-    const seen = new Set<number>()
+    if (status === 'not-received' && ((actor.hearing === 'unknown' && event.speech.length) || (actor.sight === 'unknown' && effects.length))) throw new Error('感知条件待确认')
+    const seen = new Set<string>()
     const content = observations.map(reference => {
+      const key = `${reference.kind}:${reference.index}`
+      if (seen.has(key)) throw new Error('感知引用缺失或重复')
+      seen.add(key)
+      if (reference.kind === 'effect') {
+        const effect = effects.find(item => item.index === reference.index)
+        if (!effect || actor.sight !== 'clear') throw new Error('角色无法核实所选行动结果')
+        return { ...reference, content: effect.content }
+      }
       const original = event.speech[reference.index]
-      if (!original || seen.has(reference.index)) throw new Error('感知引用缺失或重复')
-      seen.add(reference.index)
+      if (!original) throw new Error('感知引用缺失或重复')
       if (actor.hearing === 'blocked' || actor.hearing === 'unknown') throw new Error('角色听不到所选发言')
       const range = reference.range ?? [0, original.text.length]
       const [start, end] = range

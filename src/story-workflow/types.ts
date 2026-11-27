@@ -115,12 +115,15 @@ export const sceneResultInputSchema = z.object({
 }).strict()
 export type SceneResultInput = z.infer<typeof sceneResultInputSchema>
 
-export const sceneResultRecordSchema = sceneResultInputSchema.extend({
-  formatVersion: z.literal(1),
+const sceneResultRecordFields = sceneResultInputSchema.extend({
   runId: uuid,
   storyId: uuid,
   sceneId: text,
 }).strict()
+export const sceneResultRecordSchema = z.discriminatedUnion('formatVersion', [
+  sceneResultRecordFields.extend({ formatVersion: z.literal(1) }),
+  sceneResultRecordFields.extend({ formatVersion: z.literal(2), interaction: z.object({ sequence: z.number().int().positive(), digest: z.string().regex(/^[a-f0-9]{64}$/) }).strict() }),
+])
 export type SceneResultRecord = z.infer<typeof sceneResultRecordSchema>
 
 const directDecision = z.object({ kind: z.literal('direct'), preparation: text }).strict()

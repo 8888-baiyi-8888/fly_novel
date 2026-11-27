@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { PlanInput } from '../story-workflow/types.js'
 import type { StoryCharacterScope } from './story-character-participation.js'
-import type { StorySceneInteraction } from './story-scene-interaction.js'
+import type { SceneWorldRuleJudge, StorySceneInteraction } from './story-scene-interaction.js'
 import type { StoryTreeOptions } from '../story-workflow/workflow.js'
 import { createNextStoryPlan as createNextPlan } from '../story-workflow/workflow.js'
 export type { StoryTreeOptions } from '../story-workflow/workflow.js'
@@ -16,7 +16,7 @@ export { bindStoryWorld, prepareStoryWorldInput } from './story-world-materials.
 export { bindStoryCharacters, type StoryCharacterScope, type StoryCharacterCandidate } from './story-character-participation.js'
 export type { CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
 export { openStoryCharacterRuntime, type StoryCharacterConfig } from './story-character-runtime.js'
-export { openStorySceneInteraction, type SceneInteractionIdentity, type StorySceneInteraction } from './story-scene-interaction.js'
+export { openStorySceneInteraction, type SceneInteractionIdentity, type SceneWorldRuleJudge, type StorySceneInteraction } from './story-scene-interaction.js'
 export type { SceneInteractionConditions } from '../story-workflow/scene-interaction.js'
 export { createStorySceneWithMap, inspectStoryMapScene, readStoryMapCheck, readStoryMapProposal, readStorySceneWorldEvidence, requestStoryMapProposal, type StoryMapScope } from './story-map-scene.js'
 export type { SceneResultInput, SceneSetupInput } from '../story-workflow/types.js'
@@ -43,6 +43,11 @@ export function selectStoryCharacters(scope: StoryCharacterScope, sceneId: strin
 export function decideStorySceneInteraction(interaction: StorySceneInteraction, sequence: number, conditionsVersion: string,
   options: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>, signal?: AbortSignal) {
   return interaction.decide(sequence, conditionsVersion, childDirector(options, signal), signal)
+}
+
+export function judgeStorySceneActions(interaction: StorySceneInteraction, sequence: number,
+  options: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>, judge?: SceneWorldRuleJudge, signal?: AbortSignal) {
+  return interaction.judgeActions(sequence, childDirector(options, signal), judge, signal)
 }
 
 function childDirector(options: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>, signal?: AbortSignal) {
