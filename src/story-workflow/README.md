@@ -25,3 +25,7 @@
 整轮结束以根故事结果和一致的评估记录为凭据。正常的按量暂停使用独立的暂停记录，结果不明的批次只保留已写入的数据供核查。用户选择继续演化后，应用层可以核查上一轮结果并提交更新后的资料形成新计划。调用方区分新一轮的已知事实与本轮模拟经过。
 
 本阶段运行在调用方提供的模拟器上。导演实例按调用创建并释放，程序使用业务记录推进故事和核对恢复位置。
+
+整轮调试用例集中在 [round.test.ts](tests/round.test.ts)。在仓库根目录执行 `pnpm run build:tests`，再执行 `node --test .test-dist/story-workflow/tests/round.test.js` 即可单独运行。
+
+在仓库根目录执行 `pnpm run story-workflow-debug` 可用本机 DeepSeek 配置测试真实导演回复。调试入口把曲水城合成资料发送给模型，使用模拟器提供演绎经过，并把记录保存在终端显示的 `tmp/story-workflow-debug-*` 目录。也可通过 `pnpm run story-workflow-debug qwen` 选择本机已配置的 Qwen。 [调试入口](../app/story-workflow-debug.ts)

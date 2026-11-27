@@ -1,28 +1,18 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { AgentInstance } from '@fly-novel/agents'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@fly-novel/llm'
 import { createStoryPlan, readStoryPlan } from '../../app/story-workflow.js'
 import { PlanStore } from '../store.js'
+import { createTestDirectory, ScriptedAdapter } from './fixtures.js'
 
-class FixedAdapter extends LlmAdapter {
-  readonly requests: GenerateOptions[] = []
-  constructor(private readonly response: string) { super() }
-  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    this.requests.push(options)
-    yield { type: 'block-end', index: 0, block: { type: 'text', text: this.response } }
-    yield { type: 'finish', reason: { kind: 'stop' } }
-  }
-}
 const input = { task: '规划城防与商贸', facts: ['城门夜间关闭'], directions: ['城防与商贸可能趋紧'] }
 
 test('导演依据固定资料生成事件，程序保存独立身份并重读', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'story-plan-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  const adapter = new FixedAdapter('{"kind":"planned","events":["商队夜间抵达","处理货物问题"]}')
+  const root = await createTestDirectory(t, 'story-plan-')
+  const adapter = new ScriptedAdapter(['{"kind":"planned","events":["商队夜间抵达","处理货物问题"]}'])
   const options = { root, protectedRoots: [], provider: 'test', model: 'test', adapter }
   const record = await createStoryPlan(options, input)
   assert.equal(record.outcome.kind, 'planned')
@@ -38,18 +28,16 @@ test('导演依据固定资料生成事件，程序保存独立身份并重读',
 })
 
 test('无可推进事件有原因，与无效空计划区分', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'story-plan-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  const options = { root, protectedRoots: [], provider: 'test', model: 'test', adapter: new FixedAdapter('{"kind":"no_events","reason":"等待商队消息"}') }
+  const root = await createTestDirectory(t, 'story-plan-')
+  const options = { root, protectedRoots: [], provider: 'test', model: 'test', adapter: new ScriptedAdapter(['{"kind":"no_events","reason":"等待商队消息"}']) }
   const record = await createStoryPlan(options, input)
   assert.deepEqual((await readStoryPlan(options, record.id)).outcome, { kind: 'no_events', reason: '等待商队消息' })
-  await assert.rejects(createStoryPlan({ ...options, adapter: new FixedAdapter('{"kind":"planned","events":[]}') }, input))
+  await assert.rejects(createStoryPlan({ ...options, adapter: new ScriptedAdapter(['{"kind":"planned","events":[]}']) }, input))
 })
 
 test('未知版本、重复键和损坏记录被拒绝且原文件保留', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'story-plan-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  const options = { root, protectedRoots: [], provider: 'test', model: 'test', adapter: new FixedAdapter('{"kind":"planned","events":["交涉"]}') }
+  const root = await createTestDirectory(t, 'story-plan-')
+  const options = { root, protectedRoots: [], provider: 'test', model: 'test', adapter: new ScriptedAdapter(['{"kind":"planned","events":["交涉"]}']) }
   const record = await createStoryPlan(options, input)
   const path = join(root, `${record.id}.json`)
   const original = await readFile(path, 'utf8')
@@ -61,8 +49,7 @@ test('未知版本、重复键和损坏记录被拒绝且原文件保留', async
 })
 
 test('模型失败传播并释放导演，记录目录隔离失败时不调用模型', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'story-plan-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await createTestDirectory(t, 'story-plan-')
   class FailingAdapter extends LlmAdapter {
     override async *stream(): AsyncIterable<StreamChunk> {
       yield { type: 'finish', reason: { kind: 'error', failure: { code: 'PROVIDER_ERROR', message: '模型不可用' } } }
@@ -72,14 +59,13 @@ test('模型失败传播并释放导演，记录目录隔离失败时不调用�
   const options = { root, protectedRoots: [], provider: 'test', model: 'test', adapter: new FailingAdapter() }
   await assert.rejects(createStoryPlan(options, input), /模型不可用/)
   assert.equal(disposal.mock.callCount(), 1)
-  const fixed = new FixedAdapter('{"kind":"planned","events":["交涉"]}')
+  const fixed = new ScriptedAdapter(['{"kind":"planned","events":["交涉"]}'])
   await assert.rejects(createStoryPlan({ ...options, protectedRoots: [root], adapter: fixed }, input), /重叠/)
   assert.equal(fixed.requests.length, 0)
 })
 
 test('取消规划后释放导演且不保存结果', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'story-plan-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await createTestDirectory(t, 'story-plan-')
   class WaitingAdapter extends LlmAdapter {
     private notify!: () => void
     readonly started = new Promise<void>(resolve => { this.notify = resolve })
