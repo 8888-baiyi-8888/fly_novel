@@ -59,6 +59,38 @@
 
 **完成标准。** 能用现有文件解释曲水城一次暂停处于哪个故事和批次，区分已有记录与待补能力。保留一份现有版本样例作为后续兼容验证输入。
 
+#### 现有记录清单
+
+以下为多层推进路径。文件名中的 `P` 是规划 ID，也是运行 ID，`S` 是故事 ID，`B` 是批次编号，`N` 是提前汇报 ID。规划文件在 `plans/`，其余在 `collaborations/`。JSON 记录使用 `formatVersion: 1`，继续标记为空文件。文件由存储独占创建，跨文件写入可能只完成一部分。见[记录类型](../../../src/story-workflow/types.ts)和[存储实现](../../../src/story-workflow/store.ts)。
+
+| 文件 | 写入时机和身份 | 现有读取入口与证据 |
+| --- | --- | --- |
+| `P.json` | `createStoryPlan` 校验导演响应后写入规划输入、事件 ID 和顺序，或无可推进事件的原因。 | `readStoryPlan` / `PlanStore.read`。只证明规划已保存。 |
+| `P.siblings.json`、`P.S.story.json` | `runStoryTree` 先占用规划并登记根故事 ID，再写根节点。创建下级节点时保存运行、故事、直接上级和任务。 | `readRootStoryId`、`readStoryNode`。根登记已存在但节点缺失时，说明启动记录不完整。节点存在仅证明任务已保存。 |
+| `P.S.decision.story.json`、`P.S.supplement.story.json` | `runStoryTree` 保存根或子导演的拆分与直接演绎安排，并在父导演决定补充时追加一个有独立 ID 的子项。 | `readStoryStep` 按类型读取。拆分列表及其补充项给出顺序，候选子项可以还没有节点。直接演绎安排尚不表示演绎完成。 |
+| `P.S.choice.story.json` | `runStoryTree` 在创建下级任务前记录父导演对候选子项的继续、调整或取消决定，保存直接上级 ID。 | `readStoryChoice`。取消项可以没有节点。继续或调整已保存而节点缺失时，只能确认推进决定已记录。 |
+| `P.S.N.notice-report.json`、`P.S.N.notice-decision.json` | `simulateStory` 先保存子导演提前汇报，再保存直接上级的决定，随后才将决定返给模拟器。 | `readStoryNotice`。有汇报而无决定时，上级处理尚不可确认。两者均存在仍需核对后续演绎和回报。 |
+| `P.S.simulation.story.json`、`P.S.result.story.json` | `runStoryTree` 先保存模拟器返回的经过，再请导演形成回报并交直接上级接收。回报写入并重读后才结算直接演绎的子故事。 | `readStoryStep`。仅有经过时可核查模拟内容，子故事回报仍未确认。两份文件均保留在故事运行内。 |
+| `P.S.assessment.story.json` | `runStoryTree` 在结算父故事时先保存评估，再保存结果。提前终止的直接演绎也写评估。 | `readStoryStep`。根故事通过 `readStoryRoundResult` 联合校验原规划、根身份、安排、结果和评估。只有评估文件时整轮结算仍无法确认。 |
+| `P.B.paused.story.json`、`P.B.continued.story.json` | `runStoryTree` 到达暂停点时保存规划摘要和推进栈。继续在核对证据后独占创建消费标记。 | `readStoryProgress` 可重读暂停快照。`restoreStoryProgress` 还会核对关联记录并消费批次，纯查询应避免调用。消费标记只证明该暂停位置已被领取。 |
+
+#### 最小读取路径
+
+1. **按规划找根故事。** 给定可信的两个记录根和规划 ID，复用 `readStoryPlan`、`readRootStoryId` 和 `readStoryNode`。核对根节点没有上级，根安排与规划事件一致；单事件协作记录与多层故事节点分别使用各自的读取入口。
+2. **按故事找上级及当前安排。** 给定规划和目标故事 ID，复用节点、决定与步骤读取，从 `parentStoryId` 定位直接上级，并在上级的拆分列表和补充项中验证归属及顺序。下一步补一个调用方可用的组合读取入口，区分已安排未开始、已取消、已完成以及记录缺失或不一致。
+3. **按故事列场景与结果。** 当前只有故事级 `simulation` 与 `result`，沿用它们核查已有模拟和回报。后续新增场景归属、排序及结果引用。读取版本 1 样例时，将场景表示为旧格式未记录，保留可独立核实的旧回报。对于要求场景证据的新记录，缺少场景结果时应显示待核查。
+4. **按批次核查位置。** 复用 `readStoryProgress` 读取栈顶故事及其下一项，复用现有校验规则比对规划、上下级、决定与结果。后续补无需消费批次的进度核查入口，区分暂停可继续、已领取、证据不全和整轮已完成。整轮完成沿用 `readStoryRoundResult`。
+
+#### 曲水城版本 1 样例
+
+使用固定替身运行[整轮测试](../../../src/story-workflow/tests/round.test.ts)，在夹具清理前复制原始文件，并从副本重读两份暂停快照和第一轮结果。样例保存在本机 `artifacts/story-workflow-v1-Odzpbo/`，由 Git 忽略，供本地兼容验证使用。副本包含 2 份规划和 47 个协作目录文件。第一轮规划 ID 为 `0c1c2d19-4aaf-4603-82f0-16fa91209cdc`，根故事 ID 为 `e48799e2-7ebc-453b-9fca-a1f0d9fddfc5`。
+
+- 第 1 批结束后，栈顶为「商队夜间抵达」，本层已处理「查验身份」，下一项为「交涉入城」。根层虽已指向「处理货物」，仍需先结算当前下级。
+- 第 2 批完成「交涉入城」和补充的「协商临时仓位」，结算「商队夜间抵达」。暂停快照只剩根层，下一项为「处理货物」。
+- 第 3 批处理货物并结算根故事，重读评估为 `achieved`。随后从调用方提供的新局势创建独立规划。副本采自测试结束时，两个暂停均已有消费标记，可用于只读核查。
+
+DeepSeek Harness 的持久化接口按 Session 保存和重读 Agent 交互事件，读取可使用独立的只读句柄。这里同样需要让核查与取得续跑位置各自有明确入口。曲水城进度依据故事节点、决定和结果文件，Session 证据只覆盖 Agent 交互层。见 [DeepSeek Harness Session Persistence](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence/README.md)。
+
 ### 3. 跑通父子故事读取，建立场景的归属基础
 
 **输入与动作。** 给定可信记录目录、规划 ID 和目标故事 ID，复用或补齐读取能力。沿已保存的根故事、拆分和补充安排定位直接上级、同层顺序及下级结果。查询时区分已安排但还没有节点的事件、已取消事件和已完成故事。
