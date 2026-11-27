@@ -15,6 +15,12 @@ async function sceneView(store: CollaborationStore, setup: SceneSetupRecord) {
   return result ? { ...setup, status: result.status, result } : { ...setup, status: 'pending' as const }
 }
 
+/** 从已校验故事归属的存储读取场景证据。 */
+export async function readSceneViews(store: CollaborationStore, runId: string, storyId: string) {
+  const records = await store.listSceneSetups(runId, storyId)
+  return Promise.all(records.map(record => sceneView(store, record)))
+}
+
 /** 保存一个待演绎的场景设置。指定顺序已被占用时抛错，保留原记录。 */
 export async function createStoryScene(options: SceneOptions, planId: string, storyId: string, input: SceneSetupInput) {
   const setup = sceneSetupInputSchema.parse(input)
@@ -33,6 +39,5 @@ export async function readStoryScene(options: SceneOptions, planId: string, stor
 /** 列出指定故事的已保存设置，按场景顺序升序返回。 */
 export async function listStoryScenes(options: SceneOptions, planId: string, storyId: string) {
   const store = await openForScene(options, planId, storyId)
-  const records = await store.listSceneSetups(planId, storyId)
-  return Promise.all(records.map(record => sceneView(store, record)))
+  return readSceneViews(store, planId, storyId)
 }

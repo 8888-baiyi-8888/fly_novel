@@ -8,6 +8,7 @@ import { createStoryPlan as createPlan, runStoryCollaboration as runCollaboratio
 export type { StoryPlanningOptions, StoryCollaborationOptions } from '../story-workflow/workflow.js'
 export { readStoryPlan, readStoryCollaboration, readStorySimulation, readStorySiblingDecision, readStoryRoundResult } from '../story-workflow/workflow.js'
 export { readStory } from '../story-workflow/story-query.js'
+export { inspectStoryProgress } from '../story-workflow/progress.js'
 export { createStoryScene, listStoryScenes, readStoryScene } from '../story-workflow/scenes.js'
 export type { SceneResultInput, SceneSetupInput } from '../story-workflow/types.js'
 

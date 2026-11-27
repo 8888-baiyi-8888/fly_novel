@@ -129,6 +129,40 @@ export class CollaborationStore {
     catch (error) { throw new Error(`故事暂停位置已使用或占用结果不明，请核查批次 ${batch}`, { cause: error }) }
   }
 
+  /** 查找该运行最新的暂停或消费记录编号。 */
+  async latestStoryBatch(runId: string): Promise<number | undefined> {
+    const prefix = `${uuid.parse(runId)}.`
+    let latest: number | undefined
+    for (const name of await readdir(this.root)) {
+      if (!name.startsWith(prefix)) continue
+      const match = /^(\d+)\.(paused|continued)\.story\.json$/.exec(name.slice(prefix.length))
+      if (!match) continue
+      const batch = Number(match[1])
+      if (!Number.isSafeInteger(batch) || batch < 1 || String(batch) !== match[1]) throw new Error('故事批次文件编号无效')
+      if (latest === undefined || batch > latest) latest = batch
+    }
+    return latest
+  }
+
+  /** 检查计划或具体故事是否已有推进文件，包含部分写入后遗留的证据。 */
+  async hasStoryRecords(runId: string, storyId?: string): Promise<boolean> {
+    const prefix = storyId === undefined ? `${uuid.parse(runId)}.` : this.scenePrefix(runId, storyId)
+    return (await readdir(this.root)).some(name => name.startsWith(prefix))
+  }
+
+  /** 只读查看批次是否已经领取，校验空消费标记。 */
+  async hasContinuedStoryProgress(runId: string, batch: number): Promise<boolean> {
+    const path = this.progressPath(runId, batch, 'continued')
+    try {
+      const info = await lstat(path)
+      if (!info.isFile() || info.size !== 0 || key(await realpath(path)) !== key(path)) throw new Error('故事暂停消费标记无效')
+      return true
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
+      throw error
+    }
+  }
+
   /** 读取已处理子故事的决定并核对身份。 */
   async readStoryChoice(runId: string, childStoryId: string): Promise<StoryChoice> {
     const value = storyChoiceSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.${uuid.parse(childStoryId)}.choice.story.json`)))

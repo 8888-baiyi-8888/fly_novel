@@ -72,6 +72,8 @@
 
 `readStory` 从可信记录根按规划和故事 ID 重读任务、直接上级、同层位置及下级进展。省略故事 ID 时读取根故事。参数及状态见[读取父子故事](../story-workflow/README.md#读取父子故事)。
 
+`inspectStoryProgress(options, planId)` 从已保存的故事、场景、回报和批次证据核查当前位置。仅在返回 `paused` 时使用其 `batch` 调用 `continueStoryTree`。见[进度状态与续跑条件](../story-workflow/README.md#核查运行进度)。
+
 `createStoryScene` 为已确定直接演绎的子故事保存一个待演绎的场景。`readStoryScene` 按场景身份读取，`listStoryScenes` 按故事和顺序列出场景状态及结果。模拟器可通过 `recordSceneResult` 提交当前故事的场景模拟经过，已结算的场景可从故事回报追溯。见[场景设置](../story-workflow/README.md#保存和读取场景设置)和[结果记录](../story-workflow/README.md#保存模拟结果并形成故事回报)。
 
 从仓库根目录运行 `pnpm run story-workflow-debug`，可用本机配置的 DeepSeek 测试整轮导演调用。样例每批最多完成一个最小子故事，并自动接续暂停批次。终端会显示运行记录目录，按 Ctrl+C 可取消。默认限时十分钟，也可用 `pnpm run story-workflow-debug deepseek 20` 改为二十分钟。场景由调试模拟器提供，导演回复来自真实模型。 [调试入口](story-workflow-debug.ts)

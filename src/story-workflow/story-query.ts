@@ -1,12 +1,12 @@
 import { isDeepStrictEqual } from 'node:util'
 import { CollaborationStore, PlanStore } from './store.js'
-import type { StoryNode, StoryStep } from './types.js'
+import type { PlanRecord, StoryNode, StoryStep } from './types.js'
 import type { StoryCollaborationOptions } from './workflow.js'
 
 type Arrangement = { id: string; description: string }
 type Decision = Extract<StoryStep, { kind: 'decision' }>['value']
 
-async function readIfPresent<T>(read: Promise<T>): Promise<T | undefined> {
+export async function readIfPresent<T>(read: Promise<T>): Promise<T | undefined> {
   try {
     return await read
   } catch (error) {
@@ -15,7 +15,7 @@ async function readIfPresent<T>(read: Promise<T>): Promise<T | undefined> {
   }
 }
 
-async function readArrangement(store: CollaborationStore, node: StoryNode) {
+export async function readArrangement(store: CollaborationStore, node: StoryNode) {
   const { runId, storyId } = node
   const step = await readIfPresent(store.readStoryStep(runId, storyId, 'decision'))
   const supplement = await readIfPresent(store.readStoryStep(runId, storyId, 'supplement'))
@@ -32,7 +32,7 @@ async function readArrangement(store: CollaborationStore, node: StoryNode) {
   return { decision, children }
 }
 
-async function readOutcome(store: CollaborationStore, node: StoryNode, decision: Decision | undefined) {
+export async function readOutcome(store: CollaborationStore, node: StoryNode, decision: Decision | undefined) {
   const { runId, storyId } = node
   const result = await readIfPresent(store.readStoryStep(runId, storyId, 'result'))
   if (result?.kind !== 'result' || !decision) return undefined
@@ -48,7 +48,7 @@ async function readOutcome(store: CollaborationStore, node: StoryNode, decision:
   return simulation ? result : undefined
 }
 
-async function readChildChoice(store: CollaborationStore, parent: StoryNode, child: Arrangement) {
+export async function readChildChoice(store: CollaborationStore, parent: StoryNode, child: Arrangement) {
   const choice = await readIfPresent(store.readStoryChoice(parent.runId, child.id))
   if (choice && (choice.parentStoryId !== parent.storyId || choice.description !== child.description)) {
     throw new Error(`子故事决定与上级安排不匹配：${child.id}`)
@@ -74,16 +74,9 @@ async function readChildProgress(store: CollaborationStore, parent: StoryNode, c
     : { ...child, status: 'incomplete' as const, choice }
 }
 
-/** 打开可信记录根并核对目标故事归属。 */
-export async function openStory(
-  options: Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>,
-  planId: string,
-  storyId?: string,
-) {
-  const { planRoot, collaborationRoot, protectedRoots } = options
-  const plans = await PlanStore.open(planRoot, [...protectedRoots, collaborationRoot])
-  const store = await CollaborationStore.open(collaborationRoot, planRoot, protectedRoots)
-  const plan = await plans.read(planId)
+/** 核对根故事与保存的规划一致。 */
+export async function readStoryRoot(store: CollaborationStore, plan: PlanRecord) {
+  const planId = plan.id
   const rootId = await store.readRootStoryId(planId)
   const root = await store.readStoryNode(planId, rootId)
   const rootArrangement = await readArrangement(store, root)
@@ -93,7 +86,20 @@ export async function openStory(
     root.task.background !== JSON.stringify({ facts: plan.input.facts, directions: plan.input.directions })) {
     throw new Error(`根故事与原规划不一致：${planId}`)
   }
+  return { root, rootArrangement }
+}
 
+/** 打开可信记录根并核对目标故事归属。 */
+export async function openStory(
+  options: Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>,
+  planId: string,
+  storyId?: string,
+) {
+  const { planRoot, collaborationRoot, protectedRoots } = options
+  const plans = await PlanStore.open(planRoot, [...protectedRoots, collaborationRoot])
+  const store = await CollaborationStore.open(collaborationRoot, planRoot, protectedRoots)
+  const { root, rootArrangement } = await readStoryRoot(store, await plans.read(planId))
+  const rootId = root.storyId
   const node = storyId === undefined || storyId === rootId ? root : await store.readStoryNode(planId, storyId)
   let current = node
   let parent: StoryNode | null = null

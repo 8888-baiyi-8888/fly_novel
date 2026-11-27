@@ -257,7 +257,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     frames = [{ node: root, children, index: 0, results: [], decisions: [] }]
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: rootId, kind: 'decision', value: { kind: 'split', children } })
   } else {
-    frames = await restoreStoryProgress(store, planId, resumeBatch, planHash, signal)
+    frames = await restoreStoryProgress(store, plan, resumeBatch, signal)
   }
   let completedCount = 0
   const call = async (prompt: string, callSignal = signal): Promise<string> => {
