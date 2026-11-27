@@ -1,4 +1,5 @@
 import type { CollaborationStore } from './store.js'
+import type { MapSceneNeed } from './map-scene.js'
 import { parseStrictJson, reportSchema, sceneResultInputSchema, simulationSchema, storyNoticeDecisionSchema, storyNoticeInputSchema, type SceneResultInput, type Simulation, type StoryNode, type StoryNoticeDecision, type StoryNoticeInput, type StoryTask } from './types.js'
 
 export interface StorySimulationInput {
@@ -7,6 +8,7 @@ export interface StorySimulationInput {
   readonly storyId: string
   task: StoryTask
   preparation: string
+  mapNeed?: MapSceneNeed
   reportEarly(notice: StoryNoticeInput): Promise<StoryNoticeDecision>
   /** 将当前故事的场景模拟结果独占写入。模拟器须等待写入完毕。 */
   recordSceneResult(sceneId: string, input: SceneResultInput): Promise<void>
@@ -18,6 +20,7 @@ export async function simulateStory(node: StoryNode, parent: StoryNode, preparat
   options: { simulate(input: StorySimulationInput, signal: AbortSignal): Promise<Simulation> }
   call(prompt: string, signal: AbortSignal): Promise<string>
   signal?: AbortSignal
+  mapNeed?: MapSceneNeed
 }) {
   const { store, options, call, signal } = context
   const reportFormat = '{"summary":"结果","changes":["变化"],"unresolved":["未解决"],"evidence":"依据"}'
@@ -78,7 +81,8 @@ export async function simulateStory(node: StoryNode, parent: StoryNode, preparat
   let simulation: Simulation
   try {
     const { runId, storyId, task } = node
-    simulation = simulationSchema.parse(await options.simulate({ runId, storyId, task, preparation, reportEarly, recordSceneResult }, simSignal))
+    simulation = simulationSchema.parse(await options.simulate({ runId, storyId, task, preparation, reportEarly, recordSceneResult,
+      ...(context.mapNeed ? { mapNeed: context.mapNeed } : {}) }, simSignal))
     accepting = false
     if (sceneWrites.size) throw new Error('模拟器在场景结果写入结束前返回')
     if (waiting) throw new Error('模拟器在收到上级决定前结束演绎')

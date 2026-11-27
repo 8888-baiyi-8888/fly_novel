@@ -1,6 +1,7 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import { mapSceneCheckSchema, type MapSceneCheck } from './map-scene.js'
 import { storyNoticeSchema, storyProgressSchema, type StoryNotice, type StoryProgress } from './types.js'
 import { sceneOrderSchema, sceneResultRecordSchema, sceneSetupRecordSchema, type SceneResultInput, type SceneResultRecord, type SceneSetupRecord } from './types.js'
 import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, storyNodeSchema, storyStepSchema, storyChoiceSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision, type StoryNode, type StoryStep, type StoryChoice } from './types.js'
@@ -62,6 +63,21 @@ const claimSchema = z.object({ formatVersion: z.literal(1), planId: uuid, childS
 /** 使用独立目录保存单个事件的独占尝试及最终协作记录。 */
 export class CollaborationStore {
   private constructor(private readonly root: string) {}
+
+  private mapCheckPath(runId: string, storyId: string, id: string): string {
+    return join(this.root, `${uuid.parse(runId)}.${uuid.parse(storyId)}.${uuid.parse(id)}.map-check.json`)
+  }
+
+  async saveMapSceneCheck(check: MapSceneCheck): Promise<void> {
+    const value = mapSceneCheckSchema.parse(check)
+    await writeFile(this.mapCheckPath(value.runId, value.storyId, value.id), `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', encoding: 'utf8' })
+  }
+
+  async readMapSceneCheck(runId: string, storyId: string, id: string): Promise<MapSceneCheck> {
+    const check = mapSceneCheckSchema.parse(await this.readFile(this.mapCheckPath(runId, storyId, id)))
+    if (check.runId !== runId || check.storyId !== storyId || check.id !== id) throw new Error('场景地图核查身份不匹配')
+    return check
+  }
 
   /** 调用方提供全部受保护目录；记录根不得与规划根重叠。 */
   static async open(root: string, planRoot: string, protectedRoots: readonly string[]): Promise<CollaborationStore> {

@@ -6,11 +6,14 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
+import { MapStore } from '@fly-novel/map'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
-import { bindStoryWorld, createStoryPlan, prepareStoryWorldInput, readStoryPlan } from '../../app/story-workflow.js'
-import { ScriptedAdapter as DirectorAdapter } from '../../story-workflow/tests/fixtures.js'
+import { bindStoryWorld, createStoryPlan, inspectStoryMapScene, prepareStoryWorldInput, readStoryMapCheck, readStoryPlan, runStoryTree } from '../../app/story-workflow.js'
+import { advance, ScriptedAdapter as DirectorAdapter, task } from '../../story-workflow/tests/fixtures.js'
+import { CatalogService } from '../workspace/catalog/service.js'
+import { initializeCatalog } from '../workspace/catalog/format.js'
 import { withFileDiscussionAdapter } from '../discussion/file-adapter.js'
 import { candidateSchema, type DiscussionTargetAdapter } from '../discussion/service.js'
 
@@ -38,11 +41,11 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
   const names = ['甲世界', '乙世界']; const configs = []
   for (const name of names) {
     const base = join(root, name); const view = join(base, 'world')
-    for (const dir of ['world/main', 'world/confirmed', 'world/catalog', 'discussion/discussions', 'discussion/candidates', 'impact',
+    for (const dir of ['world/main', 'world/map/places', 'world/map/connections', 'world/confirmed', 'world/catalog', 'discussion/discussions', 'discussion/candidates', 'impact',
       'review/reviews', 'review/confirmations', 'commit', 'batch', 'task/tasks', 'task/first-versions', 'delivery/reviews', 'delivery/deliveries', 'session']) await mkdir(join(base, dir), { recursive: true })
     await writeFile(join(view, 'main', 'city.md'), '城门全天开放')
     configs.push({ world: { worldId: name, readRoot: view, confirmedRoot: join(view, 'confirmed'), catalogRoot: join(view, 'catalog'),
-      mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [] }, base })
+      mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [{ agentId: 'map', writableRoot: join(view, 'map') }] }, base })
   }
   const worlds = configs.map(item => item.world)
   const baseAdapter: DiscussionTargetAdapter = { async read() { throw new Error('未支持') }, async validate() {}, async validateStored() {}, async assertNoLegacyCandidate() {} }
@@ -115,7 +118,19 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     assert.equal(snapshot.artifacts[0]?.content, '城门夜间关闭')
     assert.equal(snapshot.artifacts[0]?.version, done.value.review.artifacts[0]?.version)
     assert.deepEqual(snapshot.uncovered, done.value.review.uncovered)
+    const map = await MapStore.open({ fs: contexts.fs, root: join(world.readRoot, 'map'), worldId: world.worldId, access: 'read-write', singleWriterProcess: true })
+    t.after(() => map.close())
+    await map.createOverview({ name: '曲水城地图', description: '', orientation: '北向上', scale: { width: 10, height: 10, unit: 'km' }, layers: [{ id: 'admin', name: '行政' }], reserved: [] })
+    const city = await map.createPlace({ name: '曲水城', aliases: [], description: '城外有高地概况。', detailLevel: 'overview', reserved: [],
+      parents: [{ layerId: 'admin', parent: { kind: 'world' }, localBoxes: [[0, 0, 80, 80]], frameBox: null, coverage: 'complete' }] })
+    await initializeCatalog(world.catalogRoot, world.worldId)
+    const catalog = await CatalogService.open(world, { singleWriterProcess: true })
+    const owner = catalog.bind('map')
+    const registered = await owner.register(`map/${city.path}`, '曲水城空间概况')
+    await catalog.close()
+    const catalogEntry = { path: registered.record.path, revision: registered.record.revision, category: 'setting' as const }
     const input = await prepareStoryWorldInput(storyWorld, { task: '处理入城请求', delivery: [{ target, category: 'setting' }],
+      catalog: { agentId: 'main', entries: [catalogEntry] },
       fixed: [{ id: 'merchant-arrived', version: 'fixture-1', category: 'event', content: '商队已抵达城外' }] })
     const planRoot = join(base, 'plans'); await mkdir(planRoot)
     const director = new DirectorAdapter(['{"kind":"planned","events":["处理入城请求"]}'])
@@ -124,6 +139,22 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     assert.equal(plan.formatVersion, 2)
     assert.deepEqual(await readStoryPlan(planOptions, plan.id), plan)
     assert.match(JSON.stringify(director.requests), /商队已抵达城外/)
+    const collaborationRoot = join(base, 'collaborations'); await mkdir(collaborationRoot)
+    const sceneRoots = { planRoot, collaborationRoot, protectedRoots: planOptions.protectedRoots }
+    const mapNeed = { cityId: city.id, layerId: 'admin', purpose: '寻找可停放货车的城门外等候点' }
+    const scope = { binding: storyWorld, store: map, ownerAgentId: 'map', cityId: city.id, layerId: 'admin' }
+    await assert.rejects(runStoryTree({ ...sceneRoots, provider: 'test', model: 'test',
+      adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed })]),
+      async simulate({ runId, storyId, mapNeed: requested }) {
+        assert.deepEqual(requested, mapNeed)
+        const denied = await inspectStoryMapScene(sceneRoots, runId, storyId, { ...scope, cityId: randomUUID() }, mapNeed)
+        assert.equal(denied.result.status, 'forbidden')
+        const checked = await inspectStoryMapScene(sceneRoots, runId, storyId, scope, mapNeed)
+        assert.equal(checked.result.status, 'missing')
+        assert.deepEqual(await readStoryMapCheck(sceneRoots, runId, storyId, checked.id), checked)
+        throw new Error('等候点待补充')
+      },
+    }, plan.id), /等候点待补充/)
     await assert.rejects(storyWorld.readDelivery([absent]), /未覆盖/)
     await assert.rejects(storyWorld.readDelivery([{ ...target, path: 'main/forbidden.md' }]), /无权/)
     await assert.rejects(bindStoryWorld({ ...binding, worldId: names.find(name => name !== world.worldId)! }), /世界绑定不匹配/)

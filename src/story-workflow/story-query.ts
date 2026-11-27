@@ -98,7 +98,8 @@ export async function openStory(
   const { planRoot, collaborationRoot, protectedRoots } = options
   const plans = await PlanStore.open(planRoot, [...protectedRoots, collaborationRoot])
   const store = await CollaborationStore.open(collaborationRoot, planRoot, protectedRoots)
-  const { root, rootArrangement } = await readStoryRoot(store, await plans.read(planId))
+  const plan = await plans.read(planId)
+  const { root, rootArrangement } = await readStoryRoot(store, plan)
   const rootId = root.storyId
   const node = storyId === undefined || storyId === rootId ? root : await store.readStoryNode(planId, storyId)
   let current = node
@@ -125,7 +126,7 @@ export async function openStory(
   }
 
   const { decision, children } = node === root ? rootArrangement : await readArrangement(store, node)
-  return { store, node, parent, siblingIndex, decision, children }
+  return { store, plan, node, parent, siblingIndex, decision, children }
 }
 
 /**

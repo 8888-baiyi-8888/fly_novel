@@ -341,15 +341,22 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     const task = taskSchema.parse(parseStrictJson(await call(`你是父导演，制定当前子故事任务，不指定角色行动。只返回 JSON：{"background":"背景","goal":"目标","constraints":["约束"]}。${JSON.stringify({ ...context, choice })}`)))
     const node: StoryNode = { formatVersion: 1, runId: planId, storyId: child.id, parentStoryId: frame.node.storyId, description: child.description, task }
     await store.saveStoryNode(node)
-    const decision = storyDecisionSchema.parse(parseStrictJson(await call(`你是子导演，判断当前故事能否直接进行模拟演绎。需要拆分时返回 JSON：{"kind":"split","children":["子故事描述"]}；适合直接演绎时返回 JSON：{"kind":"direct","preparation":"模拟处境"}。任务：${JSON.stringify(node)}`)))
+    const mapDirection = plan.formatVersion === 2 ? ' 如场景需要核查城门和等候点，可在 direct 结果附上 mapNeed（cityId、layerId、purpose），只引用提供的城市与地图层面。' : ''
+    const decision = storyDecisionSchema.parse(parseStrictJson(await call(`你是子导演，判断当前故事能否直接进行模拟演绎。需要拆分时返回 JSON：{"kind":"split","children":["子故事描述"]}；适合直接演绎时返回 JSON：{"kind":"direct","preparation":"模拟处境"}。${mapDirection}任务：${JSON.stringify(node)}`)))
     if (decision.kind === 'split') {
       const children = decision.children.map(description => ({ id: randomUUID(), description }))
       await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: { kind: 'split', children } })
       frames.push({ node, children, index: 0, results: [], decisions: [] })
       continue
     }
-    await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
-    const { simulation, decisions, termination } = await simulateStory(node, frame.node, decision.preparation, { store, options, call, signal })
+    if ('mapNeed' in decision) {
+      if (plan.formatVersion !== 2) throw new Error('独立规划不支持场景地图需求')
+      await store.saveStoryStep({ formatVersion: 2, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
+    } else {
+      await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
+    }
+    const { simulation, decisions, termination } = await simulateStory(node, frame.node, decision.preparation, { store, options, call, signal,
+      ...('mapNeed' in decision ? { mapNeed: decision.mapNeed } : {}) })
     signal?.throwIfAborted()
     const scenes = await store.readSettledScenes(planId, node.storyId)
     const sceneIds = scenes.map(scene => scene.sceneId)

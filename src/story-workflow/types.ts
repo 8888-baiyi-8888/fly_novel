@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
+import { mapSceneNeedSchema } from './map-scene.js'
 
 const text = z.string().trim().min(1)
 const uuid = z.string().uuid()
@@ -119,10 +120,12 @@ export const sceneResultRecordSchema = sceneResultInputSchema.extend({
 }).strict()
 export type SceneResultRecord = z.infer<typeof sceneResultRecordSchema>
 
-export const storyDecisionSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('direct'), preparation: text }).strict(),
+const directDecision = z.object({ kind: z.literal('direct'), preparation: text }).strict()
+const mapDirectDecision = directDecision.extend({ mapNeed: mapSceneNeedSchema })
+export const storyDecisionSchema = z.union([mapDirectDecision, z.discriminatedUnion('kind', [
+  directDecision,
   z.object({ kind: z.literal('split'), children: z.array(text).min(1) }).strict(),
-])
+])])
 const savedStoryDecisionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('direct'), preparation: text }).strict(),
   z.object({ kind: z.literal('split'), children: z.array(z.object({ id: uuid, description: text }).strict()).min(1) }).strict(),
@@ -143,6 +146,7 @@ const sceneStoryResultSchema = z.object({ formatVersion: z.literal(2), ...storyR
 
 export const storyStepSchema = z.union([
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('decision'), value: savedStoryDecisionSchema }).strict(),
+  z.object({ formatVersion: z.literal(2), runId: uuid, storyId: uuid, kind: z.literal('decision'), value: mapDirectDecision }).strict(),
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('simulation'), value: simulationSchema }).strict(),
   legacyStoryResultSchema,
   sceneStoryResultSchema,
