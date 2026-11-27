@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { sceneInteractionDigest, sceneInteractionEventSchema, visibleCharacterResponse, type SceneInteractionEvent } from './scene-interaction.js'
+import { resolveInteractionPerceptions, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionEventSchema, visibleCharacterResponse, type SceneInteractionDecision, type SceneInteractionEvent } from './scene-interaction.js'
 import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
 import { mapProposalKeySchema, mapProposalRecordSchema, mapRecordDigest, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck, type SceneMapEvidence } from './map-scene.js'
@@ -120,7 +120,7 @@ export class CollaborationStore {
     return (await readdir(this.root)).filter(name => name.startsWith(prefix) && name.endsWith(suffix)).map(name => uuid.parse(name.slice(prefix.length, -suffix.length))).sort()
   }
 
-  private interactionPath(sceneId: string, sequence: number, kind: 'event'): string {
+  private interactionPath(sceneId: string, sequence: number, kind: 'event' | 'decision'): string {
     return join(this.root, `${sceneId}.interaction-${z.number().int().positive().max(10000).parse(sequence)}.${kind}.json`)
   }
 
@@ -171,6 +171,33 @@ export class CollaborationStore {
     const events = await Promise.all(sequences.map(sequence => this.readInteractionEvent(runId, storyId, sceneId, sequence)))
     if (new Set(events.map(item => item.participationId)).size !== events.length) throw new Error('互动事件引用同一参与结果多次')
     return events
+  }
+
+  async saveInteractionDecision(runId: string, storyId: string, sceneId: string, decision: SceneInteractionDecision) {
+    const value = sceneInteractionDecisionSchema.parse(decision)
+    await this.assertSceneSetupOpen(runId, storyId)
+    const setup = await this.readSceneSetup(runId, storyId, sceneId)
+    if (await this.readSceneResult(setup)) throw new Error('已结算场景不能保存互动决定')
+    const events = await this.listInteractionEvents(runId, storyId, sceneId)
+    const event = events.at(-1)
+    if (!event || event.sequence !== value.sequence || sceneInteractionDigest(event) !== value.eventDigest) throw new Error('互动决定的事件版本已变化')
+    resolveInteractionPerceptions(event, value)
+    const content = `${JSON.stringify(value)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景互动决定超过大小限制')
+    await writeFile(this.interactionPath(sceneId, value.sequence, 'decision'), content, { flag: 'wx', encoding: 'utf8' })
+  }
+
+  async readInteractionDecision(event: SceneInteractionEvent) {
+    const { sceneId, sequence } = event
+    let raw: unknown
+    try { raw = await this.readFile(this.interactionPath(sceneId, sequence, 'decision')) }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+      throw error
+    }
+    const decision = sceneInteractionDecisionSchema.parse(raw)
+    if (decision.sequence !== sequence || decision.eventDigest !== sceneInteractionDigest(event)) throw new Error('互动决定的事件引用不匹配')
+    return { ...decision, perceptions: resolveInteractionPerceptions(event, decision) }
   }
 
   private mapCheckPath(runId: string, storyId: string, id: string): string {

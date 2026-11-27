@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import { openStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
+import { decideStorySceneInteraction, openStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
 import type {} from '@fly-novel/system-prompt'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
@@ -159,6 +159,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     t.after(() => characters.close())
     const guard = await characters.create({ name: '守卫', summary: '值守城门', categories: {}, body: '守卫私料：交班安排' })
     const leader = await characters.create({ name: '领队', summary: '带队抵达', categories: {}, body: '领队私料：货物容易变质' })
+    const aide = await characters.create({ name: '副手', summary: '门内等候', categories: {}, body: '副手档案：负责登记' })
     const candidates = await Promise.all([guard, leader].map(async ({ id }) => ({ characterId: id, version: (await characters.readVersioned(id)).version, presence: '在场' })))
     const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test', limit: 1,
       adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收']),
@@ -315,6 +316,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         const conditions: SceneInteractionConditions = { version: 'gate-1', participants: [
           { characterId: leader.id, position: '城门外', hearing: 'clear', sight: 'clear', basis: '发言者' },
           { characterId: guard.id, position: '城门外同侧', hearing: 'clear', sight: 'clear', basis: '站在领队身边' },
+          { characterId: aide.id, position: '门内', hearing: 'blocked', sight: 'blocked', basis: '隔门听不到私语' },
         ] }
         await assert.rejects(interaction.append(2, captain.participationId, conditions), /序号/)
         const event = await interaction.append(1, captain.participationId, conditions)
@@ -323,6 +325,27 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         assert.deepEqual(await interaction.read(), [event])
         await assert.rejects(interaction.append(2, captain.participationId, conditions), /已经占用/)
         await assert.rejects(interaction.append(2, pendingResponse.participationId, conditions), /缺少可信角色响应/)
+        const speech = { kind: 'speech', index: 0 }
+        const perceptions = [
+          { characterId: leader.id, status: 'received', reason: '本人发言', observations: [speech] },
+          { characterId: guard.id, status: 'received', reason: '同侧能听清', observations: [speech] },
+          { characterId: aide.id, status: 'not-received', reason: '隔门听不到', observations: [] },
+        ]
+        const nextDecision = { kind: 'respond', characterId: guard.id, trigger: { kind: 'observation', index: 0 } }
+        const choosePerception = async (value: unknown, version = conditions.version) => {
+          const adapter = new DirectorAdapter([JSON.stringify(value)])
+          const result = await decideStorySceneInteraction(interaction, 1, version, { ...selectOptions, adapter }, signal)
+          assert.doesNotMatch(JSON.stringify(adapter.requests), /领队本轮秘密|守卫第一轮私有测试标记/)
+          return result
+        }
+        await assert.rejects(choosePerception({ perceptions, next: nextDecision }, 'old'), /版本已变化/)
+        await assert.rejects(choosePerception({ perceptions: perceptions.slice(0, 2), next: nextDecision }), /逐一覆盖/)
+        await assert.rejects(choosePerception({ perceptions: [...perceptions.slice(0, 2), { ...perceptions[2]!, status: 'received', observations: [speech] }], next: nextDecision }), /听不到/)
+        await assert.rejects(choosePerception({ perceptions, next: { ...nextDecision, characterId: aide.id } }), /缺少可用触发/)
+        const decision = await choosePerception({ perceptions, next: nextDecision })
+        assert.equal(decision.perceptions[1]?.observations[0]?.content, '货物快坏了')
+        assert.deepEqual(decision.perceptions[2]?.observations, [])
+        assert.deepEqual(await interaction.trace(), [{ event, decision }])
         assert.equal(installations.closed, installations.guard + installations.leader)
         assert.doesNotMatch(JSON.stringify(views), /privateThought|守卫私料|领队私料|导演私料/)
         await assert.rejects(participants.readPrivate(scene.sceneId, leader.id, captain.participationId), /无权读取/)
