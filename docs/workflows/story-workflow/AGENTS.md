@@ -10,3 +10,4 @@
 - `story-workflow-stage-4-world-materials-plan.md`：世界资料接入、场景缺口核查及按需补充的分步开发与验收。
 - `story-workflow-stage-5-character-participation-plan.md`：场景参与请求、逐角色认知、角色调用及参与记录的分步开发与验收。
 - `story-workflow-stage-6-scene-interaction-plan.md`：场景事件、逐角色感知、回合调度、行动判断与场景结算的分步开发与验收。
+- `story-workflow-stage-7-events-state-assessment-plan.md`：场景事件、世界状态应用、子故事回报和父故事评估的分步开发与验收。
