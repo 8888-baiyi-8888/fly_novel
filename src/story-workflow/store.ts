@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { interactionObservationSource, resolveInteractionPerceptions, sceneActionRecordSchema, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionDispatchSchema, sceneInteractionEventSchema, verifySceneActions, visibleCharacterResponse, type SceneActionRecord, type SceneInteractionDecision, type SceneInteractionDispatch, type SceneInteractionEvent } from './scene-interaction.js'
+import { interactionObservationContent, interactionObservationSource, resolveInteractionPerceptions, sceneActionRecordSchema, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionDispatchSchema, sceneInteractionEventSchema, verifySceneActions, visibleCharacterResponse, type SceneActionRecord, type SceneInteractionDecision, type SceneInteractionDispatch, type SceneInteractionEvent } from './scene-interaction.js'
 import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, projectCharacterParticipation, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
 import { mapProposalKeySchema, mapProposalRecordSchema, mapRecordDigest, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck, type SceneMapEvidence } from './map-scene.js'
@@ -171,12 +171,18 @@ export class CollaborationStore {
     await this.readSceneSetup(runId, storyId, sceneId)
     const prefix = `${sceneId}.interaction-`
     const suffix = '.event.json'
-    const sequences = (await readdir(this.root)).filter(name => name.startsWith(prefix) && name.endsWith(suffix)).map(name => {
+    const files = (await readdir(this.root)).filter(name => name.startsWith(prefix))
+    const sequences = files.filter(name => name.endsWith(suffix)).map(name => {
       const sequence = Number(name.slice(prefix.length, -suffix.length))
       if (name !== `${prefix}${sequence}${suffix}`) throw new Error('场景互动事件文件名无效')
       return sequence
     }).sort((left, right) => left - right)
     if (sequences.some((sequence, index) => sequence !== index + 1)) throw new Error('场景互动事件序号不连续')
+    const known = new Set(sequences)
+    for (const name of files.filter(name => !name.endsWith(suffix))) {
+      const match = /^(\d+)\.(decision|dispatch|actions)\.json$/.exec(name.slice(prefix.length))
+      if (!match || String(Number(match[1])) !== match[1] || !known.has(Number(match[1]))) throw new Error('场景互动记录缺少对应事件')
+    }
     const events = await Promise.all(sequences.map(sequence => this.readInteractionEvent(runId, storyId, sceneId, sequence)))
     if (new Set(events.map(item => item.participationId)).size !== events.length) throw new Error('互动事件引用同一参与结果多次')
     return events
@@ -266,16 +272,20 @@ export class CollaborationStore {
     const decision = await this.readInteractionDecision(event)
     if (record.sequence !== event.sequence || decision?.next.kind !== 'respond' || decision.next.characterId !== record.characterId ||
       record.decisionDigest !== sceneInteractionDigest(decision)) throw new Error('互动调度的决定引用不匹配')
+    const expected = []
     for (const reference of record.observations) {
       if (reference.sequence > event.sequence) throw new Error('互动调度不能引用未来感知')
       const source = reference.sequence === event.sequence ? event : await this.readInteractionEvent(event.runId, event.storyId, event.sceneId, reference.sequence)
       const verdict = await this.readInteractionDecision(source)
-      if (!verdict?.perceptions.find(item => item.characterId === record.characterId)?.observations[reference.index]) throw new Error('互动调度的观察引用不匹配')
+      const observation = verdict?.perceptions.find(item => item.characterId === record.characterId)?.observations[reference.index]
+      if (!verdict || !observation) throw new Error('互动调度的观察引用不匹配')
+      expected.push({ id: interactionObservationSource(event.sceneId, reference), version: sceneInteractionDigest(verdict), content: interactionObservationContent(observation), basis: observation.basis })
     }
     if (decision.next.trigger.kind === 'observation') {
       const index = decision.next.trigger.index
       if (!record.observations.some(item => item.sequence === event.sequence && item.index === index)) throw new Error('调度缺少本轮获准触发观察')
     }
+    return expected
   }
 
   async readInteractionDispatch(event: SceneInteractionEvent) {
@@ -287,12 +297,13 @@ export class CollaborationStore {
       throw error
     }
     const record = sceneInteractionDispatchSchema.parse(raw)
-    await this.verifyInteractionDispatch(event, record)
+    const expected = await this.verifyInteractionDispatch(event, record)
     try {
       const { claim, result } = await this.readCharacterParticipation(runId, storyId, sceneId, record.participationId)
       if (claim.request.characterId !== record.characterId) throw new Error('互动调度的参与角色不匹配')
-      const actual = claim.entries.filter(item => item.source.kind === 'fixed' && item.source.id.startsWith(`${sceneId}:interaction:`)).map(item => item.source.id)
-      if (!isDeepStrictEqual(actual, record.observations.map(item => interactionObservationSource(sceneId, item)))) throw new Error('实际角色输入与调度观察不匹配')
+      const actual = claim.entries.filter(item => item.source.kind === 'fixed' && item.source.id.startsWith(`${sceneId}:interaction:`))
+        .map(item => ({ id: item.source.id, version: item.source.version, content: item.content, basis: item.basis }))
+      if (!isDeepStrictEqual(actual, expected)) throw new Error('实际角色输入与调度观察不匹配')
       return { record, participation: projectCharacterParticipation(claim, result) }
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return { record, participation: undefined }

@@ -5,8 +5,11 @@ import { characterResponseSchema, type CharacterResponse } from './character-par
 const id = z.string().uuid()
 const text = z.string().trim().min(1).max(4000)
 const channelAccess = z.enum(['clear', 'partial', 'blocked', 'unknown'])
+const speechHearing = z.array(z.object({ index: z.number().int().nonnegative(), access: channelAccess, basis: text }).strict()).max(8)
+  .refine(items => new Set(items.map(item => item.index)).size === items.length, '发言听闻条件重复')
 export const sceneInteractionConditionsSchema = z.object({ version: text, participants: z.array(z.object({
   characterId: id, position: text, hearing: channelAccess, sight: channelAccess, basis: text,
+  speechHearing: speechHearing.optional(),
   initiative: z.object({ id: text, description: text }).strict().optional(),
 }).strict()).min(1).max(16) }).strict().refine(value => new Set(value.participants.map(item => item.characterId)).size === value.participants.length, '场景参与角色重复')
 export type SceneInteractionConditions = z.infer<typeof sceneInteractionConditionsSchema>
@@ -16,6 +19,8 @@ export const sceneInteractionEventSchema = z.object({
   setupDigest: z.string().regex(/^[a-f0-9]{64}$/), participationId: id, characterId: id, conditions: sceneInteractionConditionsSchema,
   speech: z.array(speech).max(8), actions: z.array(text).max(8), responseKind: z.enum(['respond', 'wait', 'decline']),
 }).strict().refine(value => value.conditions.participants.some(item => item.characterId === value.characterId), '发出者不在场景参与者中')
+  .refine(value => value.conditions.participants.every(item => item.speechHearing?.every(entry => entry.index < value.speech.length) ?? true), '听闻条件引用不存在的发言')
+  .refine(value => new Set(value.speech.map(item => item.channel)).size < 2 || value.conditions.participants.every(item => item.speechHearing?.length === value.speech.length), '混合发言渠道须逐条指定听闻条件')
 export type SceneInteractionEvent = z.infer<typeof sceneInteractionEventSchema>
 
 export function sceneInteractionDigest(value: unknown): string {
@@ -75,6 +80,9 @@ export type InteractionObservationId = z.infer<typeof interactionObservationIdSc
 export function interactionObservationSource(sceneId: string, reference: InteractionObservationId): string {
   return `${sceneId}:interaction:${reference.sequence}:${reference.index}`
 }
+export function interactionObservationContent(observation: { kind: 'speech' | 'effect'; content: string }): string {
+  return `${observation.kind === 'speech' ? '听见发言' : '看见结果'}：${observation.content}`
+}
 export const sceneInteractionDispatchSchema = z.object({ formatVersion: z.literal(1), sequence: z.number().int().positive(),
   characterId: id, participationId: id, decisionDigest: z.string().regex(/^[a-f0-9]{64}$/),
   observations: z.array(interactionObservationIdSchema).max(32),
@@ -92,7 +100,8 @@ export function resolveInteractionPerceptions(event: SceneInteractionEvent, inpu
   const resolved = input.perceptions.map(({ characterId, status, observations, reason }) => {
     const actor = actors.get(characterId)!
     if (['not-received', 'uncertain'].includes(status) ? observations.length !== 0 : observations.length === 0) throw new Error('感知状态与投递内容不匹配')
-    if (status === 'not-received' && ((actor.hearing === 'unknown' && event.speech.length) || (actor.sight === 'unknown' && effects.length))) throw new Error('感知条件待确认')
+    const hearing = (index: number) => actor.speechHearing?.find(item => item.index === index)
+    if (status === 'not-received' && (event.speech.some((_, index) => (hearing(index)?.access ?? actor.hearing) === 'unknown') || (actor.sight === 'unknown' && effects.length))) throw new Error('感知条件待确认')
     const seen = new Set<string>()
     const content = observations.map(reference => {
       const key = `${reference.kind}:${reference.index}`
@@ -101,18 +110,20 @@ export function resolveInteractionPerceptions(event: SceneInteractionEvent, inpu
       if (reference.kind === 'effect') {
         const effect = effects.find(item => item.index === reference.index)
         if (!effect || actor.sight !== 'clear') throw new Error('角色无法核实所选行动结果')
-        return { ...reference, content: effect.content }
+        return { ...reference, content: effect.content, basis: actor.basis }
       }
       const original = event.speech[reference.index]
       if (!original) throw new Error('感知引用缺失或重复')
-      if (actor.hearing === 'blocked' || actor.hearing === 'unknown') throw new Error('角色听不到所选发言')
+      const condition = hearing(reference.index)
+      const access = condition?.access ?? actor.hearing
+      if (access === 'blocked' || access === 'unknown') throw new Error('角色听不到所选发言')
       const range = reference.range ?? [0, original.text.length]
       const [start, end] = range
       if (start >= end || end > original.text.length) throw new Error('原话片段越界')
       const partial = end - start < original.text.length
-      if ((actor.hearing === 'partial' || status === 'partial') && !partial) throw new Error('部分听见须使用原话片段')
+      if (access === 'partial' && !partial) throw new Error('部分听见须使用原话片段')
       if (status === 'received' && partial) throw new Error('完整收到的发言不能截断')
-      return { ...reference, content: original.text.slice(start, end) }
+      return { ...reference, content: original.text.slice(start, end), basis: condition?.basis ?? actor.basis }
     })
     return { characterId, status, reason, basis: actor.basis, observations: content }
   })

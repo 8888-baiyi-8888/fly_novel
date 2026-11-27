@@ -3,6 +3,7 @@ import { bootstrapAgents } from '@fly-novel/agents'
 import type { PlanInput } from '../story-workflow/types.js'
 import type { StoryCharacterScope } from './story-character-participation.js'
 import type { SceneWorldRuleJudge, StorySceneInteraction } from './story-scene-interaction.js'
+import type { SceneInteractionConditions } from '../story-workflow/scene-interaction.js'
 import type { StoryTreeOptions } from '../story-workflow/workflow.js'
 import { createNextStoryPlan as createNextPlan } from '../story-workflow/workflow.js'
 export type { StoryTreeOptions } from '../story-workflow/workflow.js'
@@ -48,6 +49,52 @@ export function decideStorySceneInteraction(interaction: StorySceneInteraction, 
 export function judgeStorySceneActions(interaction: StorySceneInteraction, sequence: number,
   options: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>, judge?: SceneWorldRuleJudge, signal?: AbortSignal) {
   return interaction.judgeActions(sequence, childDirector(options, signal), judge, signal)
+}
+
+/** 从首个角色响应或已保存的互动位置推进。遇到终态或未知结果时交回调用方。 */
+export async function runStorySceneInteraction(interaction: StorySceneInteraction, options: {
+  initialParticipationId: string
+  director: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>
+  scope: StoryCharacterScope
+  runtime: Parameters<StorySceneInteraction['dispatch']>[2]
+  conditions(sequence: number, participationId: string): Promise<SceneInteractionConditions>
+  grants(characterId: string): Promise<Parameters<StorySceneInteraction['dispatch']>[3]>
+  allowObservation: Parameters<StorySceneInteraction['dispatch']>[4]
+  judge?: SceneWorldRuleJudge
+  maxEvents: number
+}, signal?: AbortSignal) {
+  if (!Number.isSafeInteger(options.maxEvents) || options.maxEvents < 1 || options.maxEvents > 10000) throw new Error('互动推进数量无效')
+  signal?.throwIfAborted()
+  const trace = await interaction.trace()
+  if (trace[0] && trace[0].event.participationId !== options.initialParticipationId) throw new Error('互动起点与已保存事件不匹配')
+  const last = trace.at(-1)
+  let event = last?.event
+  let responseId = options.initialParticipationId
+  let sequence = event?.sequence ?? 1
+  if (last?.dispatch) {
+    const { record, participation } = last.dispatch
+    if (participation?.outcome.status !== 'responded') return { status: 'needs-review', sequence, participationId: record.participationId } as const
+    responseId = record.participationId
+    sequence++
+    event = undefined
+  }
+  for (let handled = 0; handled < options.maxEvents; handled++) {
+    signal?.throwIfAborted()
+    if (!event) {
+      const conditions = await options.conditions(sequence, responseId)
+      signal?.throwIfAborted()
+      event = await interaction.append(sequence, responseId, conditions)
+    }
+    if (event.actions.length) await judgeStorySceneActions(interaction, sequence, options.director, options.judge, signal)
+    const decision = await decideStorySceneInteraction(interaction, sequence, event.conditions.version, options.director, signal)
+    if (decision.next.kind !== 'respond') return { status: decision.next.kind, sequence } as const
+    const dispatch = await interaction.dispatch(sequence, options.scope, options.runtime, await options.grants(decision.next.characterId), options.allowObservation, signal)
+    if (dispatch.participation?.outcome.status !== 'responded') return { status: 'needs-review', sequence, participationId: dispatch.record.participationId } as const
+    responseId = dispatch.record.participationId
+    sequence++
+    event = undefined
+  }
+  return { status: 'limit', sequence: sequence - 1 } as const
 }
 
 function childDirector(options: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>, signal?: AbortSignal) {

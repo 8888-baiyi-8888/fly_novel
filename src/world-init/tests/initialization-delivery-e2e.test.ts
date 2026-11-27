@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, realpath, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import { decideStorySceneInteraction, judgeStorySceneActions, openStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
+import { decideStorySceneInteraction, judgeStorySceneActions, openStorySceneInteraction, runStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
 import type {} from '@fly-novel/system-prompt'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
@@ -160,7 +160,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const guard = await characters.create({ name: '守卫', summary: '值守城门', categories: {}, body: '守卫私料：交班安排' })
     const leader = await characters.create({ name: '领队', summary: '带队抵达', categories: {}, body: '领队私料：货物容易变质' })
     const aide = await characters.create({ name: '副手', summary: '门内等候', categories: {}, body: '副手档案：负责登记' })
-    const candidates = await Promise.all([guard, leader].map(async ({ id }) => ({ characterId: id, version: (await characters.readVersioned(id)).version, presence: '在场' })))
+    const candidates = await Promise.all([guard, leader, aide].map(async ({ id }) => ({ characterId: id, version: (await characters.readVersioned(id)).version, presence: '在场' })))
     const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test', limit: 1,
       adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收']),
       async simulate({ runId, storyId, mapNeed: requested, recordSceneResult }, signal) {
@@ -346,7 +346,8 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         assert.equal(decision.perceptions[1]?.observations[0]?.content, '货物快坏了')
         assert.deepEqual(decision.perceptions[2]?.observations, [])
         assert.deepEqual(await interaction.trace(), [{ event, decision }])
-        const nextActor = new DirectorAdapter([JSON.stringify({ kind: 'respond', speech: [{ text: '请先在门外等候', channel: 'normal', intendedCharacterIds: [] }],
+        const nextActor = new DirectorAdapter([JSON.stringify({ kind: 'respond', speech: [{ text: '请先在门外等候', channel: 'normal', intendedCharacterIds: [] },
+          { text: '隔门听不到的暗号', channel: 'whisper', intendedCharacterIds: [leader.id] }],
           actions: ['尝试把货车移入城门', '尝试清理门外空地', '尝试确认其余车辆可以掉头'] })])
         const sceneRuntime = await openStoryCharacterRuntime(participants, characterId => {
           assert.equal(characterId, guard.id)
@@ -361,7 +362,12 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
           assert.match(JSON.stringify(nextActor.requests), /听见发言：货物快坏了/)
           assert.doesNotMatch(JSON.stringify(nextActor.requests), /领队本轮秘密|领队私料/)
           assert.equal((await interaction.findParticipation(dispatched.record.participationId))[0]?.event.participationId, captain.participationId)
-          await interaction.append(2, dispatched.record.participationId, { ...conditions, version: 'gate-2' })
+          await assert.rejects(interaction.append(2, dispatched.record.participationId, { ...conditions, version: 'gate-2' }), /逐条指定听闻条件/)
+          await interaction.append(2, dispatched.record.participationId, { ...conditions, version: 'gate-2', participants: conditions.participants.map(item => ({
+            ...item, speechHearing: item.characterId === aide.id
+              ? [{ index: 0, access: 'partial', basis: '门缝只传来片段' }, { index: 1, access: 'blocked', basis: '隔门听不到私语' }]
+              : [{ index: 0, access: 'clear', basis: '门外对话' }, { index: 1, access: 'clear', basis: '门外同侧私语' }],
+          })) })
         } finally { await sceneRuntime.close() }
         await assert.rejects(recordSceneResult(scene.sceneId, { status: 'completed', simulation }), /未判定的互动事件/)
         const judge = async ({ index }: { index: number }) => ({ allowed: index !== 0, basis: index === 0 ? '闭门时不得进车' : '现场检查通过' })
@@ -375,14 +381,67 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
           { index: 2, status: 'unresolved', reason: '尚未确认车辆掉头空间' },
         ])]) }, judge, signal)
         assert.deepEqual(actions.outcomes.map(item => item.status), ['blocked', 'succeeded', 'unresolved'])
-        const endAdapter = new DirectorAdapter([JSON.stringify({ perceptions: [
+        const publicSpeechAdapter = new DirectorAdapter([JSON.stringify({ perceptions: [
           { characterId: guard.id, status: 'received', reason: '在门外', observations: [speech] },
           { characterId: leader.id, status: 'received', reason: '在门外现场', observations: [speech, { kind: 'effect', index: 0 }] },
-          { characterId: aide.id, status: 'not-received', reason: '仍在门内', observations: [] },
-        ], next: { kind: 'end', reason: '商队在门外等候，入城未决' } })])
-        const end = await decideStorySceneInteraction(interaction, 2, 'gate-2', { ...selectOptions, adapter: endAdapter }, signal)
-        assert.equal(end.perceptions[1]?.observations[1]?.content, '货车停在门外')
-        assert.doesNotMatch(JSON.stringify(endAdapter.requests), /尝试把货车移入城门|尚未确认车辆掉头空间/)
+          { characterId: aide.id, status: 'partial', reason: '门缝只能听到片段', observations: [{ ...speech, range: [3, 5] }] },
+        ], next: { kind: 'respond', characterId: leader.id, trigger: { kind: 'observation', index: 1 } } })])
+        const publicDecision = await decideStorySceneInteraction(interaction, 2, 'gate-2', { ...selectOptions, adapter: publicSpeechAdapter }, signal)
+        assert.equal(publicDecision.perceptions[1]?.observations[1]?.content, '货车停在门外')
+        assert.equal(publicDecision.perceptions[2]?.observations[0]?.content, '门外')
+        assert.doesNotMatch(JSON.stringify(publicSpeechAdapter.requests), /尝试把货车移入城门|尚未确认车辆掉头空间/)
+
+        const leaderTurn = new DirectorAdapter(['{"kind":"wait"}'])
+        const aideTurn = new DirectorAdapter(['{"kind":"decline"}'])
+        const selected: string[] = []
+        const followupRuntime = await openStoryCharacterRuntime(participants, characterId => {
+          selected.push(characterId)
+          assert.ok([leader.id, aide.id].includes(characterId))
+          return { provider: 'test', model: 'test', version: 'followup-1', timeoutMs: 5000, adapter: characterId === leader.id ? leaderTurn : aideTurn }
+        })
+        const noObservation = conditions.participants.map(item => ({ characterId: item.characterId, status: item.characterId === aide.id ? 'uncertain' : 'not-received', reason: '等待或未参与', observations: [] }))
+        const nextDirector = new DirectorAdapter([JSON.stringify({ perceptions: noObservation,
+          next: { kind: 'respond', characterId: aide.id, trigger: { kind: 'initiative', id: 'registrar-check' } } }),
+        JSON.stringify({ perceptions: noObservation, next: { kind: 'end', reason: '商队在门外等候，入城未决' } })])
+        const advanceOptions = { initialParticipationId: captain.participationId, scope: participants, runtime: followupRuntime,
+          director: { ...selectOptions, adapter: nextDirector }, maxEvents: 1, allowObservation: () => true,
+          async conditions(sequence: number): Promise<SceneInteractionConditions> {
+            return { version: `gate-${sequence}`, participants: conditions.participants.map(item => item.characterId === aide.id
+              ? { ...item, hearing: 'unknown', initiative: { id: 'registrar-check', description: '决定是否去登记等候车辆' } } : item) }
+          },
+          async grants(characterId: string): Promise<CharacterKnowledgeGrant[]> {
+            return [
+              { ...guardGrants[0]!, characterId, content: characterId === leader.id ? '领队私料：货物容易变质' : '副手档案：负责登记' },
+              { ...guardGrants[1]!, characterId, basis: '可信应用核对过这名角色对当前处境的观察' },
+            ]
+          },
+        }
+        try {
+          assert.deepEqual(await runStorySceneInteraction(interaction, advanceOptions, signal), { status: 'limit', sequence: 2 })
+          assert.deepEqual(selected, [leader.id])
+          assert.equal(aideTurn.requests.length, 0)
+          assert.match(JSON.stringify(leaderTurn.requests), /看见结果：货车停在门外/)
+          const dispatched = (await interaction.trace())[1]?.dispatch
+          if (!dispatched) throw new Error('预期已保存领队调度')
+          const resultPath = join(collaborationRoot, `${scene.sceneId}.${dispatched.record.participationId}.character-result.json`)
+          const interruptedPath = `${resultPath}.fixture-interrupted`
+          await rename(resultPath, interruptedPath)
+          try {
+            const reloaded = openStorySceneInteraction(sceneRoots, { runId, storyId, sceneId: scene.sceneId })
+            assert.deepEqual(await runStorySceneInteraction(reloaded, advanceOptions, signal), {
+              status: 'needs-review', sequence: 2, participationId: dispatched.record.participationId,
+            })
+            assert.deepEqual(selected, [leader.id])
+            assert.equal(nextDirector.requests.length, 0)
+          } finally { await rename(interruptedPath, resultPath) }
+          assert.deepEqual(await runStorySceneInteraction(interaction, advanceOptions, signal), { status: 'limit', sequence: 3 })
+          assert.deepEqual(selected, [leader.id, aide.id])
+          assert.match(JSON.stringify(aideTurn.requests), /听见发言：门外/)
+          assert.doesNotMatch(JSON.stringify(aideTurn.requests), /货物快坏了|请先在门外等候|领队私料|隔门听不到的暗号/)
+          assert.deepEqual(await runStorySceneInteraction(interaction, advanceOptions, signal), { status: 'end', sequence: 4 })
+          assert.deepEqual(await runStorySceneInteraction(interaction, advanceOptions, signal), { status: 'end', sequence: 4 })
+          assert.equal(nextDirector.requests.length, 2)
+        } finally { await followupRuntime.close() }
         assert.equal(installations.closed, installations.guard + installations.leader)
         assert.doesNotMatch(JSON.stringify(views), /privateThought|守卫私料|领队私料|导演私料/)
         await assert.rejects(participants.readPrivate(scene.sceneId, leader.id, captain.participationId), /无权读取/)
@@ -424,7 +483,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
       const reloaded = bindStoryCharacters(sceneRoots, { runId: plan.id, storyId: savedScene.storyId }, {
         binding: storyWorld, ownerAgentId: 'characters', store: reopenedCharacters, candidates, privateCharacterIds: [guard.id],
       })
-      assert.equal((await reloaded.list(savedScene.sceneId)).length, 11)
+      assert.equal((await reloaded.list(savedScene.sceneId)).length, 13)
       const privateRecord = await reloaded.readPrivate(savedScene.sceneId, guard.id, savedGuardParticipation)
       assert.equal(privateRecord.claim.request.profileVersion, (await reopenedCharacters.readVersioned(guard.id)).version)
       assert.equal((await reopenedCharacters.readVersioned(leader.id)).version, candidates[1]?.version)
@@ -437,6 +496,12 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
       } finally { await writeFile(responsePath, originalResponse) }
     } finally { await reopenedCharacters.close() }
     const evidence = await readStorySceneWorldEvidence(sceneRoots, plan.id, savedScene.storyId, savedScene.sceneId)
+    const reopenedInteraction = openStorySceneInteraction(sceneRoots, { runId: plan.id, ...savedScene })
+    const reopenedTrace = await reopenedInteraction.trace()
+    assert.deepEqual(reopenedTrace.map(item => item.event.sequence), [1, 2, 3, 4])
+    assert.equal(reopenedTrace[0]?.decision?.perceptions.find(item => item.characterId === aide.id)?.status, 'not-received')
+    assert.equal(reopenedTrace[2]?.dispatch?.record.characterId, aide.id)
+    assert.deepEqual(reopenedTrace[2]?.dispatch?.record.observations, [{ sequence: 2, index: 0 }])
     assert.equal(evidence.world.deliveryVersion, snapshot.version)
     assert.equal(evidence.world.materials.find(item => item.source.kind === 'catalog')?.digest, registered.record.contentSha256)
     assert.equal(evidence.world.materials.find(item => item.category === 'direction')?.content, '城防与商贸可能趋紧')

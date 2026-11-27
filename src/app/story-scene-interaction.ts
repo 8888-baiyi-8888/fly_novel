@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { openStory } from '../story-workflow/story-query.js'
-import { interactionObservationSource, sceneActionAnswerSchema, sceneActionEffects, sceneActionRuleSchema, sceneInteractionConditionsSchema, sceneInteractionDecisionInputSchema, sceneInteractionDigest, visibleCharacterResponse, type InteractionObservationId, type SceneInteractionConditions, type SceneInteractionDispatch, type SceneInteractionEvent } from '../story-workflow/scene-interaction.js'
+import { interactionObservationContent, interactionObservationSource, sceneActionAnswerSchema, sceneActionEffects, sceneActionRuleSchema, sceneInteractionConditionsSchema, sceneInteractionDecisionInputSchema, sceneInteractionDigest, visibleCharacterResponse, type InteractionObservationId, type SceneInteractionConditions, type SceneInteractionDispatch, type SceneInteractionEvent } from '../story-workflow/scene-interaction.js'
 import type { CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { StoryCharacterScope } from './story-character-participation.js'
@@ -105,6 +105,7 @@ export function openStorySceneInteraction(roots: Roots, identity: SceneInteracti
       const decision = await store.readInteractionDecision(event)
       if (decision?.next.kind !== 'respond') throw new Error('场景没有可执行的角色调度')
       const { characterId, trigger } = decision.next
+      if (grants.some(item => item.source.kind === 'fixed' && item.source.id.startsWith(`${sceneId}:interaction:`))) throw new Error('互动观察须来自已核验的感知记录')
       const participationId = randomUUID()
       const request = await scope.issueScheduled(sceneId, characterId, participationId, event.setupDigest)
       const observations: InteractionObservationId[] = []
@@ -115,7 +116,7 @@ export function openStorySceneInteraction(roots: Roots, identity: SceneInteracti
           const reference = { sequence: item.event.sequence, index }
           if (!allowObservation({ characterId, reference, content: observation.content })) continue
           observations.push(reference)
-          input.push({ characterId, sceneId, category: 'observation', content: `${observation.kind === 'speech' ? '听见发言' : '看见结果'}：${observation.content}`, basis: received!.basis,
+          input.push({ characterId, sceneId, category: 'observation', content: interactionObservationContent(observation), basis: observation.basis,
             source: { kind: 'fixed', id: interactionObservationSource(sceneId, reference), version: sceneInteractionDigest(item.decision) } })
         }
       }

@@ -57,3 +57,13 @@
 
 - **输入与动作。** 通过正式应用入口读入第四阶段的曲水城场景，以第五阶段的角色调用执行固定多轮。运行私语未被副手听见、公开发言只听到片段、行动被阻及无人回应等路径。中断后重开记录核查，检查原角色会话隔离与重复调用控制。
 - **交付及验收。** 按事件或角色回合追溯原始响应、可见性依据、实际模型输入和下一次响应。核对角色请求顺序、未选角色未启动、被撤回和未收到的内容未进入请求、已保存决定和调用失败能区分。运行聚焦测试、类型检查和构建入口冒烟测试，记录实际命令与结果。固定替身与真实模型观察分别报告。
+
+#### 固定替身验证
+
+[双世界集成用例](../../../src/world-init/tests/initialization-delivery-e2e.test.ts)在曲水城城门场景贯通四个互动事件。领队私语时副手未收到，守卫公开发言时副手只听到「门外」。第二轮只唤起领队，副手在第三轮取得独立触发后才收到此前获准的片段。含两种发言渠道的响应须逐条提供听闻条件，副手的实际模型输入缺少两段私语和未听清的部分。行动记录区分规则拒绝、阻碍后果、成功与未决。缺少已经调度的角色结果时，重开入口返回待核查，补回原结果后按照原身份继续。场景版本 2 重读核对完整互动链。
+
+`pnpm run build`、正式构建入口加载、`pnpm run typecheck` 和 `pnpm exec tsc -p tsconfig.test.json` 通过。以下命令通过 47 项相关测试。验收使用固定替身。
+
+```powershell
+node --test ".test-dist/story-workflow/tests/*.test.js" .test-dist/world-init/tests/initialization-delivery-e2e.test.js .test-dist/agents/tests/character-store.test.js .test-dist/agents/tests/character-system-prompt.test.js
+```
