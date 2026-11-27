@@ -85,6 +85,20 @@ export const sceneSetupRecordSchema = sceneSetupInputSchema.extend({
 }).strict()
 export type SceneSetupRecord = z.infer<typeof sceneSetupRecordSchema>
 
+export const sceneResultInputSchema = z.object({
+  status: z.enum(['completed', 'terminated', 'unresolved']),
+  simulation: simulationSchema,
+}).strict()
+export type SceneResultInput = z.infer<typeof sceneResultInputSchema>
+
+export const sceneResultRecordSchema = sceneResultInputSchema.extend({
+  formatVersion: z.literal(1),
+  runId: uuid,
+  storyId: uuid,
+  sceneId: text,
+}).strict()
+export type SceneResultRecord = z.infer<typeof sceneResultRecordSchema>
+
 export const storyDecisionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('direct'), preparation: text }).strict(),
   z.object({ kind: z.literal('split'), children: z.array(text).min(1) }).strict(),
@@ -103,21 +117,26 @@ export const storyAssessmentSchema = z.discriminatedUnion('status', [
 export const storyAdvanceSchema = z.union([directorDecisionSchema, terminatedAssessmentSchema])
 export const supplementProposalSchema = z.object({ status: z.literal('supplement'), reason: text, description: text }).strict()
 export const storyCompletionSchema = z.union([storyAssessmentSchema, supplementProposalSchema])
-export const storyStepSchema = z.discriminatedUnion('kind', [
+const storyResultFields = { runId: uuid, storyId: uuid, kind: z.literal('result'), value: reportSchema, receipt: text }
+const legacyStoryResultSchema = z.object({ formatVersion: z.literal(1), ...storyResultFields }).strict()
+const sceneStoryResultSchema = z.object({ formatVersion: z.literal(2), ...storyResultFields, sceneIds: z.array(text).min(1) }).strict()
+
+export const storyStepSchema = z.union([
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('decision'), value: savedStoryDecisionSchema }).strict(),
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('simulation'), value: simulationSchema }).strict(),
-  z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('result'), value: reportSchema, receipt: text }).strict(),
+  legacyStoryResultSchema,
+  sceneStoryResultSchema,
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('assessment'), value: storyAssessmentSchema }).strict(),
   z.object({ formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('supplement'),
     value: z.object({ id: uuid, description: text, reason: text }).strict() }).strict(),
 ])
 export type StoryStep = z.infer<typeof storyStepSchema>
-const completedStorySchema = z.object({
-  formatVersion: z.literal(1), runId: uuid, storyId: uuid, kind: z.literal('result'),
-  value: reportSchema, receipt: text, assessment: storyAssessmentSchema.optional(),
-}).strict()
+const completedStorySchema = z.union([
+  legacyStoryResultSchema.extend({ assessment: storyAssessmentSchema.optional() }),
+  sceneStoryResultSchema.extend({ assessment: storyAssessmentSchema.optional() }),
+])
 export const storyProgressSchema = z.object({
-  formatVersion: z.literal(1),
+  formatVersion: z.union([z.literal(1), z.literal(2)]),
   runId: uuid,
   batch: z.number().int().positive(),
   planHash: z.string().regex(/^[0-9a-f]{64}$/),
@@ -129,7 +148,10 @@ export const storyProgressSchema = z.object({
     decisions: z.array(directorDecisionSchema.extend({ description: text })),
     supplement: z.object({ id: uuid, description: text, reason: text }).strict().optional(),
   }).strict()).min(1),
-}).strict()
+}).strict().refine(
+  value => value.formatVersion === (value.frames.some(frame => frame.results.some(result => result.formatVersion === 2)) ? 2 : 1),
+  { message: '暂停记录版本与回报格式不一致', path: ['formatVersion'] },
+)
 export type StoryProgress = z.infer<typeof storyProgressSchema>
 export const storyNoticeInputSchema = z.object({ id: uuid, situation: text }).strict()
 export const storyNoticeDecisionSchema = z.discriminatedUnion('action', [

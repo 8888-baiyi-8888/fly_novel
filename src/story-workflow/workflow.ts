@@ -282,10 +282,11 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     if (output === undefined || !output.trim()) throw new Error('导演没有返回结果')
     return output
   }
-  const finish = async (node: StoryNode, report: Result['value'], assessment?: Assessment): Promise<Result> => {
+  const finish = async (node: StoryNode, report: Result['value'], assessment?: Assessment, sceneIds?: string[]): Promise<Result> => {
     const parent = node.parentStoryId === null ? null : await store.readStoryNode(planId, node.parentStoryId)
     const receipt = parent === null ? '根故事回报已记录' : (await call(`你是直接上级导演，请接收下级模拟故事回报并简述进展，不编造已发生的事实：${JSON.stringify({ parent, node, report, assessment })}`)).trim()
-    const value: Result = { formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'result', value: report, receipt }
+    const fields = { runId: planId, storyId: node.storyId, kind: 'result' as const, value: report, receipt }
+    const value: Result = sceneIds?.length ? { ...fields, formatVersion: 2, sceneIds } : { ...fields, formatVersion: 1 }
     await store.saveStoryStep(value)
     const saved = await store.readStoryStep(planId, node.storyId, 'result')
     if (saved.kind !== 'result') throw new Error('故事结果类型不匹配')
@@ -322,7 +323,8 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     }
     if (completedCount === limit) {
       signal?.throwIfAborted()
-      await store.saveStoryProgress({ formatVersion: 1, runId: planId, batch, planHash, frames })
+      const formatVersion = frames.some(item => item.results.some(result => result.formatVersion === 2)) ? 2 : 1
+      await store.saveStoryProgress({ formatVersion, runId: planId, batch, planHash, frames })
       return { kind: 'paused', runId: planId, storyId: frames[0]!.node.storyId, batch, completedCount }
     }
     const child = frame.children[frame.index++]!
@@ -349,14 +351,17 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
     const { simulation, decisions, termination } = await simulateStory(node, frame.node, decision.preparation, { store, options, call, signal })
     signal?.throwIfAborted()
+    const scenes = await store.readSettledScenes(planId, node.storyId)
+    const sceneIds = scenes.map(scene => scene.sceneId)
+    signal?.throwIfAborted()
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'simulation', value: simulation })
-    const report = reportSchema.parse(parseStrictJson(await call(`你是子导演，根据任务和已发生的模拟经过形成最终回报，并考虑提前汇报后的决定。只返回 JSON：${reportFormat}。${JSON.stringify({ node, simulation, decisions })}`)))
+    const report = reportSchema.parse(parseStrictJson(await call(`你是子导演，根据任务和已发生的模拟经过形成最终回报，并考虑提前汇报后的决定。只返回 JSON：${reportFormat}。${JSON.stringify({ node, simulation, decisions, ...(scenes.length ? { scenes } : {}) })}`)))
     if (termination) {
       const assessment: Assessment = { status: 'terminated', reason: termination.reason, report }
       await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'assessment', value: assessment })
-      frame.results.push({ ...await finish(node, report, assessment), assessment })
+      frame.results.push({ ...await finish(node, report, assessment, sceneIds), assessment })
     } else {
-      frame.results.push(await finish(node, report))
+      frame.results.push(await finish(node, report, undefined, sceneIds))
       completedCount++
     }
   }

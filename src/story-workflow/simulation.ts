@@ -1,10 +1,12 @@
 import type { CollaborationStore } from './store.js'
-import { parseStrictJson, reportSchema, simulationSchema, storyNoticeDecisionSchema, storyNoticeInputSchema, type Simulation, type StoryNode, type StoryNoticeDecision, type StoryNoticeInput, type StoryTask } from './types.js'
+import { parseStrictJson, reportSchema, sceneResultInputSchema, simulationSchema, storyNoticeDecisionSchema, storyNoticeInputSchema, type SceneResultInput, type Simulation, type StoryNode, type StoryNoticeDecision, type StoryNoticeInput, type StoryTask } from './types.js'
 
 export interface StorySimulationInput {
   task: StoryTask
   preparation: string
   reportEarly(notice: StoryNoticeInput): Promise<StoryNoticeDecision>
+  /** 将当前故事的场景模拟结果独占写入。模拟器须等待写入完毕。 */
+  recordSceneResult(sceneId: string, input: SceneResultInput): Promise<void>
 }
 
 /** 执行一次最小子故事的模拟演绎，结束前等待所有提前汇报调用收尾。 */
@@ -19,6 +21,7 @@ export async function simulateStory(node: StoryNode, parent: StoryNode, preparat
   const lifecycle = new AbortController()
   const simSignal = signal ? AbortSignal.any([signal, lifecycle.signal]) : lifecycle.signal
   const notices = new Map<string, { situation: string; response: Promise<StoryNoticeDecision> }>()
+  const sceneWrites = new Set<Promise<void>>()
   let accepting = true
   let waiting = false
   let termination: Extract<StoryNoticeDecision, { action: 'terminate' }> | undefined
@@ -58,9 +61,22 @@ export async function simulateStory(node: StoryNode, parent: StoryNode, preparat
     void delivery.catch(() => {})
     return delivery
   }
+  const recordSceneResult: StorySimulationInput['recordSceneResult'] = (sceneId, input) => {
+    const write = (async () => {
+      if (!accepting) throw new Error('演绎已经结束，不能保存场景结果')
+      simSignal.throwIfAborted()
+      await store.saveSceneResult(node.runId, node.storyId, sceneId, sceneResultInputSchema.parse(input))
+    })()
+    sceneWrites.add(write)
+    const release = () => { sceneWrites.delete(write) }
+    void write.then(release, release)
+    return write
+  }
   let simulation: Simulation
   try {
-    simulation = simulationSchema.parse(await options.simulate({ task: node.task, preparation, reportEarly }, simSignal))
+    simulation = simulationSchema.parse(await options.simulate({ task: node.task, preparation, reportEarly, recordSceneResult }, simSignal))
+    accepting = false
+    if (sceneWrites.size) throw new Error('模拟器在场景结果写入结束前返回')
     if (waiting) throw new Error('模拟器在收到上级决定前结束演绎')
     if (protocolError) throw protocolError
     simSignal.throwIfAborted()
@@ -70,5 +86,6 @@ export async function simulateStory(node: StoryNode, parent: StoryNode, preparat
     accepting = false
     if (waiting) lifecycle.abort()
     await Promise.allSettled([...notices.values()].map(notice => notice.response))
+    await Promise.allSettled(sceneWrites)
   }
 }

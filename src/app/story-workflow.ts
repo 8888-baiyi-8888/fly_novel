@@ -9,7 +9,7 @@ export type { StoryPlanningOptions, StoryCollaborationOptions } from '../story-w
 export { readStoryPlan, readStoryCollaboration, readStorySimulation, readStorySiblingDecision, readStoryRoundResult } from '../story-workflow/workflow.js'
 export { readStory } from '../story-workflow/story-query.js'
 export { createStoryScene, listStoryScenes, readStoryScene } from '../story-workflow/scenes.js'
-export type { SceneSetupInput } from '../story-workflow/types.js'
+export type { SceneResultInput, SceneSetupInput } from '../story-workflow/types.js'
 
 function directors(options: StoryPlanningOptions | StoryCollaborationOptions): OpenDirectors {
   return async () => {

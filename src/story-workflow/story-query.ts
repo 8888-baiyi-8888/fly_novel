@@ -74,11 +74,8 @@ async function readChildProgress(store: CollaborationStore, parent: StoryNode, c
     : { ...child, status: 'incomplete' as const, choice }
 }
 
-/**
- * 只读查询多层推进的故事任务、直接上级、同层位置及直接子项进展。
- * 省略 storyId 时读取规划的根故事。缺失目标、缺失上级或身份不一致时抛错。
- */
-export async function readStory(
+/** 打开可信记录根并核对目标故事归属。 */
+export async function openStory(
   options: Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>,
   planId: string,
   storyId?: string,
@@ -122,6 +119,15 @@ export async function readStory(
   }
 
   const { decision, children } = node === root ? rootArrangement : await readArrangement(store, node)
+  return { store, node, parent, siblingIndex, decision, children }
+}
+
+/**
+ * 只读查询多层推进的故事任务、直接上级、同层位置及直接子项进展。
+ * 省略 storyId 时读取规划的根故事。缺失目标、缺失上级或身份不一致时抛错。
+ */
+export async function readStory(options: Parameters<typeof openStory>[0], planId: string, storyId?: string) {
+  const { store, node, parent, siblingIndex, decision, children } = await openStory(options, planId, storyId)
   return {
     node,
     parent,

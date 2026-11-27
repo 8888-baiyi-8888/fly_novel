@@ -2,7 +2,7 @@ import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { storyNoticeSchema, storyProgressSchema, type StoryNotice, type StoryProgress } from './types.js'
-import { sceneOrderSchema, sceneSetupRecordSchema, type SceneSetupRecord } from './types.js'
+import { sceneOrderSchema, sceneResultRecordSchema, sceneSetupRecordSchema, type SceneResultInput, type SceneResultRecord, type SceneSetupRecord } from './types.js'
 import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, storyNodeSchema, storyStepSchema, storyChoiceSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision, type StoryNode, type StoryStep, type StoryChoice } from './types.js'
 
 const uuid = z.string().uuid()
@@ -159,6 +159,7 @@ export class CollaborationStore {
   async saveStoryStep(step: StoryStep): Promise<void> {
     const value = storyStepSchema.parse(step)
     await this.readStoryNode(value.runId, value.storyId)
+    await this.verifySceneReferences(value)
     const content = `${JSON.stringify(value, null, 2)}\n`
     if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('故事步骤记录超过大小限制')
     try { await writeFile(join(this.root, `${value.runId}.${value.storyId}.${value.kind}.story.json`), content, { flag: 'wx', encoding: 'utf8' }) }
@@ -169,11 +170,35 @@ export class CollaborationStore {
   async readStoryStep(runId: string, storyId: string, kind: StoryStep['kind']): Promise<StoryStep> {
     const value = storyStepSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.${uuid.parse(storyId)}.${kind}.story.json`)))
     if (value.runId !== runId || value.storyId !== storyId || value.kind !== kind) throw new Error('故事步骤身份不匹配')
+    await this.verifySceneReferences(value)
     return value
+  }
+
+  private async verifySceneReferences(step: StoryStep): Promise<void> {
+    if (step.kind !== 'result' || step.formatVersion !== 2) return
+    const decision = await this.readStoryStep(step.runId, step.storyId, 'decision')
+    if (decision.kind !== 'decision' || decision.value.kind !== 'direct') {
+      throw new Error(`场景回报须归属直接演绎的故事：${step.storyId}`)
+    }
+    const results = await this.readSettledScenes(step.runId, step.storyId)
+    if (results.length !== step.sceneIds.length || results.some((result, index) => result.sceneId !== step.sceneIds[index])) {
+      throw new Error(`子故事回报的场景引用不匹配：${step.storyId}`)
+    }
   }
 
   private scenePrefix(runId: string, storyId: string): string {
     return `${uuid.parse(runId)}.${uuid.parse(storyId)}.`
+  }
+
+  /** 故事级模拟已写入后，场景清单用于形成或核查回报。 */
+  private async assertSceneSetupOpen(runId: string, storyId: string): Promise<void> {
+    try {
+      await this.readStoryStep(runId, storyId, 'simulation')
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return
+      throw error
+    }
+    throw new Error(`故事模拟已经保存，不能追加场景：${storyId}`)
   }
 
   /** 独占保存场景设置。程序按运行、故事和顺序分配场景身份。 */
@@ -183,6 +208,7 @@ export class CollaborationStore {
     const record = sceneSetupRecordSchema.parse({ ...input, sceneId, formatVersion: 1 })
     const content = `${JSON.stringify(record, null, 2)}\n`
     if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景设置超过大小限制')
+    await this.assertSceneSetupOpen(runId, storyId)
     try {
       await writeFile(join(this.root, `${sceneId}.setup.scene.json`), content, { flag: 'wx', encoding: 'utf8' })
     } catch (error) {
@@ -218,6 +244,52 @@ export class CollaborationStore {
       }
     }
     return scenes.sort((a, b) => a.order - b.order)
+  }
+
+  /** 仅为已保存的设置独占写入一份模拟结果。 */
+  async saveSceneResult(runId: string, storyId: string, sceneId: string, input: SceneResultInput): Promise<SceneResultRecord> {
+    await this.readSceneSetup(runId, storyId, sceneId)
+    const record = sceneResultRecordSchema.parse({ ...input, formatVersion: 1, runId, storyId, sceneId })
+    const content = `${JSON.stringify(record, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景结果超过大小限制')
+    try {
+      await writeFile(join(this.root, `${sceneId}.result.scene.json`), content, { flag: 'wx', encoding: 'utf8' })
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+        throw new Error(`场景结果已存在：${sceneId}`, { cause: error })
+      }
+      throw new Error(`场景结果保存失败或结果不明，请核查场景 ${sceneId}`, { cause: error })
+    }
+    return record
+  }
+
+  /** 重读已验证设置的模拟结果，结果不存在时返回 undefined。 */
+  async readSceneResult(setup: SceneSetupRecord): Promise<SceneResultRecord | undefined> {
+    const { runId, storyId, order } = setup
+    const sceneId = this.scenePrefix(runId, storyId) + sceneOrderSchema.parse(order)
+    let data: unknown
+    try {
+      data = await this.readFile(join(this.root, `${sceneId}.result.scene.json`))
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+      throw error
+    }
+    const result = sceneResultRecordSchema.parse(data)
+    if (result.sceneId !== sceneId || result.runId !== runId || result.storyId !== storyId) {
+      throw new Error(`场景结果身份不匹配：${sceneId}`)
+    }
+    return result
+  }
+
+  /** 读取按顺序结算的场景。缺少结果或结果未决时拒绝形成回报。 */
+  async readSettledScenes(runId: string, storyId: string): Promise<SceneResultRecord[]> {
+    const results: SceneResultRecord[] = []
+    for (const setup of await this.listSceneSetups(runId, storyId)) {
+      const result = await this.readSceneResult(setup)
+      if (!result || result.status === 'unresolved') throw new Error(`场景尚未结算：${setup.sceneId}`)
+      results.push(result)
+    }
+    return results
   }
 
   /** 记录上级对当前未执行子故事的决定，包括取消。 */
