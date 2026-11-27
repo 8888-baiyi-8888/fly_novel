@@ -15,6 +15,8 @@ export { bindStoryWorld, prepareStoryWorldInput } from './story-world-materials.
 export { bindStoryCharacters, type StoryCharacterScope, type StoryCharacterCandidate } from './story-character-participation.js'
 export type { CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
 export { openStoryCharacterRuntime, type StoryCharacterConfig } from './story-character-runtime.js'
+export { openStorySceneInteraction, type SceneInteractionIdentity } from './story-scene-interaction.js'
+export type { SceneInteractionConditions } from '../story-workflow/scene-interaction.js'
 export { createStorySceneWithMap, inspectStoryMapScene, readStoryMapCheck, readStoryMapProposal, readStorySceneWorldEvidence, requestStoryMapProposal, type StoryMapScope } from './story-map-scene.js'
 export type { SceneResultInput, SceneSetupInput } from '../story-workflow/types.js'
 

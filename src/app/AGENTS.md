@@ -9,6 +9,7 @@
 - `story-map-scene.ts`：校验场景地图需求、授权和当前地图证据。
 - `story-character-participation.ts`：绑定同一子故事中的人物档案及场景参与范围。
 - `story-character-runtime.ts`：装配、复用和释放角色实例，取得结构化回应。
+- `story-scene-interaction.ts`：建立场景互动记录、核对来源和组织推进。
 - `story-workflow-debug.ts`：使用本机真实模型与模拟演绎运行整轮故事的调试入口。
 - `tests/`：所属模块的自动化测试。
 - `world-initialization-entry.ts`：世界初始化可信应用及业务服务装配入口。

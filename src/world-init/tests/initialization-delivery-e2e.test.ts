@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
+import { openStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
 import type {} from '@fly-novel/system-prompt'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
@@ -310,6 +311,18 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         finally { await timeoutRuntime.close() }
         const views = await participants.list(scene.sceneId)
         assert.equal(views.length, 10)
+        const interaction = openStorySceneInteraction(sceneRoots, { runId, storyId, sceneId: scene.sceneId })
+        const conditions: SceneInteractionConditions = { version: 'gate-1', participants: [
+          { characterId: leader.id, position: '城门外', hearing: 'clear', sight: 'clear', basis: '发言者' },
+          { characterId: guard.id, position: '城门外同侧', hearing: 'clear', sight: 'clear', basis: '站在领队身边' },
+        ] }
+        await assert.rejects(interaction.append(2, captain.participationId, conditions), /序号/)
+        const event = await interaction.append(1, captain.participationId, conditions)
+        assert.equal(event.speech[0]?.text, '货物快坏了')
+        assert.doesNotMatch(JSON.stringify(event), /领队本轮秘密/)
+        assert.deepEqual(await interaction.read(), [event])
+        await assert.rejects(interaction.append(2, captain.participationId, conditions), /已经占用/)
+        await assert.rejects(interaction.append(2, pendingResponse.participationId, conditions), /缺少可信角色响应/)
         assert.equal(installations.closed, installations.guard + installations.leader)
         assert.doesNotMatch(JSON.stringify(views), /privateThought|守卫私料|领队私料|导演私料/)
         await assert.rejects(participants.readPrivate(scene.sceneId, leader.id, captain.participationId), /无权读取/)

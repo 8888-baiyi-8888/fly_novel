@@ -1,6 +1,7 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import { sceneInteractionDigest, sceneInteractionEventSchema, visibleCharacterResponse, type SceneInteractionEvent } from './scene-interaction.js'
 import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
 import { mapProposalKeySchema, mapProposalRecordSchema, mapRecordDigest, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck, type SceneMapEvidence } from './map-scene.js'
@@ -117,6 +118,59 @@ export class CollaborationStore {
     const prefix = `${sceneId}.`
     const suffix = '.character-claim.json'
     return (await readdir(this.root)).filter(name => name.startsWith(prefix) && name.endsWith(suffix)).map(name => uuid.parse(name.slice(prefix.length, -suffix.length))).sort()
+  }
+
+  private interactionPath(sceneId: string, sequence: number, kind: 'event'): string {
+    return join(this.root, `${sceneId}.interaction-${z.number().int().positive().max(10000).parse(sequence)}.${kind}.json`)
+  }
+
+  async saveInteractionEvent(event: SceneInteractionEvent): Promise<void> {
+    const value = sceneInteractionEventSchema.parse(event)
+    const { runId, storyId, sceneId, sequence, participationId } = value
+    await this.assertSceneSetupOpen(runId, storyId)
+    const setup = await this.readSceneSetup(runId, storyId, sceneId)
+    if (await this.readSceneResult(setup)) throw new Error('已结算场景不能追加互动事件')
+    await this.verifyInteractionEvent(setup, value)
+    const prior = await this.listInteractionEvents(runId, storyId, sceneId)
+    if (sequence !== prior.length + 1 || prior.some(item => item.participationId === participationId)) throw new Error('互动序号或参与来源已经占用')
+    const content = `${JSON.stringify(value)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景互动事件超过大小限制')
+    await writeFile(this.interactionPath(sceneId, sequence, 'event'), content, { flag: 'wx', encoding: 'utf8' })
+  }
+
+  private async verifyInteractionEvent(setup: SceneSetupRecord, event: SceneInteractionEvent) {
+    const { runId, storyId, sceneId } = setup
+    if (event.runId !== runId || event.storyId !== storyId || event.sceneId !== sceneId || event.setupDigest !== sceneInteractionDigest(setup)) {
+      throw new Error('互动事件的场景身份或版本不匹配')
+    }
+    const { claim, result } = await this.readCharacterParticipation(runId, storyId, sceneId, event.participationId)
+    if (claim.request.characterId !== event.characterId || result?.outcome.status !== 'responded' ||
+      !isDeepStrictEqual(visibleCharacterResponse(result.outcome.response), { responseKind: event.responseKind, speech: event.speech, actions: event.actions })) {
+      throw new Error('互动事件和角色原始响应不匹配')
+    }
+  }
+
+  async readInteractionEvent(runId: string, storyId: string, sceneId: string, sequence: number) {
+    const setup = await this.readSceneSetup(runId, storyId, sceneId)
+    const event = sceneInteractionEventSchema.parse(await this.readFile(this.interactionPath(sceneId, sequence, 'event')))
+    if (event.sequence !== sequence) throw new Error('场景互动事件序号不匹配')
+    await this.verifyInteractionEvent(setup, event)
+    return event
+  }
+
+  async listInteractionEvents(runId: string, storyId: string, sceneId: string) {
+    await this.readSceneSetup(runId, storyId, sceneId)
+    const prefix = `${sceneId}.interaction-`
+    const suffix = '.event.json'
+    const sequences = (await readdir(this.root)).filter(name => name.startsWith(prefix) && name.endsWith(suffix)).map(name => {
+      const sequence = Number(name.slice(prefix.length, -suffix.length))
+      if (name !== `${prefix}${sequence}${suffix}`) throw new Error('场景互动事件文件名无效')
+      return sequence
+    }).sort((left, right) => left - right)
+    if (sequences.some((sequence, index) => sequence !== index + 1)) throw new Error('场景互动事件序号不连续')
+    const events = await Promise.all(sequences.map(sequence => this.readInteractionEvent(runId, storyId, sceneId, sequence)))
+    if (new Set(events.map(item => item.participationId)).size !== events.length) throw new Error('互动事件引用同一参与结果多次')
+    return events
   }
 
   private mapCheckPath(runId: string, storyId: string, id: string): string {

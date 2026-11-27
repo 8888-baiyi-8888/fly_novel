@@ -9,6 +9,7 @@
 - `scenes.ts`：校验场景所属故事，提供设置创建及场景状态和结果查询。
 - `map-scene.ts`：场景地图需求和核查记录格式。
 - `character-participation.ts`：角色邀请及参与相关的业务契约。
+- `scene-interaction.ts`：场景互动事件、当时条件及记录校验。
 - `progress.ts`：只读核查故事与场景进度，校验并独占取得正常暂停的继续位置。
 - `simulation.ts`：执行最小子故事的模拟演绎，处理场景结果写入、提前汇报、上级决定和取消。
 - `README.md`：模块职责、文件格式和使用边界。
