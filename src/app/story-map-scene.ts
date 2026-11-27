@@ -206,3 +206,16 @@ export async function createStorySceneWithMap(roots: SceneRoots, runId: string, 
   const record = await story.store.saveSceneSetup({ ...setup, runId, storyId, mapEvidence: evidence })
   return { ...record, status: 'pending' as const }
 }
+
+/** 从历史记录重建场景采用的交付、当前地图和补充证据，无需打开当前世界。 */
+export async function readStorySceneWorldEvidence(roots: SceneRoots, runId: string, storyId: string, sceneId: string) {
+  const story = await openStory(roots, runId, storyId)
+  const scene = await story.store.readSceneSetup(runId, storyId, sceneId)
+  if (story.plan.formatVersion !== 2 || scene.formatVersion !== 2) throw new Error('场景没有世界地图证据')
+  const world = story.plan.input.world
+  const { worldId, deliveryId, deliveryVersion, checkId, adoption } = scene.mapEvidence
+  if (worldId !== world.worldId || deliveryId !== world.deliveryId || deliveryVersion !== world.deliveryVersion) throw new Error('场景交付依据与本轮规划不匹配')
+  const check = await story.store.readMapSceneCheck(runId, storyId, checkId)
+  const proposal = adoption ? await story.store.readMapProposal(runId, storyId, checkId) : undefined
+  return { world, scene, check, ...(proposal ? { proposal } : {}) }
+}

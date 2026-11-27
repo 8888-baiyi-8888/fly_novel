@@ -10,8 +10,8 @@ import { MapStore } from '@fly-novel/map'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
-import { bindStoryWorld, createStoryPlan, createStoryScene, createStorySceneWithMap, inspectStoryMapScene, prepareStoryWorldInput, readStoryMapCheck, readStoryMapProposal, readStoryPlan, readStoryScene, requestStoryMapProposal, runStoryTree } from '../../app/story-workflow.js'
-import { achieved, advance, report as directorReport, ScriptedAdapter as DirectorAdapter, simulation, task } from '../../story-workflow/tests/fixtures.js'
+import { bindStoryWorld, continueStoryTree, createStoryPlan, createStoryScene, createStorySceneWithMap, inspectStoryMapScene, inspectStoryProgress, prepareStoryWorldInput, readStoryMapCheck, readStoryMapProposal, readStoryPlan, readStoryRoundResult, readStoryScene, readStorySceneWorldEvidence, requestStoryMapProposal, runStoryTree } from '../../app/story-workflow.js'
+import { achieved, advance, leaf, report as directorReport, ScriptedAdapter as DirectorAdapter, simulation, task } from '../../story-workflow/tests/fixtures.js'
 import { CatalogService } from '../workspace/catalog/service.js'
 import { initializeCatalog } from '../workspace/catalog/format.js'
 import { withFileDiscussionAdapter } from '../discussion/file-adapter.js'
@@ -129,11 +129,14 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const registered = await owner.register(`map/${city.path}`, '曲水城空间概况')
     await catalog.close()
     const catalogEntry = { path: registered.record.path, revision: registered.record.revision, category: 'setting' as const }
-    const input = await prepareStoryWorldInput(storyWorld, { task: '处理入城请求', delivery: [{ target, category: 'setting' }],
+    const selection = { task: '处理入城请求', delivery: [{ target, category: 'setting' as const }],
       catalog: { agentId: 'main', entries: [catalogEntry] },
-      fixed: [{ id: 'merchant-arrived', version: 'fixture-1', category: 'event', content: '商队已抵达城外' }] })
+      fixed: [{ id: 'merchant-arrived', version: 'fixture-1', category: 'event' as const, content: '商队已抵达城外' },
+        { id: 'trade-pressure', version: 'fixture-1', category: 'direction' as const, content: '城防与商贸可能趋紧' }] }
+    await assert.rejects(prepareStoryWorldInput(storyWorld, { ...selection, catalog: { ...selection.catalog, entries: [{ ...catalogEntry, revision: randomUUID() }] } }), /版本已变化/)
+    const input = await prepareStoryWorldInput(storyWorld, selection)
     const planRoot = join(base, 'plans'); await mkdir(planRoot)
-    const director = new DirectorAdapter(['{"kind":"planned","events":["处理入城请求"]}'])
+    const director = new DirectorAdapter(['{"kind":"planned","events":["处理入城请求","天亮后再议"]}'])
     const planOptions = { root: planRoot, protectedRoots: [world.readRoot, roots.delivery], provider: 'test', model: 'test', adapter: director }
     const plan = await createStoryPlan(planOptions, input)
     assert.equal(plan.formatVersion, 2)
@@ -143,8 +146,10 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const sceneRoots = { planRoot, collaborationRoot, protectedRoots: planOptions.protectedRoots }
     const mapNeed = { cityId: city.id, layerId: 'admin', purpose: '寻找可停放货车的城门外等候点' }
     const scope = { binding: storyWorld, store: map, ownerAgentId: 'map', cityId: city.id, layerId: 'admin' }
-    const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test',
-      adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收', achieved]),
+    let savedScene: { storyId: string; sceneId: string } | undefined
+    const worldBefore = await map.snapshot()
+    const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test', limit: 1,
+      adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收']),
       async simulate({ runId, storyId, mapNeed: requested, recordSceneResult }, signal) {
         assert.deepEqual(requested, mapNeed)
         const denied = await inspectStoryMapScene(sceneRoots, runId, storyId, { ...scope, cityId: randomUUID() }, mapNeed)
@@ -163,6 +168,14 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         await assert.rejects(requestStoryMapProposal(sceneRoots, runId, storyId, checked.id, scope, proposalModel, signal), { code: 'EEXIST' })
         assert.equal(mapDirector.requests.length, 1)
         const setup = { order: 1, situation: '商队夜间抵达城门', preparation: '在北门外高地等候并处理入城请求' }
+        const badCheck = await inspectStoryMapScene(sceneRoots, runId, storyId, scope, mapNeed)
+        const badAdapter = new DirectorAdapter([JSON.stringify({ status: 'proposed', cityId: randomUUID(), layerId: 'admin',
+          gate: { kind: 'proposed', description: '其他地区城门' }, waiting: { name: '其他地点', description: '供车队等候', relativeToGate: '城门以北' } })])
+        const invalid = await requestStoryMapProposal(sceneRoots, runId, storyId, badCheck.id, scope, { ...proposalModel, adapter: badAdapter }, signal)
+        assert.equal(invalid.result.status, 'invalid')
+        await assert.rejects(createStorySceneWithMap(sceneRoots, runId, storyId, badCheck.id, scope, setup, async () => {
+          throw new Error('无效提案不得提交审阅')
+        }), /未形成可用提案/)
         await assert.rejects(createStoryScene(sceneRoots, runId, storyId, setup), /缺少已核对的地图资料/)
         await assert.rejects(createStorySceneWithMap(sceneRoots, runId, storyId, checked.id, scope, setup), /尚未取得可信审阅/)
         await assert.rejects(createStorySceneWithMap(sceneRoots, runId, storyId, checked.id, scope, setup,
@@ -174,18 +187,57 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         }, signal)
         assert.equal(scene.formatVersion, 2)
         assert.deepEqual(await readStoryScene(sceneRoots, runId, storyId, scene.sceneId), scene)
+        savedScene = { storyId, sceneId: scene.sceneId }
         await recordSceneResult(scene.sceneId, { status: 'completed', simulation })
         return simulation
       },
     }, plan.id)
-    assert.equal(round.kind, 'result')
+    if (round.kind !== 'paused') throw new Error('预期入城故事完成后暂停')
+    assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'paused')
+    assert.ok(savedScene)
+    const completedStoryId = savedScene.storyId
+    assert.deepEqual(await map.snapshot(), worldBefore)
+    assert.deepEqual(await storyWorld.readDelivery([target]), snapshot)
     await assert.rejects(storyWorld.readDelivery([absent]), /未覆盖/)
     await assert.rejects(storyWorld.readDelivery([{ ...target, path: 'main/forbidden.md' }]), /无权/)
     await assert.rejects(bindStoryWorld({ ...binding, worldId: names.find(name => name !== world.worldId)! }), /世界绑定不匹配/)
     const unknownDelivery = await bindStoryWorld({ ...binding, deliveryId: randomUUID() })
     await assert.rejects(unknownDelivery.readDelivery([target]), /不存在/)
+    const malformedId = randomUUID()
+    const malformedPath = join(roots.delivery, 'deliveries', `${malformedId}.json`)
+    const malformed = await bindStoryWorld({ ...binding, deliveryId: malformedId })
+    await writeFile(malformedPath, JSON.stringify({ ...done.value, id: malformedId, formatVersion: 999 }))
+    await assert.rejects(malformed.readDelivery([target]))
+    await writeFile(malformedPath, JSON.stringify({ ...done.value, id: malformedId, review: { ...done.value.review,
+      artifacts: done.value.review.artifacts.map(item => ({ ...item, content: '内容已经损坏' })) } }))
+    await assert.rejects(malformed.readDelivery([target]), /摘要不匹配/)
     await opened.close()
     await assert.rejects(storyWorld.readDelivery([target]), /已关闭/)
+    const evidence = await readStorySceneWorldEvidence(sceneRoots, plan.id, savedScene.storyId, savedScene.sceneId)
+    assert.equal(evidence.world.deliveryVersion, snapshot.version)
+    assert.equal(evidence.world.materials.find(item => item.source.kind === 'catalog')?.digest, registered.record.contentSha256)
+    assert.equal(evidence.world.materials.find(item => item.category === 'direction')?.content, '城防与商贸可能趋紧')
+    assert.equal(evidence.check.result.status, 'missing')
+    assert.equal(evidence.proposal?.result.status, 'proposed')
+    if (evidence.scene.formatVersion !== 2) throw new Error('预期地图场景设置')
+    assert.equal(evidence.scene.mapEvidence.adoption?.actor, '固定验收审阅者')
+    const proofPath = join(collaborationRoot, `${plan.id}.${savedScene.storyId}.${evidence.check.id}.map-check.json`)
+    const originalProof = await readFile(proofPath, 'utf8')
+    await writeFile(proofPath, JSON.stringify({ ...evidence.check, result: { ...evidence.check.result, snapshotVersion: 'changed' } }))
+    await assert.rejects(readStorySceneWorldEvidence(sceneRoots, plan.id, savedScene.storyId, savedScene.sceneId), /地图核查证据不匹配/)
+    assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'needs-review')
+    await writeFile(proofPath, originalProof)
+    const continuation = new DirectorAdapter([...leaf('天亮后再议'), achieved])
+    const ended = await continueStoryTree({ ...sceneRoots, provider: 'test', model: 'test', adapter: continuation,
+      async simulate({ storyId, mapNeed: requested }) {
+        assert.notEqual(storyId, completedStoryId)
+        assert.equal(requested, undefined)
+        return simulation
+      },
+    }, plan.id, round.batch)
+    assert.equal(ended.kind, 'result')
+    assert.match(JSON.stringify(continuation.requests), /城防与商贸可能趋紧/)
+    assert.equal((await readStoryRoundResult(sceneRoots, plan.id)).assessment.status, 'achieved')
   }
   assert.equal(await readFile(join(configs[0]!.world.readRoot, 'main', 'city.md'), 'utf8'), '城门夜间关闭')
   assert.equal(await readFile(join(configs[1]!.world.readRoot, 'main', 'city.md'), 'utf8'), '城门夜间关闭')

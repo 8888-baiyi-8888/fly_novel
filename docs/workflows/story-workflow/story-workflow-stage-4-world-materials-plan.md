@@ -130,3 +130,15 @@
 **本步交付。** 可重复运行的集成用例、相关入口说明和供下一阶段使用的最小资料契约。验证后对照 [DeepSeek Harness 委派能力的项目对照记录](../../modules/agents/tool-subagent-development-plan.md)，说明可比的权限装配、调用生命周期与结果边界。记录实际运行的命令及结果。
 
 **完成标准。** 可以追溯同一场景采用了哪份交付、哪些当前资料和哪条补充。缺失、无权、读取失败、补充失败和来源过期均得到明确结果。旧故事记录可重读，固定替身验证与任何真实模型观察分别报告。第四阶段完成后按用户指示进入下一阶段。
+
+#### 固定替身验证
+
+[初始化与故事集成用例](../../../src/world-init/tests/initialization-delivery-e2e.test.ts)用两个隔离世界生成夜间闭门交付，以固定商贸方向和商队已到达事件启动故事。当前地图有曲水城概况，缺少城门和车队等候点。子导演提出场景地图需求，地图 Agent 提交北门外高地提案，可信审阅确认本场景的临时等候方案并保存结果。`readStorySceneWorldEvidence` 在关闭初始化应用后独立重读交付版本、当前地图目录摘要、核查和提案采纳。集成用例比较前后地图与交付并检查旧 revision、交付越权、未知交付版本、正文损坏、异地点提案、拒绝采纳和场景证据失配。
+
+参照[项目的 DeepSeek Harness 对照记录](../../modules/agents/tool-subagent-development-plan.md)，两条路径都由可信装配选择预设，前台等待结果并释放实例，取消由调用方传入。阶段四由应用根据已保存的地图缺口触发，地图 Agent 只接收选定正文且工具集为空。应用将输出校验为结构化提案，通过核查 ID 和采纳记录保存业务证据。项目对照记录中的通用委派则通过父 Agent 工具触发，工具执行结果交回父 Loop。
+
+**实际验证。** `pnpm run typecheck`、`pnpm run build` 和 `pnpm exec tsc -p tsconfig.test.json` 均通过。相关测试通过 77 项，包含地图证据损坏时停在待核查、恢复原记录后从下一批继续并重读整轮结果。正式构建通过 `node -` 读取本机既有交付并核对规则正文摘要。未发起真实模型请求。
+
+```powershell
+node --test ".test-dist/story-workflow/tests/*.test.js" .test-dist/world-init/tests/initialization-delivery-e2e.test.js .test-dist/world-init/tests/catalog-service.test.js .test-dist/agents/tests/map-store.test.js .test-dist/agents/tests/map-query.test.js
+```

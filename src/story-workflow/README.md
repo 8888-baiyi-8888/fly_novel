@@ -61,7 +61,7 @@
 从规划 ID 调用 `readStoryPlan` 重读初步计划，并用 `readStory` 获取根故事和下级身份。以规划 ID 和目标最小故事 ID 调用 `readStory` 读取回报，再根据 `sceneIds` 使用 `readStoryScene` 重读处境、准备和原始模拟经过。轮次暂停时用 `inspectStoryProgress` 找到批次和下一项，整轮结束后用 `readStoryRoundResult` 获取根回报及评估。
 
 在仓库根目录执行 `pnpm run story-workflow-debug` 可用本机 DeepSeek 配置测试真实导演回复。调试入口把曲水城合成资料发送给模型，使用模拟器提供演绎经过，并把记录保存在终端显示的 `tmp/story-workflow-debug-*` 目录。也可通过 `pnpm run story-workflow-debug qwen` 选择本机已配置的 Qwen。 [调试入口](../app/story-workflow-debug.ts)
-# 世界绑定规划
+### 世界绑定规划
 
 `prepareStoryWorldInput` 将历史交付、选定的当前目录正文和可信固定输入组成同一轮的资料快照。每项保存资料类别、来源、版本、正文和摘要。规划格式 2 保存该快照，格式 1 保留独立规划。读取重算资料摘要，单次规划的大小限制为 1 MiB。父子导演与分批继续沿用规划保存的正文和范围。应用如要采用变化后的来源，须读取并形成新一轮输入。
 
