@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { PlanInput } from '../story-workflow/types.js'
+import type { StoryCharacterScope } from './story-character-participation.js'
 import type { StoryTreeOptions } from '../story-workflow/workflow.js'
 import { createNextStoryPlan as createNextPlan } from '../story-workflow/workflow.js'
 export type { StoryTreeOptions } from '../story-workflow/workflow.js'
@@ -11,10 +12,11 @@ export { readStory } from '../story-workflow/story-query.js'
 export { inspectStoryProgress } from '../story-workflow/progress.js'
 export { createStoryScene, listStoryScenes, readStoryScene } from '../story-workflow/scenes.js'
 export { bindStoryWorld, prepareStoryWorldInput } from './story-world-materials.js'
+export { bindStoryCharacters, type StoryCharacterScope, type StoryCharacterCandidate } from './story-character-participation.js'
 export { createStorySceneWithMap, inspectStoryMapScene, readStoryMapCheck, readStoryMapProposal, readStorySceneWorldEvidence, requestStoryMapProposal, type StoryMapScope } from './story-map-scene.js'
 export type { SceneResultInput, SceneSetupInput } from '../story-workflow/types.js'
 
-function directors(options: StoryPlanningOptions | StoryCollaborationOptions): OpenDirectors {
+function directors(options: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>): OpenDirectors {
   return async () => {
     const framework = await bootstrapAgents()
     return {
@@ -25,6 +27,26 @@ function directors(options: StoryPlanningOptions | StoryCollaborationOptions): O
       dispose: () => framework.manager.disposeAll(),
     }
   }
+}
+
+/** 由当前子导演为一个已保存的场景提出参与请求。 */
+export async function selectStoryCharacters(scope: StoryCharacterScope, sceneId: string, candidates: readonly string[],
+  options: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>, signal?: AbortSignal) {
+  return scope.select(sceneId, candidates, async prompt => {
+    signal?.throwIfAborted()
+    const framework = await directors(options)()
+    try {
+      const director = await framework.create('child-director')
+      const cancel = () => director.cancel()
+      signal?.addEventListener('abort', cancel, { once: true })
+      try {
+        signal?.throwIfAborted()
+        const output = await director.run({ prompt })
+        signal?.throwIfAborted()
+        return output.content
+      } finally { signal?.removeEventListener('abort', cancel) }
+    } finally { await framework.dispose() }
+  })
 }
 export function createStoryPlan(options: StoryPlanningOptions, input: PlanInput, signal?: AbortSignal) {
   return createPlan(options, directors(options), input, signal)

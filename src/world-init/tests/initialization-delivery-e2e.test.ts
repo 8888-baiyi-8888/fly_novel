@@ -7,6 +7,8 @@ import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
+import { CharacterStore } from '@fly-novel/character'
+import { bindStoryCharacters, selectStoryCharacters } from '../../app/story-workflow.js'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
@@ -41,11 +43,12 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
   const names = ['甲世界', '乙世界']; const configs = []
   for (const name of names) {
     const base = join(root, name); const view = join(base, 'world')
-    for (const dir of ['world/main', 'world/map/places', 'world/map/connections', 'world/confirmed', 'world/catalog', 'discussion/discussions', 'discussion/candidates', 'impact',
+    for (const dir of ['world/main', 'world/characters', 'world/map/places', 'world/map/connections', 'world/confirmed', 'world/catalog', 'discussion/discussions', 'discussion/candidates', 'impact',
       'review/reviews', 'review/confirmations', 'commit', 'batch', 'task/tasks', 'task/first-versions', 'delivery/reviews', 'delivery/deliveries', 'session']) await mkdir(join(base, dir), { recursive: true })
     await writeFile(join(view, 'main', 'city.md'), '城门全天开放')
     configs.push({ world: { worldId: name, readRoot: view, confirmedRoot: join(view, 'confirmed'), catalogRoot: join(view, 'catalog'),
-      mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [{ agentId: 'map', writableRoot: join(view, 'map') }] }, base })
+      mainAgent: { agentId: 'main', writableRoot: join(view, 'main') }, agents: [{ agentId: 'map', writableRoot: join(view, 'map') },
+        { agentId: 'characters', writableRoot: join(view, 'characters') }] }, base })
   }
   const worlds = configs.map(item => item.world)
   const baseAdapter: DiscussionTargetAdapter = { async read() { throw new Error('未支持') }, async validate() {}, async validateStored() {}, async assertNoLegacyCandidate() {} }
@@ -148,6 +151,11 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const scope = { binding: storyWorld, store: map, ownerAgentId: 'map', cityId: city.id, layerId: 'admin' }
     let savedScene: { storyId: string; sceneId: string } | undefined
     const worldBefore = await map.snapshot()
+    const characters = await CharacterStore.open(join(world.readRoot, 'characters'), true)
+    t.after(() => characters.close())
+    const guard = await characters.create({ name: '守卫', summary: '值守城门', categories: {}, body: '守卫私料：交班安排' })
+    const leader = await characters.create({ name: '领队', summary: '带队抵达', categories: {}, body: '领队私料：货物容易变质' })
+    const candidates = await Promise.all([guard, leader].map(async ({ id }) => ({ characterId: id, version: (await characters.readVersioned(id)).version, presence: '在场' })))
     const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test', limit: 1,
       adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收']),
       async simulate({ runId, storyId, mapNeed: requested, recordSceneResult }, signal) {
@@ -187,6 +195,16 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         }, signal)
         assert.equal(scene.formatVersion, 2)
         assert.deepEqual(await readStoryScene(sceneRoots, runId, storyId, scene.sceneId), scene)
+        const participants = bindStoryCharacters(sceneRoots, { runId, storyId }, { binding: storyWorld, ownerAgentId: 'characters', store: characters, candidates })
+        const choice = new DirectorAdapter([JSON.stringify({ participants: [{ characterId: guard.id, invitation: '回应城外车队' }] })])
+        const selectOptions = { provider: 'test', model: 'test', adapter: choice }
+        const requests = await selectStoryCharacters(participants, scene.sceneId, [guard.id, leader.id], selectOptions, signal)
+        assert.equal(requests[0]?.characterId, guard.id)
+        assert.equal(requests[0]?.profileVersion, candidates[0]?.version)
+        assert.doesNotMatch(JSON.stringify(choice.requests), /守卫私料|领队私料/)
+        await assert.rejects(selectStoryCharacters(participants, scene.sceneId, [randomUUID()], selectOptions), /授权候选/)
+        const duplicate = new DirectorAdapter([JSON.stringify({ participants: [{ characterId: guard.id, invitation: '一' }, { characterId: guard.id, invitation: '二' }] })])
+        await assert.rejects(selectStoryCharacters(participants, scene.sceneId, [guard.id], { ...selectOptions, adapter: duplicate }), /重复邀请/)
         savedScene = { storyId, sceneId: scene.sceneId }
         await recordSceneResult(scene.sceneId, { status: 'completed', simulation })
         return simulation

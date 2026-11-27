@@ -70,6 +70,8 @@
 
 `readStorySceneWorldEvidence` 按运行、故事和场景 ID 重读历史规划来源、核查和采纳记录，使用故事记录目录即可。未结算的地图需求由 `inspectStoryProgress` 标为待核查，处理中断沿用故事工作流现有的继续限制。见[第四阶段验收](../../docs/workflows/story-workflow/story-workflow-stage-4-world-materials-plan.md#固定替身验证)。
 
+`bindStoryCharacters` 绑定直接演绎子故事、选定世界人物根和可信候选。调用方持有人物存储。`selectStoryCharacters` 使用当前待演绎场景和调用方选定的候选子集调用子导演，只提供候选身份、名字和到场依据。应用检查选中身份、场景和档案版本后分配参与请求 ID。见[参与绑定](story-character-participation.ts)。
+
 `runStoryCollaboration` 由可信调用方指定已有规划及其中一个事件、独立记录目录、模型和模拟器；程序创建独立父子导演实例，由父导演交付任务，子导演组织模拟并根据模拟经过形成回报，父导演接收后保存结果。`readStorySimulation` 可核查已保存的模拟经过，`readStoryCollaboration` 读取完整协作结果；记录、失败及不自动重试的边界见[故事模块说明](../story-workflow/README.md)。本入口不接入真实角色、场景演绎或世界状态，也不推进下一个兄弟故事。
 
 `runStorySiblings` 在同一规划中顺序处理兄弟故事，将之前的模拟回报提供给父导演决定是否继续、调整或取消；`readStorySiblingDecision` 读取已保存的决定。中断或失败后不会自动重试，同一规划也不会自动再次启动兄弟推进。
