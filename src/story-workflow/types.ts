@@ -69,6 +69,22 @@ export const storyNodeSchema = z.object({
 })
 export type StoryNode = z.infer<typeof storyNodeSchema>
 
+export const sceneOrderSchema = z.number().int().positive()
+export const sceneSetupInputSchema = z.object({
+  order: sceneOrderSchema,
+  situation: text,
+  preparation: text,
+}).strict()
+export type SceneSetupInput = z.infer<typeof sceneSetupInputSchema>
+
+export const sceneSetupRecordSchema = sceneSetupInputSchema.extend({
+  formatVersion: z.literal(1),
+  runId: uuid,
+  storyId: uuid,
+  sceneId: text,
+}).strict()
+export type SceneSetupRecord = z.infer<typeof sceneSetupRecordSchema>
+
 export const storyDecisionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('direct'), preparation: text }).strict(),
   z.object({ kind: z.literal('split'), children: z.array(text).min(1) }).strict(),

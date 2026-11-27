@@ -1,7 +1,8 @@
-import { lstat, readFile, realpath, writeFile } from 'node:fs/promises'
+import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { storyNoticeSchema, storyProgressSchema, type StoryNotice, type StoryProgress } from './types.js'
+import { sceneOrderSchema, sceneSetupRecordSchema, type SceneSetupRecord } from './types.js'
 import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, storyNodeSchema, storyStepSchema, storyChoiceSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision, type StoryNode, type StoryStep, type StoryChoice } from './types.js'
 
 const uuid = z.string().uuid()
@@ -169,6 +170,54 @@ export class CollaborationStore {
     const value = storyStepSchema.parse(await this.readFile(join(this.root, `${uuid.parse(runId)}.${uuid.parse(storyId)}.${kind}.story.json`)))
     if (value.runId !== runId || value.storyId !== storyId || value.kind !== kind) throw new Error('故事步骤身份不匹配')
     return value
+  }
+
+  private scenePrefix(runId: string, storyId: string): string {
+    return `${uuid.parse(runId)}.${uuid.parse(storyId)}.`
+  }
+
+  /** 独占保存场景设置。程序按运行、故事和顺序分配场景身份。 */
+  async saveSceneSetup(input: Omit<SceneSetupRecord, 'sceneId' | 'formatVersion'>): Promise<SceneSetupRecord> {
+    const { runId, storyId, order } = input
+    const sceneId = this.scenePrefix(runId, storyId) + sceneOrderSchema.parse(order)
+    const record = sceneSetupRecordSchema.parse({ ...input, sceneId, formatVersion: 1 })
+    const content = `${JSON.stringify(record, null, 2)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景设置超过大小限制')
+    try {
+      await writeFile(join(this.root, `${sceneId}.setup.scene.json`), content, { flag: 'wx', encoding: 'utf8' })
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+        throw new Error(`场景身份及顺序已占用：${sceneId}`, { cause: error })
+      }
+      throw new Error(`场景设置保存失败或结果不明，请核查场景 ${sceneId}`, { cause: error })
+    }
+    return record
+  }
+
+  /** 读取并核对文件名与场景所属运行、故事和顺序。 */
+  async readSceneSetup(runId: string, storyId: string, sceneId: string): Promise<SceneSetupRecord> {
+    const prefix = this.scenePrefix(runId, storyId)
+    if (!sceneId.startsWith(prefix)) throw new Error(`场景不属于指定的运行与故事：${sceneId}`)
+    const order = sceneOrderSchema.parse(Number(sceneId.slice(prefix.length)))
+    if (sceneId !== prefix + order) throw new Error(`场景身份无效：${sceneId}`)
+    const record = sceneSetupRecordSchema.parse(await this.readFile(join(this.root, `${sceneId}.setup.scene.json`)))
+    if (record.sceneId !== sceneId || record.runId !== runId || record.storyId !== storyId || record.order !== order) {
+      throw new Error(`场景记录身份不匹配：${sceneId}`)
+    }
+    return record
+  }
+
+  /** 按故事列出已保存的场景设置，按顺序号升序返回。 */
+  async listSceneSetups(runId: string, storyId: string): Promise<SceneSetupRecord[]> {
+    const prefix = this.scenePrefix(runId, storyId)
+    const suffix = '.setup.scene.json'
+    const scenes: SceneSetupRecord[] = []
+    for (const name of await readdir(this.root)) {
+      if (name.startsWith(prefix) && name.endsWith(suffix)) {
+        scenes.push(await this.readSceneSetup(runId, storyId, name.slice(0, -suffix.length)))
+      }
+    }
+    return scenes.sort((a, b) => a.order - b.order)
   }
 
   /** 记录上级对当前未执行子故事的决定，包括取消。 */
