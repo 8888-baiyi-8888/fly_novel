@@ -8,7 +8,7 @@
 
 ## 配置文件
 
-应用数据目录固定为 `D:/mydata/GitHub/fly_novel/.fly-novel`，定义在 `src/config/paths.ts` 的 `APP_HOME` 中，与启动位置无关。迁移机器时需修改此常量。当前不读取环境变量。
+应用数据目录是当前工作目录下的 `.fly-novel`，由 [`APP_HOME`](paths.ts) 根据 `process.cwd()` 确定。从仓库根目录启动时使用仓库内的 `.fly-novel`。当前没有环境变量覆盖入口。
 
 首次使用时，在该目录中复制两份样例（已有真实配置时不要覆盖）：
 
