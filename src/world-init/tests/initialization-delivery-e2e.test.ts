@@ -8,7 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
 import { CharacterStore } from '@fly-novel/character'
-import { bindStoryCharacters, selectStoryCharacters } from '../../app/story-workflow.js'
+import { bindStoryCharacters, selectStoryCharacters, type CharacterKnowledgeGrant } from '../../app/story-workflow.js'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
@@ -202,6 +202,19 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         assert.equal(requests[0]?.characterId, guard.id)
         assert.equal(requests[0]?.profileVersion, candidates[0]?.version)
         assert.doesNotMatch(JSON.stringify(choice.requests), /守卫私料|领队私料/)
+        const guardRequest = requests[0]!
+        const guardGrants: CharacterKnowledgeGrant[] = [
+          { characterId: guard.id, sceneId: scene.sceneId, category: 'profile', content: '守卫私料：交班安排', basis: '本人档案', source: { kind: 'profile' } },
+          { characterId: guard.id, sceneId: scene.sceneId, category: 'observation', content: '商队夜间抵达城门', basis: '在城门内值守', source: { kind: 'scene', field: 'situation' } },
+          { characterId: guard.id, sceneId: scene.sceneId, category: 'known', content: '城门夜间关闭', basis: '值守人员已知', source: { kind: 'world', index: 0, version: snapshot.artifacts[0]!.version } },
+        ]
+        const guardKnowledge = await participants.prepare(guardRequest, guardGrants)
+        assert.deepEqual(guardKnowledge.entries.map(item => item.category), ['profile', 'observation', 'known'])
+        assert.doesNotMatch(JSON.stringify(guardKnowledge), /领队私料|北门外高地|商贸可能趋紧/)
+        await assert.rejects(participants.prepare(guardRequest, [{ ...guardGrants[0]!, characterId: leader.id }]), /授权角色/)
+        await assert.rejects(participants.prepare({ ...guardRequest }, guardGrants), /未由当前子故事签发/)
+        await assert.rejects(participants.prepare(guardRequest, [...guardGrants, { ...guardGrants[2]!, source: { kind: 'world', index: 3, version: 'fixture-1' } }]), /无权读取/)
+        await assert.rejects(participants.prepare(guardRequest, [...guardGrants, { ...guardGrants[2]!, source: { kind: 'world', index: 0, version: 'old' } }]), /版本已变化/)
         await assert.rejects(selectStoryCharacters(participants, scene.sceneId, [randomUUID()], selectOptions), /授权候选/)
         const duplicate = new DirectorAdapter([JSON.stringify({ participants: [{ characterId: guard.id, invitation: '一' }, { characterId: guard.id, invitation: '二' }] })])
         await assert.rejects(selectStoryCharacters(participants, scene.sceneId, [guard.id], { ...selectOptions, adapter: duplicate }), /重复邀请/)

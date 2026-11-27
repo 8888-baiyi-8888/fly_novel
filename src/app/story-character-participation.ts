@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { CharacterStore } from '@fly-novel/character'
-import { characterSelectionSchema } from '../story-workflow/character-participation.js'
+import { characterKnowledgeGrantSchema, characterSelectionSchema, type CharacterKnowledgeEntry, type CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
 import { openStory, readIfPresent } from '../story-workflow/story-query.js'
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { bindStoryWorld } from './story-world-materials.js'
@@ -26,6 +26,8 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
   const recordRoots = { ...roots, protectedRoots }
   const candidates = new Map(options.candidates.map(candidate => [candidate.characterId, { ...candidate }]))
   if (candidates.size !== options.candidates.length) throw new Error('场景角色候选重复')
+  interface Request { participationId: string; worldId: string; runId: string; storyId: string; sceneId: string; characterId: string; profileVersion: string; invitation: string }
+  const issued = new WeakSet<Request>()
 
   async function pendingScene(sceneId: string) {
     const story = await openStory(recordRoots, runId, storyId)
@@ -61,8 +63,45 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
       await pendingScene(sceneId)
       return Promise.all(output.participants.map(async item => {
         const { version } = await readCandidate(item.characterId, allowed)
-        return Object.freeze({ ...item, participationId: randomUUID(), worldId: world.worldId, runId, storyId, sceneId, profileVersion: version })
+        const request = Object.freeze({ ...item, participationId: randomUUID(), worldId: world.worldId, runId, storyId, sceneId, profileVersion: version })
+        issued.add(request)
+        return request
       }))
+    },
+    /** 调用方在当前场景逐角色授予片段。持久来源的版本及实际文本在调用前复核。 */
+    async prepare(request: Request, grants: readonly CharacterKnowledgeGrant[]) {
+      if (!issued.has(request)) throw new Error('角色参与请求未由当前子故事签发')
+      if (grants.length > 32) throw new Error('角色认知条目超过数量限制')
+      const { scene, plan } = await pendingScene(request.sceneId)
+      if (plan.formatVersion !== 2) throw new Error('角色认知缺少世界绑定')
+      const { document, version } = await readCandidate(request.characterId, new Set([request.characterId]))
+      if (version !== request.profileVersion) throw new Error('角色档案版本已变化')
+      const entries = grants.map(value => {
+        const { source, ...item } = characterKnowledgeGrantSchema.parse(value)
+        if (item.characterId !== request.characterId || item.sceneId !== request.sceneId) throw new Error('认知授权角色或场景不匹配')
+        let proof: CharacterKnowledgeEntry['source']
+        switch (source.kind) {
+          case 'profile':
+            if (!document.body.includes(item.content)) throw new Error('角色档案不含所选片段')
+            proof = { kind: 'profile', id: request.characterId, version }; break
+          case 'scene':
+            if (!scene[source.field].includes(item.content)) throw new Error('场景未覆盖所选片段')
+            proof = { kind: 'scene', id: `${scene.sceneId}:${source.field}`, version: createHash('sha256').update(JSON.stringify(scene)).digest('hex') }; break
+          case 'world': {
+            const material = plan.input.world.materials[source.index]
+            if (!material || material.category === 'direction') throw new Error('角色无权读取该世界资料')
+            if (source.version !== material.version) throw new Error('角色认知来源版本已变化')
+            if (!material.content.includes(item.content)) throw new Error('世界资料未覆盖所选片段')
+            proof = { kind: 'world', id: `${plan.id}:${source.index}`, version: material.version }; break
+          }
+          case 'fixed': proof = { kind: 'fixed', id: source.id, version: source.version }; break
+        }
+        return Object.freeze({ ...item, source: Object.freeze(proof) })
+      })
+      if (!entries.some(item => item.source.kind === 'profile' && item.category === 'profile')) throw new Error('角色认知缺少获准的人物档案')
+      if (!entries.some(item => item.category === 'observation')) throw new Error('角色认知缺少当前处境')
+      if (Buffer.byteLength(JSON.stringify(entries)) > 64 * 1024) throw new Error('角色认知材料超过大小限制')
+      return Object.freeze({ request, entries: Object.freeze(entries) })
     },
   })
 }
