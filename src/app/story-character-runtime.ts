@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { bootstrapAgents, type Agent, type AgentPluginDefinition } from '@fly-novel/agents'
 import type { LlmAdapter } from '@fly-novel/llm'
 import { characterResponseSchema, type CharacterKnowledgeGrant, type CharacterOutcome, type CharacterParticipationResult } from '../story-workflow/character-participation.js'
@@ -17,6 +18,7 @@ export interface StoryCharacterConfig {
 
 type Preparation = Awaited<ReturnType<StoryCharacterScope['prepare']>>
 type Request = Preparation['request']
+type Participation = Awaited<ReturnType<StoryCharacterScope['record']>>
 interface Slot { agent: Agent; version: string; entries: Set<string>; history: CharacterParticipationResult['history'] }
 
 /** 当前子故事持有的角色运行器。调用方须在退出时等待 close。 */
@@ -24,7 +26,7 @@ export async function openStoryCharacterRuntime(scope: StoryCharacterScope, conf
   const framework = await bootstrapAgents()
   const base = framework.presets.get('character-agent')
   const slots = new Map<string, Slot>()
-  const active = new Map<string, Promise<unknown>>()
+  const active = new Map<string, { request: Request; grants: readonly CharacterKnowledgeGrant[]; operation: Promise<Participation> }>()
   const cleanupFailures = new Map<string, unknown>()
   const registered = new Map<string, AgentPluginDefinition>()
   const lifecycle = new AbortController()
@@ -57,6 +59,7 @@ export async function openStoryCharacterRuntime(scope: StoryCharacterScope, conf
     } })
     const slot = { agent, version: config.version, entries: new Set<string>(), history: [] }
     slots.set(characterId, slot)
+    if (agent.context.get('tools') || agent.context.get('fs') || agent.context.get('sessionPersistence')) throw new Error('角色场景插件提供了未授权的业务能力')
     return slot
   }
 
@@ -104,9 +107,14 @@ export async function openStoryCharacterRuntime(scope: StoryCharacterScope, conf
     async respond(request: Request, grants: readonly CharacterKnowledgeGrant[], signal?: AbortSignal) {
       if (closing) throw new Error('角色运行器已关闭')
       if (cleanupFailures.has(request.characterId)) throw new Error('角色实例清理结果待核查', { cause: cleanupFailures.get(request.characterId) })
-      if (active.has(request.characterId)) throw new Error('角色正在执行其他参与请求')
+      const existing = active.get(request.characterId)
+      if (existing) {
+        if (existing.request === request && isDeepStrictEqual(existing.grants, grants)) return existing.operation
+        throw new Error('角色正在执行其他参与请求')
+      }
+      const input = structuredClone(grants)
       const operation = (async () => {
-        const preparation = await scope.prepare(request, grants)
+        const preparation = await scope.prepare(request, input)
         const config = configure(request.characterId)
         if (!config.provider.trim() || !config.model.trim() || !config.version.trim() || !Number.isSafeInteger(config.timeoutMs) ||
           config.timeoutMs < 1 || config.timeoutMs > 2_147_483_647) throw new Error('角色运行配置无效')
@@ -124,13 +132,13 @@ export async function openStoryCharacterRuntime(scope: StoryCharacterScope, conf
           throw error
         }
       })()
-      active.set(request.characterId, operation)
+      active.set(request.characterId, { request, grants: input, operation })
       try { return await operation } finally { active.delete(request.characterId) }
     },
     close() {
       return closing ??= (async () => {
         lifecycle.abort()
-        await Promise.allSettled(active.values())
+        await Promise.allSettled([...active.values()].map(item => item.operation))
         const errors = [...cleanupFailures.values()]
         try { await framework.manager.disposeAll() } catch (error) { errors.push(error) }
         if (errors.length) throw new AggregateError(errors, '角色运行器清理失败')

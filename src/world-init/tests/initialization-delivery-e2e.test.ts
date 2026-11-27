@@ -3,8 +3,10 @@ import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, realpath, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
+import type {} from '@fly-novel/system-prompt'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
 import { CharacterStore } from '@fly-novel/character'
@@ -150,6 +152,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const mapNeed = { cityId: city.id, layerId: 'admin', purpose: '寻找可停放货车的城门外等候点' }
     const scope = { binding: storyWorld, store: map, ownerAgentId: 'map', cityId: city.id, layerId: 'admin' }
     let savedScene: { storyId: string; sceneId: string } | undefined
+    let savedGuardParticipation: string | undefined
     const worldBefore = await map.snapshot()
     const characters = await CharacterStore.open(join(world.readRoot, 'characters'), true)
     t.after(() => characters.close())
@@ -216,45 +219,103 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         await assert.rejects(participants.prepare(guardRequest, [...guardGrants, { ...guardGrants[2]!, source: { kind: 'world', index: 3, version: 'fixture-1' } }]), /无权读取/)
         await assert.rejects(participants.prepare(guardRequest, [...guardGrants, { ...guardGrants[2]!, source: { kind: 'world', index: 0, version: 'old' } }]), /版本已变化/)
         await assert.rejects(selectStoryCharacters(participants, scene.sceneId, [randomUUID()], selectOptions), /授权候选/)
+        await assert.rejects(selectStoryCharacters(participants, randomUUID(), [guard.id], selectOptions), /场景不属于指定/)
+        const staleCandidates = candidates.map(candidate => ({ ...candidate, version: 'old-profile-version' }))
+        const staleParticipants = bindStoryCharacters(sceneRoots, { runId, storyId }, { binding: storyWorld, ownerAgentId: 'characters', store: characters, candidates: staleCandidates })
+        await assert.rejects(selectStoryCharacters(staleParticipants, scene.sceneId, [guard.id], selectOptions), /档案版本已变化/)
+        assert.equal(choice.requests.length, 1)
         const duplicate = new DirectorAdapter([JSON.stringify({ participants: [{ characterId: guard.id, invitation: '一' }, { characterId: guard.id, invitation: '二' }] })])
         await assert.rejects(selectStoryCharacters(participants, scene.sceneId, [guard.id], { ...selectOptions, adapter: duplicate }), /重复邀请/)
         const invite = async (characterId: string) => (await selectStoryCharacters(participants, scene.sceneId, [characterId], {
           ...selectOptions, adapter: new DirectorAdapter([JSON.stringify({ participants: [{ characterId, invitation: '导演私料：不得交给角色' }] })]),
         }, signal))[0]!
         const guardAgain = await invite(guard.id); const captain = await invite(leader.id); const guardAfterRevocation = await invite(guard.id)
+        const decline = await invite(leader.id); const invalidResponse = await invite(leader.id); const interrupted = await invite(guard.id)
+        const pendingResponse = await invite(guard.id)
+        const failedResponse = await invite(leader.id); const timedOut = await invite(guard.id)
         const guardAdapter = new DirectorAdapter(['{"kind":"wait","privateThought":"守卫第一轮私有测试标记"}', '{"kind":"wait"}', '{"kind":"decline"}'])
-        const leaderAdapter = new DirectorAdapter(['{"kind":"decline"}'])
+        const leaderAdapter = new DirectorAdapter([JSON.stringify({ kind: 'respond', speech: [{ text: '货物快坏了', channel: 'whisper', intendedCharacterIds: [guard.id] }], actions: [],
+          privateThought: '领队本轮秘密' }), '{"kind":"decline"}', '{"kind":"respond","done":true}'])
+        const cancellation = new AbortController()
+        class InterruptedAdapter extends LlmAdapter {
+          override async *stream(): AsyncIterable<StreamChunk> {
+            cancellation.abort(new Error('固定取消'))
+            yield { type: 'finish', reason: { kind: 'stop' } }
+          }
+        }
+        const interruptedAdapter = new InterruptedAdapter()
+        const installations = { guard: 0, leader: 0, closed: 0 }
+        const characterPlugin = (role: 'guard' | 'leader') => ({ definition: { id: `fixture-${role}`, version: '1',
+          plugin: Object.assign((ctx: Context) => {
+            installations[role]++
+            const remove = ctx.systemPrompt.section({ name: `fixture-${role}`, order: 1, text: `插件私有测试标记-${role}` })
+            ctx.effect(() => () => { remove(); installations.closed++ })
+          }, { inject: ['systemPrompt'] }),
+        } })
+        const guardPlugin = characterPlugin('guard'); const leaderPlugin = characterPlugin('leader')
+        let interruptGuard = false
         const runtime = await openStoryCharacterRuntime(participants, characterId => ({ provider: 'test', model: 'test', version: 'fixture-1', timeoutMs: 5000,
-          adapter: characterId === guard.id ? guardAdapter : leaderAdapter,
+          adapter: characterId === guard.id ? (interruptGuard ? interruptedAdapter : guardAdapter) : leaderAdapter,
+          plugins: [characterId === guard.id ? guardPlugin : leaderPlugin],
+          ...(characterId === guard.id && interruptGuard ? { version: 'cancel-1' } : {}),
         }))
         try {
-          const first = await runtime.respond(guardRequest, guardGrants, signal)
+          const [first, same] = await Promise.all([runtime.respond(guardRequest, guardGrants, signal), runtime.respond(guardRequest, guardGrants, signal)])
           assert.equal(first.outcome.status, 'responded')
+          assert.deepEqual(same, first)
           assert.deepEqual(await runtime.respond(guardRequest, guardGrants, signal), first)
           assert.equal(guardAdapter.requests.length, 1)
           await assert.rejects(runtime.respond(guardRequest, guardGrants.slice(0, 2), signal), /请求内容已变化/)
           const leaderGrants: CharacterKnowledgeGrant[] = [
             { ...guardGrants[0]!, characterId: leader.id, content: '领队私料：货物容易变质' },
             { ...guardGrants[1]!, characterId: leader.id, basis: '本人随队抵达' },
+            { characterId: leader.id, sceneId: scene.sceneId, category: 'rumor', content: '传闻有人可以申请夜间通行', basis: '路上听闻', source: { kind: 'fixed', id: 'route-rumor', version: '1' } },
           ]
-          assert.equal((await runtime.respond(captain, leaderGrants, signal)).outcome.status, 'responded')
+          const spoken = await runtime.respond(captain, leaderGrants, signal)
+          assert.deepEqual(spoken.outcome, { status: 'responded', response: { kind: 'respond', speech: [{ text: '货物快坏了', channel: 'whisper', intendedCharacterIds: [guard.id] }], actions: [] } })
+          assert.deepEqual((await runtime.respond(decline, leaderGrants, signal)).outcome, { status: 'responded', response: { kind: 'decline' } })
           await runtime.respond(guardAgain, guardGrants, signal)
           const next = await participants.readPrivate(scene.sceneId, guard.id, guardAgain.participationId)
           assert.deepEqual(next.result?.history, [{ participationId: guardRequest.participationId, sceneId: scene.sceneId }])
+          assert.equal(installations.guard, 1)
+          assert.equal(installations.leader, 1)
           await runtime.respond(guardAfterRevocation, guardGrants.slice(0, 2), signal)
           assert.deepEqual((await participants.readPrivate(scene.sceneId, guard.id, guardAfterRevocation.participationId)).result?.history, [])
           assert.match(JSON.stringify(guardAdapter.requests[1]?.messages), /守卫第一轮私有测试标记/)
           assert.doesNotMatch(JSON.stringify(guardAdapter.requests[2]?.messages), /守卫第一轮私有测试标记|城门夜间关闭/)
           assert.doesNotMatch(JSON.stringify(leaderAdapter.requests), /守卫私料|守卫第一轮私有测试标记|城门夜间关闭|导演私料/)
-          assert.doesNotMatch(JSON.stringify(guardAdapter.requests), /领队私料|导演私料/)
+          assert.doesNotMatch(JSON.stringify(guardAdapter.requests), /领队私料|领队本轮秘密|货物快坏了|导演私料|插件私有测试标记-leader/)
+          assert.match(JSON.stringify(guardAdapter.requests), /插件私有测试标记-guard/)
+          assert.match(JSON.stringify(leaderAdapter.requests), /插件私有测试标记-leader/)
+          assert.doesNotMatch(JSON.stringify(leaderAdapter.requests), /插件私有测试标记-guard/)
+          assert.equal(leaderAdapter.requests[0]?.tools?.length ?? 0, 0)
+          assert.equal((await runtime.respond(invalidResponse, leaderGrants, signal)).outcome.status, 'invalid')
+          assert.equal((await runtime.respond(failedResponse, leaderGrants, signal)).outcome.status, 'failed')
+          const pendingInput = await participants.prepare(pendingResponse, guardGrants)
+          await assert.rejects(participants.record(pendingInput, 'fixture-1', async () => { throw new Error('中断发生在结果保存前') }), /中断发生/)
+          assert.equal((await runtime.respond(pendingResponse, guardGrants, signal)).outcome.status, 'pending')
+          assert.equal(guardAdapter.requests.length, 3)
+          interruptGuard = true
+          assert.equal((await runtime.respond(interrupted, guardGrants, cancellation.signal)).outcome.status, 'cancelled')
         } finally { await runtime.close() }
         await assert.rejects(runtime.respond(guardRequest, guardGrants), /已关闭/)
+        class SlowAdapter extends LlmAdapter {
+          override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+            await delay(10000, undefined, { signal: options.signal })
+            yield { type: 'finish', reason: { kind: 'stop' } }
+          }
+        }
+        const timeoutRuntime = await openStoryCharacterRuntime(participants, () => ({ provider: 'test', model: 'test', version: 'timeout-1', timeoutMs: 300, adapter: new SlowAdapter() }))
+        try { assert.equal((await timeoutRuntime.respond(timedOut, guardGrants, signal)).outcome.status, 'timeout') }
+        finally { await timeoutRuntime.close() }
         const views = await participants.list(scene.sceneId)
-        assert.equal(views.length, 4)
+        assert.equal(views.length, 10)
+        assert.equal(installations.closed, installations.guard + installations.leader)
         assert.doesNotMatch(JSON.stringify(views), /privateThought|守卫私料|领队私料|导演私料/)
         await assert.rejects(participants.readPrivate(scene.sceneId, leader.id, captain.participationId), /无权读取/)
         await assert.rejects(participants.readPrivate(scene.sceneId, guard.id, captain.participationId), /授权角色不匹配/)
         savedScene = { storyId, sceneId: scene.sceneId }
+        savedGuardParticipation = guardRequest.participationId
         await recordSceneResult(scene.sceneId, { status: 'completed', simulation })
         return simulation
       },
@@ -262,6 +323,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     if (round.kind !== 'paused') throw new Error('预期入城故事完成后暂停')
     assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'paused')
     assert.ok(savedScene)
+    assert.ok(savedGuardParticipation)
     const completedStoryId = savedScene.storyId
     assert.deepEqual(await map.snapshot(), worldBefore)
     assert.deepEqual(await storyWorld.readDelivery([target]), snapshot)
@@ -280,6 +342,24 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     await assert.rejects(malformed.readDelivery([target]), /摘要不匹配/)
     await opened.close()
     await assert.rejects(storyWorld.readDelivery([target]), /已关闭/)
+    await characters.close()
+    const reopenedCharacters = await CharacterStore.open(characters.rootDirectory)
+    try {
+      const reloaded = bindStoryCharacters(sceneRoots, { runId: plan.id, storyId: savedScene.storyId }, {
+        binding: storyWorld, ownerAgentId: 'characters', store: reopenedCharacters, candidates, privateCharacterIds: [guard.id],
+      })
+      assert.equal((await reloaded.list(savedScene.sceneId)).length, 10)
+      const privateRecord = await reloaded.readPrivate(savedScene.sceneId, guard.id, savedGuardParticipation)
+      assert.equal(privateRecord.claim.request.profileVersion, (await reopenedCharacters.readVersioned(guard.id)).version)
+      assert.equal((await reopenedCharacters.readVersioned(leader.id)).version, candidates[1]?.version)
+      assert.equal(privateRecord.result?.outcome.status, 'responded')
+      const responsePath = join(collaborationRoot, `${savedScene.sceneId}.${savedGuardParticipation}.character-result.json`)
+      const originalResponse = await readFile(responsePath, 'utf8')
+      try {
+        await writeFile(responsePath, JSON.stringify({ ...privateRecord.result, formatVersion: 999 }))
+        await assert.rejects(reloaded.readPrivate(savedScene.sceneId, guard.id, savedGuardParticipation))
+      } finally { await writeFile(responsePath, originalResponse) }
+    } finally { await reopenedCharacters.close() }
     const evidence = await readStorySceneWorldEvidence(sceneRoots, plan.id, savedScene.storyId, savedScene.sceneId)
     assert.equal(evidence.world.deliveryVersion, snapshot.version)
     assert.equal(evidence.world.materials.find(item => item.source.kind === 'catalog')?.digest, registered.record.contentSha256)

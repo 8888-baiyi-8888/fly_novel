@@ -81,3 +81,13 @@
 
 - **输入与动作。** 使用第四阶段的曲水城城门场景、固定守卫和商队领队，通过正式故事应用入口依次完成候选选择、逐角色认知、角色调用及重读。比较实际模型请求和保存的认知依据。加入同一子故事内再次邀请守卫的用例，核对实例复用，以及领队私有内容始终未进入守卫会话。分别验证领队说出货物风险、不参与及一方调用中断的情况。
 - **交付及验收。** 同一场景可从两个角色角度验证资料权限和自主响应，且世界档案及交付不发生写入。按[第六阶段交接要求](story-workflow-stage-6-scene-interaction-plan.md#前置能力与阶段边界)核对响应包含可稳定定位的角色、场景和参与尝试身份，以及可区分的发言、行动尝试和私有内容。运行聚焦测试、类型检查和构建冒烟验证，记录实际命令及结果。固定替身结果与任何另行安排的真实模型观察分别报告。
+
+#### 固定替身验证
+
+[双世界集成用例](../../../src/world-init/tests/initialization-delivery-e2e.test.ts)在已采用地图补充的城门场景中装配守卫和领队。守卫连续两次调用只装配一次，领队使用不同插件和会话。撤回守卫的闭门规则授权后重建会话。领队可私语或不参与，私语文本仅出现在场景响应记录中，守卫输入没有因此新增内容。实测并发重复、资料越权、无效响应、失败、取消、超时和结果未知的占用。关停初始化应用和角色运行器后，重开角色资料服务并按场景重读参与视图及获准的私有记录。核对角色档案、地图和交付版本，旧故事流程继续可用。
+
+`pnpm run build`、`pnpm run typecheck`、`pnpm exec tsc -p tsconfig.test.json` 通过。正式构建入口可加载 `bindStoryCharacters`、`selectStoryCharacters` 和 `openStoryCharacterRuntime`。以下命令通过 47 项相关测试。验收未调用真实模型。
+
+```powershell
+node --test ".test-dist/story-workflow/tests/*.test.js" .test-dist/world-init/tests/initialization-delivery-e2e.test.js .test-dist/agents/tests/character-store.test.js .test-dist/agents/tests/character-system-prompt.test.js
+```
