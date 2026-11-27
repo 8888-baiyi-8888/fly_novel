@@ -8,7 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@fly-novel/fs-local'
 import { MapStore } from '@fly-novel/map'
 import { CharacterStore } from '@fly-novel/character'
-import { bindStoryCharacters, selectStoryCharacters, type CharacterKnowledgeGrant } from '../../app/story-workflow.js'
+import { bindStoryCharacters, openStoryCharacterRuntime, selectStoryCharacters, type CharacterKnowledgeGrant } from '../../app/story-workflow.js'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
@@ -218,6 +218,30 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         await assert.rejects(selectStoryCharacters(participants, scene.sceneId, [randomUUID()], selectOptions), /授权候选/)
         const duplicate = new DirectorAdapter([JSON.stringify({ participants: [{ characterId: guard.id, invitation: '一' }, { characterId: guard.id, invitation: '二' }] })])
         await assert.rejects(selectStoryCharacters(participants, scene.sceneId, [guard.id], { ...selectOptions, adapter: duplicate }), /重复邀请/)
+        const invite = async (characterId: string) => (await selectStoryCharacters(participants, scene.sceneId, [characterId], {
+          ...selectOptions, adapter: new DirectorAdapter([JSON.stringify({ participants: [{ characterId, invitation: '导演私料：不得交给角色' }] })]),
+        }, signal))[0]!
+        const guardAgain = await invite(guard.id); const captain = await invite(leader.id); const guardAfterRevocation = await invite(guard.id)
+        const guardAdapter = new DirectorAdapter(['{"kind":"wait","privateThought":"守卫第一轮私有测试标记"}', '{"kind":"wait"}', '{"kind":"decline"}'])
+        const leaderAdapter = new DirectorAdapter(['{"kind":"decline"}'])
+        const runtime = await openStoryCharacterRuntime(participants, characterId => ({ provider: 'test', model: 'test', version: 'fixture-1', timeoutMs: 5000,
+          adapter: characterId === guard.id ? guardAdapter : leaderAdapter,
+        }))
+        try {
+          assert.equal((await runtime.respond(guardRequest, guardGrants, signal)).outcome.status, 'responded')
+          const leaderGrants: CharacterKnowledgeGrant[] = [
+            { ...guardGrants[0]!, characterId: leader.id, content: '领队私料：货物容易变质' },
+            { ...guardGrants[1]!, characterId: leader.id, basis: '本人随队抵达' },
+          ]
+          assert.equal((await runtime.respond(captain, leaderGrants, signal)).outcome.status, 'responded')
+          assert.deepEqual((await runtime.respond(guardAgain, guardGrants, signal)).history, [guardRequest.participationId])
+          assert.deepEqual((await runtime.respond(guardAfterRevocation, guardGrants.slice(0, 2), signal)).history, [])
+          assert.match(JSON.stringify(guardAdapter.requests[1]?.messages), /守卫第一轮私有测试标记/)
+          assert.doesNotMatch(JSON.stringify(guardAdapter.requests[2]?.messages), /守卫第一轮私有测试标记|城门夜间关闭/)
+          assert.doesNotMatch(JSON.stringify(leaderAdapter.requests), /守卫私料|守卫第一轮私有测试标记|城门夜间关闭|导演私料/)
+          assert.doesNotMatch(JSON.stringify(guardAdapter.requests), /领队私料|导演私料/)
+        } finally { await runtime.close() }
+        await assert.rejects(runtime.respond(guardRequest, guardGrants), /已关闭/)
         savedScene = { storyId, sceneId: scene.sceneId }
         await recordSceneResult(scene.sceneId, { status: 'completed', simulation })
         return simulation

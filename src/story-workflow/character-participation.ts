@@ -23,3 +23,17 @@ export const characterKnowledgeEntrySchema = characterKnowledgeGrantSchema.omit(
   source: z.object({ kind: z.enum(['profile', 'scene', 'world', 'fixed']), id: description, version: description }).strict(),
 })
 export type CharacterKnowledgeEntry = z.infer<typeof characterKnowledgeEntrySchema>
+
+const privateThought = { privateThought: description.optional() }
+export const characterResponseSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('respond'), speech: z.array(z.object({ text: description, channel: z.enum(['normal', 'whisper']),
+    intendedCharacterIds: z.array(characterId).max(16) }).strict()).max(8), actions: z.array(description).max(8), ...privateThought }).strict(),
+  z.object({ kind: z.literal('wait'), ...privateThought }).strict(),
+  z.object({ kind: z.literal('decline'), ...privateThought }).strict(),
+]).refine(value => value.kind !== 'respond' || value.speech.length + value.actions.length > 0, '角色回应缺少发言或行动尝试')
+export type CharacterResponse = z.infer<typeof characterResponseSchema>
+export const characterOutcomeSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('responded'), response: characterResponseSchema }).strict(),
+  z.object({ status: z.enum(['invalid', 'failed', 'cancelled', 'timeout']) }).strict(),
+])
+export type CharacterOutcome = z.infer<typeof characterOutcomeSchema>

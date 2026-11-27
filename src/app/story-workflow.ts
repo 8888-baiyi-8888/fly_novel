@@ -14,6 +14,7 @@ export { createStoryScene, listStoryScenes, readStoryScene } from '../story-work
 export { bindStoryWorld, prepareStoryWorldInput } from './story-world-materials.js'
 export { bindStoryCharacters, type StoryCharacterScope, type StoryCharacterCandidate } from './story-character-participation.js'
 export type { CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
+export { openStoryCharacterRuntime, type StoryCharacterConfig } from './story-character-runtime.js'
 export { createStorySceneWithMap, inspectStoryMapScene, readStoryMapCheck, readStoryMapProposal, readStorySceneWorldEvidence, requestStoryMapProposal, type StoryMapScope } from './story-map-scene.js'
 export type { SceneResultInput, SceneSetupInput } from '../story-workflow/types.js'
 
