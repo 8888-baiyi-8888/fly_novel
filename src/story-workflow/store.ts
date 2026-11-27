@@ -1,7 +1,8 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { mapProposalKeySchema, mapProposalRecordSchema, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck } from './map-scene.js'
+import { isDeepStrictEqual } from 'node:util'
+import { mapProposalKeySchema, mapProposalRecordSchema, mapRecordDigest, mapSceneCheckSchema, type MapProposalRecord, type MapSceneCheck, type SceneMapEvidence } from './map-scene.js'
 import { storyNoticeSchema, storyProgressSchema, type StoryNotice, type StoryProgress } from './types.js'
 import { sceneOrderSchema, sceneResultRecordSchema, sceneSetupRecordSchema, type SceneResultInput, type SceneResultRecord, type SceneSetupRecord } from './types.js'
 import { collaborationSchema, parseStrictJson, planRecordSchema, simulationRecordSchema, siblingRunSchema, siblingDecisionSchema, storyNodeSchema, storyStepSchema, storyChoiceSchema, type Collaboration, type PlanRecord, type SimulationRecord, type SiblingDecision, type StoryNode, type StoryStep, type StoryChoice } from './types.js'
@@ -281,13 +282,14 @@ export class CollaborationStore {
   }
 
   /** 独占保存场景设置。程序按运行、故事和顺序分配场景身份。 */
-  async saveSceneSetup(input: Omit<SceneSetupRecord, 'sceneId' | 'formatVersion'>): Promise<SceneSetupRecord> {
+  async saveSceneSetup(input: Omit<SceneSetupRecord, 'sceneId' | 'formatVersion'> & { mapEvidence?: SceneMapEvidence }): Promise<SceneSetupRecord> {
     const { runId, storyId, order } = input
     const sceneId = this.scenePrefix(runId, storyId) + sceneOrderSchema.parse(order)
-    const record = sceneSetupRecordSchema.parse({ ...input, sceneId, formatVersion: 1 })
+    const record = sceneSetupRecordSchema.parse({ ...input, sceneId, formatVersion: input.mapEvidence ? 2 : 1 })
     const content = `${JSON.stringify(record, null, 2)}\n`
     if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景设置超过大小限制')
     await this.assertSceneSetupOpen(runId, storyId)
+    await this.verifySceneMapEvidence(record)
     try {
       await writeFile(join(this.root, `${sceneId}.setup.scene.json`), content, { flag: 'wx', encoding: 'utf8' })
     } catch (error) {
@@ -309,7 +311,25 @@ export class CollaborationStore {
     if (record.sceneId !== sceneId || record.runId !== runId || record.storyId !== storyId || record.order !== order) {
       throw new Error(`场景记录身份不匹配：${sceneId}`)
     }
+    await this.verifySceneMapEvidence(record)
     return record
+  }
+
+  private async verifySceneMapEvidence(record: SceneSetupRecord): Promise<void> {
+    const { runId, storyId } = record
+    const decision = await this.readStoryStep(runId, storyId, 'decision')
+    const need = decision.kind === 'decision' && 'mapNeed' in decision.value ? decision.value.mapNeed : undefined
+    if (record.formatVersion === 1) {
+      if (need) throw new Error('场景缺少已核对的地图资料')
+      return
+    }
+    const { checkId, checkDigest, worldId, adoption } = record.mapEvidence
+    const check = await this.readMapSceneCheck(runId, storyId, checkId)
+    if (!need || check.worldId !== worldId || !isDeepStrictEqual(check.need, need) || mapRecordDigest(check) !== checkDigest) throw new Error('场景地图核查证据不匹配')
+    if (check.result.status === 'ready' && !adoption) return
+    if (check.result.status !== 'missing' || !adoption) throw new Error('场景地图需求尚未满足')
+    const proposal = await this.readMapProposal(runId, storyId, checkId)
+    if (proposal.result.status !== 'proposed' || mapRecordDigest(proposal) !== adoption.proposalDigest) throw new Error('场景地图提案证据不匹配')
   }
 
   /** 按故事列出已保存的场景设置，按顺序号升序返回。 */

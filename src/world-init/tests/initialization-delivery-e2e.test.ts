@@ -10,8 +10,8 @@ import { MapStore } from '@fly-novel/map'
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
-import { bindStoryWorld, createStoryPlan, inspectStoryMapScene, prepareStoryWorldInput, readStoryMapCheck, readStoryMapProposal, readStoryPlan, requestStoryMapProposal, runStoryTree } from '../../app/story-workflow.js'
-import { advance, ScriptedAdapter as DirectorAdapter, task } from '../../story-workflow/tests/fixtures.js'
+import { bindStoryWorld, createStoryPlan, createStoryScene, createStorySceneWithMap, inspectStoryMapScene, prepareStoryWorldInput, readStoryMapCheck, readStoryMapProposal, readStoryPlan, readStoryScene, requestStoryMapProposal, runStoryTree } from '../../app/story-workflow.js'
+import { achieved, advance, report as directorReport, ScriptedAdapter as DirectorAdapter, simulation, task } from '../../story-workflow/tests/fixtures.js'
 import { CatalogService } from '../workspace/catalog/service.js'
 import { initializeCatalog } from '../workspace/catalog/format.js'
 import { withFileDiscussionAdapter } from '../discussion/file-adapter.js'
@@ -143,9 +143,9 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const sceneRoots = { planRoot, collaborationRoot, protectedRoots: planOptions.protectedRoots }
     const mapNeed = { cityId: city.id, layerId: 'admin', purpose: '寻找可停放货车的城门外等候点' }
     const scope = { binding: storyWorld, store: map, ownerAgentId: 'map', cityId: city.id, layerId: 'admin' }
-    await assert.rejects(runStoryTree({ ...sceneRoots, provider: 'test', model: 'test',
-      adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed })]),
-      async simulate({ runId, storyId, mapNeed: requested }, signal) {
+    const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test',
+      adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收', achieved]),
+      async simulate({ runId, storyId, mapNeed: requested, recordSceneResult }, signal) {
         assert.deepEqual(requested, mapNeed)
         const denied = await inspectStoryMapScene(sceneRoots, runId, storyId, { ...scope, cityId: randomUUID() }, mapNeed)
         assert.equal(denied.result.status, 'forbidden')
@@ -162,9 +162,23 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         assert.doesNotMatch(JSON.stringify(mapDirector.requests), /城门夜间关闭|商队已抵达城外/)
         await assert.rejects(requestStoryMapProposal(sceneRoots, runId, storyId, checked.id, scope, proposalModel, signal), { code: 'EEXIST' })
         assert.equal(mapDirector.requests.length, 1)
-        throw new Error('等候点待补充')
+        const setup = { order: 1, situation: '商队夜间抵达城门', preparation: '在北门外高地等候并处理入城请求' }
+        await assert.rejects(createStoryScene(sceneRoots, runId, storyId, setup), /缺少已核对的地图资料/)
+        await assert.rejects(createStorySceneWithMap(sceneRoots, runId, storyId, checked.id, scope, setup), /尚未取得可信审阅/)
+        await assert.rejects(createStorySceneWithMap(sceneRoots, runId, storyId, checked.id, scope, setup,
+          async () => ({ status: 'rejected', reason: '等候点适用条件未核实' })), /未采纳/)
+        const scene = await createStorySceneWithMap(sceneRoots, runId, storyId, checked.id, scope, setup, async ({ proposal: candidate, materials }) => {
+          assert.equal(candidate.waiting.name, '北门外高地')
+          assert.ok(materials.some(item => item.category === 'setting' && item.content.includes('城门夜间关闭')))
+          return { status: 'accepted', actor: '固定验收审阅者', reason: '城外临时等候，保持夜间闭门' }
+        }, signal)
+        assert.equal(scene.formatVersion, 2)
+        assert.deepEqual(await readStoryScene(sceneRoots, runId, storyId, scene.sceneId), scene)
+        await recordSceneResult(scene.sceneId, { status: 'completed', simulation })
+        return simulation
       },
-    }, plan.id), /等候点待补充/)
+    }, plan.id)
+    assert.equal(round.kind, 'result')
     await assert.rejects(storyWorld.readDelivery([absent]), /未覆盖/)
     await assert.rejects(storyWorld.readDelivery([{ ...target, path: 'main/forbidden.md' }]), /无权/)
     await assert.rejects(bindStoryWorld({ ...binding, worldId: names.find(name => name !== world.worldId)! }), /世界绑定不匹配/)

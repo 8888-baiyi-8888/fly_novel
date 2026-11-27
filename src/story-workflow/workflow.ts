@@ -359,6 +359,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
       ...('mapNeed' in decision ? { mapNeed: decision.mapNeed } : {}) })
     signal?.throwIfAborted()
     const scenes = await store.readSettledScenes(planId, node.storyId)
+    if ('mapNeed' in decision && scenes.length === 0) throw new Error(`地图需求尚未形成可核对的场景：${node.storyId}`)
     const sceneIds = scenes.map(scene => scene.sceneId)
     signal?.throwIfAborted()
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'simulation', value: simulation })

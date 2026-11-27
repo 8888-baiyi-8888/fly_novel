@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { relative, sep } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { MapStoreError, parseMapPlace, type MapStore } from '@fly-novel/map'
-import { mapProposalAnswerSchema, mapSceneNeedSchema, type MapProposalRecord, type MapSceneCheck, type MapSceneNeed } from '../story-workflow/map-scene.js'
+import { mapProposalAnswerSchema, mapRecordDigest, mapSceneNeedSchema, type MapProposalRecord, type MapSceneCheck, type MapSceneNeed, type SceneMapEvidence } from '../story-workflow/map-scene.js'
 import { openStory } from '../story-workflow/story-query.js'
-import { parseStrictJson, type StoryWorldContext } from '../story-workflow/types.js'
+import { parseStrictJson, sceneSetupInputSchema, type SceneSetupInput, type StoryWorldContext } from '../story-workflow/types.js'
+import { parseDiscussionTarget } from '../world-init/discussion/service.js'
+import { CatalogService } from '../world-init/workspace/catalog/service.js'
 import type { bindStoryWorld } from './story-world-materials.js'
 import { bootstrapAgents } from '@fly-novel/agents'
 import type { LlmAdapter } from '@fly-novel/llm'
@@ -144,4 +146,63 @@ export async function readStoryMapProposal(roots: SceneRoots, runId: string, sto
   const story = await openStory(roots, runId, storyId)
   await story.store.readMapSceneCheck(runId, storyId, checkId)
   return story.store.readMapProposal(runId, storyId, checkId)
+}
+
+/** 使用已满足的地图资料，或由可信调用方明确审阅的提案，保存一个场景设置。 */
+export async function createStorySceneWithMap(roots: SceneRoots, runId: string, storyId: string, checkId: string, scope: StoryMapScope,
+  input: SceneSetupInput, review?: (data: {
+    check: MapSceneCheck
+    proposal: Extract<MapProposalRecord['result'], { status: 'proposed' }>
+    materials: StoryWorldContext['materials']
+  }) => Promise<{ status: 'accepted'; actor: string; reason: string } | { status: 'rejected'; reason: string }>, signal?: AbortSignal) {
+  const setup = sceneSetupInputSchema.parse(input)
+  signal?.throwIfAborted()
+  const story = await openStory(roots, runId, storyId)
+  if (story.plan.formatVersion !== 2 || story.decision?.kind !== 'direct' || !('mapNeed' in story.decision)) throw new Error('故事缺少已登记的地图需求')
+  const world = story.plan.input.world
+  const check = await story.store.readMapSceneCheck(runId, storyId, checkId)
+  if (check.worldId !== world.worldId || !isDeepStrictEqual(check.need, story.decision.mapNeed)) throw new Error('场景地图需求身份不匹配')
+  if (check.result.status !== 'ready' && check.result.status !== 'missing') throw new Error('地图核查尚不可用于场景')
+  const verifySources = async () => {
+    const current = await checkMapScope(scope, world, check.need, signal)
+    if (!isDeepStrictEqual(current, check.result)) throw new Error('场景地图来源版本已变化')
+    const config = scope.binding.world
+    const path = `${relative(config.readRoot, scope.store.rootDirectory).split(sep).join('/')}/places/${check.need.cityId}.json`
+    const catalogMaterial = world.materials.find(item => item.source.kind === 'catalog' && item.source.path === path)
+    if (!catalogMaterial || catalogMaterial.source.kind !== 'catalog') throw new Error('场景缺少地图目录来源')
+    const catalog = await CatalogService.open(config, { singleWriterProcess: true })
+    try {
+      const reader = catalog.bind(config.mainAgent.agentId)
+      try {
+        const live = await reader.readSharedSource(path, catalogMaterial.source.revision, signal)
+        if (live.fileStatus !== 'current' || live.contentSha256 !== catalogMaterial.digest) throw new Error('场景地图目录来源已变化')
+      } finally { await reader.close() }
+    } finally { await catalog.close() }
+    const delivered = world.materials.flatMap(item => item.source.kind === 'delivery' ? [{ item, target: parseDiscussionTarget(item.source.target) }] : [])
+    const snapshot = await scope.binding.readDelivery(delivered.map(({ target }) => target))
+    if (snapshot.version !== world.deliveryVersion || snapshot.reviewVersion !== world.reviewVersion ||
+      delivered.some(({ item }, index) => snapshot.artifacts[index]?.version !== item.version || snapshot.artifacts[index]?.digest !== item.digest)) {
+      throw new Error('场景交付来源版本已变化')
+    }
+  }
+  await verifySources()
+  const evidence: SceneMapEvidence = { checkId, checkDigest: mapRecordDigest(check), worldId: world.worldId,
+    deliveryId: world.deliveryId, deliveryVersion: world.deliveryVersion }
+  if (check.result.status === 'missing') {
+    if (!review) throw new Error('等候点提案尚未取得可信审阅')
+    const record = await story.store.readMapProposal(runId, storyId, checkId)
+    if (record.result.status !== 'proposed') throw new Error('地图补充未形成可用提案')
+    const proposal = record.result
+    if (proposal.cityId !== check.need.cityId || proposal.layerId !== check.need.layerId ||
+      (check.result.gate ? proposal.gate.kind !== 'existing' || proposal.gate.id !== check.result.gate.id : proposal.gate.kind !== 'proposed')) {
+      throw new Error('提案所用城门或地点与核查不匹配')
+    }
+    const choice = await review(structuredClone({ check, proposal, materials: world.materials }))
+    if (choice.status !== 'accepted') throw new Error(`地图提案未采纳：${choice.reason}`)
+    evidence.adoption = { actor: choice.actor, reason: choice.reason, proposalDigest: mapRecordDigest(record) }
+    await verifySources()
+  }
+  signal?.throwIfAborted()
+  const record = await story.store.saveSceneSetup({ ...setup, runId, storyId, mapEvidence: evidence })
+  return { ...record, status: 'pending' as const }
 }

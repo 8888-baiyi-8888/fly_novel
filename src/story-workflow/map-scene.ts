@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { createHash } from 'node:crypto'
 
 const uuid = z.string().uuid()
 const text = z.string().trim().min(1)
@@ -30,3 +31,14 @@ export const mapProposalRecordSchema = mapProposalKeySchema.extend({ result: z.u
   z.object({ status: z.enum(['cancelled', 'timeout', 'failed', 'invalid']) }).strict(),
 ]) }).strict()
 export type MapProposalRecord = z.infer<typeof mapProposalRecordSchema>
+
+const digest = z.string().regex(/^[0-9a-f]{64}$/)
+export const sceneMapEvidenceSchema = z.object({
+  checkId: uuid, checkDigest: digest, worldId: text, deliveryId: uuid, deliveryVersion: text,
+  adoption: z.object({ actor: text.max(200), reason: text.max(1500), proposalDigest: digest }).strict().optional(),
+}).strict()
+export type SceneMapEvidence = z.infer<typeof sceneMapEvidenceSchema>
+
+export function mapRecordDigest(record: unknown): string {
+  return createHash('sha256').update(JSON.stringify(record)).digest('hex')
+}

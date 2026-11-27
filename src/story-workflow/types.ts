@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
-import { mapSceneNeedSchema } from './map-scene.js'
+import { mapSceneNeedSchema, sceneMapEvidenceSchema } from './map-scene.js'
 
 const text = z.string().trim().min(1)
 const uuid = z.string().uuid()
@@ -98,12 +98,15 @@ export const sceneSetupInputSchema = z.object({
 }).strict()
 export type SceneSetupInput = z.infer<typeof sceneSetupInputSchema>
 
-export const sceneSetupRecordSchema = sceneSetupInputSchema.extend({
-  formatVersion: z.literal(1),
+const sceneSetupRecordFields = sceneSetupInputSchema.extend({
   runId: uuid,
   storyId: uuid,
   sceneId: text,
 }).strict()
+export const sceneSetupRecordSchema = z.discriminatedUnion('formatVersion', [
+  sceneSetupRecordFields.extend({ formatVersion: z.literal(1) }),
+  sceneSetupRecordFields.extend({ formatVersion: z.literal(2), mapEvidence: sceneMapEvidenceSchema }),
+])
 export type SceneSetupRecord = z.infer<typeof sceneSetupRecordSchema>
 
 export const sceneResultInputSchema = z.object({
