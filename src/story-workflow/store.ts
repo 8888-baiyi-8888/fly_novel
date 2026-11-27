@@ -1,6 +1,7 @@
 import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import { sceneEventIdentity, sceneEventSchema, type SceneEvent } from './scene-event.js'
 import { interactionObservationContent, interactionObservationSource, resolveInteractionPerceptions, sceneActionRecordSchema, sceneInteractionDecisionSchema, sceneInteractionDigest, sceneInteractionDispatchSchema, sceneInteractionEventSchema, verifySceneActions, visibleCharacterResponse, type SceneActionRecord, type SceneInteractionDecision, type SceneInteractionDispatch, type SceneInteractionEvent } from './scene-interaction.js'
 import { characterClaimDigest, characterParticipationClaimSchema, characterParticipationResultSchema, projectCharacterParticipation, type CharacterParticipationClaim, type CharacterParticipationResult } from './character-participation.js'
 import { isDeepStrictEqual } from 'node:util'
@@ -66,6 +67,41 @@ const claimSchema = z.object({ formatVersion: z.literal(1), planId: uuid, childS
 /** 使用独立目录保存单个事件的独占尝试及最终协作记录。 */
 export class CollaborationStore {
   private constructor(private readonly root: string) {}
+
+  private async deriveSceneEvent(worldId: string, runId: string, storyId: string, sceneId: string): Promise<SceneEvent> {
+    const setup = await this.readSceneSetup(runId, storyId, sceneId)
+    const result = await this.readSceneResult(setup)
+    if (result?.formatVersion !== 2 || result.status === 'unresolved') throw new Error('场景缺少已结算的互动证据')
+    const events = await this.listInteractionEvents(runId, storyId, sceneId)
+    const sequence = await Promise.all(events.map(async event => {
+      const actions = await this.readInteractionActions(event)
+      return { order: event.sequence, participationId: event.participationId, characterId: event.characterId,
+        sourceDigest: sceneInteractionDigest(event), speech: event.speech,
+        actions: actions?.outcomes.map((outcome, index) => ({ ...outcome, attempt: event.actions[index]!,
+          ruleAllowed: actions.rules[index]!.allowed, ruleBasis: actions.rules[index]!.basis })) ?? [] }
+    }))
+    return sceneEventSchema.parse({ formatVersion: 1, eventId: sceneEventIdentity(worldId, sceneId, result.interaction.digest), worldId,
+      runId, storyId, sceneId, resultDigest: sceneInteractionDigest(result), interactionDigest: result.interaction.digest, status: result.status, sequence })
+  }
+
+  async recordSceneEvent(worldId: string, runId: string, storyId: string, sceneId: string): Promise<SceneEvent> {
+    const event = await this.deriveSceneEvent(worldId, runId, storyId, sceneId)
+    const content = `${JSON.stringify(event)}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('场景事件超过大小限制')
+    try { await writeFile(join(this.root, `${sceneId}.adopted-event.json`), content, { flag: 'wx', encoding: 'utf8' }) }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return this.readSceneEvent(worldId, runId, storyId, sceneId)
+      throw error
+    }
+    return event
+  }
+
+  async readSceneEvent(worldId: string, runId: string, storyId: string, sceneId: string): Promise<SceneEvent> {
+    const expected = await this.deriveSceneEvent(worldId, runId, storyId, sceneId)
+    const saved = sceneEventSchema.parse(await this.readFile(join(this.root, `${sceneId}.adopted-event.json`)))
+    if (!isDeepStrictEqual(saved, expected)) throw new Error('已采用事件与场景证据不匹配')
+    return saved
+  }
 
   private participationPath(sceneId: string, participationId: string, suffix: 'claim' | 'result') {
     return join(this.root, `${sceneId}.${uuid.parse(participationId)}.character-${suffix}.json`)

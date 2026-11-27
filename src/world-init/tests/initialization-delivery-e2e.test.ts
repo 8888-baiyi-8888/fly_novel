@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
+import { openStoryEvents } from '../../app/story-workflow.js'
 import { decideStorySceneInteraction, judgeStorySceneActions, openStorySceneInteraction, runStorySceneInteraction, type SceneInteractionConditions } from '../../app/story-workflow.js'
 import type {} from '@fly-novel/system-prompt'
 import { LocalFileSystem } from '@fly-novel/fs-local'
@@ -164,6 +165,7 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
     const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test', limit: 1,
       adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收']),
       async simulate({ runId, storyId, mapNeed: requested, recordSceneResult }, signal) {
+        const storyEvents = openStoryEvents(sceneRoots, { worldId: world.worldId, runId })
         assert.deepEqual(requested, mapNeed)
         const denied = await inspectStoryMapScene(sceneRoots, runId, storyId, { ...scope, cityId: randomUUID() }, mapNeed)
         assert.equal(denied.result.status, 'forbidden')
@@ -452,6 +454,14 @@ test('双世界从第一版、讨论、确认发布到交付及重启读取', { 
         const closedScene = await readStoryScene(sceneRoots, runId, storyId, scene.sceneId)
         if (closedScene.status === 'pending') throw new Error('预期场景结果已经保存')
         assert.equal(closedScene.result.formatVersion, 2)
+        const identity = { runId, storyId, sceneId: scene.sceneId }
+        const adopted = await storyEvents.adopt(identity)
+        assert.deepEqual(await storyEvents.adopt(identity), adopted)
+        assert.deepEqual(await storyEvents.read(identity), adopted)
+        assert.deepEqual(adopted.sequence[1]?.actions.map(item => item.status), ['blocked', 'succeeded', 'unresolved'])
+        assert.doesNotMatch(JSON.stringify(adopted), /领队本轮秘密|守卫第一轮私有测试标记/)
+        const outsideWorld = openStoryEvents(sceneRoots, { worldId: '另一个世界', runId })
+        await assert.rejects(outsideWorld.adopt(identity), /授权世界/)
         return simulation
       },
     }, plan.id)
