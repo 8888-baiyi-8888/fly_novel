@@ -6,7 +6,7 @@
 
 第三阶段已经能重读规划、父子故事、场景、模拟结果和运行进度。[故事入口](../../../src/app/story-workflow.ts)仍由调用方传入任务、事实和发展方向。导演可以获取这些输入，场景演绎由可信模拟器提供。第四阶段让导演从可信应用选定的世界和资料范围取得可追溯的故事起点，并在当前任务需要时请求补充设定。
 
-首个贯通示例只覆盖曲水城与城门。初始化交付可以提供夜间闭门的规则和商贸趋紧的发展方向。商队是否已经抵达应看选定的可信局势或事件依据。若已授权读取的城门资料缺少可用等候点，导演可以请求地图 Agent 提议一处临时安置点。应用核对提案适用的地点、依据和冲突，再决定本次场景是否可采用。用固定模拟器验证组织场景所需资料已经齐备，角色调用、角色认知、世界事实写入和通用发布仍按后续阶段推进。
+首个贯通示例只覆盖曲水城与城门。现有初始化交付提供夜间闭门规则，商贸趋紧使用固定故事输入，具体来源见[曲水城最小验收输入](#曲水城最小验收输入)。商队是否已经抵达应看选定的可信局势或事件依据。若已授权读取的城门资料缺少可用等候点，导演可以请求地图 Agent 提议一处临时安置点。应用核对提案适用的地点、依据和冲突，再决定本次场景是否可采用。用固定模拟器验证组织场景所需资料已经齐备，角色调用、角色认知、世界事实写入和通用发布仍按后续阶段推进。
 
 ## 现有能力及复用范围
 
@@ -33,6 +33,45 @@
 **本步交付。** 可核对的配置和资料清单，写明每类来源的读取者、选择者、版本、可见范围和失败方式。确定曲水城最小输入及验收数据来源。
 
 **完成标准。** 能说明一条城门规则、一个商贸发展方向和一项缺口分别从哪里取得。能指出交付快照、目录简介和当前正文的不同用途。本步只做只读核查。
+
+#### 配置与读取入口核查
+
+| 来源 | 选择者、读取入口与版本 | 授权、失败方式及复用边界 |
+| --- | --- | --- |
+| 世界配置 | 可信调用方提供完整世界配置列表并指定 `worldId`。`validateWorldWorkspaceConfigs` 校验并固定读取根、已确认资料根、目录保护根、主 Agent 和专用 Agent 的专属根。世界绑定使用 ID 与完整配置。 | 重复身份、缺失目录、非真实路径、越界和重叠配置会被拒绝。可复用配置校验，故事运行仍需绑定世界并由应用选定允许读取的资料。见[世界配置](../../../src/world-init/workspace/config.ts#L55)。 |
+| 初始化交付 | 可信调用方指定世界、各业务记录根、Session 根和交付 UUID。`openWorldInitializationWorkflow` 返回 `workflow`，由 `workflow.readDelivery(id)` 读取 `<delivery>/deliveries/<id>.json`。返回值含交付文件 `FsVersion`、格式版本 1、`reviewVersion` 及各所选正文的来源版本和摘要。 | 读取校验外层世界与交付 ID、文件边界及记录格式。文件缺失、路径失配、重复键、未知版本、编码或大小异常及读取期间变化都会拒绝。现有入口需要整套初始化业务服务与协调器。调用方等待 `opened.close()`，文件后端、模块存储和 Session 服务由借出者关闭。见[应用装配](../../../src/app/world-initialization-entry.ts#L23)、[交付读取](../../../src/world-init/recovery/delivery.ts#L239)及[固定替身重开测试](../../../src/world-init/tests/initialization-delivery-e2e.test.ts#L107)。 |
+| 交付范围与历史正文 | `review.artifacts` 保存选定 `target`、来源 `version`、完整 `content` 与 SHA-256 `digest`。正文或 `notes` 可保留留白。`uncovered` 与 `acknowledgedUncovered` 分别记录未覆盖项与知悉决定。`deferred` 保存暂留候选的 ID、版本、目标和摘要。 | 重读返回历史快照，当前读入口没有逐项重算正文摘要或复核当前正文。候选正文需按候选身份另读。实现明确把目录及登记成果状态列入交付未复核范围，已交付的模块正文仍可保留 `suggested`。见[交付结构](../../../src/world-init/recovery/delivery.ts#L19)、[未覆盖项](../../../src/world-init/recovery/delivery.ts#L133)及[暂留测试](../../../src/world-init/tests/recovery-orchestrator.test.ts#L77)。 |
+| 资料目录和当前正文 | 可信装配以同世界 `agentId` 绑定 `CatalogService`。`read`、`search` 定位登记项。`readSharedSource(path, revision)` 按登记负责人解析实际文件，返回正文、实际摘要和 `current` 或 `stale`。后续页使用同一目录版本和 `nextOffset`。 | 文件须位于登记负责人的专属目录。共享读取允许同世界跨负责人读取登记正文，`readSource` 仅给本人签发更新凭据。应用须另行限制本轮可读路径。旧 revision、越权路径、文件缺失、超限及编码错误有不同失败方式。绑定由使用者关闭，服务及后端由装配方关闭。见[目录服务](../../../src/world-init/workspace/catalog/service.ts#L87)及[路径校验](../../../src/world-init/workspace/catalog/path.ts#L19)。 |
+| 模块业务读取 | 可信应用按世界、负责人及业务 ID 使用 `MapStore.readOverview/readPlace/readConnection` 和 `MapQueries`。发展规划使用 `DevelopmentStore.readDocument(kind, id)`，初始局势使用 `SituationStore.readStart/readOverview/readSituation`。模块读返回正文、路径及文件版本。 | 地图核对身份、格式、父级图和查询版本。只读模式限制写入，地点范围仍由应用筛选。`SharedMapStorage` 由可信装配持有并关闭，借用者不关闭。初始局势可提供初始化起点，故事入口尚缺当前可信事件来源。见[地图存储](../../../src/agents/plugins/map/store.ts#L229)、[共享句柄](../../../src/world-init/storage/map.ts#L7)、[发展读取](../../../src/agents/plugins/world-development/store.ts#L128)及[局势读取](../../../src/agents/plugins/initial-situation/store.ts#L109)。 |
+| 地图 Agent | 初始化普通委派由可信装配选择地图预设、世界和负责人，并可借用共享地图存储。工具包含地图读取、局部查询、坐标和连通查询，也包含创建概览、地点、连通和更新连通。另配文件读搜，可选配目录登记、更新和移除。初始化讨论模式使用专用的只读子 Agent 装配。 | 普通入口要求可写地图存储，文件沙箱的写根为负责人目录。可复用 Agent 身份、取消与释放、只读地图工具和地图查询。场景补充仍需限定地点、文件与目录访问，且缺少结构化提案返回。调用方等待 `dispose()`，外层装配关闭借出的存储。见[地图 Agent](../../../src/app/agents/map-agent.ts#L52)、[初始化委派](../../../src/app/agents/world-initialization.ts#L386)及[地图工具](../../../src/agents/plugins/map/tools.ts#L30)。 |
+
+#### 故事资料接入位置
+
+- **初步规划前。** `createStoryPlan` 校验调用方提供的 `task`、`facts`、`directions`，整体传给导演并随规划保存。应用可在调用前读取并核对世界资料。现有规划输入为文本，尚无世界、来源版本和授权范围的可重读凭据。见[规划入口](../../../src/app/story-workflow.ts#L27)和[规划实现](../../../src/story-workflow/workflow.ts#L27)。
+- **父子导演调用。** 单事件协作给父导演完整规划输入、当前事件，以及可选的兄弟结果和决定，子导演收到父导演生成的 `background`、`goal`、`constraints`。多层运行将事实和方向放进根任务 `background`，父导演根据父节点、当前子项和既有回报与决定生成子任务，子导演收到该子节点。依赖世界资料的决定需要保留应用核过的来源，嵌入任务文字后无法仅凭现有字段重建依据。见[单事件协作](../../../src/story-workflow/workflow.ts#L113)和[多层推进](../../../src/story-workflow/workflow.ts#L324)。
+- **创建场景前。** 多层子导演返回 `direct.preparation` 后，可信模拟器得到 `runId`、`storyId`、任务、准备信息、提前汇报及场景结果写入回调。整轮测试通过模拟器提交 `order`、`situation`、`preparation`。城门和等候点核查可在直接演绎决定之后、`createStoryScene` 之前进行。场景设置版本 1 尚无资料引用和缺口字段。见[模拟器调用](../../../src/story-workflow/simulation.ts#L81)、[场景设置](../../../src/story-workflow/scenes.ts#L24)和[整轮测试](../../../src/story-workflow/tests/round.test.ts#L13)。
+
+#### 曲水城最小验收输入
+
+本机完整样例由[世界初始化完整示例](../../../src/app/world-initialization-full-example.ts)生成并记录模拟确认。核查副本位于 `tmp/world-initialization-example-1fyf8t`，世界 ID 为 `0912e69d-b9b4-4309-a777-37a1bbbf5e55`，交付 ID 为 `46fa8526-f8a5-4cbe-834d-73a386d109a2`，记录根为副本内的 `delivery`。交付包含 39 项正文和空暂留清单，保留了未选正文、目录状态和世界语义一致性等未覆盖项。`tmp/init-delivery-real-c8y8ii` 留有另一世界的规则单项交付，可作独立读取样例。上述 `tmp/` 副本受 Git 忽略，可重复验收仍需准备固定资料。
+
+| 固定输入 | 来源、版本和范围 |
+| --- | --- |
+| 世界、交付及可读范围 | 可信调用方提供校验过的世界配置、交付 ID 与业务根，将本轮范围限定为曲水城、城门规则、一个发展方向及入城场景所需空间资料。 |
+| 夜间闭门规则 | 完整交付选中了主 Agent 总览 `main/world-plan-52b82f11-dd47-4ab8-86cd-68e4ef7189d8.md`，来源 SHA-256 以 `6be3b26d6cf7` 开头。正文写明城门夜间关闭，紧急医疗运输可申请通行。 |
+| 商贸发展方向 | 「城防与商贸可能趋紧」来自[故事固定输入](../../../src/story-workflow/tests/fixtures.ts#L31)，对应核查提交 `c873f33`，现有交付缺少这条方向。现有交付可另用 `development` 的宏观蓝图 `babca068-ba7c-481a-9795-8956924c90aa` 核验「码头航道恢复」，正文格式 1，来源 SHA-256 以 `00bb2ff771c3` 开头，标为近至中景的未来方向。 |
+| 当前局势与任务 | 处理城防与商贸矛盾、处理入城请求可沿用[故事固定输入](../../../src/story-workflow/tests/fixtures.ts#L26)。现有「商队夜间抵达」仅见于脚本规划和场景处境。若验收采用「商队已经抵达」，需另提供带来源、版本、地点和时点的可信固定局势或事件。 |
+| 城门位置及等候点缺口 | 曲水城地点 ID 为 `b3d3aa6c-3fc1-45f4-8dba-ff148980a91a`，格式 1，交付与当前登记正文 SHA-256 均以 `1fda533fa799` 开头，目录 revision 为 `c2747d59-bcee-4d1e-acd9-aefede836941`。当前地图快照只有 1 个地点、0 条连通，行政层子地点查询完整返回空，城市 `frameBox` 为 `null`。城市级高地概述未标明城门位置或车队可用的等候点。可用[整轮夹具](../../../src/story-workflow/tests/round.test.ts#L13)的「核对高地是否可以临时停放货车」表达需要，夹具里的高地等候结果仍属于模拟。 |
+
+#### 读取结果的判定
+
+- **确实缺少资料。** 已授权且读取、查询均完成的范围中没有所需项目。本次地图检查属于这种情况。
+- **无权读取。** 调用方未授予访问，或身份、所有权、路径校验拒绝。报告拒绝所针对的对象与操作。
+- **读取失败。** I/O、编码、格式、未知版本、超限或读取期间变化阻止核查。目录已登记而文件缺失时，记录两者的差异。
+- **来源过期。** 旧目录 revision 会冲突。登记摘要与实际正文不一致时返回 `stale`。历史交付按原版本重读，用于当前决策前另查对应现时版本。
+- **范围未覆盖。** 交付未选、分页未完成或相关范围尚未核查时，保留未覆盖结论。目录简介用于定位，正文用于核对内容，交付快照证明所选历史版本。
+
+**实际验证。** 用 `node -` 调用已有 `dist` 的初始化应用读取完整样例，独立核对 39 项正文 SHA-256。用 `CatalogService` 重读曲水城正文，得到 `current`，并验证旧 revision 返回 `CATALOG_CONFLICT`、跨负责人获取更新凭据返回 `CATALOG_FORBIDDEN`。用只读 `MapStore` 及 `MapQueries` 验证地点、连通数量和行政层子地点查询结果。核查前后 `git status --short` 均无输出。未重新构建、未运行测试套件，未发起模型请求。
 
 ### 2. 绑定世界并重读一份初始化交付
 
