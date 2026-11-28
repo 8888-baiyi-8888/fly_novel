@@ -42,6 +42,8 @@ test('开始请求固定规划身份，重开后重读，版本和请求冲突�
     assert.deepEqual(same, plan)
     assert.equal(adapter.requests.length, 1)
     assert.equal((await first.read(runId))?.manifest.planId, plan.id)
+    assert.deepEqual(await first.diagnose(runId), { runId, planId: plan.id, status: 'ready' })
+    assert.deepEqual(await first.diagnose(runId), { runId, planId: plan.id, status: 'ready' })
     await assert.rejects(first.start(runId, { ...selection, task: '另外一轮' }), /不同开始请求/)
   } finally { await first.close() }
   const reopened = await openStoryRunWorkflow(options)
@@ -49,12 +51,18 @@ test('开始请求固定规划身份，重开后重读，版本和请求冲突�
   finally { await reopened.close() }
   assert.equal(adapter.requests.length, 1)
   const changed = await openStoryRunWorkflow({ ...options, configurationVersion: 'fixture-2' })
-  try { await assert.rejects(changed.read(runId), /配置已变化/) }
+  try {
+    await assert.rejects(changed.read(runId), /配置已变化/)
+    assert.equal((await changed.diagnose(runId)).issue, 'stale')
+  }
   finally { await changed.close() }
   const path = join(options.runRoot, `${runId}.manifest.run.json`)
   const saved = JSON.parse(await readFile(path, 'utf8'))
   await writeFile(path, JSON.stringify({ ...saved, formatVersion: 999 }))
   const corrupted = await openStoryRunWorkflow(options)
-  try { await assert.rejects(corrupted.read(runId)) }
+  try {
+    await assert.rejects(corrupted.read(runId))
+    assert.equal((await corrupted.diagnose(runId)).issue, 'corrupt')
+  }
   finally { await corrupted.close() }
 })

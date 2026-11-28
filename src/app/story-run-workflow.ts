@@ -6,12 +6,20 @@ import { openStoryRunRecords, runDigest, storyRunManifestSchema, storyRunIdSchem
 import type { StoryPlanningOptions } from '../story-workflow/workflow.js'
 import { readIfPresent } from '../story-workflow/story-query.js'
 import { prepareStoryWorldInput, type bindStoryWorld } from './story-world-materials.js'
-import { createReservedStoryPlan } from './story-workflow.js'
+import { createReservedStoryPlan, inspectStoryProgress, readStoryRoundResult } from './story-workflow.js'
 
 type Binding = Awaited<ReturnType<typeof bindStoryWorld>>
 type MaterialSelection = Parameters<typeof prepareStoryWorldInput>[1]
 type Roots = { planRoot: string; collaborationRoot: string; protectedRoots: readonly string[] }
 const owners = new Set<string>()
+function evidenceIssue(error: unknown): 'missing' | 'forbidden' | 'stale' | 'corrupt' | 'failed' {
+  if (error instanceof SyntaxError || error instanceof z.ZodError) return 'corrupt'
+  const code = error instanceof Error && 'code' in error ? error.code : undefined
+  if (code === 'ENOENT') return 'missing'
+  if (code === 'EACCES' || code === 'EPERM' || (error instanceof Error && /无权|未经授权/.test(error.message))) return 'forbidden'
+  if (error instanceof Error && /已变化|版本不同|不匹配/.test(error.message)) return 'stale'
+  return 'failed'
+}
 
 export interface StoryRunWorkflowOptions extends Roots {
   runRoot: string
@@ -34,7 +42,7 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
   const roots = { planRoot: options.planRoot, collaborationRoot: options.collaborationRoot, protectedRoots: [...protectedRoots, records.root] }
   const planning = { ...director, root: roots.planRoot, protectedRoots: [...roots.protectedRoots, roots.collaborationRoot] }
   const plans = await PlanStore.open(planning.root, planning.protectedRoots)
-  await CollaborationStore.open(roots.collaborationRoot, roots.planRoot, roots.protectedRoots)
+  const collaboration = await CollaborationStore.open(roots.collaborationRoot, roots.planRoot, roots.protectedRoots)
   const configuration = runDigest({ world, deliveryId, configurationVersion, root: records.root, ...roots, provider: director.provider, model: director.model })
   if (owners.has(records.root)) throw new Error('故事运行目录已有可信写入者')
   owners.add(records.root)
@@ -68,7 +76,47 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
     if (plan && !isDeepStrictEqual(plan.input, value.input)) throw new Error('已保存规划与运行意图不匹配')
     return plan
   }
+  async function diagnose(runId: string) {
+    storyRunIdSchema.parse(runId)
+    let planId: string | undefined
+    try {
+      const saved = await manifest(runId)
+      if (!saved) return { runId, status: 'missing' as const, issue: 'missing' as const }
+      planId = saved.planId
+      const plan = await readPlan(saved)
+      if (!plan) return { runId, planId, status: 'planning' as const }
+      if (plan.outcome.kind === 'no_events') return { runId, planId, status: 'no-events' as const, reason: plan.outcome.reason }
+      const progress = await inspectStoryProgress(roots, planId)
+      if (progress.status === 'completed') {
+        const completed = await readStoryRoundResult(roots, planId)
+        return { runId, planId, status: completed.assessment.status === 'terminated' ? 'terminated' as const : 'completed' as const, completed }
+      }
+      if (progress.status === 'not-started') return { runId, planId, status: 'ready' as const }
+      if (progress.status === 'paused' || progress.status === 'awaiting-review' || progress.status === 'review-ready' || progress.status === 'review-cancelled') {
+        return { ...progress, runId, planId }
+      }
+      const scenes = progress.current ? await Promise.all((await collaboration.listSceneSetups(planId, progress.current.storyId)).map(async scene => {
+        const [result, events, participants] = await Promise.all([
+          collaboration.readSceneResult(scene), collaboration.listInteractionEvents(plan.id, scene.storyId, scene.sceneId),
+          collaboration.listCharacterParticipationIds(plan.id, scene.storyId, scene.sceneId),
+        ])
+        const participation = await Promise.all(participants.map(id => collaboration.readCharacterParticipation(plan.id, scene.storyId, scene.sceneId, id)))
+        const tail = events.at(-1)
+        const dispatch = tail && await collaboration.readInteractionDispatch(tail)
+        return { sceneId: scene.sceneId, order: scene.order, status: result?.status ?? 'pending', sequence: tail?.sequence ?? 0,
+          participation: participation.map(item => ({ id: item.claim.request.participationId,
+            characterId: item.claim.request.characterId, status: item.result?.outcome.status ?? 'pending' })),
+          ...(dispatch ? { dispatchId: dispatch.record.participationId, dispatchStatus: dispatch.participation?.outcome.status ?? 'pending' } : {}),
+        }
+      })) : []
+      return { runId, planId, status: 'needs-review' as const, current: progress.current, batch: progress.batch,
+        reason: progress.reason, scenes, confirmed: progress.confirmed.map(item => item.result.storyId) }
+    } catch (error) {
+      return { runId, planId, status: 'blocked' as const, issue: evidenceIssue(error) }
+    }
+  }
   return Object.freeze({
+    diagnose,
     async read(runId: string) {
       const saved = await manifest(runId)
       if (!saved) return undefined
