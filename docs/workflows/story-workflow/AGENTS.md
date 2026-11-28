@@ -13,3 +13,4 @@
 - `story-workflow-stage-7-events-state-assessment-plan.md`：场景事件、世界状态应用、子故事回报和父故事评估的分步开发与验收。
 - `story-workflow-stage-8-user-review-plan.md`：父故事安排审阅、用户与超时决定、等待及继续的分步开发与验收。
 - `story-workflow-stage-9-world-time-parallel-stories-plan.md`：世界时间、并行调度、角色和共享状态协调的分步开发与验收。
+- `story-workflow-stage-10-recovery-run-entry-plan.md`：正式运行装配、证据诊断、恢复、完整运行和下一轮的分步开发与验收。
