@@ -4,7 +4,7 @@
 
 - `README.md`：目录职责和使用说明。
 - `agents/`：各类 Agent 的应用层创建入口。
-- `story-workflow.ts`：故事工作流的模型和导演装配、记录查询、进度核查和场景设置入口。
+- `story-workflow.ts`：故事工作流的模型和导演装配、审阅与继续、记录查询、进度核查和场景设置入口。
 - `story-world-materials.ts`：绑定故事使用的可信世界与交付读取范围。
 - `story-map-scene.ts`：校验场景地图需求、授权和当前地图证据。
 - `story-character-participation.ts`：绑定同一子故事中的人物档案及场景参与范围。

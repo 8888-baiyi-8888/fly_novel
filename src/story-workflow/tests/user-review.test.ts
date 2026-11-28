@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { createReviewSnapshot, reviewDigest, reviewPolicySchema, storyReviewSchema } from '../user-review.js'
 import { continueStoryTree, createStoryPlan, inspectStoryProgress, readStory, readStoryReview, refreshStoryReview, runStoryTree, settleStoryReview, submitStoryReview, type StoryTreeOptions } from '../../app/story-workflow.js'
@@ -32,7 +34,7 @@ test('审阅选项绑定原安排、期限、依赖和正文版本', () => {
   assert.throws(() => createReviewSnapshot(input, reviewId, policy, 20, { ...proposals, dependencies: [{ before: first, after: second }] }), /推进依赖/)
 })
 
-test('限时审阅在截止前接受手选，恰好到期只接受推荐项', async t => {
+test('限时审阅拒绝过早结算，恰好到期只接受推荐项', async t => {
   const { baseOptions, plan } = await setup(t)
   let now = 200
   const clock = { ...baseOptions, now: () => now }
@@ -60,6 +62,46 @@ test('限时审阅在截止前接受手选，恰好到期只接受推荐项', as
   now = 211
   await assert.rejects(submitStoryReview(clock, plan.id, batch, review, { kind: 'cancel' }), /已有其他审阅决定/)
   assert.equal((await inspectStoryProgress(baseOptions, plan.id)).status, 'review-ready')
+})
+
+test('新进程读取到期审阅并结算，继续采用已保存的推荐顺序', async t => {
+  const { baseOptions, plan } = await setup(t, ['核对闭门和等候条件', '安排货物'])
+  const adapter = new ScriptedAdapter([...leaf('城门'), ...leaf('货物'), achieved])
+  const simulated: string[] = []
+  const options: StoryTreeOptions = {
+    ...baseOptions, adapter,
+    simulate: async ({ storyId }) => { simulated.push(storyId); return simulation },
+    review: {
+      policy: { kind: 'timed', durationMs: 10 }, now: () => 100,
+      propose({ children }) {
+        const childIds = children.map(item => item.id)
+        return { recommendedId: 'rules', recommendationReason: '先确认闭门条件', options: [
+          { id: 'rules', label: '先核对闭门条件', childIds },
+          { id: 'goods', label: '先安排货物', childIds: [...childIds].reverse() },
+        ] }
+      },
+    },
+  }
+  const pending = await runStoryTree(options, plan.id)
+  assert.equal(pending.kind, 'review')
+  const receipt = JSON.parse(execFileSync(process.execPath, ['-e', `
+    const story = require(process.argv[1])
+    const [rootsJson, runId, batch] = process.argv.slice(2)
+    const options = JSON.parse(rootsJson)
+    ;(async () => {
+      const view = await story.readStoryReview(options, runId, Number(batch))
+      if (view.decision !== undefined || view.consumed) throw new Error('预期待结算审阅')
+      const receipt = await story.settleStoryReview({ ...options, now: () => 113 }, runId, Number(batch), view.review)
+      process.stdout.write(JSON.stringify(receipt))
+    })().catch(error => { console.error(error); process.exitCode = 1 })
+  `, join(__dirname, '../../app/story-workflow.js'), JSON.stringify(baseOptions), plan.id, String(pending.batch)], { encoding: 'utf8' }))
+  assert.equal(receipt.source, 'timeout')
+  assert.equal(receipt.choice.optionId, 'rules')
+  assert.equal(receipt.deadline, 110)
+  assert.equal(receipt.decidedAt, 113)
+  assert.deepEqual((await readStoryReview(baseOptions, plan.id, pending.batch)).decision, receipt)
+  assert.equal((await continueStoryTree(options, plan.id, pending.batch)).kind, 'result')
+  assert.deepEqual(simulated, pending.review.children.map(item => item.id))
 })
 
 test('持续等待可以明确取消，同一决定可重读且冲突决定被拒绝', async t => {

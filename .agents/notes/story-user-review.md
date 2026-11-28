@@ -7,3 +7,7 @@
 世界初始化的确认入口由可信应用校验任务归属和用户看到的版本。故事审阅沿用可信调用和版本绑定原则，使用故事记录根、规划、父故事和批次定位。模型作用域只处理故事内容。
 
 核对了故事应用入口、多层推进、暂停恢复、故事查询和世界初始化确认入口。
+
+启用审阅的轮次使用格式 4。审阅快照和推进栈保存在同一记录；决定和领取各有独占写入点。依据更新后的替代批次由原审阅处理记录固定，重试可补齐保存。采用的顺序由原拆分、审阅选项、决定和领取证据共同确定。
+
+固定数据验收通过 `pnpm run build`、`pnpm run typecheck`、`pnpm exec tsc -p tsconfig.test.json` 和 `node --test ".test-dist/story-workflow/tests/*.test.js" .test-dist/world-init/tests/initialization-delivery-e2e.test.js`，共 46 项测试。正式构建产物通过固定替身烟雾检查，覆盖等待、到期结算、继续和整轮重读。未调用真实模型。

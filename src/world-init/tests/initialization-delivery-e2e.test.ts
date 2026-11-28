@@ -18,6 +18,7 @@ import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } f
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
 import { bindStoryWorld, continueStoryTree, createStoryPlan, createStoryScene, createStorySceneWithMap, inspectStoryMapScene, inspectStoryProgress, prepareStoryWorldInput, readStoryMapCheck, readStoryMapProposal, readStoryPlan, readStoryRoundResult, readStoryScene, readStorySceneWorldEvidence, requestStoryMapProposal, runStoryTree } from '../../app/story-workflow.js'
+import { readStory, readStoryReview, submitStoryReview, type StoryTreeOptions } from '../../app/story-workflow.js'
 import { advance, leaf, report as directorReport, ScriptedAdapter as DirectorAdapter, simulation, task } from '../../story-workflow/tests/fixtures.js'
 import { CatalogService } from '../workspace/catalog/service.js'
 import { initializeCatalog } from '../workspace/catalog/format.js'
@@ -144,7 +145,9 @@ test('双世界隔离从初始化交付到城门互动、事件与故事评估',
     await assert.rejects(prepareStoryWorldInput(storyWorld, { ...selection, catalog: { ...selection.catalog, entries: [{ ...catalogEntry, revision: randomUUID() }] } }), /版本已变化/)
     const input = await prepareStoryWorldInput(storyWorld, selection)
     const planRoot = join(base, 'plans'); await mkdir(planRoot)
-    const director = new DirectorAdapter(['{"kind":"planned","events":["处理入城请求","天亮后再议"]}'])
+    const reviewEnabled = world.worldId === names[1]
+    const events = reviewEnabled ? ['核对闭门规则和等候条件', '组织门外等候并核对规则适用条件'] : ['处理入城请求', '天亮后再议']
+    const director = new DirectorAdapter([JSON.stringify({ kind: 'planned', events })])
     const planOptions = { root: planRoot, protectedRoots: [world.readRoot, roots.delivery], provider: 'test', model: 'test', adapter: director }
     const plan = await createStoryPlan(planOptions, input)
     assert.equal(plan.formatVersion, 2)
@@ -175,8 +178,22 @@ test('双世界隔离从初始化交付到城门互动、事件与故事评估',
     const leader = await characters.create({ name: '领队', summary: '带队抵达', categories: {}, body: '领队私料：货物容易变质' })
     const aide = await characters.create({ name: '副手', summary: '门内等候', categories: {}, body: '副手档案：负责登记' })
     const candidates = await Promise.all([guard, leader, aide].map(async ({ id }) => ({ characterId: id, version: (await characters.readVersioned(id)).version, presence: '在场' })))
-    const round = await runStoryTree({ ...sceneRoots, provider: 'test', model: 'test', limit: 1, worldProgress: state.progress, worldObjectives,
-      adapter: new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收']),
+    const roundDirector = new DirectorAdapter([advance, task, JSON.stringify({ kind: 'direct', preparation: '城门交涉', mapNeed }), directorReport, '已接收'])
+    const review: StoryTreeOptions['review'] = reviewEnabled ? {
+      policy: { kind: 'timed', durationMs: 50 }, now: () => 100,
+      propose({ children }) {
+        const childIds = children.map(child => child.id)
+        return {
+          options: [
+            { id: 'rules-first', childIds, label: '先核对闭门和等候条件，再考虑货物安置' },
+            { id: 'waiting-first', childIds: [...childIds].reverse(), label: '先组织门外等候，再核对规则适用条件' },
+          ],
+          recommendedId: 'rules-first', recommendationReason: '闭门规则决定等候条件',
+        }
+      },
+    } : undefined
+    const treeOptions: StoryTreeOptions = { ...sceneRoots, provider: 'test', model: 'test', limit: 1, worldProgress: state.progress, worldObjectives,
+      review, adapter: roundDirector,
       async simulate({ runId, storyId, mapNeed: requested, recordSceneResult }, signal) {
         const storyEvents = openStoryEvents(sceneRoots, { worldId: world.worldId, runId })
         assert.deepEqual(requested, mapNeed)
@@ -528,7 +545,31 @@ test('双世界隔离从初始化交付到城门互动、事件与故事评估',
         assert.deepEqual(await state.inspect(operationId), firstApply)
         return simulation
       },
-    }, plan.id)
+    }
+    let round = await runStoryTree(treeOptions, plan.id)
+    if (reviewEnabled) {
+      assert.equal(round.kind, 'review')
+      const { batch, review } = round
+      assert.equal(review.worldState?.status, 'arrived')
+      assert.equal(roundDirector.requests.length, 0)
+      assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'awaiting-review')
+      assert.deepEqual((await readStoryReview(sceneRoots, plan.id, batch)).review, review)
+      const manual = await submitStoryReview({ ...sceneRoots, worldProgress: state.progress, worldObjectives, now: () => 125 }, plan.id, batch, review, { kind: 'select', optionId: 'waiting-first' })
+      assert.equal(manual.source, 'user')
+      assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'review-ready')
+      round = await continueStoryTree(treeOptions, plan.id, batch)
+      assert.equal((await readStoryReview(sceneRoots, plan.id, batch)).consumed, true)
+      const adopted = await readStory(sceneRoots, plan.id)
+      assert.equal(adopted.adoptedReview?.version, review.version)
+      const first = adopted.children[0]
+      assert.equal(first?.status, 'completed')
+      assert.equal(first.id, review.children[1]?.id)
+      assert.equal(first.id, savedScene?.storyId)
+      assert.equal(first.result.formatVersion, 3)
+      const savedPlan = await readStoryPlan(planOptions, plan.id)
+      assert.equal(savedPlan.outcome.kind, 'planned')
+      assert.deepEqual(savedPlan.outcome.events, review.children)
+    }
     if (round.kind !== 'paused') throw new Error('预期入城故事完成后暂停')
     assert.equal((await inspectStoryProgress(sceneRoots, plan.id)).status, 'paused')
     assert.ok(savedScene)
@@ -604,7 +645,7 @@ test('双世界隔离从初始化交付到城门互动、事件与故事评估',
       ...leaf('核对备用入城安排'), JSON.stringify({ status: 'unmet', reason: '补充后入城条件仍不足', adjustment, report: JSON.parse(directorReport) }),
     ])
     const laterStories: string[] = []
-    const continuationOptions = { ...sceneRoots, provider: 'test', model: 'test', adapter: continuation,
+    const continuationOptions = { ...sceneRoots, provider: 'test', model: 'test', adapter: continuation, review,
       async simulate({ storyId, mapNeed: requested }) {
         assert.notEqual(storyId, completedStoryId)
         assert.equal(requested, undefined)

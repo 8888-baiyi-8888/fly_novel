@@ -92,7 +92,7 @@
 
 `runStoryTree` 基于已有规划逐层拆分和顺序推进故事，下级结束后回报直接上级；最小故事由调用方提供的模拟器演绎。它与 `runStorySiblings` 使用同一规划的独占运行记录，同一规划不能重复启动。失败后保留文件供核查，不自动恢复。
 
-`runStoryTree` 和 `continueStoryTree` 接受可选的 `limit`，默认每批完成 5 个最小子故事。收到 `kind: 'paused'` 时，将返回的 `batch` 和原规划 ID 传给 `continueStoryTree`，可重新指定本次数量。收到 `kind: 'result'` 表示整轮已结束。两种结果的 `completedCount` 都表示本批完成数量。
+`runStoryTree` 和 `continueStoryTree` 接受可选的 `limit`，默认每批完成 5 个最小子故事。收到 `kind: 'paused'` 时，将返回的 `batch` 和原规划 ID 传给 `continueStoryTree`，可重新指定本次数量。收到 `kind: 'review'` 时进入父故事安排审阅。收到 `kind: 'result'` 表示整轮已结束。`completedCount` 表示本批完成数量。
 
 多层推进的模拟器可以调用 `await reportEarly({ id, situation })` 汇报重大情况，`id` 为本子故事内稳定的 UUID。模拟器须等待决定，再按 `action` 继续、应用 `direction` 调整演绎，或结束演绎并返回已发生的模拟经过。同一 ID 和相同内容可重复读取本次决定。决定调用失败时应结束当前模拟并传播错误。
 
@@ -100,7 +100,18 @@
 
 `readStory` 从可信记录根按规划和故事 ID 重读任务、直接上级、同层位置及下级进展。省略故事 ID 时读取根故事。参数及状态见[读取父子故事](../story-workflow/README.md#读取父子故事)。
 
-`inspectStoryProgress(options, planId)` 从已保存的故事、场景、回报和批次证据核查当前位置。仅在返回 `paused` 时使用其 `batch` 调用 `continueStoryTree`。见[进度状态与续跑条件](../story-workflow/README.md#核查运行进度)。
+`inspectStoryProgress(options, planId)` 从已保存的故事、场景、回报和批次证据核查当前位置。可继续的状态为 `paused` 和 `review-ready`。见[进度状态与续跑条件](../story-workflow/README.md#核查运行进度)。
+
+### 父故事安排审阅
+
+从 [story-workflow.ts](story-workflow.ts) 使用以下可信应用入口。开新轮次时设置 `review.policy` 为 `{ kind: 'timed', durationMs: 30_000 }` 或 `{ kind: 'indefinite' }`。默认关闭。应用可通过 `review.propose` 根据保存的子故事、父任务和状态返回允许的排列、依赖及推荐项。省略时提供继续初步安排。继续时传入同样的模式，以及原世界状态来源和目标（如启用）。
+
+1. 用 `inspectStoryProgress(roots, runId)` 查找最新审阅批次。用 `readStoryReview(roots, runId, batch)` 重读目标、约束、初步安排、可选顺序、推荐理由、截止时间和既有决定。
+2. 将用户看到的 `reviewId` 和 `version` 交给 `submitStoryReview(options, runId, batch, expected, choice)`。用户选择用 `{ kind: 'select', optionId }`，终止此次推进用 `{ kind: 'cancel' }`。若有状态来源或目标，决定入口使用相同的 `worldProgress` 和 `worldObjectives`。关闭界面保留审阅。
+3. 对限时审阅，应用可在截止时调用 `settleStoryReview(options, runId, batch, expected)`。应用重启时先读批次，再结算已到期的等待。时钟默认是 `Date.now`，测试可在运行的 `review.now` 及决定入口的 `options.now` 注入固定时钟。读取与结算各自独立，等待期间释放导演资源。
+4. 在选项决定保存后调用 `continueStoryTree(treeOptions, runId, batch)`。通过 `readStory` 查询采用的选项引用和实际顺序。状态升版使原决定过期时，调用 `refreshStoryReview` 固定同一来源的新版本，有自定义选项时重新提供 `propose`。使用返回的新批次展示并取得决定。
+
+一个可信应用进程负责调度同一记录根的写入。用户选择、明确取消和超时在同一个决定入口边界内竞争。批次领取后若中断且缺少后续推进证据，进度核查返回 `needs-review`，应用保留现有资料供核查。文件格式及状态见[审阅记录](../story-workflow/README.md#父故事安排审阅记录)。
 
 `createStoryScene` 为已确定直接演绎的子故事保存一个待演绎的场景。`readStoryScene` 按场景身份读取，`listStoryScenes` 按故事和顺序列出场景状态及结果。模拟器可通过 `recordSceneResult` 提交当前故事的场景模拟经过，已结算的场景可从故事回报追溯。见[场景设置](../story-workflow/README.md#保存和读取场景设置)和[结果记录](../story-workflow/README.md#保存模拟结果并形成故事回报)。
 
