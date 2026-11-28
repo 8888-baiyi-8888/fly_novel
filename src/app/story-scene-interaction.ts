@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { openStory } from '../story-workflow/story-query.js'
+import { openStory, readIfPresent } from '../story-workflow/story-query.js'
+import { isDeepStrictEqual } from 'node:util'
 import { interactionObservationContent, interactionObservationSource, sceneActionAnswerSchema, sceneActionEffects, sceneActionRuleSchema, sceneInteractionConditionsSchema, sceneInteractionDecisionInputSchema, sceneInteractionDigest, visibleCharacterResponse, type InteractionObservationId, type SceneInteractionConditions, type SceneInteractionDispatch, type SceneInteractionEvent } from '../story-workflow/scene-interaction.js'
 import type { CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
 import { parseStrictJson } from '../story-workflow/types.js'
@@ -98,19 +99,20 @@ export function openStorySceneInteraction(roots: Roots, identity: SceneInteracti
     },
     /** 只执行已保存决定选中的角色。调用方重新批准该角色的观察。 */
     async dispatch(sequence: number, scope: StoryCharacterScope, runtime: CharacterRuntime, grants: readonly CharacterKnowledgeGrant[],
-      allowObservation: (subject: { characterId: string; reference: InteractionObservationId; content: string }) => boolean, signal?: AbortSignal) {
+      allowObservation: (subject: { characterId: string; reference: InteractionObservationId; content: string }) => boolean, signal?: AbortSignal, recover = false) {
       signal?.throwIfAborted()
       const { store, worldId } = await open()
       if (scope.worldId !== worldId || scope.runId !== runId || scope.storyId !== storyId || !runtime.isBoundTo(scope)) throw new Error('角色运行器与当前场景互动不匹配')
       const event = await store.readInteractionEvent(runId, storyId, sceneId, sequence)
       const existing = await store.readInteractionDispatch(event)
-      if (existing) return existing
+      if (existing && (!recover || existing.participation)) return existing
+      if (existing && await readIfPresent(store.readCharacterParticipation(runId, storyId, sceneId, existing.record.participationId))) return existing
       const decision = await store.readInteractionDecision(event)
       if (decision?.next.kind !== 'respond') throw new Error('场景没有可执行的角色调度')
       const { characterId, trigger } = decision.next
       currentScheduledScene()?.assertCharacter(characterId, sceneId, runId, storyId)
       if (grants.some(item => item.source.kind === 'fixed' && item.source.id.startsWith(`${sceneId}:interaction:`))) throw new Error('互动观察须来自已核验的感知记录')
-      const participationId = randomUUID()
+      const participationId = existing?.record.participationId ?? randomUUID()
       const request = await scope.issueScheduled(sceneId, characterId, participationId, event.setupDigest)
       const observations: InteractionObservationId[] = []
       const input = [...grants]
@@ -132,7 +134,9 @@ export function openStorySceneInteraction(roots: Roots, identity: SceneInteracti
       await scope.prepare(request, input)
       const record: SceneInteractionDispatch = { formatVersion: 1, sequence, characterId, participationId, decisionDigest: sceneInteractionDigest(decision), observations }
       signal?.throwIfAborted()
-      if (!await store.claimInteractionDispatch(event, record)) return (await store.readInteractionDispatch(event))!
+      if (existing) {
+        if (!isDeepStrictEqual(record, existing.record)) throw new Error('已领取角色回合的授权或观察已变化')
+      } else if (!await store.claimInteractionDispatch(event, record)) return (await store.readInteractionDispatch(event))!
       const participation = await runtime.respond(request, input, signal)
       return { record, participation }
     },

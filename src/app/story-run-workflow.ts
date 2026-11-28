@@ -9,6 +9,7 @@ import { prepareStoryWorldInput, type bindStoryWorld } from './story-world-mater
 import { continueStoryTree, createReservedStoryPlan, inspectStoryProgress, readStoryRoundResult, runStoryTree, settleStoryReview, submitStoryReview, type StoryReviewChoice, type StoryReviewIdentity } from './story-workflow.js'
 import { reviewPolicySchema } from '../story-workflow/user-review.js'
 import { runManagedScene, type StoryRunSceneOptions } from './story-run-scene.js'
+import { openStoryConvoyState } from './story-convoy-state.js'
 export type { StoryRunSceneOptions } from './story-run-scene.js'
 
 type Binding = Awaited<ReturnType<typeof bindStoryWorld>>
@@ -58,7 +59,8 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
   const plans = await PlanStore.open(planning.root, planning.protectedRoots)
   const collaboration = await CollaborationStore.open(roots.collaborationRoot, roots.planRoot, roots.protectedRoots)
   const configuration = runDigest({ world, deliveryId, configurationVersion, root: records.root, ...roots, provider: director.provider, model: director.model,
-    policy, objectives: execution?.worldObjectives, schedule: execution?.scene.schedule?.version })
+    policy, objectives: execution?.worldObjectives, schedule: execution?.scene.schedule?.version,
+    convoy: execution?.scene.convoy && { id: execution.scene.convoy.convoyId, root: execution.scene.convoy.stateRoot } })
   if (owners.has(records.root)) throw new Error('故事运行目录已有可信写入者')
   owners.add(records.root)
   const lifecycle = new AbortController()
@@ -138,9 +140,12 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
     const saved = await manifest(runId)
     if (!saved || !await readPlan(saved)) throw new Error('故事运行尚无已保存规划')
     if (!execution) throw new Error('故事运行未装配场景执行')
-    const worldProgress = execution.worldProgress?.(saved.planId, active)
+    const convoy = execution.scene.convoy
+    const worldProgress = execution.worldProgress?.(saved.planId, active) ?? (convoy ?
+      execution.scene.schedule?.handle.progress(saved.planId, active) ??
+        (await openStoryConvoyState(roots, { ...convoy, worldId: world.worldId, runId: saved.planId })).progress : undefined)
     const tree: StoryTreeOptions = { ...roots, ...director, limit: execution.limit, review: execution.review, worldObjectives: execution.worldObjectives, worldProgress,
-      simulate: (input, signal) => runManagedScene(roots, binding, director, execution.scene, input, signal) }
+      simulate: (input, signal) => runManagedScene(records, runId, roots, binding, director, execution.scene, input, signal) }
     return { saved, tree, reviewOptions: { ...roots, now: execution.review?.now, worldProgress, worldObjectives: execution.worldObjectives } }
   }
   return Object.freeze({

@@ -26,7 +26,7 @@ export interface StoryMapScope {
 }
 
 /** 检查直接演绎故事所需的城门和等候点，保存可按故事重读的核查记录。 */
-export async function inspectStoryMapScene(roots: SceneRoots, runId: string, storyId: string, scope: StoryMapScope, input: MapSceneNeed, signal?: AbortSignal) {
+export async function inspectStoryMapScene(roots: SceneRoots, runId: string, storyId: string, scope: StoryMapScope, input: MapSceneNeed, signal?: AbortSignal, checkId: string = randomUUID()) {
   const need = mapSceneNeedSchema.parse(input)
   signal?.throwIfAborted()
   const story = await openStory(roots, runId, storyId)
@@ -35,7 +35,7 @@ export async function inspectStoryMapScene(roots: SceneRoots, runId: string, sto
   }
   const world = story.plan.input.world
   const result = await checkMapScope(scope, world, need, signal)
-  const check: MapSceneCheck = { formatVersion: 1, id: randomUUID(), runId, storyId, worldId: world.worldId, need, result }
+  const check: MapSceneCheck = { formatVersion: 1, id: checkId, runId, storyId, worldId: world.worldId, need, result }
   signal?.throwIfAborted()
   await story.store.saveMapSceneCheck(check)
   return check

@@ -124,16 +124,28 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
     })
   }
   const queued = new Set<string>()
-  async function acquire(slotId: string, identity: SceneIdentity, signal: AbortSignal) {
+  async function acquire(slotId: string, identity: SceneIdentity, signal: AbortSignal, recover: boolean) {
     for (;;) {
       const result = await exclusive(async () => {
         signal.throwIfAborted()
         const previous = await current()
         const { window } = previous
         const slot = find(window, slotId)
+        const active = window.slots.filter(item => item.claim && executing.has(item.claim.token))
+        if (recover && slot.claim && slot.resolution?.kind !== 'settled' && slot.resolution?.kind !== 'cancelled') {
+          const { claim } = slot
+          if (executing.has(claim.token) || claim.storyId !== identity.storyId || claim.sceneId !== identity.sceneId) throw new Error('排期无法接管现有场景领取')
+          if (active.length >= maxConcurrent || active.some(item => item.runId === slot.runId)) return { waiting: wait(signal) }
+          const { scene } = await sceneSource(slot, identity)
+          if (scheduleDigest(scene) !== claim.setupDigest) throw new Error('接管场景的设置已变化')
+          signal.throwIfAborted()
+          const { resolution: _, ...reopened } = slot
+          await update(previous, setSlot(window, reopened), '接管已有场景领取')
+          executing.add(claim.token)
+          return { slot: reopened, claim }
+        }
         if (slot.claim || slot.resolution) throw new Error('排期已经领取或取消，请核查保存的进度')
         const { blocks, routes, state } = await readiness(window, slot)
-        const active = window.slots.filter(item => item.claim && !item.resolution && executing.has(item.claim.token))
         if (blocks.length || active.length >= maxConcurrent || active.some(item => item.runId === slot.runId)) return { waiting: wait(signal) }
         const prior = window.slots.filter(item => queued.has(item.id) && item.id !== slot.id && !item.claim && !item.resolution &&
           (item.start < slot.start || (item.start === slot.start && item.id < slot.id)))
@@ -360,14 +372,14 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
         return update(previous, setSlot(previous.window, { ...slot, resolution: { kind: 'cancelled', reason } }), reason)
       })
     },
-    execute<T>(slotId: string, target: SceneIdentity, run: (permit: ScheduledScenePermit, signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    execute<T>(slotId: string, target: SceneIdentity, run: (permit: ScheduledScenePermit, signal: AbortSignal) => Promise<T>, signal?: AbortSignal, recover = false): Promise<T> {
       live()
       if (queued.has(slotId)) throw new Error('排期已有等待的演绎请求')
       const identity = Object.freeze(scheduledSceneIdentitySchema.parse(target))
       const activeSignal = signal ? AbortSignal.any([shutdown.signal, signal]) : shutdown.signal
       queued.add(slotId)
       const execution = (async () => {
-        const { slot, claim } = await acquire(slotId, identity, activeSignal).finally(() => {
+        const { slot, claim } = await acquire(slotId, identity, activeSignal, recover).finally(() => {
           queued.delete(slotId)
           for (const wake of waiters) wake()
         })

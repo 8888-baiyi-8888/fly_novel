@@ -69,6 +69,7 @@ export async function runStorySceneInteraction(interaction: StorySceneInteractio
   allowObservation: Parameters<StorySceneInteraction['dispatch']>[4]
   judge?: SceneWorldRuleJudge
   maxEvents: number
+  recoverUnstartedDispatch?: boolean
 }, signal?: AbortSignal) {
   if (!Number.isSafeInteger(options.maxEvents) || options.maxEvents < 1 || options.maxEvents > 10000) throw new Error('互动推进数量无效')
   signal?.throwIfAborted()
@@ -79,8 +80,11 @@ export async function runStorySceneInteraction(interaction: StorySceneInteractio
   let responseId = options.initialParticipationId
   let sequence = event?.sequence ?? 1
   if (last?.dispatch) {
-    const { record, participation } = last.dispatch
-    if (participation?.outcome.status !== 'responded') return { status: 'needs-review', sequence, participationId: record.participationId } as const
+    const { record } = last.dispatch
+    const recovered = options.recoverUnstartedDispatch && !last.dispatch.participation
+      ? await interaction.dispatch(sequence, options.scope, options.runtime, await options.grants(record.characterId), options.allowObservation, signal, true)
+      : last.dispatch
+    if (recovered.participation?.outcome.status !== 'responded') return { status: 'needs-review', sequence, participationId: record.participationId } as const
     responseId = record.participationId
     sequence++
     event = undefined

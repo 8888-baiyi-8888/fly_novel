@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { CharacterStore } from '@fly-novel/character'
-import { characterClaimDigest, characterKnowledgeGrantSchema, characterParticipationClaimSchema, characterSelectionSchema, projectCharacterParticipation, type CharacterKnowledgeEntry, type CharacterKnowledgeGrant, type CharacterParticipationRequest, type CharacterParticipationResult } from '../story-workflow/character-participation.js'
+import { characterClaimDigest, characterKnowledgeGrantSchema, characterParticipationClaimSchema, characterParticipationRequestSchema, characterSelectionSchema, projectCharacterParticipation, type CharacterKnowledgeEntry, type CharacterKnowledgeGrant, type CharacterParticipationRequest, type CharacterParticipationResult } from '../story-workflow/character-participation.js'
 import { openStory, readIfPresent } from '../story-workflow/story-query.js'
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { bindStoryWorld } from './story-world-materials.js'
@@ -60,6 +60,17 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
 
   return Object.freeze({
     worldId: world.worldId, runId, storyId,
+    /** 从可信运行记录重建已选定请求。发行与调用仍核对场景及人物版本。 */
+    async restore(input: CharacterParticipationRequest) {
+      const request = Object.freeze(characterParticipationRequestSchema.parse(input))
+      if (request.worldId !== world.worldId || request.runId !== runId || request.storyId !== storyId) throw new Error('恢复角色请求归属不匹配')
+      currentScheduledScene()?.assertCharacter(request.characterId, request.sceneId, runId, storyId)
+      await pendingScene(request.sceneId)
+      const { version } = await readCandidate(request.characterId, new Set([request.characterId]))
+      if (version !== request.profileVersion) throw new Error('恢复角色请求的档案版本已变化')
+      issued.add(request)
+      return request
+    },
     /** 可信调度已选定角色及参与 ID，仍须核对当前场景和档案。 */
     async issueScheduled(sceneId: string, characterId: string, participationId: string, setupDigest: string) {
       currentScheduledScene()?.assertCharacter(characterId, sceneId, runId, storyId)
