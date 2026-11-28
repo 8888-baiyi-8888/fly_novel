@@ -19,7 +19,7 @@ export { bindStoryCharacters, type StoryCharacterScope, type StoryCharacterCandi
 export type { CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
 export { openStoryCharacterRuntime, type StoryCharacterConfig } from './story-character-runtime.js'
 export { openStoryEvents } from './story-event.js'
-export { openStoryWorldSchedule, type ScheduledScenePermit } from './story-world-schedule.js'
+export { openStoryWorldSchedule, type ScheduledExperience, type ScheduledScenePermit } from './story-world-schedule.js'
 export type { ScheduleRoute, ScheduleSlot, WorldSchedule } from '../story-workflow/world-schedule.js'
 export { openStoryConvoyState, type AuthorizeConvoyChange } from './story-convoy-state.js'
 export type { ConvoyProposal } from '../story-workflow/convoy-state.js'

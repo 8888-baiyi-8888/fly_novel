@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { isDeepStrictEqual } from 'node:util'
 import { PlanStore } from '../story-workflow/store.js'
 import { openStory } from '../story-workflow/story-query.js'
@@ -6,20 +7,33 @@ import { inspectStoryProgress } from '../story-workflow/progress.js'
 import { openWorldScheduleStore, sceneScheduleReadiness, scheduleDigest, scheduleSlotSchema, scheduledSceneIdentitySchema,
   type ScheduleBlock, type ScheduledScene, type ScheduleRoute, type ScheduleSlot, type WorldSchedule } from '../story-workflow/world-schedule.js'
 import type { SceneSetupRecord } from '../story-workflow/types.js'
+import type { CharacterKnowledgeGrant } from '../story-workflow/character-participation.js'
+import { interactionObservationContent } from '../story-workflow/scene-interaction.js'
 
 type Roots = Parameters<typeof openStory>[0]
 type Window = WorldSchedule['window']
 type SceneIdentity = Pick<SceneSetupRecord, 'storyId' | 'sceneId'>
 type Claim = NonNullable<ScheduledScene['claim']>
+export interface ScheduledExperience {
+  readonly source: SceneIdentity & { readonly runId: string; readonly worldId: string; readonly minute: number }
+  readonly characterId: string
+  readonly kind: 'observation' | 'action'
+  readonly content: string
+  readonly version: string
+}
 export interface ScheduledScenePermit {
   readonly slot: Readonly<ScheduleSlot>
   readonly identity: Readonly<SceneIdentity>
   assertActive(): void
   assertCharacter(characterId: string, sceneId: string, runId: string, storyId: string): void
+  experiences(characterId: string): Promise<CharacterKnowledgeGrant[]>
 }
 
 const ownedRoots = new Set<string>()
 const ownedWorlds = new Set<string>()
+const executionScope = new AsyncLocalStorage<Readonly<{ owner: object; permit: ScheduledScenePermit }>>()
+export function currentScheduledScene() { return executionScope.getStore()?.permit }
+export const scheduledExperiencePrefix = 'schedule-experience:'
 
 /** 调度同一世界中各自拥有推进记录的故事运行。等待或演绎时不持有排期写入队列。 */
 export async function openStoryWorldSchedule(roots: Roots, options: {
@@ -28,6 +42,7 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
   maxConcurrent: number
   routeStillValid?(route: ScheduleRoute): Promise<boolean>
   endingPositions?(input: { slot: ScheduleSlot; scene: SceneSetupRecord }): Promise<Window['positions']>
+  allowExperience?(input: ScheduledExperience, destination: SceneIdentity & { runId: string }): Promise<boolean>
 }) {
   const { worldId, maxConcurrent, routeStillValid, endingPositions } = options
   if (!worldId.trim() || !Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) throw new Error('世界调度配置无效')
@@ -37,6 +52,7 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
   ownedRoots.add(store.root)
   ownedWorlds.add(worldId)
   const shutdown = new AbortController()
+  const owner = {}
   const running = new Set<Promise<unknown>>()
   const waiters = new Set<() => void>()
   let tail = Promise.resolve()
@@ -137,6 +153,46 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
     }
   }
   const executing = new Set<string>()
+  async function experiences(slot: ScheduleSlot, identity: SceneIdentity, characterId: string) {
+    const { allowExperience } = options
+    if (!allowExperience) return []
+    const authorize = allowExperience
+    const { window } = await current()
+    const earlier = window.slots.filter(item => item.end <= slot.start && item.characters.includes(characterId) && item.resolution?.kind === 'settled')
+      .sort((left, right) => left.end - right.end)
+    const grants = new Map<string, CharacterKnowledgeGrant>()
+    for (const previous of earlier) {
+      const claim = previous.claim!
+      const { store: records, scene } = await sceneSource(previous, claim)
+      const result = await records.readSceneResult(scene)
+      if (scheduleDigest(scene) !== claim.setupDigest || !result || previous.resolution?.kind !== 'settled' ||
+        scheduleDigest(result) !== previous.resolution.evidenceDigest) throw new Error('跨故事经历的场景结算证据已变化')
+      if (result.formatVersion !== 2) continue
+      const { storyId, sceneId } = claim
+      const source = { worldId, runId: previous.runId, storyId, sceneId, minute: previous.end }
+      async function add(reference: string, kind: ScheduledExperience['kind'], content: string, evidence: unknown) {
+        const version = scheduleDigest([result, evidence])
+        const item = { source, characterId, kind, content, version }
+        if (!await authorize(structuredClone(item), { ...identity, runId: slot.runId })) return
+        const id = `${scheduledExperiencePrefix}${window.id}:${previous.id}:${reference}`
+        grants.set(id, { characterId, sceneId: identity.sceneId, category: 'known', content,
+          basis: `第 ${source.minute} 分钟前在所属场景亲历的${kind === 'action' ? '已确认行动' : '观察'}`,
+          source: { kind: 'fixed', id, version } })
+      }
+      for (const event of await records.listInteractionEvents(previous.runId, storyId, sceneId)) {
+        const [decision, actions] = await Promise.all([records.readInteractionDecision(event), records.readInteractionActions(event)])
+        const perception = decision?.perceptions.find(item => item.characterId === characterId)
+        for (const [index, observation] of (perception?.observations ?? []).entries()) {
+          await add(`${event.sequence}:observation:${index}`, 'observation', interactionObservationContent(observation), [event, decision])
+        }
+        if (event.characterId !== characterId) continue
+        for (const action of actions?.outcomes ?? []) {
+          if (action.status === 'succeeded') await add(`${event.sequence}:action:${action.index}`, 'action', action.observable ?? event.actions[action.index]!, [event, actions])
+        }
+      }
+    }
+    return [...grants.values()]
+  }
   async function settle(slotId: string, claim: Claim) {
     const previous = await current()
     const slot = find(previous.window, slotId)
@@ -145,6 +201,12 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
     if (scheduleDigest(scene) !== claim.setupDigest) throw new Error('场景设置已变化')
     const result = await records.readSceneResult(scene)
     if (!result || result.status === 'unresolved') throw new Error('场景没有可核对的结算结果')
+    for (const id of await records.listCharacterParticipationIds(slot.runId, scene.storyId, scene.sceneId)) {
+      const participation = await records.readCharacterParticipation(slot.runId, scene.storyId, scene.sceneId, id)
+      if (!slot.characters.includes(participation.claim.request.characterId) || participation.result?.outcome.status !== 'responded') {
+        throw new Error('场景存在未获准或没有确定结果的角色参与')
+      }
+    }
     const positions = endingPositions ? await endingPositions({ slot: scheduleSlotSchema.parse(slotWithoutProgress(slot)), scene }) :
       slot.characters.map(characterId => ({ characterId, locationId: slot.locationId }))
     const resolution = { kind: 'settled', positions, evidenceDigest: scheduleDigest(result) } as const
@@ -257,10 +319,16 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
             if (runId !== slot.runId || sceneId !== identity.sceneId || storyId !== identity.storyId ||
               !slot.characters.includes(characterId)) throw new Error('角色调用超出当前排期许可')
           },
+          async experiences(characterId: string) {
+            permit.assertCharacter(characterId, identity.sceneId, slot.runId, identity.storyId)
+            const grants = await experiences(slot, identity, characterId)
+            assertActive()
+            return grants
+          },
         })
         try {
           activeSignal.throwIfAborted()
-          const value = await run(permit, activeSignal)
+          const value = await executionScope.run({ owner, permit }, () => run(permit, activeSignal))
           permitActive = false
           await exclusive(() => settle(slotId, claim))
           return value
@@ -302,6 +370,7 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
       })
     },
     close() {
+      if (executionScope.getStore()?.owner === owner) throw new Error('场景执行回调不能关闭所属世界调度器')
       return closing ??= (async () => {
         shutdown.abort(new Error('世界调度器已关闭'))
         await Promise.allSettled(running)

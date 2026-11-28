@@ -5,6 +5,7 @@ import type { CharacterKnowledgeGrant } from '../story-workflow/character-partic
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { StoryCharacterScope } from './story-character-participation.js'
 import type { openStoryCharacterRuntime } from './story-character-runtime.js'
+import { currentScheduledScene } from './story-world-schedule.js'
 
 type Roots = Parameters<typeof openStory>[0]
 export interface SceneInteractionIdentity { runId: string; storyId: string; sceneId: string }
@@ -39,6 +40,8 @@ export function openStorySceneInteraction(roots: Roots, identity: SceneInteracti
   return Object.freeze({
     async append(sequence: number, participationId: string, input: SceneInteractionConditions) {
       const conditions = sceneInteractionConditionsSchema.parse(input)
+      const permit = currentScheduledScene()
+      for (const { characterId } of conditions.participants) permit?.assertCharacter(characterId, sceneId, runId, storyId)
       const { store, setup, worldId } = await open()
       const { claim, result } = await store.readCharacterParticipation(runId, storyId, sceneId, participationId)
       if (claim.request.worldId !== worldId || result?.outcome.status !== 'responded') throw new Error('场景事件缺少可信角色响应')
@@ -105,6 +108,7 @@ export function openStorySceneInteraction(roots: Roots, identity: SceneInteracti
       const decision = await store.readInteractionDecision(event)
       if (decision?.next.kind !== 'respond') throw new Error('场景没有可执行的角色调度')
       const { characterId, trigger } = decision.next
+      currentScheduledScene()?.assertCharacter(characterId, sceneId, runId, storyId)
       if (grants.some(item => item.source.kind === 'fixed' && item.source.id.startsWith(`${sceneId}:interaction:`))) throw new Error('互动观察须来自已核验的感知记录')
       const participationId = randomUUID()
       const request = await scope.issueScheduled(sceneId, characterId, participationId, event.setupDigest)

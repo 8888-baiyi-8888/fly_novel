@@ -5,6 +5,7 @@ import { openStory, readIfPresent } from '../story-workflow/story-query.js'
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { bindStoryWorld } from './story-world-materials.js'
 import { sceneInteractionDigest } from '../story-workflow/scene-interaction.js'
+import { currentScheduledScene, scheduledExperiencePrefix } from './story-world-schedule.js'
 
 type Roots = Parameters<typeof openStory>[0]
 type Binding = Awaited<ReturnType<typeof bindStoryWorld>>
@@ -61,6 +62,7 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
     worldId: world.worldId, runId, storyId,
     /** 可信调度已选定角色及参与 ID，仍须核对当前场景和档案。 */
     async issueScheduled(sceneId: string, characterId: string, participationId: string, setupDigest: string) {
+      currentScheduledScene()?.assertCharacter(characterId, sceneId, runId, storyId)
       const { scene } = await pendingScene(sceneId)
       if (sceneInteractionDigest(scene) !== setupDigest) throw new Error('调度与角色范围的场景版本不匹配')
       const { version } = await readCandidate(characterId, new Set([characterId]))
@@ -70,6 +72,8 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
     },
     /** 调用方选择本场景的候选子集。导演只收到最小候选信息。 */
     async select(sceneId: string, characterIds: readonly string[], choose: (prompt: string) => Promise<string>) {
+      const permit = currentScheduledScene()
+      for (const characterId of characterIds) permit?.assertCharacter(characterId, sceneId, runId, storyId)
       const { scene } = await pendingScene(sceneId)
       const allowed = new Set(characterIds)
       if (allowed.size !== characterIds.length) throw new Error('场景候选角色重复')
@@ -80,6 +84,7 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
       const output = characterSelectionSchema.parse(parseStrictJson(await choose(`你是当前场景的子导演，请从候选中选择参与者。邀请描述处境及回应机会，不指定角色行动。只返回 JSON {"participants":[{"characterId":"候选 ID","invitation":"回应契机"}]}，也可以返回空列表。场景：${JSON.stringify({ situation: scene.situation, preparation: scene.preparation, candidates: roster })}`)))
       await pendingScene(sceneId)
       return Promise.all(output.participants.map(async item => {
+        permit?.assertCharacter(item.characterId, sceneId, runId, storyId)
         const { version } = await readCandidate(item.characterId, allowed)
         const request = Object.freeze({ ...item, participationId: randomUUID(), worldId: world.worldId, runId, storyId, sceneId, profileVersion: version })
         issued.add(request)
@@ -89,12 +94,16 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
     /** 调用方在当前场景逐角色授予片段。持久来源的版本及实际文本在调用前复核。 */
     async prepare(request: CharacterParticipationRequest, grants: readonly CharacterKnowledgeGrant[]) {
       if (!issued.has(request)) throw new Error('角色参与请求未由当前子故事签发')
-      if (grants.length > 32) throw new Error('角色认知条目超过数量限制')
+      const permit = currentScheduledScene()
+      permit?.assertCharacter(request.characterId, request.sceneId, runId, storyId)
+      if (grants.some(item => item.source.kind === 'fixed' && item.source.id.startsWith(scheduledExperiencePrefix))) throw new Error('跨故事经历须由排期证据派生')
+      const input = [...grants, ...(permit ? await permit.experiences(request.characterId) : [])]
+      if (input.length > 32) throw new Error('角色认知条目超过数量限制')
       const { scene, plan } = await pendingScene(request.sceneId)
       if (plan.formatVersion !== 2) throw new Error('角色认知缺少世界绑定')
       const { document, version } = await readCandidate(request.characterId, new Set([request.characterId]))
       if (version !== request.profileVersion) throw new Error('角色档案版本已变化')
-      const entries = grants.map(value => {
+      const entries = input.map(value => {
         const { source, ...item } = characterKnowledgeGrantSchema.parse(value)
         if (item.characterId !== request.characterId || item.sceneId !== request.sceneId) throw new Error('认知授权角色或场景不匹配')
         let proof: CharacterKnowledgeEntry['source']
@@ -127,8 +136,11 @@ export function bindStoryCharacters(roots: Roots, identity: { runId: string; sto
       if (!prepared.has(preparation)) throw new Error('参与输入未由当前子故事核准')
       const { request, entries } = preparation
       const { sceneId, participationId } = request
+      const permit = currentScheduledScene()
+      permit?.assertCharacter(request.characterId, sceneId, runId, storyId)
       const { store: records } = await pendingScene(sceneId)
       const claim = characterParticipationClaimSchema.parse({ formatVersion: 1, request, entries, configVersion })
+      permit?.assertCharacter(request.characterId, sceneId, runId, storyId)
       if (!await records.claimCharacterParticipation(claim)) {
         const saved = await records.readCharacterParticipation(runId, storyId, sceneId, participationId)
         if (characterClaimDigest(saved.claim) !== characterClaimDigest(claim)) throw new Error('同一参与身份的请求内容已变化')

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { openWorldScheduleStore, sceneScheduleReadiness, scheduleDigest, worldScheduleSchema, type ScheduleSlot, type WorldSchedule } from '../world-schedule.js'
-import { createStoryPlan, createStoryScene, openStoryWorldSchedule, runStoryTree } from '../../app/story-workflow.js'
+import { bindStoryCharacters, createStoryPlan, createStoryScene, openStoryCharacterRuntime, openStorySceneInteraction, openStoryWorldSchedule, runStoryTree, type bindStoryWorld } from '../../app/story-workflow.js'
+import { CharacterStore } from '@fly-novel/character'
 import { achieved, createTestDirectory, leaf, ScriptedAdapter, simulation } from './fixtures.js'
 
 const worldId = '曲水城'
@@ -48,18 +49,100 @@ async function fixture(t: Parameters<typeof createTestDirectory>[0]) {
   const roots = { planRoot, collaborationRoot, protectedRoots: [] }
   const model = { provider: 'fixed', model: 'fixed' }
   const content = '夜间闭门'
-  const { createHash } = await import('node:crypto')
+  const deliveryId = randomUUID()
   const createPlan = (events: string[]) => createStoryPlan({
     ...model, root: planRoot, protectedRoots: [collaborationRoot, scheduleRoot],
     adapter: new ScriptedAdapter([JSON.stringify({ kind: 'planned', events })]),
   }, {
     task: '曲水城商贸', facts: [content], directions: [],
-    world: { worldId, deliveryId: randomUUID(), deliveryVersion: '1', reviewVersion: '1',
+    world: { worldId, deliveryId, deliveryVersion: '1', reviewVersion: '1',
       materials: [{ category: 'setting', source: { kind: 'fixed', id: '北门规则' }, version: '1', content,
         digest: createHash('sha256').update(content).digest('hex') }], notes: [], uncovered: [], deferred: [] },
   })
-  return { roots, model, createPlan, options: { worldId, scheduleRoot, maxConcurrent: 2 } }
+  return { root, roots, model, createPlan, deliveryId, options: { worldId, scheduleRoot, maxConcurrent: 2 } }
 }
+
+test('跨故事经历按真实感知逐角色装配，泄露和未登记角色调用被拒绝', { timeout: 10000 }, async t => {
+  const { root, roots, model, createPlan, deliveryId, options } = await fixture(t)
+  const worldRoot = join(root, 'world')
+  const characterRoot = join(worldRoot, 'characters')
+  await mkdir(characterRoot, { recursive: true })
+  const characters = await CharacterStore.open(characterRoot, true)
+  const owner = { agentId: 'characters', writableRoot: characters.rootDirectory }
+  const binding: Awaited<ReturnType<typeof bindStoryWorld>> = {
+    deliveryId, world: { worldId, readRoot: worldRoot, confirmedRoot: worldRoot, catalogRoot: worldRoot, mainAgent: owner, agents: [owner] },
+    async readDelivery() { throw new Error('使用固定交付'); },
+  }
+  const actors = await Promise.all(['守卫', '领队', '书记员'].map(async name => {
+    const { id: characterId } = await characters.create({ name, summary: name, categories: {}, body: name })
+    return { characterId, version: (await characters.readVersioned(characterId)).version, presence: '在场', name }
+  }))
+  const [gateGuard, leader, clerk] = actors as [typeof actors[number], typeof actors[number], typeof actors[number]]
+  const [gatePlan, officePlan] = await Promise.all([createPlan(['北门交涉']), createPlan(['值所交接'])])
+  const dispatcher = await openStoryWorldSchedule(roots, { ...options, async allowExperience() { return true } })
+  try {
+    const before = { ...slot(0, 10), runId: gatePlan.id, characters: actors.map(actor => actor.characterId) }
+    const later = { ...slot(20, 25, office), runId: officePlan.id, characters: [gateGuard.characterId, clerk.characterId] }
+    const initial = await dispatcher.openWindow({ id: randomUUID(), epoch: '当夜', start: 0, end: 60,
+      positions: actors.map(actor => ({ characterId: actor.characterId, locationId: north })),
+      routes: [{ from: north, to: office, duration: 10, sourceId: '城墙路', version: '1', passage: 'allowed', basis: '已核查通行' }] })
+    await dispatcher.revise(initial.revision, { slots: [before, later], seal: true, reason: '批准交接排期' })
+    const early = new ScriptedAdapter([JSON.stringify({ kind: 'respond', speech: [
+      { text: '货物快坏了', channel: 'whisper', intendedCharacterIds: [gateGuard.characterId] },
+      { text: '登记暗号', channel: 'whisper', intendedCharacterIds: [clerk.characterId] },
+    ], actions: [], privateThought: '领队私念' })])
+    const guardModel = new ScriptedAdapter(['{"kind":"wait"}'])
+    const clerkModel = new ScriptedAdapter(['{"kind":"wait"}'])
+    const run = (planned: ScheduleSlot) => runStoryTree({
+      ...roots, ...model, adapter: new ScriptedAdapter([...leaf('交接'), achieved]),
+      async simulate(input, signal) {
+        const saved = await createStoryScene(roots, input.runId, input.storyId, { order: 1, situation: '依照排期准备', preparation: '登记' })
+        return dispatcher.execute(planned.id, { storyId: input.storyId, sceneId: saved.sceneId }, async (permit, activeSignal) => {
+          const scope = bindStoryCharacters(roots, input, { binding, ownerAgentId: owner.agentId, store: characters, candidates: actors })
+          const runtime = await openStoryCharacterRuntime(scope, characterId => ({
+            ...model, version: '1', timeoutMs: 5000, adapter: planned === before ? early : characterId === gateGuard.characterId ? guardModel : clerkModel,
+          }))
+          try {
+            const respond = async (actor: typeof leader) => {
+              const [request] = await scope.select(saved.sceneId, [actor.characterId], async () => JSON.stringify({ participants: [{ characterId: actor.characterId, invitation: '交谈' }] }))
+              return runtime.respond(request!, [
+                { characterId: actor.characterId, sceneId: saved.sceneId, category: 'profile', content: actor.name, basis: '固定档案', source: { kind: 'profile' } },
+                { characterId: actor.characterId, sceneId: saved.sceneId, category: 'observation', content: saved.situation, basis: '当前处境', source: { kind: 'scene', field: 'situation' } },
+              ], activeSignal)
+            }
+            if (planned === before) {
+              const response = await respond(leader)
+              assert.equal(response.outcome.status, 'responded')
+              const interaction = openStorySceneInteraction(roots, { runId: input.runId, storyId: input.storyId, sceneId: saved.sceneId })
+              await interaction.append(1, response.participationId, { version: '1', participants: actors.map(actor => ({
+                characterId: actor.characterId, hearing: 'clear', sight: 'clear', position: north, basis: '临近',
+              })) })
+              await interaction.decide(1, '1', async () => JSON.stringify({ next: { kind: 'end', reason: '交谈结束' }, perceptions: [
+                { characterId: leader.characterId, status: 'not-received', reason: '本人发言', observations: [] },
+                { characterId: gateGuard.characterId, status: 'received', reason: '耳语对象', observations: [{ kind: 'speech', index: 0 }] },
+                { characterId: clerk.characterId, status: 'received', reason: '耳语对象', observations: [{ kind: 'speech', index: 1 }] },
+              ] }))
+            } else {
+              await assert.rejects(respond(leader), /超出当前排期/)
+              const first = await permit.experiences(gateGuard.characterId)
+              assert.deepEqual(await permit.experiences(gateGuard.characterId), first)
+              assert.equal(first.length, 1)
+              await respond(gateGuard)
+              await respond(clerk)
+            }
+            await input.recordSceneResult(saved.sceneId, { status: 'completed', simulation })
+            return simulation
+          } finally { await runtime.close() }
+        }, signal)
+      },
+    }, planned.runId)
+    assert.deepEqual((await Promise.all([run(later), run(before)])).map(result => result.kind), ['result', 'result'])
+    assert.match(JSON.stringify(guardModel.requests), /货物快坏了/)
+    assert.doesNotMatch(JSON.stringify(guardModel.requests), /登记暗号|领队私念/)
+    assert.match(JSON.stringify(clerkModel.requests), /登记暗号/)
+    assert.doesNotMatch(JSON.stringify(clerkModel.requests), /货物快坏了|领队私念/)
+  } finally { await dispatcher.close(); await characters.close() }
+})
 
 test('正式故事入口并发推进独立场景，重复领取被拒绝，已结算排期可重读', { timeout: 10000 }, async t => {
   const { roots, model, createPlan, options } = await fixture(t)
