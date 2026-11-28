@@ -5,7 +5,7 @@ import { openStory, readIfPresent } from '../story-workflow/story-query.js'
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { bindStoryWorld } from './story-world-materials.js'
 import { sceneInteractionDigest } from '../story-workflow/scene-interaction.js'
-import { currentScheduledScene, scheduledExperiencePrefix } from './story-world-schedule.js'
+import { currentScheduledScene, scheduledExperiencePrefix } from './story-schedule-context.js'
 
 type Roots = Parameters<typeof openStory>[0]
 type Binding = Awaited<ReturnType<typeof bindStoryWorld>>

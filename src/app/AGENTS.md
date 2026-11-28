@@ -13,6 +13,7 @@
 - `story-event.ts`：在可信世界运行范围内采用并重读已结算的场景事件。
 - `story-convoy-state.ts`：绑定商队状态目标、核对事件证据与状态变化授权。
 - `story-world-schedule.ts`：可信应用的世界时间窗、并行场景领取和结算入口。
+- `story-schedule-context.ts`：演绎回调持有的角色、经历和共享状态许可。
 - `story-workflow-debug.ts`：使用本机真实模型与模拟演绎运行整轮故事的调试入口。
 - `tests/`：所属模块的自动化测试。
 - `world-initialization-entry.ts`：世界初始化可信应用及业务服务装配入口。

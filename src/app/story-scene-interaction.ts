@@ -5,7 +5,7 @@ import type { CharacterKnowledgeGrant } from '../story-workflow/character-partic
 import { parseStrictJson } from '../story-workflow/types.js'
 import type { StoryCharacterScope } from './story-character-participation.js'
 import type { openStoryCharacterRuntime } from './story-character-runtime.js'
-import { currentScheduledScene } from './story-world-schedule.js'
+import { currentScheduledScene } from './story-schedule-context.js'
 
 type Roots = Parameters<typeof openStory>[0]
 export interface SceneInteractionIdentity { runId: string; storyId: string; sceneId: string }

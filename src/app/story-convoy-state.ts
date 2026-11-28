@@ -7,6 +7,7 @@ import { sceneInteractionDigest } from '../story-workflow/scene-interaction.js'
 import { eventAssessmentEvidence, type StoryWorldProgressSource } from '../story-workflow/world-progress.js'
 import { PlanStore } from '../story-workflow/store.js'
 import { openStoryEvents } from './story-event.js'
+import { currentScheduledScene } from './story-schedule-context.js'
 
 type Roots = Parameters<typeof openStoryEvents>[0]
 type Action = SceneEvent['sequence'][number]['actions'][number]
@@ -19,7 +20,8 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
   const { runId, authorize } = options
   await PlanStore.open(options.stateRoot, [roots.planRoot, roots.collaborationRoot, options.worldRoot, ...roots.protectedRoots])
   const root = await realpath(options.stateRoot)
-  const events = openStoryEvents({ ...roots, protectedRoots: [...roots.protectedRoots, root, options.worldRoot] }, { worldId: identity.worldId, runId })
+  const eventRoots = { ...roots, protectedRoots: [...roots.protectedRoots, root, options.worldRoot] }
+  const events = openStoryEvents(eventRoots, { worldId: identity.worldId, runId })
   const baselineFile = 'convoy-0.json'
   const committedFile = 'convoy-1.json'
 
@@ -50,9 +52,9 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
     return change
   }
 
-  async function verifyEvidence(proposal: ConvoyProposal) {
-    const { actionIndex, sequence, eventId, ...source } = proposal.evidence
-    const event = await events.read(source)
+  async function verifyEvidence(proposal: ConvoyProposal, source = events) {
+    const { actionIndex, sequence, eventId, ...sourceIdentity } = proposal.evidence
+    const event = await source.read(sourceIdentity)
     if (event.eventId !== eventId) throw new Error('商队状态变化的事件版本已变化')
     const action = event.sequence.find(item => item.order === sequence)?.actions.find(item => item.index === actionIndex)
     if (!action || action.status !== 'succeeded' || !action.ruleAllowed || !action.observable) throw new Error('缺少已经确认的商队行动结果')
@@ -86,6 +88,12 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
   async function apply(operationId: string, signal?: AbortSignal): Promise<ConvoyReceipt> {
     signal?.throwIfAborted()
     if (!authorize) throw new Error('无权应用商队状态变化')
+    const permit = currentScheduledScene()
+    if (permit) {
+      const saved = await readChange(operationId)
+      permit.assertConvoyWrite(root, saved.proposal)
+      if (saved.expectedDigest !== permit.state?.digest) throw new Error('商队获准操作与排期准入摘要不匹配')
+    }
     const prior = await inspect(operationId)
     if (prior.status !== 'not-applied') return prior
     let change
@@ -99,6 +107,7 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
     if (current.revision !== proposal.expectedRevision || sceneInteractionDigest(current) !== change.expectedDigest) return inspect(operationId)
     const record = convoyCommittedSchema.parse({ ...identity, formatVersion: 1, revision: 1, status: 'waiting', locationId: proposal.locationId, change })
     signal?.throwIfAborted()
+    permit?.assertConvoyWrite(root, proposal)
     try { await publishConvoyRecord(root, committedFile, record) }
     catch (error) {
       const receipt = await inspect(operationId)
@@ -111,12 +120,19 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
   const progress: StoryWorldProgressSource = Object.freeze({
     worldId: identity.worldId, runId,
     async current() {
+      const permit = currentScheduledScene()
+      if (permit) return permit.readConvoy(root, identity.worldId, runId, identity.convoyId)
       const current = await read()
       const stamp = { ...identity, digest: sceneInteractionDigest(current) }
       if (current.status === 'waiting') {
         const { proposal } = current.change
-        const receipt = await inspect(proposal.operationId)
-        if (receipt.status !== 'applied' || !isDeepStrictEqual(receipt.state, current)) throw new Error('当前商队状态的应用回执待核查')
+        try {
+          const source = proposal.evidence.runId === runId ? events : openStoryEvents(eventRoots, { worldId: identity.worldId, runId: proposal.evidence.runId })
+          const { event } = await verifyEvidence(proposal, source)
+          if (sceneInteractionDigest(event) !== current.change.eventDigest) throw new Error('状态的事件摘要已变化')
+        } catch (error) {
+          throw new Error('当前商队状态的应用回执待核查', { cause: error })
+        }
         return { ...stamp, status: 'waiting' as const, revision: 1 as const, locationId: current.locationId,
           operationId: proposal.operationId, eventId: proposal.evidence.eventId }
       }
@@ -130,8 +146,22 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
     },
   })
 
-  return Object.freeze({ worldId: identity.worldId, convoyId: identity.convoyId, runId, read, readChange, inspect, apply, progress,
+  return Object.freeze({ worldId: identity.worldId, convoyId: identity.convoyId, runId, stateRoot: root,
+    async initialEvidence() {
+      const permit = currentScheduledScene()
+      if (permit) return permit.readConvoy(root, identity.worldId, runId, identity.convoyId)
+      const baseline = await readBaseline()
+      return { ...identity, status: 'arrived' as const, revision: 0 as const, digest: sceneInteractionDigest(baseline) }
+    },
+    async read() {
+      const expected = currentScheduledScene()?.readConvoy(root, identity.worldId, runId, identity.convoyId)
+      const result = await read()
+      if (expected && sceneInteractionDigest(result) !== expected.digest) throw new Error('商队状态已越过场景准入版本')
+      return result
+    },
+    readChange, inspect, apply, progress,
     async initialize(source: ConvoyBaseline['source']) {
+      if (currentScheduledScene()) throw new Error('场景执行期间不能初始化商队')
       const baseline: ConvoyBaseline = { ...identity, formatVersion: 1, revision: 0, status: 'arrived', source: convoyBaselineSourceSchema.parse(source) }
       if (!await publishConvoyRecord(root, baselineFile, baseline) && !isDeepStrictEqual(await readBaseline(), baseline)) throw new Error('商队已有不同初始状态')
       return baseline
@@ -139,20 +169,25 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
     async prepare(input: ConvoyProposal) {
       const proposal = convoyProposalSchema.parse(input)
       verifyIdentity(proposal)
+      const permit = currentScheduledScene()
+      permit?.assertConvoyWrite(root, proposal)
       let existing: ConvoyChange | undefined
       try { existing = await readChange(proposal.operationId) }
       catch (error) { if (!isMissingStoryFile(error)) throw error }
       if (existing) {
         if (!isDeepStrictEqual(existing.proposal, proposal)) throw new Error('同一商队状态操作的内容已变化')
+        if (permit && existing.expectedDigest !== permit.state?.digest) throw new Error('商队获准操作与排期准入摘要不匹配')
         return existing
       }
       if (!authorize) throw new Error('无权准备商队状态变化')
       const baseline = await read()
       if (baseline.revision !== proposal.expectedRevision) throw new Error('商队状态预期版本已变化')
+      if (permit && sceneInteractionDigest(baseline) !== permit.state?.digest) throw new Error('商队状态已越过场景准入版本')
       const { event, action } = await verifyEvidence(proposal)
       const authorization = await authorize(structuredClone({ proposal, event, action }))
       if (!authorization) throw new Error('商队状态变化未获授权')
       const change = convoyChangeSchema.parse({ formatVersion: 1, proposal, expectedDigest: sceneInteractionDigest(baseline), eventDigest: sceneInteractionDigest(event), authorization })
+      permit?.assertConvoyWrite(root, proposal)
       if (!await publishConvoyRecord(root, convoyOperationName(proposal.operationId), change) && !isDeepStrictEqual(await readChange(proposal.operationId), change)) {
         throw new Error('同一商队状态操作的内容已变化')
       }

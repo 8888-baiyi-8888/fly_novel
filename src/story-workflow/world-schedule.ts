@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
 import { publishConvoyRecord, readConvoyRecord } from './convoy-state.js'
 import { PlanStore } from './store.js'
+import { currentConvoyEvidenceSchema } from './world-progress.js'
 
 const id = z.string().uuid()
 const text = z.string().trim().min(1)
@@ -20,7 +21,9 @@ export const scheduleRouteSchema = z.object({
   passage: z.enum(['allowed', 'blocked', 'unknown']), basis: text,
 }).strict()
 export type ScheduleRoute = z.infer<typeof scheduleRouteSchema>
-const claim = scene.extend({ token: id, routes: z.array(scheduleRouteSchema).default([]) }).strict()
+const claim = scene.extend({
+  token: id, routes: z.array(scheduleRouteSchema).default([]), state: currentConvoyEvidenceSchema.optional(),
+}).strict()
 
 export const scheduleSlotSchema = z.object({
   id, runId: id, ...range, locationId: text, characters: z.array(id), dependencies: z.array(dependency),
@@ -30,6 +33,7 @@ export type ScheduleSlot = z.infer<typeof scheduleSlotSchema>
 
 const settlement = z.object({
   kind: z.literal('settled'), evidenceDigest: hash, positions: z.array(position),
+  effect: z.object({ minute, state: currentConvoyEvidenceSchema }).strict().optional(),
 }).strict()
 const resolution = z.discriminatedUnion('kind', [
   settlement, z.object({ kind: z.literal('cancelled'), reason: text }).strict(),
@@ -38,6 +42,7 @@ const resolution = z.discriminatedUnion('kind', [
 const scheduled = scheduleSlotSchema.extend({ claim: claim.optional(), resolution: resolution.optional() }).strict()
 const workspace = z.object({
   id, ...range, sealed: z.boolean(), positions: z.array(position), routes: z.array(scheduleRouteSchema), slots: z.array(scheduled),
+  baseline: currentConvoyEvidenceSchema.optional(),
 }).strict()
 export const worldScheduleSchema = z.object({
   formatVersion: z.literal(1), worldId: text, epoch: text, revision: minute,
@@ -47,6 +52,7 @@ export const worldScheduleSchema = z.object({
   const issue = (message: string) => ctx.addIssue({ code: 'custom', message })
   if ((value.revision === 0) !== (value.previous === null) || window.start >= window.end) issue('世界时间窗或版本无效')
   if (new Set(window.positions.map(item => item.characterId)).size !== window.positions.length) issue('角色起始位置重复')
+  if (window.baseline && window.baseline.worldId !== value.worldId) issue('时间窗商队状态属于其他世界')
   if (new Set(window.routes.map(item => JSON.stringify([item.from, item.to]))).size !== window.routes.length ||
     window.routes.some(item => item.from === item.to)) issue('直连路线方向重复或无效')
   const byId = new Map(window.slots.map(item => [item.id, item]))
@@ -64,19 +70,26 @@ export const worldScheduleSchema = z.object({
       const key = JSON.stringify([slot.runId, slot.claim.storyId, slot.claim.sceneId])
       if (identities.has(key) || !window.sealed) issue('已领取场景身份重复或时间窗未批准')
       identities.add(key)
+      if (slot.claim.state ? (slot.claim.state.worldId !== value.worldId || slot.claim.state.convoyId !== window.baseline?.convoyId ||
+        !slot.targets.some(target => target.id === slot.claim?.state?.convoyId)) : slot.targets.length > 0) issue('领取记录的共享状态不匹配')
     }
     if (slot.resolution?.kind === 'settled') {
       const known = slot.resolution.positions.map(item => item.characterId)
       if (!slot.claim || known.length !== slot.characters.length || new Set(known).size !== known.length ||
         !known.every(characterId => slot.characters.includes(characterId))) issue('结算角色及领取记录不匹配')
+      const effect = slot.resolution.effect
+      if (effect && (effect.minute !== slot.end || effect.state.status !== 'waiting' || effect.state.worldId !== value.worldId ||
+        effect.state.convoyId !== slot.claim?.state?.convoyId || effect.state.revision !== slot.claim.state.revision + 1 ||
+        !slot.targets.some(target => target.id === effect.state.convoyId && target.mode === 'write'))) issue('场景状态变化或生效时间无效')
     }
     if (slot.resolution?.kind === 'uncertain' && !slot.claim) issue('待核查的排期缺少领取')
   }
   const active = window.slots.filter(slot => slot.resolution?.kind !== 'cancelled')
   for (const [index, left] of active.entries()) {
     for (const right of active.slice(index + 1)) {
-      if (left.start < right.end && right.start < left.end && left.characters.some(id => right.characters.includes(id))) {
-        issue('同一角色的排期区间重叠')
+      if (left.start < right.end && right.start < left.end) {
+        if (left.characters.some(id => right.characters.includes(id))) issue('同一角色的排期区间重叠')
+        if (left.targets.some(target => right.targets.some(other => target.id === other.id && (target.mode === 'write' || other.mode === 'write')))) issue('共享状态的读写或写写区间重叠')
       }
     }
   }
@@ -88,6 +101,14 @@ export type ScheduleBlock =
   | { kind: 'unsealed' }
   | { kind: 'predecessor' | 'result'; slotId: string; characterId?: string; targetId?: string }
   | { kind: 'position' | 'no-route' | 'passage' | 'travel-time' | 'route-version'; characterId: string; from?: string; to: string }
+  | { kind: 'state-unverified'; targetId: string }
+
+/** 读取已核对的业务效果。每次写入只在场景结束时对后段生效。 */
+export function scheduledStateAt(window: WorldSchedule['window'], time: number) {
+  const effects = window.slots.flatMap(slot => slot.resolution?.kind === 'settled' && slot.resolution.effect ? [slot.resolution.effect] : [])
+    .filter(effect => effect.minute <= time).sort((left, right) => right.minute - left.minute)
+  return effects[0]?.state ?? window.baseline
+}
 
 export function sceneScheduleReadiness(window: WorldSchedule['window'], slot: ScheduledScene): { blocks: ScheduleBlock[]; routes: ScheduleRoute[] } {
   const blocks: ScheduleBlock[] = []
@@ -97,6 +118,13 @@ export function sceneScheduleReadiness(window: WorldSchedule['window'], slot: Sc
     const before = window.slots.find(item => item.id === dependency.slotId)!
     if (before.resolution?.kind === 'settled' || (before.resolution?.kind === 'cancelled' && dependency.kind === 'order')) continue
     blocks.push({ kind: dependency.kind === 'result' ? 'result' : 'predecessor', slotId: before.id })
+  }
+  for (const target of slot.targets) {
+    for (const before of window.slots) {
+      if (before.end > slot.start || before.resolution?.kind === 'settled' || before.resolution?.kind === 'cancelled' ||
+        !before.targets.some(other => other.id === target.id && (target.mode === 'write' || other.mode === 'write'))) continue
+      blocks.push({ kind: 'predecessor', slotId: before.id, targetId: target.id })
+    }
   }
   for (const characterId of slot.characters) {
     const before = window.slots.filter(item => item.end <= slot.start && item.id !== slot.id && item.resolution?.kind !== 'cancelled' &&

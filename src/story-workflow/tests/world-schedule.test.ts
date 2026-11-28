@@ -4,7 +4,7 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { openWorldScheduleStore, sceneScheduleReadiness, scheduleDigest, worldScheduleSchema, type ScheduleSlot, type WorldSchedule } from '../world-schedule.js'
-import { bindStoryCharacters, createStoryPlan, createStoryScene, openStoryCharacterRuntime, openStorySceneInteraction, openStoryWorldSchedule, runStoryTree, type bindStoryWorld } from '../../app/story-workflow.js'
+import { bindStoryCharacters, createStoryPlan, createStoryScene, openStoryCharacterRuntime, openStoryConvoyState, openStoryEvents, openStorySceneInteraction, openStoryWorldSchedule, runStoryTree, type bindStoryWorld } from '../../app/story-workflow.js'
 import { CharacterStore } from '@fly-novel/character'
 import { achieved, createTestDirectory, leaf, ScriptedAdapter, simulation } from './fixtures.js'
 
@@ -38,6 +38,19 @@ test('角色交接按已结算地点、通行方向和剩余世界时间判定',
   assert.equal(sceneScheduleReadiness(window, { ...later, start: 19 }).blocks[0]?.kind, 'travel-time')
   assert.deepEqual(sceneScheduleReadiness(window, later), { blocks: [], routes: [route] })
   assert.deepEqual(sceneScheduleReadiness(window, { ...later, locationId: north, start: 10 }).blocks, [])
+})
+
+test('排期允许同一状态读读重叠，按时间阻止读写和写写冲突', () => {
+  const convoy = randomUUID()
+  const earlier = { ...slot(0, 10), characters: [], targets: [{ id: convoy, mode: 'write' as const }] }
+  const reader = { ...slot(9, 20), characters: [], targets: [{ id: convoy, mode: 'read' as const }] }
+  assert.throws(() => worldScheduleSchema.parse(schedule([earlier, reader])), /共享状态.*重叠/)
+  assert.throws(() => worldScheduleSchema.parse(schedule([earlier, { ...reader, targets: earlier.targets }])), /共享状态.*重叠/)
+  assert.doesNotThrow(() => worldScheduleSchema.parse(schedule([{ ...earlier, targets: reader.targets }, reader])))
+  const later = { ...reader, start: 10 }
+  const { window } = schedule([earlier, later])
+  window.sealed = true
+  assert.deepEqual(sceneScheduleReadiness(window, later).blocks, [{ kind: 'predecessor', slotId: earlier.id, targetId: convoy }])
 })
 
 async function fixture(t: Parameters<typeof createTestDirectory>[0]) {
@@ -79,10 +92,17 @@ test('跨故事经历按真实感知逐角色装配，泄露和未登记角色�
   }))
   const [gateGuard, leader, clerk] = actors as [typeof actors[number], typeof actors[number], typeof actors[number]]
   const [gatePlan, officePlan] = await Promise.all([createPlan(['北门交涉']), createPlan(['值所交接'])])
-  const dispatcher = await openStoryWorldSchedule(roots, { ...options, async allowExperience() { return true } })
+  const stateRoot = join(root, 'state')
+  await mkdir(stateRoot)
+  const convoy = { convoyId: randomUUID(), stateRoot, worldRoot, async authorize() { return '获准在北门等候' } }
+  const gateState = await openStoryConvoyState(roots, { ...convoy, worldId, runId: gatePlan.id })
+  await gateState.initialize({ sourceId: '商队已抵达', version: '1' })
+  const dispatcher = await openStoryWorldSchedule(roots, { ...options, convoy, async allowExperience() { return true } })
   try {
-    const before = { ...slot(0, 10), runId: gatePlan.id, characters: actors.map(actor => actor.characterId) }
-    const later = { ...slot(20, 25, office), runId: officePlan.id, characters: [gateGuard.characterId, clerk.characterId] }
+    const before = { ...slot(0, 10), runId: gatePlan.id, characters: actors.map(actor => actor.characterId),
+      targets: [{ id: convoy.convoyId, mode: 'write' as const }] }
+    const later = { ...slot(20, 25, office), runId: officePlan.id, characters: [gateGuard.characterId, clerk.characterId],
+      targets: [{ id: convoy.convoyId, mode: 'read' as const }] }
     const initial = await dispatcher.openWindow({ id: randomUUID(), epoch: '当夜', start: 0, end: 60,
       positions: actors.map(actor => ({ characterId: actor.characterId, locationId: north })),
       routes: [{ from: north, to: office, duration: 10, sourceId: '城墙路', version: '1', passage: 'allowed', basis: '已核查通行' }] })
@@ -90,11 +110,11 @@ test('跨故事经历按真实感知逐角色装配，泄露和未登记角色�
     const early = new ScriptedAdapter([JSON.stringify({ kind: 'respond', speech: [
       { text: '货物快坏了', channel: 'whisper', intendedCharacterIds: [gateGuard.characterId] },
       { text: '登记暗号', channel: 'whisper', intendedCharacterIds: [clerk.characterId] },
-    ], actions: [], privateThought: '领队私念' })])
+    ], actions: ['停稳车辆'], privateThought: '领队私念' })])
     const guardModel = new ScriptedAdapter(['{"kind":"wait"}'])
     const clerkModel = new ScriptedAdapter(['{"kind":"wait"}'])
     const run = (planned: ScheduleSlot) => runStoryTree({
-      ...roots, ...model, adapter: new ScriptedAdapter([...leaf('交接'), achieved]),
+      ...roots, ...model, adapter: new ScriptedAdapter([...leaf('交接'), achieved]), worldProgress: dispatcher.progress(planned.runId),
       async simulate(input, signal) {
         const saved = await createStoryScene(roots, input.runId, input.storyId, { order: 1, situation: '依照排期准备', preparation: '登记' })
         return dispatcher.execute(planned.id, { storyId: input.storyId, sceneId: saved.sceneId }, async (permit, activeSignal) => {
@@ -117,12 +137,15 @@ test('跨故事经历按真实感知逐角色装配，泄露和未登记角色�
               await interaction.append(1, response.participationId, { version: '1', participants: actors.map(actor => ({
                 characterId: actor.characterId, hearing: 'clear', sight: 'clear', position: north, basis: '临近',
               })) })
+              await interaction.judgeActions(1, async () => JSON.stringify([{ index: 0, status: 'succeeded', reason: '车辆停稳', observable: '商队已在北门等候' }]))
               await interaction.decide(1, '1', async () => JSON.stringify({ next: { kind: 'end', reason: '交谈结束' }, perceptions: [
                 { characterId: leader.characterId, status: 'not-received', reason: '本人发言', observations: [] },
                 { characterId: gateGuard.characterId, status: 'received', reason: '耳语对象', observations: [{ kind: 'speech', index: 0 }] },
                 { characterId: clerk.characterId, status: 'received', reason: '耳语对象', observations: [{ kind: 'speech', index: 1 }] },
               ] }))
             } else {
+              assert.equal(permit.state?.status, 'waiting')
+              assert.equal((await dispatcher.progress(input.runId).current()).status, 'waiting')
               await assert.rejects(respond(leader), /超出当前排期/)
               const first = await permit.experiences(gateGuard.characterId)
               assert.deepEqual(await permit.experiences(gateGuard.characterId), first)
@@ -131,6 +154,16 @@ test('跨故事经历按真实感知逐角色装配，泄露和未登记角色�
               await respond(clerk)
             }
             await input.recordSceneResult(saved.sceneId, { status: 'completed', simulation })
+            if (planned === before) {
+              const evidence = { runId: input.runId, storyId: input.storyId, sceneId: saved.sceneId }
+              const event = await openStoryEvents(roots, { worldId, runId: input.runId }).adopt(evidence)
+              const operationId = randomUUID()
+              await gateState.prepare({ worldId, convoyId: convoy.convoyId, expectedRevision: 0, locationId: north, operationId,
+                evidence: { ...evidence, eventId: event.eventId, sequence: 1, actionIndex: 0 } })
+              assert.equal((await gateState.apply(operationId, activeSignal)).status, 'applied')
+              assert.equal((await gateState.progress.current()).status, 'arrived')
+              assert.equal((await gateState.apply(operationId, activeSignal)).status, 'applied')
+            }
             return simulation
           } finally { await runtime.close() }
         }, signal)
@@ -141,6 +174,10 @@ test('跨故事经历按真实感知逐角色装配，泄露和未登记角色�
     assert.doesNotMatch(JSON.stringify(guardModel.requests), /登记暗号|领队私念/)
     assert.match(JSON.stringify(clerkModel.requests), /登记暗号/)
     assert.doesNotMatch(JSON.stringify(clerkModel.requests), /货物快坏了|领队私念/)
+    const settled = (await dispatcher.view()).slots[0]?.resolution
+    assert.equal(settled?.kind, 'settled')
+    assert.equal(settled.effect?.minute, 10)
+    assert.equal(settled.effect?.state.revision, 1)
   } finally { await dispatcher.close(); await characters.close() }
 })
 

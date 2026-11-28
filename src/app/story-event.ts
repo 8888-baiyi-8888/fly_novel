@@ -1,5 +1,6 @@
 import { openStory } from '../story-workflow/story-query.js'
 import type { SceneInteractionIdentity } from './story-scene-interaction.js'
+import { currentScheduledScene } from './story-schedule-context.js'
 
 type Roots = Parameters<typeof openStory>[0]
 
@@ -19,7 +20,11 @@ export function openStoryEvents(roots: Roots, scope: { worldId: string; runId: s
   }
   return Object.freeze({ worldId, runId,
     async adopt(identity: SceneInteractionIdentity) {
-      return (await readSource(identity)).recordSceneEvent(worldId, runId, identity.storyId, identity.sceneId)
+      const permit = currentScheduledScene()
+      permit?.assertScene(identity.sceneId, identity.runId, identity.storyId)
+      const store = await readSource(identity)
+      permit?.assertScene(identity.sceneId, identity.runId, identity.storyId)
+      return store.recordSceneEvent(worldId, runId, identity.storyId, identity.sceneId)
     },
     async read(identity: SceneInteractionIdentity) {
       return (await readSource(identity)).readSceneEvent(worldId, runId, identity.storyId, identity.sceneId)
