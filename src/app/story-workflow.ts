@@ -7,7 +7,7 @@ import type { SceneInteractionConditions } from '../story-workflow/scene-interac
 import type { StoryTreeOptions } from '../story-workflow/workflow.js'
 import { createNextStoryPlan as createNextPlan } from '../story-workflow/workflow.js'
 export type { StoryTreeOptions } from '../story-workflow/workflow.js'
-import { createStoryPlan as createPlan, runStoryCollaboration as runCollaboration, runStorySiblings as runSiblings, runStoryTree as runTree, type OpenDirectors, type StoryPlanningOptions, type StoryCollaborationOptions } from '../story-workflow/workflow.js'
+import { createStoryPlan as createPlan, runStoryCollaboration as runCollaboration, runStorySiblings as runSiblings, runStoryTree as runTree, type ManagedStoryTree, type OpenDirectors, type StoryPlanningOptions, type StoryCollaborationOptions } from '../story-workflow/workflow.js'
 export type { StoryPlanningOptions, StoryCollaborationOptions } from '../story-workflow/workflow.js'
 export { readStoryPlan, readStoryCollaboration, readStorySimulation, readStorySiblingDecision, readStoryRoundResult } from '../story-workflow/workflow.js'
 export { readStory } from '../story-workflow/story-query.js'
@@ -149,6 +149,10 @@ export function runStoryTree(options: StoryTreeOptions, planId: string, signal?:
 /** 从上次返回的暂停批次继续。本次可重新指定演绎数量。 */
 export function continueStoryTree(options: StoryTreeOptions, planId: string, batch: number, signal?: AbortSignal) {
   return runTree(options, directors(options), planId, signal, batch)
+}
+/** 统一入口独占运行后使用其持久化导演输出及恢复配置。 */
+export function runManagedStoryTree(options: StoryTreeOptions, planId: string, managed: ManagedStoryTree, signal: AbortSignal, batch?: number) {
+  return runTree(options, directors(options), planId, signal, batch, managed)
 }
 
 /** 上一轮结束后，用更新的输入开启新一轮规划。 */

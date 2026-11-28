@@ -35,7 +35,7 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-async function inspectTree(store: CollaborationStore, root: StoryNode, planHash: string) {
+export async function inspectStoryBranch(store: CollaborationStore, root: StoryNode, planHash: string) {
   const confirmed: ConfirmedResult[] = []
   const visited = new Set<string>()
   async function visit(node: StoryNode): Promise<ReviewPoint | undefined> {
@@ -184,7 +184,7 @@ async function verifyPendingReview(store: CollaborationStore, plan: PlanRecord, 
   if (await store.latestStoryBatch(plan.id) !== batch || await store.hasContinuedStoryProgress(plan.id, batch)) throw new Error('审阅批次不再等待决定')
   const pause = await readVerifiedPause(store, plan, batch)
   const { root, planHash } = await readStoryRoot(store, plan)
-  verifyNext(pause, (await inspectTree(store, root, planHash)).point)
+  verifyNext(pause, (await inspectStoryBranch(store, root, planHash)).point)
   return pause
 }
 
@@ -283,7 +283,7 @@ export async function inspectStoryProgress(
     rootId = await readIfPresent(store.readRootStoryId(planId))
     if (!rootId && batch === undefined && !await store.hasStoryRecords(planId)) return { status: 'not-started' as const, planId }
     const { root, planHash } = await readStoryRoot(store, plan)
-    const inspection = await inspectTree(store, root, planHash)
+    const inspection = await inspectStoryBranch(store, root, planHash)
     confirmed = inspection.confirmed
     point = inspection.point
     const evidence = { planId, rootStoryId: rootId, batch, confirmed, completedCount: confirmed.filter(item => item.counted).length }
@@ -350,7 +350,7 @@ export async function restoreStoryProgress(store: CollaborationStore, plan: Plan
   try {
     progress = await readVerifiedPause(store, plan, resumeBatch)
     const { root, planHash } = await readStoryRoot(store, plan)
-    const { point } = await inspectTree(store, root, planHash)
+    const { point } = await inspectStoryBranch(store, root, planHash)
     verifyNext(progress, point)
   } catch (error) {
     if (await store.hasContinuedStoryProgress(plan.id, resumeBatch)) {

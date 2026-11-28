@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
 import { PlanStore, CollaborationStore } from '../story-workflow/store.js'
-import { openStoryRunRecords, runDigest, storyRunManifestSchema, storyRunIdSchema, type StoryRunManifest } from '../story-workflow/run-records.js'
-import type { StoryPlanningOptions, StoryTreeOptions } from '../story-workflow/workflow.js'
+import { openStoryRunRecords, runDigest, storyRunDigestSchema, storyRunManifestSchema, storyRunIdSchema, type StoryRunManifest } from '../story-workflow/run-records.js'
+import type { ManagedStoryTree, StoryPlanningOptions, StoryTreeOptions } from '../story-workflow/workflow.js'
 import { readIfPresent } from '../story-workflow/story-query.js'
 import { prepareStoryWorldInput, type bindStoryWorld } from './story-world-materials.js'
-import { continueStoryTree, createReservedStoryPlan, inspectStoryProgress, readStoryRoundResult, runStoryTree, settleStoryReview, submitStoryReview, type StoryReviewChoice, type StoryReviewIdentity } from './story-workflow.js'
+import { createReservedStoryPlan, inspectStoryProgress, readStoryRoundResult, runManagedStoryTree, settleStoryReview, submitStoryReview, type StoryReviewChoice, type StoryReviewIdentity } from './story-workflow.js'
 import { reviewPolicySchema } from '../story-workflow/user-review.js'
 import { runManagedScene, type StoryRunSceneOptions } from './story-run-scene.js'
 import { openStoryConvoyState } from './story-convoy-state.js'
@@ -103,6 +103,8 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
       const plan = await readPlan(saved)
       if (!plan) return { runId, planId, status: 'planning' as const }
       if (plan.outcome.kind === 'no_events') return { runId, planId, status: 'no-events' as const, reason: plan.outcome.reason }
+      const rootStoryId = await readIfPresent(collaboration.readRootStoryId(plan.id))
+      if (rootStoryId && rootStoryId !== saved.rootStoryId) throw new Error('故事根节点与运行意图不匹配')
       const progress = await inspectStoryProgress(roots, planId)
       if (progress.status === 'completed') {
         const completed = await readStoryRoundResult(roots, planId)
@@ -148,16 +150,62 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
       simulate: (input, signal) => runManagedScene(records, runId, roots, binding, director, execution.scene, input, signal) }
     return { saved, tree, reviewOptions: { ...roots, now: execution.review?.now, worldProgress, worldObjectives: execution.worldObjectives } }
   }
+  function managed(saved: StoryRunManifest, recover: boolean, signal: AbortSignal): ManagedStoryTree {
+    return { rootStoryId: saved.rootStoryId, recover,
+      async output<T>(key: string, input: unknown, schema: z.ZodType<T>, generate: () => Promise<T>) {
+        const format = z.object({ input: storyRunDigestSchema, value: schema }).strict()
+        const digest = runDigest({ planId: saved.planId, input })
+        const output = await records.read(saved.runId, key, format)
+        if (output) {
+          if (output.input !== digest) throw new Error('保存的导演依据已变化')
+          return output.value
+        }
+        const value = await generate()
+        signal.throwIfAborted()
+        return (await records.save(saved.runId, key, format, format.parse({ input: digest, value }))).value
+      } }
+  }
+  function start(runId: string, selection: MaterialSelection, signal?: AbortSignal, previousRunId?: string) {
+    const request = structuredClone(selection)
+    return operate(runId, async active => {
+      let previous: StoryRunManifest['previous']
+      if (previousRunId !== undefined) {
+        if (previousRunId === runId) throw new Error('下一轮需要新运行身份')
+        const predecessor = await manifest(previousRunId)
+        if (!predecessor || !await readPlan(predecessor)) throw new Error('上一轮没有已核对规划')
+        if ((await inspectStoryProgress(roots, predecessor.planId)).status !== 'completed') throw new Error('上一轮尚未形成可核对的整轮结果')
+        previous = { runId: previousRunId, result: runDigest(await readStoryRoundResult(roots, predecessor.planId)) }
+      }
+      const digest = runDigest({ request, previous })
+      let saved = await manifest(runId)
+      if (saved && saved.request !== digest) throw new Error('同一运行身份对应不同开始请求')
+      if (!saved) {
+        const input = await prepareStoryWorldInput(binding, request)
+        active.throwIfAborted()
+        saved = await records.save(runId, 'manifest', storyRunManifestSchema, {
+          formatVersion: 1, runId, planId: randomUUID(), rootStoryId: randomUUID(), worldId: world.worldId, deliveryId,
+          configuration, request: digest, input, ...(previous ? { previous } : {}),
+        })
+      }
+      return await readPlan(saved) ?? await createReservedStoryPlan(planning, saved.planId, saved.input, active)
+    }, signal)
+  }
   return Object.freeze({
     diagnose,
     advance(runId: string, version: string, signal?: AbortSignal) {
       return operate(runId, async active => {
         const state = await diagnose(runId)
         if (state.version !== version) throw new Error('运行诊断版本已变化')
-        if (state.status !== 'ready' && state.status !== 'paused' && state.status !== 'review-ready') return state
+        if (state.status === 'planning') {
+          const saved = await manifest(runId)
+          if (!saved) throw new Error('规划意图已丢失')
+          await createReservedStoryPlan(planning, saved.planId, saved.input, active)
+          return diagnose(runId)
+        }
+        if (state.status !== 'ready' && state.status !== 'paused' && state.status !== 'review-ready' && state.status !== 'needs-review') return state
         const { saved, tree } = await executionInputs(runId, active)
-        if (state.status === 'ready') await runStoryTree(tree, saved.planId, active)
-        else await continueStoryTree(tree, saved.planId, state.batch!, active)
+        await runManagedStoryTree(tree, saved.planId, managed(saved, state.status === 'needs-review', active), active,
+          state.status === 'paused' || state.status === 'review-ready' ? state.batch : undefined)
         return diagnose(runId)
       }, signal)
     },
@@ -178,22 +226,9 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
       if (!saved) return undefined
       return { manifest: saved, plan: await readPlan(saved) }
     },
-    start(runId: string, selection: MaterialSelection, signal?: AbortSignal) {
-      const request = structuredClone(selection)
-      return operate(runId, async active => {
-        const digest = runDigest(request)
-        let saved = await manifest(runId)
-        if (saved && saved.request !== digest) throw new Error('同一运行身份对应不同开始请求')
-        if (!saved) {
-          const input = await prepareStoryWorldInput(binding, request)
-          active.throwIfAborted()
-          saved = await records.save(runId, 'manifest', storyRunManifestSchema, {
-            formatVersion: 1, runId, planId: randomUUID(), rootStoryId: randomUUID(), worldId: world.worldId, deliveryId,
-            configuration, request: digest, input,
-          })
-        }
-        return await readPlan(saved) ?? await createReservedStoryPlan(planning, saved.planId, saved.input, active)
-      }, signal)
+    start(runId: string, selection: MaterialSelection, signal?: AbortSignal) { return start(runId, selection, signal) },
+    startNext(previousRunId: string, runId: string, selection: MaterialSelection, signal?: AbortSignal) {
+      return start(runId, selection, signal, previousRunId)
     },
     close() {
       return closing ??= (async () => {

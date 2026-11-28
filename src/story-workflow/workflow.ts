@@ -1,13 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { z } from 'zod'
 import type { StoryProgress } from './types.js'
-import { inspectStoryProgress, restoreStoryProgress } from './progress.js'
+import { inspectStoryBranch, inspectStoryProgress, restoreStoryProgress } from './progress.js'
 import { simulateStory, type StorySimulationInput } from './simulation.js'
 import type { Agent } from '@fly-novel/agents'
 import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyAdvanceSchema, storyCompletionSchema, storyDecisionSchema, storyProgressVersion, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
 import { CollaborationStore } from './store.js'
 import { evaluateWorldObjectives, storyWorldEvidenceSchema, verifyWorldAssessment, worldObjectivesSchema, type EventEvidence, type StoryWorldEvidence, type StoryWorldProgressSource, type WorldObjective } from './world-progress.js'
 import { createReviewSnapshot, readReviewEvidence, reviewPolicySchema, reviewTime, type StoryReview, type StoryReviewConfiguration } from './user-review.js'
+import { readArrangement, readChildChoice, readIfPresent, readOutcome } from './story-query.js'
+import { mapSceneNeedSchema } from './map-scene.js'
 
 export interface DirectorScope { create(role: string): Promise<Agent>; dispose(): Promise<void> }
 export type OpenDirectors = () => Promise<DirectorScope>
@@ -250,7 +253,13 @@ export async function createNextStoryPlan(options: StoryPlanningOptions & { coll
 }
 
 /** 逐层推进故事，达到本次数量时保存暂停位置；传入批次继续已有暂停。 */
-export async function runStoryTree(options: StoryTreeOptions, openDirectors: OpenDirectors, planId: string, signal?: AbortSignal, resumeBatch?: number): Promise<StoryTreeResult> {
+export interface ManagedStoryTree {
+  rootStoryId: string
+  recover: boolean
+  output<T>(key: string, input: unknown, schema: z.ZodType<T>, generate: () => Promise<T>): Promise<T>
+}
+
+export async function runStoryTree(options: StoryTreeOptions, openDirectors: OpenDirectors, planId: string, signal?: AbortSignal, resumeBatch?: number, managed?: ManagedStoryTree): Promise<StoryTreeResult> {
   if (!options.provider.trim() || !options.model.trim()) throw new Error('模型配置不能为空')
   const limit = options.limit === undefined ? 5 : options.limit
   if (!Number.isSafeInteger(limit) || limit < 1) throw new Error('本次演绎数量必须是正整数')
@@ -270,16 +279,43 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
   type Assessment = Extract<StoryStep, { kind: 'assessment' }>['value']
   type Frame = StoryProgress['frames'][number]
   let frames: Frame[]
-  const batch = resumeBatch === undefined ? 1 : resumeBatch + 1
+  const recovering = managed?.recover === true
+  const latest = recovering ? await store.latestStoryBatch(planId) : undefined
+  if (recovering && latest !== undefined) {
+    const pause = await store.readStoryProgress(planId, latest)
+    if (pause.planHash !== planHash || !isDeepStrictEqual(pause.reviewPolicy, reviewPolicy) ||
+      (pause.formatVersion >= 3 && !isDeepStrictEqual(pause.worldObjectives, objectives))) throw new Error('中断批次与可信运行配置不匹配')
+    if (pause.review) {
+      if ((await store.readReviewTransition(pause.review))?.kind !== 'adopted') throw new Error('最近的审阅批次尚未取得推进位置')
+    } else if (!await store.hasContinuedStoryProgress(planId, latest)) {
+      throw new Error('最近的正常批次仍可按原入口继续')
+    }
+  }
+  const batch = (resumeBatch ?? latest ?? 0) + 1
+  async function openFrame(node: StoryNode): Promise<Frame> {
+    const arrangement = await readArrangement(store, node, planHash)
+    if (arrangement.decision?.kind !== 'split') throw new Error('父故事缺少已保存拆分')
+    return { node, children: arrangement.children, index: 0, results: [], decisions: [],
+      ...(arrangement.supplement ? { supplement: arrangement.supplement } : {}),
+      ...(arrangement.adoptedReview ? { adoptedReview: arrangement.adoptedReview } : {}) }
+  }
   if (resumeBatch === undefined) {
-    const rootId = randomUUID()
-    await store.startSiblings(planId, rootId)
+    const rootId = managed?.rootStoryId ?? randomUUID()
+    const existing = recovering ? await readIfPresent(store.readRootStoryId(planId)) : undefined
+    if (existing && existing !== rootId) throw new Error('恢复的根故事身份不匹配')
+    if (!existing) await store.startSiblings(planId, rootId)
     const root: StoryNode = { formatVersion: 1, runId: planId, storyId: rootId, parentStoryId: null, description: plan.input.task, task: { background: JSON.stringify({ facts: plan.input.facts, directions: plan.input.directions }), goal: plan.input.task, constraints: [] } }
-    await store.saveStoryNode(root)
+    const savedRoot = recovering ? await readIfPresent(store.readStoryNode(planId, rootId)) : undefined
+    if (savedRoot && !isDeepStrictEqual(root, savedRoot)) throw new Error('恢复的根故事任务不匹配')
+    if (!savedRoot) await store.saveStoryNode(root)
     const children = plan.outcome.events
-    frames = [{ node: root, children, index: 0, results: [], decisions: [] }]
-    await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: rootId, kind: 'decision', value: { kind: 'split', children } })
+    const split = recovering ? await readIfPresent(store.readStoryStep(planId, rootId, 'decision')) : undefined
+    if (split && (split.kind !== 'decision' || split.value.kind !== 'split' || !isDeepStrictEqual(split.value.children, children))) throw new Error('根拆分与原规划不匹配')
+    if (!split) await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: rootId, kind: 'decision', value: { kind: 'split', children } })
+    if (recovering && await readIfPresent(store.readStoryStep(planId, rootId, 'result'))) throw new Error('根回报已存在，须先核查整轮证据')
+    frames = [recovering ? await openFrame(root) : { node: root, children, index: 0, results: [], decisions: [] }]
   } else {
+    if (managed && await store.readRootStoryId(planId) !== managed.rootStoryId) throw new Error('恢复批次的根故事身份不匹配')
     frames = await restoreStoryProgress(store, plan, resumeBatch, signal, source, objectives, reviewPolicy)
   }
   let completedCount = 0
@@ -305,6 +341,13 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     if (output === undefined || !output.trim()) throw new Error('导演没有返回结果')
     return output
   }
+  function ask<T>(key: string, schema: z.ZodType<T>, prompt: string, json = true): Promise<T> {
+    const generate = async () => {
+      const output = await call(prompt)
+      return schema.parse(json ? parseStrictJson(output) : output.trim())
+    }
+    return managed ? managed.output(key, prompt, schema, generate) : generate()
+  }
   const currentEvidence = async (events: EventEvidence[]): Promise<StoryWorldEvidence | undefined> => {
     if (!source) return undefined
     const current = await source.current()
@@ -324,7 +367,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
   const finish = async (node: StoryNode, report: Result['value'], assessment?: Assessment, sceneIds?: string[], worldEvidence?: StoryWorldEvidence): Promise<Result> => {
     await verifyCurrent(worldEvidence)
     const parent = node.parentStoryId === null ? null : await store.readStoryNode(planId, node.parentStoryId)
-    const receipt = parent === null ? '根故事回报已记录' : (await call(`你是直接上级导演，请接收下级故事回报并简述进展，不编造已发生的事实：${JSON.stringify({ parent, node, report, assessment, worldEvidence })}`)).trim()
+    const receipt = parent === null ? '根故事回报已记录' : await ask(`receipt.${node.storyId}`, z.string().min(1), `你是直接上级导演，请接收下级故事回报并简述进展，不编造已发生的事实：${JSON.stringify({ parent, node, report, assessment, worldEvidence })}`, false)
     await verifyCurrent(worldEvidence)
     const fields = { runId: planId, storyId: node.storyId, kind: 'result' as const, value: report, receipt }
     const value: Result = worldEvidence ? { ...fields, formatVersion: 3, sceneIds: sceneIds ?? [], worldEvidence }
@@ -334,10 +377,11 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     if (saved.kind !== 'result') throw new Error('故事结果类型不匹配')
     return saved
   }
-  const closeFrame = async (frame: Frame, input: Assessment, worldEvidence?: StoryWorldEvidence) => {
+  const closeFrame = async (frame: Frame, input: Assessment, worldEvidence?: StoryWorldEvidence, saved = false) => {
     await verifyCurrent(worldEvidence)
-    const assessment = { ...input, report: withWorldFacts(input.report, worldEvidence) }
-    await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: frame.node.storyId, kind: 'assessment', value: assessment })
+    const assessment = saved ? input : { ...input, report: withWorldFacts(input.report, worldEvidence) }
+    if (managed) await managed.output(`assessment-evidence.${frame.node.storyId}`, worldEvidence ?? null, storyWorldEvidenceSchema.nullable(), async () => worldEvidence ?? null)
+    if (!saved) await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: frame.node.storyId, kind: 'assessment', value: assessment })
     const result = await finish(frame.node, assessment.report, assessment, undefined, worldEvidence)
     frames.pop()
     frames.at(-1)?.results.push({ ...result, assessment })
@@ -348,12 +392,22 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     signal?.throwIfAborted()
     if (JSON.stringify(await plans.read(planId)) !== JSON.stringify(plan)) throw new Error(`规划已变化，请核查运行 ${planId}`)
     const frame = frames[frames.length - 1]!
-    if (frame.index >= frame.children.length) {
+    const nextChild = frame.children[frame.index]
+    const savedChoice = recovering && nextChild ? await readChildChoice(store, frame.node, nextChild) : undefined
+    const savedAssessment = recovering ? await readIfPresent(store.readStoryStep(planId, frame.node.storyId, 'assessment')) : undefined
+    if (!nextChild || (savedAssessment?.kind === 'assessment' && savedAssessment.value.status === 'terminated' && !savedChoice)) {
       const worldEvidence = await frameEvidence(frame)
+      if (savedAssessment?.kind === 'assessment') {
+        for (const child of frame.children.slice(frame.index)) if (await store.hasStoryRecords(planId, child.id)) throw new Error('已终止父故事仍有未核对的子项记录')
+        verifyWorldAssessment(savedAssessment.value.status, worldEvidence)
+        const result = await closeFrame(frame, savedAssessment.value, worldEvidence, true)
+        if (!frames.length) return { ...result, completedCount }
+        continue
+      }
       const supplementRule = frame.supplement
         ? '已经安排过补充故事，禁止再补充。'
         : '仅在目标未达成且补充有意义时，可以返回 {"status":"supplement","reason":"尚未达成的原因","description":"一个补充故事"}。'
-      const assessment = storyCompletionSchema.parse(parseStrictJson(await call(`你是本层父导演。依据下级已保存的回报、事件与已核对状态评估当前目标，保留实际经过。只返回严格 JSON，结束时返回 status（achieved、unmet 或 terminated）、reason 和 report（${reportFormat}）。unmet 时须另给 adjustment，说明根据实际结果怎样调整父故事。条件变化无法继续时用 terminated，并记录未解决事项。${supplementRule} 资料：${JSON.stringify({ story: frame.node, results: frame.results, decisions: frame.decisions, supplement: frame.supplement, worldEvidence })}`)))
+      const assessment = await ask(`assessment.${frame.node.storyId}.${frame.index}`, storyCompletionSchema, `你是本层父导演。依据下级已保存的回报、事件与已核对状态评估当前目标，保留实际经过。只返回严格 JSON，结束时返回 status（achieved、unmet 或 terminated）、reason 和 report（${reportFormat}）。unmet 时须另给 adjustment，说明根据实际结果怎样调整父故事。条件变化无法继续时用 terminated，并记录未解决事项。${supplementRule} 资料：${JSON.stringify({ story: frame.node, results: frame.results, decisions: frame.decisions, supplement: frame.supplement, worldEvidence })}`)
       await verifyCurrent(worldEvidence)
       verifyWorldAssessment(assessment.status, worldEvidence)
       if (assessment.status === 'supplement') {
@@ -386,50 +440,86 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
       await store.saveStoryProgress({ formatVersion, runId: planId, batch, planHash, frames, reviewPolicy, ...(formatVersion >= 3 && objectives ? { worldObjectives: objectives } : {}) })
       return { kind: 'paused', runId: planId, storyId: frames[0]!.node.storyId, batch, completedCount }
     }
-    const child = frame.children[frame.index++]!
-    const worldEvidence = await frameEvidence(frame)
+    const child = nextChild
+    frame.index++
+    const savedNode = recovering ? await readIfPresent(store.readStoryNode(planId, child.id)) : undefined
+    const savedSplit = savedNode ? await readIfPresent(store.readStoryStep(planId, child.id, 'decision')) : undefined
+    if (recovering && (!savedChoice || savedChoice.decision === 'cancel') && savedNode) throw new Error('恢复的子故事缺少有效父决定')
+    if (savedNode && (savedNode.parentStoryId !== frame.node.storyId || savedNode.description !== child.description)) throw new Error('恢复的子故事不匹配父安排')
+    if (savedSplit?.kind === 'decision' && savedNode) {
+      const completed = await readOutcome(store, savedNode, savedSplit.value)
+      if (completed && savedChoice) {
+        if ((await inspectStoryBranch(store, savedNode, planHash)).point) throw new Error('已保存子回报的结算证据不完整')
+        const evaluation = await readIfPresent(store.readStoryStep(planId, child.id, 'assessment'))
+        frame.decisions.push({ description: child.description, decision: savedChoice.decision, reason: savedChoice.reason })
+        frame.results.push(evaluation?.kind === 'assessment' ? { ...completed, assessment: evaluation.value } : completed)
+        continue
+      }
+      if (await readIfPresent(store.readStoryStep(planId, child.id, 'result'))) throw new Error('发现已有回报但无法核对结束位置')
+    }
+    if (recovering && savedChoice?.decision !== 'cancel') {
+      if (!savedChoice && await store.hasStoryRecords(planId, child.id)) throw new Error('尚无父决定的子故事已出现业务写入')
+      for (const later of frame.children.slice(frame.index)) if (await store.hasStoryRecords(planId, later.id)) throw new Error('待恢复子项之后已有推进记录')
+      if (savedAssessment && !savedChoice) throw new Error('父评估与未推进子项冲突')
+    }
+    const worldEvidence = !savedChoice || (!savedNode && savedChoice.decision !== 'cancel') ? await frameEvidence(frame) : undefined
     const context = { parent: frame.node, child, prior: frame.results, decisions: frame.decisions, worldEvidence }
-    const choice = storyAdvanceSchema.parse(parseStrictJson(await call(`你是父导演。根据上级故事与此前模拟结果判断当前子故事继续、调整或取消。只返回 JSON：{"decision":"continue 或 adjust 或 cancel","reason":"原因及调整方向"}。若条件变化导致整个父故事需要提前结束，返回 {"status":"terminated","reason":"终止原因","report":${reportFormat}}。${JSON.stringify(context)}`)))
+    const choice = savedChoice ? { decision: savedChoice.decision, reason: savedChoice.reason } :
+      await ask(`advance.${child.id}`, storyAdvanceSchema, `你是父导演。根据上级故事与此前模拟结果判断当前子故事继续、调整或取消。只返回 JSON：{"decision":"continue 或 adjust 或 cancel","reason":"原因及调整方向"}。若条件变化导致整个父故事需要提前结束，返回 {"status":"terminated","reason":"终止原因","report":${reportFormat}}。${JSON.stringify(context)}`)
     await verifyCurrent(worldEvidence)
     if ('status' in choice) {
       const result = await closeFrame(frame, choice, worldEvidence)
       if (!frames.length) return { ...result, completedCount }
       continue
     }
-    await store.saveStoryChoice({ formatVersion: 1, runId: planId, parentStoryId: frame.node.storyId, childStoryId: child.id, description: child.description, ...choice })
+    if (!savedChoice) await store.saveStoryChoice({ formatVersion: 1, runId: planId, parentStoryId: frame.node.storyId, childStoryId: child.id, description: child.description, ...choice })
     frame.decisions.push({ description: child.description, ...choice })
     if (choice.decision === 'cancel') continue
-    const task = taskSchema.parse(parseStrictJson(await call(`你是父导演，制定当前子故事任务，不指定角色行动。只返回 JSON：{"background":"背景","goal":"目标","constraints":["约束"]}。${JSON.stringify({ ...context, choice })}`)))
+    const task = savedNode?.task ?? await ask(`task.${child.id}`, taskSchema, `你是父导演，制定当前子故事任务，不指定角色行动。只返回 JSON：{"background":"背景","goal":"目标","constraints":["约束"]}。${JSON.stringify({ ...context, choice })}`)
     await verifyCurrent(worldEvidence)
     const node: StoryNode = { formatVersion: 1, runId: planId, storyId: child.id, parentStoryId: frame.node.storyId, description: child.description, task }
-    await store.saveStoryNode(node)
+    if (!savedNode) await store.saveStoryNode(node)
     const mapDirection = plan.formatVersion === 2 ? ' 如场景需要核查城门和等候点，可在 direct 结果附上 mapNeed（cityId、layerId、purpose），只引用提供的城市与地图层面。' : ''
-    const decision = storyDecisionSchema.parse(parseStrictJson(await call(`你是子导演，判断当前故事能否直接进行模拟演绎。需要拆分时返回 JSON：{"kind":"split","children":["子故事描述"]}；适合直接演绎时返回 JSON：{"kind":"direct","preparation":"模拟处境"}。${mapDirection}任务：${JSON.stringify(node)}`)))
+    if (savedSplit?.kind === 'decision' && savedSplit.value.kind === 'split') {
+      frames.push(await openFrame(node))
+      continue
+    }
+    const existingDirect = savedSplit?.kind === 'decision' && savedSplit.value.kind === 'direct' ? savedSplit.value : undefined
+    const decision = existingDirect ??
+      await ask(`split.${child.id}`, storyDecisionSchema, `你是子导演，判断当前故事能否直接进行模拟演绎。需要拆分时返回 JSON：{"kind":"split","children":["子故事描述"]}；适合直接演绎时返回 JSON：{"kind":"direct","preparation":"模拟处境"}。${mapDirection}任务：${JSON.stringify(node)}`)
     if (decision.kind === 'split') {
       const children = decision.children.map(description => ({ id: randomUUID(), description }))
       await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: { kind: 'split', children } })
       frames.push({ node, children, index: 0, results: [], decisions: [] })
       continue
     }
-    if ('mapNeed' in decision) {
-      if (plan.formatVersion !== 2) throw new Error('独立规划不支持场景地图需求')
-      await store.saveStoryStep({ formatVersion: 2, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
-    } else {
-      await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
+    const mapNeed = 'mapNeed' in decision ? mapSceneNeedSchema.parse(decision.mapNeed) : undefined
+    if (!existingDirect) {
+      if (mapNeed) {
+        if (plan.formatVersion !== 2) throw new Error('独立规划不支持场景地图需求')
+        await store.saveStoryStep({ formatVersion: 2, runId: planId, storyId: node.storyId, kind: 'decision', value: { ...decision, mapNeed } })
+      } else {
+        await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'decision', value: decision })
+      }
     }
-    const { simulation, decisions, termination } = await simulateStory(node, frame.node, decision.preparation, { store, options, call, signal,
-      ...('mapNeed' in decision ? { mapNeed: decision.mapNeed } : {}) })
+    const savedSimulation = recovering ? await readIfPresent(store.readStoryStep(planId, node.storyId, 'simulation')) : undefined
+    const savedTermination = recovering ? await readIfPresent(store.readStoryStep(planId, node.storyId, 'assessment')) : undefined
+    const { simulation, decisions, termination } = savedSimulation?.kind === 'simulation'
+      ? { simulation: savedSimulation.value, decisions: [], termination: savedTermination?.kind === 'assessment' ? savedTermination.value : undefined }
+      : await simulateStory(node, frame.node, decision.preparation, { store, options, call, signal,
+        ...(mapNeed ? { mapNeed } : {}) })
     signal?.throwIfAborted()
     const scenes = await store.readSettledScenes(planId, node.storyId)
-    if ('mapNeed' in decision && scenes.length === 0) throw new Error(`地图需求尚未形成可核对的场景：${node.storyId}`)
+    if (mapNeed && scenes.length === 0) throw new Error(`地图需求尚未形成可核对的场景：${node.storyId}`)
     const sceneIds = scenes.map(scene => scene.sceneId)
     const childEvidence = source ? await currentEvidence(await Promise.all(scenes.filter(scene => scene.formatVersion === 2).map(scene => source.event(node.storyId, scene.sceneId)))) : undefined
     signal?.throwIfAborted()
-    await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'simulation', value: simulation })
-    const report = withWorldFacts(reportSchema.parse(parseStrictJson(await call(`你是子导演，根据任务和已发生的经过形成最终回报，并考虑提前汇报后的决定。只有已核对状态代表实际写入。只返回 JSON：${reportFormat}。${JSON.stringify({ node, simulation, decisions, ...(scenes.length ? { scenes } : {}), worldEvidence: childEvidence })}`))), childEvidence)
+    if (!savedSimulation) await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'simulation', value: simulation })
+    const report = savedTermination?.kind === 'assessment' ? savedTermination.value.report :
+      withWorldFacts(await ask(`report.${node.storyId}`, reportSchema, `你是子导演，根据任务和已发生的经过形成最终回报，并考虑提前汇报后的决定。只有已核对状态代表实际写入。只返回 JSON：${reportFormat}。${JSON.stringify({ node, simulation, decisions, ...(scenes.length ? { scenes } : {}), worldEvidence: childEvidence })}`), childEvidence)
     if (termination) {
       const assessment: Assessment = { status: 'terminated', reason: termination.reason, report }
-      await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'assessment', value: assessment })
+      if (!savedTermination) await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: node.storyId, kind: 'assessment', value: assessment })
       frame.results.push({ ...await finish(node, report, assessment, sceneIds, childEvidence), assessment })
     } else {
       frame.results.push(await finish(node, report, undefined, sceneIds, childEvidence))

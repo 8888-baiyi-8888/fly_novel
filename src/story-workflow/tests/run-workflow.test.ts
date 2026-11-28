@@ -127,3 +127,58 @@ test('正式入口从交付经用户审阅和真实角色编排到根回报', as
     await assert.rejects(next.advance(runId, confirmed.version), /诊断版本已变化/)
   } finally { await next.close() }
 })
+
+test('从已有角色响应和已保存导演回报继续，只补做缺失步骤并建立下一轮', async t => {
+  const responses = ['{"kind":"planned","events":["北门交涉"]}']
+  const data = await fixture(t, responses)
+  const { options, characterId, role } = await characterOptions(t, data)
+  const scene = options.execution.scene
+  let interrupt = true
+  const settings = { ...options, execution: { ...options.execution, review: undefined, scene: {
+    ...scene,
+    async prepare(input: Parameters<typeof scene.prepare>[0]) {
+      const prepared = await scene.prepare(input)
+      return { ...prepared, async conditions(...args: Parameters<typeof prepared.conditions>) {
+        if (interrupt) { interrupt = false; throw new Error('角色响应保存后中断') }
+        return prepared.conditions(...args)
+      } }
+    },
+  } } }
+  responses.push(advance, task, '{"kind":"direct","preparation":"核对闭门"}',
+    JSON.stringify({ participants: [{ characterId, invitation: '回答商队' }] }))
+  const { runId, selection } = data
+  const first = await openStoryRunWorkflow(settings)
+  try {
+    await first.start(runId, selection)
+    await assert.rejects(first.startNext(runId, randomUUID(), selection), /尚未形成/)
+    await assert.rejects(first.advance(runId, (await first.diagnose(runId)).version), /响应保存后中断/)
+    const view = await first.diagnose(runId)
+    assert.equal(view.status, 'needs-review')
+    assert.equal(view.scenes[0]?.participation[0]?.status, 'responded')
+    assert.equal(view.scenes[0]?.sequence, 0)
+  } finally { await first.close() }
+  const second = await openStoryRunWorkflow(settings)
+  responses.push(JSON.stringify({ perceptions: [{ characterId, status: 'not-received', reason: '本人发言', observations: [] }], next: { kind: 'end', reason: '结束' } }), report)
+  try {
+    await assert.rejects(second.advance(runId, (await second.diagnose(runId)).version), /缺少测试响应/)
+    assert.equal(role.requests.length, 1)
+    const view = await second.diagnose(runId)
+    assert.equal(view.status, 'needs-review')
+    assert.equal(view.scenes[0]?.status, 'completed')
+  } finally { await second.close() }
+  const third = await openStoryRunWorkflow(settings)
+  try {
+    const calls = data.adapter.requests.length
+    responses.push('原回报已接收', achieved, '{"kind":"planned","events":["天亮后再议"]}')
+    const finished = await third.advance(runId, (await third.diagnose(runId)).version)
+    assert.equal(finished.status, 'completed')
+    assert.equal(data.adapter.requests.length - calls, 2)
+    assert.equal(role.requests.length, 1)
+    const successor = randomUUID()
+    const nextInput = { ...selection, task: '天亮后核对入城条件' }
+    const next = await third.startNext(runId, successor, nextInput)
+    assert.equal((await third.read(successor))?.manifest.previous?.runId, runId)
+    assert.notEqual(next.id, finished.planId)
+    assert.deepEqual(await third.startNext(runId, successor, nextInput), next)
+  } finally { await third.close() }
+})
