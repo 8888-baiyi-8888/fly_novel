@@ -12,7 +12,7 @@ const minute = z.number().int().nonnegative()
 const range = { start: minute, end: minute }
 const position = z.object({ characterId: id, locationId: text }).strict()
 const scene = z.object({ storyId: id, sceneId: text, setupDigest: hash }).strict()
-const claim = scene.extend({ token: id }).strict()
+export const scheduledSceneIdentitySchema = scene.omit({ setupDigest: true })
 const dependency = z.object({ slotId: id, kind: z.enum(['order', 'result']) }).strict()
 const target = z.object({ id, mode: z.enum(['read', 'write']) }).strict()
 export const scheduleRouteSchema = z.object({
@@ -20,6 +20,7 @@ export const scheduleRouteSchema = z.object({
   passage: z.enum(['allowed', 'blocked', 'unknown']), basis: text,
 }).strict()
 export type ScheduleRoute = z.infer<typeof scheduleRouteSchema>
+const claim = scene.extend({ token: id, routes: z.array(scheduleRouteSchema).default([]) }).strict()
 
 export const scheduleSlotSchema = z.object({
   id, runId: id, ...range, locationId: text, characters: z.array(id), dependencies: z.array(dependency),

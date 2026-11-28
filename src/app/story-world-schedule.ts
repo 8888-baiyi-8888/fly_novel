@@ -1,0 +1,314 @@
+import { randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
+import { PlanStore } from '../story-workflow/store.js'
+import { openStory } from '../story-workflow/story-query.js'
+import { inspectStoryProgress } from '../story-workflow/progress.js'
+import { openWorldScheduleStore, sceneScheduleReadiness, scheduleDigest, scheduleSlotSchema, scheduledSceneIdentitySchema,
+  type ScheduleBlock, type ScheduledScene, type ScheduleRoute, type ScheduleSlot, type WorldSchedule } from '../story-workflow/world-schedule.js'
+import type { SceneSetupRecord } from '../story-workflow/types.js'
+
+type Roots = Parameters<typeof openStory>[0]
+type Window = WorldSchedule['window']
+type SceneIdentity = Pick<SceneSetupRecord, 'storyId' | 'sceneId'>
+type Claim = NonNullable<ScheduledScene['claim']>
+export interface ScheduledScenePermit {
+  readonly slot: Readonly<ScheduleSlot>
+  readonly identity: Readonly<SceneIdentity>
+  assertActive(): void
+  assertCharacter(characterId: string, sceneId: string, runId: string, storyId: string): void
+}
+
+const ownedRoots = new Set<string>()
+const ownedWorlds = new Set<string>()
+
+/** 调度同一世界中各自拥有推进记录的故事运行。等待或演绎时不持有排期写入队列。 */
+export async function openStoryWorldSchedule(roots: Roots, options: {
+  worldId: string
+  scheduleRoot: string
+  maxConcurrent: number
+  routeStillValid?(route: ScheduleRoute): Promise<boolean>
+  endingPositions?(input: { slot: ScheduleSlot; scene: SceneSetupRecord }): Promise<Window['positions']>
+}) {
+  const { worldId, maxConcurrent, routeStillValid, endingPositions } = options
+  if (!worldId.trim() || !Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) throw new Error('世界调度配置无效')
+  const store = await openWorldScheduleStore(options.scheduleRoot, [roots.planRoot, roots.collaborationRoot, ...roots.protectedRoots], worldId)
+  const plans = await PlanStore.open(roots.planRoot, [roots.collaborationRoot, store.root, ...roots.protectedRoots])
+  if (ownedRoots.has(store.root) || ownedWorlds.has(worldId)) throw new Error('该世界或排期根已有调度器')
+  ownedRoots.add(store.root)
+  ownedWorlds.add(worldId)
+  const shutdown = new AbortController()
+  const running = new Set<Promise<unknown>>()
+  const waiters = new Set<() => void>()
+  let tail = Promise.resolve()
+  let closing: Promise<void> | undefined
+
+  function exclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const result = tail.then(operation)
+    tail = result.then(() => undefined, () => undefined)
+    return result
+  }
+  function live() { shutdown.signal.throwIfAborted() }
+  async function current() {
+    const value = await store.latest()
+    if (!value) throw new Error('世界尚未登记时间窗')
+    return value
+  }
+  async function update(previous: WorldSchedule, window: Window, reason: string) {
+    const saved = await store.save({ ...previous, revision: previous.revision + 1, previous: scheduleDigest(previous), reason, window })
+    for (const wake of waiters) wake()
+    return saved
+  }
+  function find(window: Window, slotId: string) {
+    const slot = window.slots.find(item => item.id === slotId)
+    if (!slot) throw new Error('排期不属于当前时间窗')
+    return slot
+  }
+  function setSlot(window: Window, slot: ScheduledScene): Window {
+    return { ...window, slots: window.slots.map(item => item.id === slot.id ? slot : item) }
+  }
+  function expect(value: WorldSchedule, revision: number) {
+    if (value.revision !== revision) throw new Error('世界排期预期版本已变化')
+  }
+  async function validateRuns(slots: ScheduleSlot[]) {
+    for (const runId of new Set(slots.map(slot => slot.runId))) {
+      const plan = await plans.read(runId)
+      if (plan.formatVersion !== 2 || plan.input.world.worldId !== worldId || plan.outcome.kind !== 'planned') throw new Error('排期运行未绑定本世界的有效规划')
+    }
+  }
+  async function sceneSource(slot: ScheduledScene, target: SceneIdentity) {
+    const story = await openStory(roots, slot.runId, target.storyId)
+    if (story.decision?.kind !== 'direct' || story.plan.formatVersion !== 2 || story.plan.input.world.worldId !== worldId) throw new Error('排期场景不属于本世界的直接演绎故事')
+    const scene = await story.store.readSceneSetup(slot.runId, target.storyId, target.sceneId)
+    if (scene.formatVersion === 2 && (scene.mapEvidence.worldId !== worldId || scene.mapEvidence.deliveryId !== story.plan.input.world.deliveryId ||
+      scene.mapEvidence.deliveryVersion !== story.plan.input.world.deliveryVersion)) throw new Error('排期场景的世界资料版本不匹配')
+    return { store: story.store, scene }
+  }
+  async function readiness(window: Window, slot: ScheduledScene) {
+    const { blocks, routes } = sceneScheduleReadiness(window, slot)
+    if (routeStillValid) {
+      for (const route of routes) {
+        if (!await routeStillValid(structuredClone(route))) {
+          const characterId = slot.characters.find(id => sceneScheduleReadiness(window, { ...slot, characters: [id] }).routes.includes(route))!
+          blocks.push({ kind: 'route-version', characterId, from: route.from, to: route.to })
+        }
+      }
+    }
+    return { blocks, routes }
+  }
+  function wait(signal: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+      const cleanup = () => { waiters.delete(wake); signal.removeEventListener('abort', abort) }
+      const wake = () => { cleanup(); resolve() }
+      const abort = () => { cleanup(); reject(signal.reason) }
+      waiters.add(wake)
+      signal.addEventListener('abort', abort, { once: true })
+      if (signal.aborted) abort()
+    })
+  }
+  const queued = new Set<string>()
+  async function acquire(slotId: string, identity: SceneIdentity, signal: AbortSignal) {
+    for (;;) {
+      const result = await exclusive(async () => {
+        signal.throwIfAborted()
+        const previous = await current()
+        const { window } = previous
+        const slot = find(window, slotId)
+        if (slot.claim || slot.resolution) throw new Error('排期已经领取或取消，请核查保存的进度')
+        const { blocks, routes } = await readiness(window, slot)
+        const active = window.slots.filter(item => item.claim && !item.resolution && executing.has(item.claim.token))
+        if (blocks.length || active.length >= maxConcurrent || active.some(item => item.runId === slot.runId)) return { waiting: wait(signal) }
+        const prior = window.slots.filter(item => queued.has(item.id) && item.id !== slot.id && !item.claim && !item.resolution &&
+          (item.start < slot.start || (item.start === slot.start && item.id < slot.id)))
+        for (const candidate of prior) {
+          if (!active.some(item => item.runId === candidate.runId) && !(await readiness(window, candidate)).blocks.length) return { waiting: wait(signal) }
+        }
+        const { scene, store: records } = await sceneSource(slot, identity)
+        if (await records.readSceneResult(scene) || (await records.listCharacterParticipationIds(slot.runId, identity.storyId, identity.sceneId)).length) {
+          throw new Error('场景已存在演绎记录，无法领取空白排期')
+        }
+        const claim = { ...identity, setupDigest: scheduleDigest(scene), token: randomUUID(), routes }
+        signal.throwIfAborted()
+        await update(previous, setSlot(window, { ...slot, claim }), '独占领取场景排期')
+        executing.add(claim.token)
+        return { slot, claim }
+      })
+      if (result.slot) return { slot: result.slot, claim: result.claim }
+      await result.waiting
+    }
+  }
+  const executing = new Set<string>()
+  async function settle(slotId: string, claim: Claim) {
+    const previous = await current()
+    const slot = find(previous.window, slotId)
+    if (!isDeepStrictEqual(slot.claim, claim) || slot.resolution?.kind === 'cancelled') throw new Error('场景领取版本已变化')
+    const { store: records, scene } = await sceneSource(slot, claim)
+    if (scheduleDigest(scene) !== claim.setupDigest) throw new Error('场景设置已变化')
+    const result = await records.readSceneResult(scene)
+    if (!result || result.status === 'unresolved') throw new Error('场景没有可核对的结算结果')
+    const positions = endingPositions ? await endingPositions({ slot: scheduleSlotSchema.parse(slotWithoutProgress(slot)), scene }) :
+      slot.characters.map(characterId => ({ characterId, locationId: slot.locationId }))
+    const resolution = { kind: 'settled', positions, evidenceDigest: scheduleDigest(result) } as const
+    if (slot.resolution?.kind === 'settled') {
+      if (!isDeepStrictEqual(slot.resolution, resolution)) throw new Error('场景结算证据已变化')
+      return previous
+    }
+    return update(previous, setSlot(previous.window, { ...slot, resolution }), '核对结算并结束场景排期')
+  }
+  function slotWithoutProgress({ claim: _claim, resolution: _resolution, ...slot }: ScheduledScene): ScheduleSlot { return slot }
+  return Object.freeze({
+    latest: store.latest, read: store.read,
+    async view() {
+      const { window, revision } = await current()
+      const reviews = new Map<string, ReturnType<typeof inspectStoryProgress>>()
+      return { revision, windowId: window.id, slots: await Promise.all(window.slots.map(async slot => {
+        const blocks: ScheduleBlock[] = slot.resolution || slot.claim ? [] : (await readiness(window, slot)).blocks
+        let review
+        if (!slot.resolution && !slot.claim) {
+          const pending = reviews.get(slot.runId) ?? inspectStoryProgress(roots, slot.runId)
+          reviews.set(slot.runId, pending)
+          const progress = await pending
+          if (progress.status === 'awaiting-review' || progress.status === 'review-ready' || progress.status === 'review-cancelled') {
+            review = { status: progress.status, batch: progress.batch }
+          }
+        }
+        const status = slot.resolution?.kind ?? (slot.claim ? (executing.has(slot.claim.token) ? 'running' : 'uncertain') : blocks.length || review ? 'waiting' : 'ready')
+        return { ...slot, status, blocks, ...(review ? { review } : {}) }
+      })) }
+    },
+    openWindow(input: { id: string; start: number; end: number; epoch: string; positions: Window['positions']; routes: ScheduleRoute[] }, expectedRevision = -1) {
+      return exclusive(async () => {
+        live()
+        const previous = await store.latest()
+        const { epoch, ...window } = structuredClone(input)
+        const draft = { ...window, sealed: false, slots: [] }
+        if (!previous) {
+          if (expectedRevision !== -1) throw new Error('世界排期预期版本已变化')
+          return store.save({ formatVersion: 1, worldId, epoch, revision: 0, previous: null, reason: '登记时间窗', window: draft })
+        }
+        expect(previous, expectedRevision)
+        if (epoch !== previous.epoch || window.id === previous.window.id || window.start < previous.window.end ||
+          !previous.window.sealed || previous.window.slots.some(item => !item.resolution || item.resolution.kind === 'uncertain')) throw new Error('前一世界时间窗尚未完成或时间基准无效')
+        const positions = new Map(previous.window.positions.map(item => [item.characterId, item]))
+        for (const slot of [...previous.window.slots].sort((left, right) => left.end - right.end)) {
+          if (slot.resolution?.kind === 'settled') for (const item of slot.resolution.positions) positions.set(item.characterId, item)
+        }
+        for (const position of window.positions) {
+          const prior = positions.get(position.characterId)
+          if (prior && !isDeepStrictEqual(prior, position)) throw new Error('新时间窗起始位置与已确认位置不符')
+          positions.set(position.characterId, position)
+        }
+        return update(previous, { ...draft, positions: [...positions.values()] }, '登记下一时间窗')
+      })
+    },
+    revise(expectedRevision: number, input: { slots: ScheduleSlot[]; reason: string; routes?: ScheduleRoute[]; seal?: boolean }) {
+      const draft = structuredClone(input)
+      return exclusive(async () => {
+        live()
+        const previous = await current()
+        expect(previous, expectedRevision)
+        const slots: ScheduledScene[] = draft.slots.map(slot => scheduleSlotSchema.parse(slot))
+        await validateRuns(slots)
+        const started = previous.window.slots.filter(slot => slot.claim || slot.resolution)
+        for (const prior of started) {
+          const index = slots.findIndex(slot => slot.id === prior.id)
+          if (index < 0 || !isDeepStrictEqual(slots[index], slotWithoutProgress(prior))) throw new Error('已领取或结算的排期不可修改')
+          slots[index] = prior
+        }
+        for (const slot of slots.filter(item => !item.claim && !item.resolution)) {
+          const prior = previous.window.slots.find(item => item.id === slot.id)
+          if (isDeepStrictEqual(slot, prior)) continue
+          if (started.some(item => item.claim && item.start >= slot.start && (item.runId === slot.runId || item.characters.some(id => slot.characters.includes(id)) ||
+            item.targets.some(target => slot.targets.some(other => other.id === target.id))))) throw new Error('排期修订会回填已领取场景的前置范围')
+        }
+        return update(previous, { ...previous.window, slots, routes: draft.routes ?? previous.window.routes, sealed: previous.window.sealed || !!draft.seal }, draft.reason)
+      })
+    },
+    cancel(slotId: string, expectedRevision: number, reason: string) {
+      return exclusive(async () => {
+        live()
+        const previous = await current()
+        expect(previous, expectedRevision)
+        const slot = find(previous.window, slotId)
+        if (slot.claim || slot.resolution) throw new Error('只有尚未领取的排期可直接取消')
+        return update(previous, setSlot(previous.window, { ...slot, resolution: { kind: 'cancelled', reason } }), reason)
+      })
+    },
+    execute<T>(slotId: string, target: SceneIdentity, run: (permit: ScheduledScenePermit, signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+      live()
+      if (queued.has(slotId)) throw new Error('排期已有等待的演绎请求')
+      const identity = Object.freeze(scheduledSceneIdentitySchema.parse(target))
+      const activeSignal = signal ? AbortSignal.any([shutdown.signal, signal]) : shutdown.signal
+      queued.add(slotId)
+      const execution = (async () => {
+        const { slot, claim } = await acquire(slotId, identity, activeSignal).finally(() => {
+          queued.delete(slotId)
+          for (const wake of waiters) wake()
+        })
+        let permitActive = true
+        const assertActive = () => {
+          activeSignal.throwIfAborted()
+          if (!permitActive) throw new Error('场景排期许可已结束')
+        }
+        const permit: ScheduledScenePermit = Object.freeze({
+          slot: Object.freeze(structuredClone(slotWithoutProgress(slot))), identity,
+          assertActive,
+          assertCharacter(characterId: string, sceneId: string, runId: string, storyId: string) {
+            assertActive()
+            if (runId !== slot.runId || sceneId !== identity.sceneId || storyId !== identity.storyId ||
+              !slot.characters.includes(characterId)) throw new Error('角色调用超出当前排期许可')
+          },
+        })
+        try {
+          activeSignal.throwIfAborted()
+          const value = await run(permit, activeSignal)
+          permitActive = false
+          await exclusive(() => settle(slotId, claim))
+          return value
+        } catch (error) {
+          await exclusive(async () => {
+            const previous = await current()
+            const owned = find(previous.window, slotId)
+            if (!owned.resolution && owned.claim?.token === claim.token) {
+              const reason = error instanceof Error ? error.message : String(error)
+              await update(previous, setSlot(previous.window, { ...owned, resolution: { kind: 'uncertain', reason } }), '场景执行结果待核查')
+            }
+          }).catch(failure => { throw new AggregateError([error, failure], '场景执行和待核查记录保存失败') })
+          throw error
+        } finally {
+          permitActive = false
+          executing.delete(claim.token)
+          for (const wake of waiters) wake()
+        }
+      })()
+      running.add(execution)
+      const release = () => { running.delete(execution) }
+      void execution.then(release, release)
+      return execution
+    },
+    reconcile(slotId: string, choice: { kind: 'settle' } | { kind: 'cancel-empty'; reason: string } = { kind: 'settle' }) {
+      return exclusive(async () => {
+        live()
+        const previous = await current()
+        const slot = find(previous.window, slotId)
+        if (!slot.claim || executing.has(slot.claim.token)) throw new Error('排期尚无可核查的离线领取')
+        if (choice.kind === 'cancel-empty') {
+          const { scene, store: records } = await sceneSource(slot, slot.claim)
+          if (slot.resolution?.kind === 'settled' || scheduleDigest(scene) !== slot.claim.setupDigest || await records.readSceneResult(scene) ||
+            (await records.listCharacterParticipationIds(slot.runId, scene.storyId, scene.sceneId)).length ||
+            (await records.listInteractionEvents(slot.runId, scene.storyId, scene.sceneId)).length) throw new Error('排期已有业务记录或设置变化，不能作为空场景取消')
+          return update(previous, setSlot(previous.window, { ...slot, resolution: { kind: 'cancelled', reason: choice.reason } }), choice.reason)
+        }
+        return settle(slotId, slot.claim)
+      })
+    },
+    close() {
+      return closing ??= (async () => {
+        shutdown.abort(new Error('世界调度器已关闭'))
+        await Promise.allSettled(running)
+        await tail
+        ownedRoots.delete(store.root)
+        ownedWorlds.delete(worldId)
+      })()
+    },
+  })
+}
