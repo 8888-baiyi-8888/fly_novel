@@ -124,6 +124,10 @@ function childDirector(options: Pick<StoryPlanningOptions, 'provider' | 'model' 
 export function createStoryPlan(options: StoryPlanningOptions, input: PlanInput, signal?: AbortSignal) {
   return createPlan(options, directors(options), input, signal)
 }
+/** 正式运行已保存启动意图时，沿其规划身份保存导演结果。 */
+export function createReservedStoryPlan(options: StoryPlanningOptions, planId: string, input: PlanInput, signal?: AbortSignal) {
+  return createPlan(options, directors(options), input, signal, planId)
+}
 export function runStoryCollaboration(options: StoryCollaborationOptions, planId: string, eventId: string, signal?: AbortSignal) {
   return runCollaboration(options, directors(options), planId, eventId, signal)
 }

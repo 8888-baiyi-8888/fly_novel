@@ -26,7 +26,7 @@ export interface StoryPlanningOptions {
 }
 
 /** 调用导演生成并保存初步计划；失败时不将模型回复当作已保存的业务结果。 */
-export async function createStoryPlan(options: StoryPlanningOptions, openDirectors: OpenDirectors, input: PlanInput, signal?: AbortSignal): Promise<PlanRecord> {
+export async function createStoryPlan(options: StoryPlanningOptions, openDirectors: OpenDirectors, input: PlanInput, signal?: AbortSignal, reservedId?: string): Promise<PlanRecord> {
   const data = planInputSchema.parse(input)
   if (!options.provider.trim() || !options.model.trim()) throw new Error('模型配置不能为空')
   signal?.throwIfAborted()
@@ -51,7 +51,7 @@ export async function createStoryPlan(options: StoryPlanningOptions, openDirecto
   if (failure !== undefined) throw failure
   signal?.throwIfAborted()
   if (output === undefined) throw new Error('导演没有返回规划')
-  const record = createPlanRecord(data, output)
+  const record = createPlanRecord(data, output, reservedId)
   signal?.throwIfAborted()
   await store.save(record)
   return record

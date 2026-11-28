@@ -54,10 +54,10 @@ export function parseStrictJson(source: string): unknown {
 }
 
 /** 解析导演规划并由程序分配不同的运行与事件身份。 */
-export function createPlanRecord(input: PlanInput, response: string): PlanRecord {
+export function createPlanRecord(input: PlanInput, response: string, id: string = randomUUID()): PlanRecord {
   const validated = planInputSchema.parse(input)
   const result = proposal.parse(parseStrictJson(response))
-  return planRecordSchema.parse({ formatVersion: 'world' in validated ? 2 : 1, id: randomUUID(), input: validated,
+  return planRecordSchema.parse({ formatVersion: 'world' in validated ? 2 : 1, id, input: validated,
     outcome: result.kind === 'planned'
       ? { kind: result.kind, events: result.events.map(description => ({ id: randomUUID(), description })) }
       : result })
