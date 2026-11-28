@@ -102,6 +102,26 @@
 
 `inspectStoryProgress(options, planId)` 从已保存的故事、场景、回报和批次证据核查当前位置。可继续的状态为 `paused` 和 `review-ready`。见[进度状态与续跑条件](../story-workflow/README.md#核查运行进度)。
 
+### 故事完整运行与恢复
+
+正式 Node.js 入口为 [openStoryRunWorkflow](story-run-workflow.ts)。调用方提供已绑定的世界初始化交付、真实且隔离的运行、规划及协作目录、导演适配器、人物装配和审阅设置。需要地图、共享商队状态或并行排期时，配置相应可信入口，并在配置语义变化时更换 `configurationVersion`。应用借用资料和调度句柄，拥有本轮导演及角色作用域。关闭时先等待运行服务的 `close()`，再释放借用句柄。
+
+1. 用调用方持有的稳定 UUID 和可信资料选择调用 `start(runId, selection)`。同一请求读回原规划。需要提前登记世界排期时，可用返回的规划 ID 绑定场景排期。
+2. 用 `diagnose(runId)` 只读查看状态和证据版本。准备就绪、普通批次暂停、审阅已确认或结果待核查时，可调用 `advance(runId, version)`。入口重新核对对应位置，只补做可核验的步骤。正在等待审阅时，用 `submitReview`、`settleReview` 或 `refreshReview` 显式处理。
+3. 重开用相同目录和配置，按原 ID 读取。状态待核查时，检查场景、角色参与、排期与操作回执。已有角色领取而缺少有效响应时，继续会停在相同位置。整个轮次结束后，可调用 `startNext(previousRunId, newRunId, selection)` 生成附带前轮结果摘要的新规划。
+
+首版正式运行按一个最小故事准备一个独立结算的场景。多场景演绎仍可使用既有的底层入口。固定替身样例通过 `pnpm run story-run-example` 创建新记录目录并停在审阅。输出中的 `root` 是重开所需目录。构建后，可分别执行以下命令观察跨进程继续。
+
+```powershell
+$runDirectory = '替换为样例输出中的 root'
+node dist/app/story-run-example.js $runDirectory inspect
+node dist/app/story-run-example.js $runDirectory approve
+node dist/app/story-run-example.js $runDirectory advance
+node dist/app/story-run-example.js $runDirectory next
+```
+
+样例使用固定交付和模型替身，真实启动需由可信调用方装配实际配置。记录和恢复依据见[统一运行记录](../story-workflow/README.md#统一运行记录)。
+
 ### 世界时间与并行故事
 
 从 [story-workflow.ts](story-workflow.ts) 调用 `openStoryWorldSchedule(roots, options)`，绑定一个世界、独立真实的排期目录和最大并发数。同一可信写入进程持有该世界的调度器；故事运行沿用原规划和协作根。应用通过 `openWindow` 定义世界时间基准、范围、起始角色位置和获准通行证据，再通过 `revise` 登记并批准场景区间、参与角色、资源及依赖。变更须携带上一版号。调用 `view` 查看等待原因、审阅批次、领取和结算状态，按版本调用 `read` 可查历史。

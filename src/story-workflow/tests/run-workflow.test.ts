@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { test, type TestContext } from 'node:test'
 import { FsVersion } from '@fly-novel/fs'
 import { CharacterStore } from '@fly-novel/character'
@@ -181,4 +182,56 @@ test('从已有角色响应和已保存导演回报继续，只补做缺失步�
     assert.notEqual(next.id, finished.planId)
     assert.deepEqual(await third.startNext(runId, successor, nextInput), next)
   } finally { await third.close() }
+})
+
+test('曲水城正式样例跨进程保留审阅、角色响应和已应用状态', { timeout: 30000 }, async t => {
+  const entry = join(__dirname, '../../app/story-run-example.js')
+  function subprocess(args: string[], code = 0) {
+    const result = spawnSync(process.execPath, args, { encoding: 'utf8', timeout: 10000 })
+    if (result.error) throw result.error
+    assert.equal(result.status, code, result.stderr || result.stdout)
+    return result.stdout
+  }
+  const opened = JSON.parse(subprocess([entry]))
+  const root = String(opened.root)
+  t.after(async () => {
+    assert.equal(dirname(root), await realpath(resolve('tmp')))
+    assert.equal(await realpath(root), root)
+    await rm(root, { recursive: true, force: true })
+  })
+  assert.equal(opened.status, 'awaiting-review')
+  assert.equal(JSON.parse(subprocess([entry, root, 'inspect'])).review.reviewId, opened.review.reviewId)
+  assert.equal(JSON.parse(subprocess([entry, root, 'approve'])).status, 'review-ready')
+  const exitOn = async (method: 'writeFile' | 'link', argument: number, suffix: string, code: number) => {
+    const hook = join(root, `fixture-${code}.cjs`)
+    await writeFile(hook, `const fs = require('node:fs/promises')
+const original = fs.${method}
+fs.${method} = async (...args) => {
+  const result = await original(...args)
+  if (String(args[${argument}]).endsWith(${JSON.stringify(suffix)})) process.exit(${code})
+  return result
+}
+`, { flag: 'wx' })
+    subprocess(['--require', hook, entry, root, 'advance'], code)
+  }
+  await exitOn('writeFile', 0, '.character-result.json', 71)
+  const interrupted = JSON.parse(subprocess([entry, root, 'inspect']))
+  assert.equal(interrupted.status, 'needs-review')
+  assert.equal(interrupted.scenes[0]?.participation[0]?.status, 'responded')
+  const stories = join(root, 'stories')
+  const participation = (await readdir(stories)).filter(name => name.endsWith('.character-result.json'))
+  assert.equal(participation.length, 1)
+  await exitOn('link', 1, 'convoy-1.json', 72)
+  const stateRoot = join(root, 'state')
+  const recordedState = await readFile(join(stateRoot, 'convoy-1.json'), 'utf8')
+  const recovered = JSON.parse(subprocess([entry, root, 'advance']))
+  assert.equal(recovered.status, 'completed')
+  assert.equal(recovered.completed.result.worldEvidence.current.revision, 1)
+  assert.deepEqual((await readdir(stories)).filter(name => name.endsWith('.character-result.json')), participation)
+  assert.equal((await readdir(stories)).filter(name => name.endsWith('.adopted-event.json')).length, 1)
+  assert.equal((await readdir(stateRoot)).filter(name => name.startsWith('operation-')).length, 1)
+  assert.equal(await readFile(join(stateRoot, 'convoy-1.json'), 'utf8'), recordedState)
+  const successor = JSON.parse(subprocess([entry, root, 'next']))
+  assert.equal(successor.status, 'ready')
+  assert.notEqual(successor.planId, opened.planId)
 })

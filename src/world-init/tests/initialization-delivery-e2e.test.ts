@@ -17,6 +17,8 @@ import { bindStoryCharacters, openStoryCharacterRuntime, selectStoryCharacters, 
 import { LlmAdapter, type GenerateOptions, type StreamChunk, type ToolCallId } from '@fly-novel/llm'
 import configured = require('../../app/call-llm.js')
 import { openWorldInitializationWorkflow } from '../../app/world-initialization-entry.js'
+import { openStoryRunWorkflow } from '../../app/story-run-workflow.js'
+import { openStoryWorldSchedule } from '../../app/story-workflow.js'
 import { bindStoryWorld, continueStoryTree, createStoryPlan, createStoryScene, createStorySceneWithMap, inspectStoryMapScene, inspectStoryProgress, prepareStoryWorldInput, readStoryMapCheck, readStoryMapProposal, readStoryPlan, readStoryRoundResult, readStoryScene, readStorySceneWorldEvidence, requestStoryMapProposal, runStoryTree } from '../../app/story-workflow.js'
 import { readStory, readStoryReview, submitStoryReview, type StoryTreeOptions } from '../../app/story-workflow.js'
 import { advance, leaf, report as directorReport, ScriptedAdapter as DirectorAdapter, simulation, task } from '../../story-workflow/tests/fixtures.js'
@@ -678,6 +680,67 @@ test('双世界隔离从初始化交付到城门互动、事件与故事评估',
         await writeFile(assessmentPath, JSON.stringify({ ...JSON.parse(assessmentBytes), value: { status: 'achieved', reason: '被误写为全部完成', report: evaluated.assessment.report } }))
         await assert.rejects(readStoryRoundResult(sceneRoots, plan.id), /目标证据不一致/)
       } finally { await writeFile(assessmentPath, assessmentBytes) }
+      const runRoot = join(base, 'managed-runs')
+      const scheduleRoot = join(base, 'managed-schedule')
+      await Promise.all([mkdir(runRoot), mkdir(scheduleRoot)])
+      const reopenedInitialization = await openWorldInitializationWorkflow(options)
+      t.after(() => reopenedInitialization.close())
+      const managedBinding = await bindStoryWorld({ ...binding, initialization: reopenedInitialization.workflow })
+      const managedCharacters = await CharacterStore.open(join(world.readRoot, 'characters'), false)
+      t.after(() => managedCharacters.close())
+      const managedRoots = { ...sceneRoots, protectedRoots: [...sceneRoots.protectedRoots, scheduleRoot] }
+      const dispatch = await openStoryWorldSchedule(sceneRoots, { worldId: world.worldId, scheduleRoot, maxConcurrent: 2 })
+      t.after(() => dispatch.close())
+      const slot = randomUUID()
+      const response = new DirectorAdapter(['{"kind":"wait"}'])
+      const fixedModel = { provider: 'test', model: 'test' }
+      const service = await openStoryRunWorkflow({ ...managedRoots, runRoot, binding: managedBinding, configurationVersion: 'managed-fixture-1',
+        director: { ...fixedModel, adapter: new DirectorAdapter([
+          '{"kind":"planned","events":["核对北门等候点"]}', advance, task, JSON.stringify({ kind: 'direct', preparation: '核对城门', mapNeed }),
+          JSON.stringify({ participants: [{ characterId: guard.id, invitation: '值守城门' }] }),
+          JSON.stringify({ next: { kind: 'end', reason: '守卫等候' }, perceptions: [{ characterId: guard.id, status: 'not-received', reason: '无发言', observations: [] }] }),
+          directorReport, '已接收', JSON.stringify({ status: 'achieved', reason: '已核对等候安排', report: JSON.parse(directorReport) }),
+        ]) },
+        execution: { scene: { maxEvents: 5, schedule: { handle: dispatch, slot: async () => slot, version: '1' },
+          characters: { store: managedCharacters, ownerAgentId: 'characters',
+            configure: () => ({ ...fixedModel, adapter: response, timeoutMs: 5000, version: '1' }) },
+          map: { scope: { ...scope, binding: managedBinding }, model: { ...fixedModel, timeoutMs: 5000, adapter: new DirectorAdapter([JSON.stringify({
+            status: 'proposed', cityId: city.id, layerId: 'admin', gate: { kind: 'proposed', description: '北门' },
+            waiting: { name: '高地等候点', description: '停放货车', relativeToGate: '北门外' },
+          })]) }, async review() { return { status: 'accepted', actor: '固定审阅者', reason: '保留夜间闭门规则' } } },
+          async prepare() {
+            return { candidates, initialCandidates: [guard.id], allowObservation: () => true,
+              async grants(_, scene) {
+                return [{ sceneId: scene.sceneId, characterId: guard.id, category: 'profile', content: '守卫私料：交班安排', basis: '自身档案', source: { kind: 'profile' } },
+                  { sceneId: scene.sceneId, characterId: guard.id, category: 'observation', content: scene.situation, basis: '在场', source: { kind: 'scene', field: 'situation' } }]
+              },
+              async conditions() { return { version: '1', participants: [{ characterId: guard.id, position: '北门', hearing: 'clear', sight: 'clear', basis: '值守' }] } },
+            }
+          },
+        } },
+      })
+      try {
+        const runId = randomUUID()
+        const planned = await service.start(runId, selection)
+        const window = await dispatch.openWindow({ id: randomUUID(), epoch: '抵达当夜', start: 0, end: 60,
+          positions: [{ characterId: guard.id, locationId: '北门' }], routes: [] })
+        await dispatch.revise(window.revision, { slots: [{ id: slot, runId: planned.id, start: 0, end: 10,
+          locationId: '北门', characters: [guard.id], dependencies: [], targets: [] }], reason: '固定贯通', seal: true })
+        const result = await service.advance(runId, (await service.diagnose(runId)).version)
+        assert.equal(result.status, 'completed')
+        const scheduled = (await dispatch.view()).slots[0]!
+        assert.equal(scheduled.status, 'settled')
+        const claim = scheduled.claim!
+        const proof = await readStorySceneWorldEvidence(managedRoots, planned.id, claim.storyId, claim.sceneId)
+        assert.equal(proof.world.deliveryVersion, snapshot.version)
+        assert.equal(proof.proposal?.result.status, 'proposed')
+        assert.equal(response.requests.length, 1)
+      } finally {
+        await service.close()
+        await dispatch.close()
+        await managedCharacters.close()
+        await reopenedInitialization.close()
+      }
     }
   }
   assert.equal(await readFile(join(configs[0]!.world.readRoot, 'main', 'city.md'), 'utf8'), '城门夜间关闭')

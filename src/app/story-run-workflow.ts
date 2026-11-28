@@ -6,9 +6,9 @@ import { openStoryRunRecords, runDigest, storyRunDigestSchema, storyRunManifestS
 import type { ManagedStoryTree, StoryPlanningOptions, StoryTreeOptions } from '../story-workflow/workflow.js'
 import { readIfPresent } from '../story-workflow/story-query.js'
 import { prepareStoryWorldInput, type bindStoryWorld } from './story-world-materials.js'
-import { createReservedStoryPlan, inspectStoryProgress, readStoryRoundResult, runManagedStoryTree, settleStoryReview, submitStoryReview, type StoryReviewChoice, type StoryReviewIdentity } from './story-workflow.js'
+import { createReservedStoryPlan, inspectStoryProgress, readStoryRoundResult, refreshStoryReview, runManagedStoryTree, settleStoryReview, submitStoryReview, type StoryReviewChoice, type StoryReviewIdentity } from './story-workflow.js'
 import { reviewPolicySchema } from '../story-workflow/user-review.js'
-import { runManagedScene, type StoryRunSceneOptions } from './story-run-scene.js'
+import { readManagedConvoyReceipt, runManagedScene, type StoryRunSceneOptions } from './story-run-scene.js'
 import { openStoryConvoyState } from './story-convoy-state.js'
 export type { StoryRunSceneOptions } from './story-run-scene.js'
 
@@ -51,8 +51,12 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
     z.number().int().min(1).max(10000).parse(execution.scene.maxEvents)
     if (execution.limit !== undefined) z.number().int().positive().parse(execution.limit)
     if (execution.scene.schedule) z.string().trim().min(1).parse(execution.scene.schedule.version)
+    const characters = execution.scene.characters
+    if (!world.agents.some(item => item.agentId === characters.ownerAgentId && item.writableRoot === characters.store.rootDirectory)) throw new Error('可信运行的人物目录或负责人不匹配')
+    if (execution.scene.convoy?.worldRoot !== undefined && execution.scene.convoy.worldRoot !== world.readRoot) throw new Error('可信商队状态的世界目录不匹配')
   }
-  const protectedRoots = [...new Set([...options.protectedRoots, world.readRoot])]
+  const convoyRoot = execution?.scene.convoy?.stateRoot
+  const protectedRoots = [...new Set([...options.protectedRoots, world.readRoot, ...(convoyRoot ? [convoyRoot] : [])])]
   const records = await openStoryRunRecords(options.runRoot, [options.planRoot, options.collaborationRoot, ...protectedRoots])
   const roots = { planRoot: options.planRoot, collaborationRoot: options.collaborationRoot, protectedRoots: [...protectedRoots, records.root] }
   const planning = { ...director, root: roots.planRoot, protectedRoots: [...roots.protectedRoots, roots.collaborationRoot] }
@@ -108,6 +112,12 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
       const progress = await inspectStoryProgress(roots, planId)
       if (progress.status === 'completed') {
         const completed = await readStoryRoundResult(roots, planId)
+        if (completed.result.formatVersion === 3 && execution?.scene.convoy) {
+          const state = await openStoryConvoyState(roots, { ...execution.scene.convoy, worldId: world.worldId, runId: plan.id })
+          const expected = completed.result.worldEvidence.current
+          const current = expected.status === 'arrived' ? await state.initialEvidence() : await state.progress.current()
+          if (!isDeepStrictEqual(current, expected)) throw new Error('根回报的商队状态版本已变化')
+        }
         return { runId, planId, status: completed.assessment.status === 'terminated' ? 'terminated' as const : 'completed' as const, completed }
       }
       if (progress.status === 'not-started') return { runId, planId, status: 'ready' as const }
@@ -128,15 +138,23 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
           ...(dispatch ? { dispatchId: dispatch.record.participationId, dispatchStatus: dispatch.participation?.outcome.status ?? 'pending' } : {}),
         }
       })) : []
-      return { runId, planId, status: 'needs-review' as const, current: progress.current, batch: progress.batch,
+      const state = progress.current && execution?.scene.convoy
+        ? await readManagedConvoyReceipt(records, runId, roots, world.worldId, plan.id, progress.current.storyId, execution.scene.convoy) : undefined
+      return { runId, planId, status: 'needs-review' as const, current: progress.current, batch: progress.batch, state,
         reason: progress.reason, scenes, confirmed: progress.confirmed.map(item => item.result.storyId) }
     } catch (error) {
       return { runId, planId, status: 'blocked' as const, issue: evidenceIssue(error) }
     }
   }
   async function diagnose(runId: string) {
+    lifecycle.signal.throwIfAborted()
     const result = await inspect(runId)
-    return { ...result, version: runDigest(result) }
+    const schedule = execution?.scene.schedule?.handle
+    const latest = result.planId && schedule ? await schedule.latest() : undefined
+    const slots = latest && schedule ? (await schedule.view()).slots.filter(slot => slot.runId === result.planId)
+      .map(({ id, status, blocks, review }) => ({ id, status, blocks, review })) : undefined
+    const view = { ...result, ...(slots?.length ? { schedule: slots } : {}) }
+    return { ...view, version: runDigest(view) }
   }
   async function executionInputs(runId: string, active: AbortSignal) {
     const saved = await manifest(runId)
@@ -173,8 +191,9 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
         if (previousRunId === runId) throw new Error('下一轮需要新运行身份')
         const predecessor = await manifest(previousRunId)
         if (!predecessor || !await readPlan(predecessor)) throw new Error('上一轮没有已核对规划')
-        if ((await inspectStoryProgress(roots, predecessor.planId)).status !== 'completed') throw new Error('上一轮尚未形成可核对的整轮结果')
-        previous = { runId: previousRunId, result: runDigest(await readStoryRoundResult(roots, predecessor.planId)) }
+        const status = await inspect(previousRunId)
+        if (status.status !== 'completed' && status.status !== 'terminated') throw new Error('上一轮尚未形成可核对的整轮结果')
+        previous = { runId: previousRunId, result: runDigest(status.completed) }
       }
       const digest = runDigest({ request, previous })
       let saved = await manifest(runId)
@@ -221,7 +240,14 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
         return settleStoryReview(reviewOptions, saved.planId, batch, expected)
       }, signal)
     },
+    refreshReview(runId: string, batch: number, expected: StoryReviewIdentity, signal?: AbortSignal) {
+      return operate(runId, async active => {
+        const { saved, reviewOptions } = await executionInputs(runId, active)
+        return refreshStoryReview({ ...reviewOptions, propose: execution?.review?.propose }, saved.planId, batch, expected)
+      }, signal)
+    },
     async read(runId: string) {
+      lifecycle.signal.throwIfAborted()
       const saved = await manifest(runId)
       if (!saved) return undefined
       return { manifest: saved, plan: await readPlan(saved) }

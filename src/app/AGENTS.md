@@ -8,6 +8,7 @@
 - `story-world-materials.ts`：绑定故事使用的可信世界与交付读取范围。
 - `story-run-workflow.ts`：故事运行统一装配、稳定开始身份、诊断与继续入口。
 - `story-run-scene.ts`：正式运行的场景准备、角色装配、互动及结算。
+- `story-run-example.ts`：使用固定交付和模型替身的曲水城运行与恢复样例。
 - `story-map-scene.ts`：校验场景地图需求、授权和当前地图证据。
 - `story-character-participation.ts`：绑定同一子故事中的人物档案及场景参与范围。
 - `story-character-runtime.ts`：装配、复用和释放角色实例，取得结构化回应。

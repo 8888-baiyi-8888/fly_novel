@@ -1,4 +1,5 @@
 import { readdir, realpath } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { convoyBaselineSchema, convoyBaselineSourceSchema, convoyChangeSchema, convoyCommittedSchema, convoyIdentitySchema, convoyOperationName, convoyProposalSchema,
   isMissingStoryFile, publishConvoyRecord, readConvoyRecord, type ConvoyBaseline, type ConvoyChange, type ConvoyProposal, type ConvoyReceipt, type ConvoyState } from '../story-workflow/convoy-state.js'
@@ -18,7 +19,9 @@ export async function openStoryConvoyState(roots: Roots, options: { worldId: str
   authorize?: AuthorizeConvoyChange }) {
   const identity = convoyIdentitySchema.parse({ worldId: options.worldId, convoyId: options.convoyId })
   const { runId, authorize } = options
-  await PlanStore.open(options.stateRoot, [roots.planRoot, roots.collaborationRoot, options.worldRoot, ...roots.protectedRoots])
+  const key = (path: string) => process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path)
+  const stateKey = key(options.stateRoot)
+  await PlanStore.open(options.stateRoot, [roots.planRoot, roots.collaborationRoot, options.worldRoot, ...roots.protectedRoots.filter(path => key(path) !== stateKey)])
   const root = await realpath(options.stateRoot)
   const eventRoots = { ...roots, protectedRoots: [...roots.protectedRoots, root, options.worldRoot] }
   const events = openStoryEvents(eventRoots, { worldId: identity.worldId, runId })

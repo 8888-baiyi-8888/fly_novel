@@ -28,6 +28,10 @@ type Identity = Pick<StorySimulationInput, 'runId' | 'storyId' | 'task' | 'prepa
 type Records = Awaited<ReturnType<typeof openStoryRunRecords>>
 const convoyIntent = z.union([z.literal('no-change'), convoyProposalSchema])
 const finishedScene = z.object({ sceneId: z.string().min(1), result: storyRunDigestSchema, eventId: storyRunDigestSchema }).strict()
+const adoption = z.object({ version: storyRunDigestSchema, decision: z.discriminatedUnion('status', [
+  z.object({ status: z.literal('accepted'), actor: z.string().trim().min(1), reason: z.string().trim().min(1) }).strict(),
+  z.object({ status: z.literal('rejected'), reason: z.string().trim().min(1) }).strict(),
+]) }).strict()
 
 export interface StoryRunSceneOptions {
   characters: {
@@ -60,6 +64,19 @@ export interface StoryRunSceneOptions {
   }
 }
 
+export async function readManagedConvoyReceipt(records: Records, managedId: string, roots: Roots, worldId: string, runId: string, storyId: string,
+  config: NonNullable<StoryRunSceneOptions['convoy']>) {
+  const intent = await records.read(managedId, `scene.${storyId}.convoy`, convoyIntent)
+  if (!intent || intent === 'no-change') return undefined
+  if (intent.worldId !== worldId || intent.convoyId !== config.convoyId || intent.evidence.runId !== runId || intent.evidence.storyId !== storyId) {
+    throw new Error('场景状态操作与运行归属不匹配')
+  }
+  const state = await openStoryConvoyState(roots, { ...config, worldId, runId })
+  const receipt = await state.inspect(intent.operationId)
+  return { operationId: intent.operationId, eventId: intent.evidence.eventId, status: receipt.status,
+    ...(receipt.status === 'applied' ? { revision: receipt.state.revision } : {}) }
+}
+
 /** 使用现有受权入口驱动一个可结算的最小场景。 */
 export async function runManagedScene(records: Records, managedId: string, roots: Roots, binding: Binding, director: Director, config: StoryRunSceneOptions,
   input: StorySimulationInput, signal: AbortSignal): Promise<Simulation> {
@@ -84,7 +101,17 @@ export async function runManagedScene(records: Records, managedId: string, roots
     if (check.result.status === 'missing' && !await readIfPresent(readStoryMapProposal(roots, runId, storyId, checkId))) {
       await requestStoryMapProposal(roots, runId, storyId, checkId, map.scope, map.model, signal)
     }
-    scene = await createStorySceneWithMap(roots, runId, storyId, check.id, map.scope, setup, map.review, signal)
+    scene = await createStorySceneWithMap(roots, runId, storyId, check.id, map.scope, setup, async evidence => {
+      const version = runDigest(evidence)
+      const saved = await records.read(managedId, step('map-adoption'), adoption)
+      if (saved) {
+        if (saved.version !== version) throw new Error('已保存的地图审阅依据已变化')
+        return saved.decision
+      }
+      const decision = await map.review(evidence)
+      signal.throwIfAborted()
+      return (await records.save(managedId, step('map-adoption'), adoption, { version, decision })).decision
+    }, signal)
   } else {
     scene = await createStoryScene(roots, runId, storyId, setup)
   }
@@ -178,5 +205,5 @@ export async function runManagedScene(records: Records, managedId: string, roots
     await handle.reconcile(slotId)
     return result.simulation
   }
-  return handle.execute(slotId, target, (_, active) => simulate(active), signal, !!scheduled.claim)
+  return handle.execute(slotId, { storyId, sceneId }, (_, active) => simulate(active), signal, !!scheduled.claim)
 }
