@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { test } from 'node:test'
 import { createReviewSnapshot, reviewDigest, reviewPolicySchema, storyReviewSchema } from '../user-review.js'
+import { continueStoryTree, inspectStoryProgress, readStory, readStoryReview, runStoryTree, type StoryTreeOptions } from '../../app/story-workflow.js'
+import { ScriptedAdapter, setup, simulation } from './fixtures.js'
 
 test('审阅选项绑定原安排、期限、依赖和正文版本', () => {
   const first = randomUUID()
@@ -27,4 +29,23 @@ test('审阅选项绑定原安排、期限、依赖和正文版本', () => {
   assert.throws(() => createReviewSnapshot(input, reviewId, policy, 20, { ...proposals, options: [reversed, reversed] }), /选项重复/)
   assert.throws(() => createReviewSnapshot(input, reviewId, policy, 20, { ...proposals, options: [{ ...reversed, childIds: [first, first] }] }), /同一批子故事/)
   assert.throws(() => createReviewSnapshot(input, reviewId, policy, 20, { ...proposals, dependencies: [{ before: first, after: second }] }), /推进依赖/)
+})
+
+test('根故事在初步拆分后等待，重开时只读原版本和期限', async t => {
+  const { baseOptions, plan } = await setup(t)
+  let now = 100
+  const adapter = new ScriptedAdapter([])
+  const options: StoryTreeOptions = {
+    ...baseOptions, adapter, simulate: async () => simulation,
+    review: { policy: { kind: 'timed', durationMs: 25 }, now: () => now },
+  }
+  const waiting = await runStoryTree(options, plan.id)
+  assert.equal(waiting.kind, 'review')
+  assert.equal(waiting.review.deadline, 125)
+  assert.equal((await inspectStoryProgress(baseOptions, plan.id)).status, 'awaiting-review')
+  now = 130
+  assert.deepEqual(await readStoryReview(baseOptions, plan.id, waiting.batch), waiting.review)
+  await assert.rejects(continueStoryTree(options, plan.id, waiting.batch), /需要审阅决定/)
+  assert.deepEqual((await readStory(baseOptions, plan.id)).children.map(child => child.status), ['planned', 'planned'])
+  assert.equal(adapter.requests.length, 0)
 })

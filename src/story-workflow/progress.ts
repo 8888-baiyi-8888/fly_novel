@@ -6,6 +6,7 @@ import { readArrangement, readChildChoice, readIfPresent, readOutcome, readStory
 import type { PlanRecord, StoryNode, StoryProgress, StoryStep } from './types.js'
 import type { StoryCollaborationOptions } from './workflow.js'
 import type { StoryWorldProgressSource, WorldObjective } from './world-progress.js'
+import type { StoryReviewPolicy } from './user-review.js'
 
 type StoryLocation = Pick<StoryNode, 'storyId' | 'parentStoryId' | 'description'>
 type ReviewPoint = {
@@ -18,6 +19,7 @@ type ConfirmedResult = {
   result: Extract<StoryStep, { kind: 'result' }>
   counted: boolean
 }
+type ProgressRoots = Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>
 
 function location(node: StoryNode): StoryLocation {
   const { storyId, parentStoryId, description } = node
@@ -141,6 +143,16 @@ function verifyNext(progress: StoryProgress, point: ReviewPoint | undefined): as
   }
 }
 
+/** 只读重开指定批次的审阅快照。 */
+export async function readStoryReview(options: ProgressRoots, runId: string, batch: number) {
+  const { planRoot, collaborationRoot, protectedRoots } = options
+  const plans = await PlanStore.open(planRoot, [...protectedRoots, collaborationRoot])
+  const store = await CollaborationStore.open(collaborationRoot, planRoot, protectedRoots)
+  const progress = await readVerifiedPause(store, await plans.read(runId), batch)
+  if (!progress.review) throw new Error('该批次没有父故事安排审阅')
+  return progress.review
+}
+
 /** 只读核查最新业务证据。只有 paused 表示尚未消费且可继续的位置。 */
 export async function inspectStoryProgress(
   options: Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>,
@@ -170,6 +182,7 @@ export async function inspectStoryProgress(
       }
       const pause = await readVerifiedPause(store, plan, batch)
       verifyNext(pause, point)
+      if (pause.review) return { ...evidence, status: 'awaiting-review' as const, current: point.current, review: pause.review }
       return { ...evidence, status: 'paused' as const, current: point.current, next: point.next }
     }
     return { ...evidence, status: 'needs-review' as const, ...point }
@@ -183,7 +196,7 @@ export async function inspectStoryProgress(
 }
 
 /** 核对原规划和已保存的推进记录，独占取得本次继续的位置。 */
-export async function restoreStoryProgress(store: CollaborationStore, plan: PlanRecord, resumeBatch: number, signal?: AbortSignal, worldProgress?: StoryWorldProgressSource, objectives?: WorldObjective[]): Promise<StoryProgress['frames']> {
+export async function restoreStoryProgress(store: CollaborationStore, plan: PlanRecord, resumeBatch: number, signal?: AbortSignal, worldProgress?: StoryWorldProgressSource, objectives?: WorldObjective[], reviewPolicy?: StoryReviewPolicy): Promise<StoryProgress['frames']> {
   if (await store.hasContinuedStoryProgress(plan.id, resumeBatch)) throw new Error(`故事暂停位置已使用，请核查批次 ${resumeBatch}`)
   let progress: StoryProgress
   try {
@@ -197,6 +210,8 @@ export async function restoreStoryProgress(store: CollaborationStore, plan: Plan
     }
     throw error
   }
+  if (!isDeepStrictEqual(progress.reviewPolicy, reviewPolicy)) throw new Error('继续故事的审阅模式已变化')
+  if (progress.review) throw new Error('父故事安排需要审阅决定')
   if (progress.formatVersion === 3) {
     if (!worldProgress) throw new Error('继续此批故事需要原世界状态来源')
     const current = await worldProgress.current()

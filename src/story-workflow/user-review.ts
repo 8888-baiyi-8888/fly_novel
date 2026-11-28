@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import type { StoryWorldProgressSource, WorldObjective } from './world-progress.js'
 
 const id = z.string().uuid()
 const text = z.string().trim().min(1)
@@ -54,6 +55,19 @@ export type StoryReview = z.infer<typeof storyReviewSchema>
 export type StoryReviewPolicy = z.infer<typeof reviewPolicySchema>
 export type StoryReviewSubject = z.infer<typeof subject>
 export type StoryReviewProposals = z.input<typeof proposals>
+export interface StoryReviewConfiguration {
+  policy: StoryReviewPolicy
+  /** 可信时钟，返回 Unix 毫秒。默认使用 Date.now。 */
+  now?: () => number
+  /** 应用提供可采用的顺序及约束，可省略以保留初步安排。 */
+  propose?(subject: StoryReviewSubject): StoryReviewProposals | undefined
+}
+
+export async function reviewEvidenceHash(source?: StoryWorldProgressSource, objectives?: readonly WorldObjective[]): Promise<string> {
+  const current = await source?.current()
+  if (current && current.worldId !== source?.worldId) throw new Error('审阅的世界状态身份不匹配')
+  return reviewDigest({ current, objectives })
+}
 
 export const reviewChoiceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('select'), optionId: text }).strict(),

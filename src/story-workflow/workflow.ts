@@ -7,6 +7,7 @@ import type { Agent } from '@fly-novel/agents'
 import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyAdvanceSchema, storyCompletionSchema, storyDecisionSchema, storyProgressVersion, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
 import { CollaborationStore } from './store.js'
 import { evaluateWorldObjectives, storyWorldEvidenceSchema, verifyWorldAssessment, worldObjectivesSchema, type EventEvidence, type StoryWorldEvidence, type StoryWorldProgressSource, type WorldObjective } from './world-progress.js'
+import { createReviewSnapshot, reviewEvidenceHash, reviewPolicySchema, reviewTime, type StoryReview, type StoryReviewConfiguration } from './user-review.js'
 
 export interface DirectorScope { create(role: string): Promise<Agent>; dispose(): Promise<void> }
 export type OpenDirectors = () => Promise<DirectorScope>
@@ -198,6 +199,8 @@ export async function readStorySiblingDecision(options: Pick<StoryCollaborationO
 }
 
 export interface StoryTreeOptions extends StoryCollaborationOptions {
+  /** 可信应用的父故事安排审阅设置。省略时直接推进。 */
+  review?: StoryReviewConfiguration
   /** 本次最多完成多少个直接演绎的子故事，默认 5。 */
   limit?: number
   /** 由可信应用绑定的本轮事件与世界状态来源。 */
@@ -210,6 +213,7 @@ export interface StoryTreeOptions extends StoryCollaborationOptions {
 type StoryTreeResult =
   | (Extract<StoryStep, { kind: 'result' }> & { completedCount: number })
   | { kind: 'paused'; runId: string; storyId: string; batch: number; completedCount: number }
+  | { kind: 'review'; runId: string; storyId: string; batch: number; completedCount: number; review: StoryReview }
 
 /** 读取已结束的整轮结果。暂停、旧入口的协作记录或部分写入无法通过核对。 */
 export async function readStoryRoundResult(options: Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>, planId: string) {
@@ -254,6 +258,8 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
   const source = options.worldProgress
   if (source && (source.runId !== planId || plan.formatVersion !== 2 || plan.input.world.worldId !== source.worldId)) throw new Error('故事状态来源与本轮世界不匹配')
   const objectives = options.worldObjectives ? worldObjectivesSchema.parse(options.worldObjectives) : undefined
+  const policy = options.review === undefined ? { kind: 'off' } as const : reviewPolicySchema.parse(options.review.policy)
+  const reviewPolicy = policy.kind === 'off' ? undefined : policy
   if (objectives && !source) throw new Error('世界评估目标需要可信的状态来源')
   const planHash = createHash('sha256').update(JSON.stringify(plan)).digest('hex')
   type Result = Extract<StoryStep, { kind: 'result' }>
@@ -270,7 +276,7 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
     frames = [{ node: root, children, index: 0, results: [], decisions: [] }]
     await store.saveStoryStep({ formatVersion: 1, runId: planId, storyId: rootId, kind: 'decision', value: { kind: 'split', children } })
   } else {
-    frames = await restoreStoryProgress(store, plan, resumeBatch, signal, source, objectives)
+    frames = await restoreStoryProgress(store, plan, resumeBatch, signal, source, objectives, reviewPolicy)
   }
   let completedCount = 0
   const call = async (prompt: string, callSignal = signal): Promise<string> => {
@@ -358,10 +364,22 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
       if (!frames.length) return { ...result, completedCount }
       continue
     }
+    if (reviewPolicy && frame.index === 0) {
+      const subject = {
+        runId: planId, parentStoryId: frame.node.storyId, batch, planHash,
+        goal: frame.node.task.goal, constraints: frame.node.task.constraints, children: frame.children,
+        evidenceHash: await reviewEvidenceHash(source, objectives),
+      }
+      const alternatives = options.review?.propose?.(structuredClone(subject))
+      const review = createReviewSnapshot(subject, randomUUID(), reviewPolicy, reviewTime(options.review?.now), alternatives)
+      signal?.throwIfAborted()
+      await store.saveStoryProgress({ formatVersion: 4, runId: planId, batch, planHash, frames, worldObjectives: objectives, reviewPolicy, review })
+      return { kind: 'review', runId: planId, storyId: frames[0]!.node.storyId, batch, completedCount, review }
+    }
     if (completedCount === limit) {
       signal?.throwIfAborted()
-      const formatVersion = storyProgressVersion(frames)
-      await store.saveStoryProgress({ formatVersion, runId: planId, batch, planHash, frames, ...(formatVersion === 3 && objectives ? { worldObjectives: objectives } : {}) })
+      const formatVersion = reviewPolicy ? 4 : storyProgressVersion(frames)
+      await store.saveStoryProgress({ formatVersion, runId: planId, batch, planHash, frames, reviewPolicy, ...(formatVersion >= 3 && objectives ? { worldObjectives: objectives } : {}) })
       return { kind: 'paused', runId: planId, storyId: frames[0]!.node.storyId, batch, completedCount }
     }
     const child = frame.children[frame.index++]!

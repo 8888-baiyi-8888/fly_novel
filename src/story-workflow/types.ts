@@ -3,6 +3,8 @@ import { parseDocument } from 'yaml'
 import { z } from 'zod'
 import { storyWorldEvidenceSchema, worldObjectivesSchema } from './world-progress.js'
 import { mapSceneNeedSchema, sceneMapEvidenceSchema } from './map-scene.js'
+import { enabledReviewPolicySchema, storyReviewSchema } from './user-review.js'
+import { isDeepStrictEqual } from 'node:util'
 
 const text = z.string().trim().min(1)
 const uuid = z.string().uuid()
@@ -174,11 +176,13 @@ export function storyProgressVersion(frames: readonly { results: readonly { form
   return frames.some(frame => frame.results.some(result => result.formatVersion === 2)) ? 2 : 1
 }
 export const storyProgressSchema = z.object({
-  formatVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  formatVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   runId: uuid,
   batch: z.number().int().positive(),
   planHash: z.string().regex(/^[0-9a-f]{64}$/),
   worldObjectives: worldObjectivesSchema.optional(),
+  reviewPolicy: enabledReviewPolicySchema.optional(),
+  review: storyReviewSchema.optional(),
   frames: z.array(z.object({
     node: storyNodeSchema,
     children: z.array(z.object({ id: uuid, description: text }).strict()).min(1),
@@ -188,7 +192,20 @@ export const storyProgressSchema = z.object({
     supplement: z.object({ id: uuid, description: text, reason: text }).strict().optional(),
   }).strict()).min(1),
 }).strict().refine(
-  value => value.formatVersion === storyProgressVersion(value.frames) && (value.worldObjectives === undefined || value.formatVersion === 3),
+  value => {
+    if (value.formatVersion !== 4) {
+      return value.reviewPolicy === undefined && value.review === undefined && value.formatVersion === storyProgressVersion(value.frames) &&
+        (value.worldObjectives === undefined || value.formatVersion === 3)
+    }
+    if (!value.reviewPolicy) return false
+    const review = value.review
+    if (!review) return true
+    const top = value.frames.at(-1)!
+    return review.runId === value.runId && review.batch === value.batch && review.planHash === value.planHash &&
+      review.parentStoryId === top.node.storyId && review.goal === top.node.task.goal && isDeepStrictEqual(review.constraints, top.node.task.constraints) &&
+      isDeepStrictEqual(review.policy, value.reviewPolicy) && isDeepStrictEqual(review.children, top.children) &&
+      top.index === 0 && top.decisions.length === 0 && top.results.length === 0 && top.supplement === undefined
+  },
   { message: '暂停记录版本与回报格式不一致', path: ['formatVersion'] },
 )
 export type StoryProgress = z.infer<typeof storyProgressSchema>

@@ -1,4 +1,5 @@
-import { lstat, readdir, readFile, realpath, writeFile } from 'node:fs/promises'
+import { link, lstat, readdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { sceneEventIdentity, sceneEventSchema, type SceneEvent } from './scene-event.js'
@@ -406,6 +407,32 @@ export class CollaborationStore {
     return join(this.root, `${uuid.parse(runId)}.${z.number().int().positive().parse(batch)}.${kind}.story.json`)
   }
 
+  private async reviewCheckpointPaths(runId: string, batch?: number, parentStoryId?: string) {
+    const prefix = `${uuid.parse(runId)}.`
+    return (await readdir(this.root)).flatMap(name => {
+      if (!name.startsWith(prefix)) return []
+      const parts = /^(\d+)\.([0-9a-f-]{36})\.review-paused\.story\.json$/.exec(name.slice(prefix.length))
+      if (!parts || (parentStoryId !== undefined && parts[2] !== parentStoryId)) return []
+      const number = z.number().int().positive().parse(Number(parts[1]))
+      if (String(number) !== parts[1]) throw new Error('审阅批次文件编号无效')
+      return batch === undefined || batch === number ? [{ batch: number, parentStoryId: uuid.parse(parts[2]), path: join(this.root, name) }] : []
+    })
+  }
+
+  private async publishReviewFile(path: string, content: string): Promise<boolean> {
+    const temporary = join(this.root, `.review-${randomUUID()}.tmp`)
+    await writeFile(temporary, content, { flag: 'wx', encoding: 'utf8' })
+    try {
+      await link(temporary, path)
+      return true
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return false
+      throw error
+    } finally {
+      await unlink(temporary)
+    }
+  }
+
   /** 独占保存提前汇报或上级决定，决定必须对应已保存的汇报。 */
   async saveStoryNotice(notice: StoryNotice): Promise<void> {
     const value = storyNoticeSchema.parse(notice)
@@ -434,12 +461,22 @@ export class CollaborationStore {
     const value = storyProgressSchema.parse(progress)
     const content = `${JSON.stringify(value, null, 2)}\n`
     if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('故事暂停记录超过大小限制')
-    await writeFile(this.progressPath(value.runId, value.batch, 'paused'), content, { flag: 'wx', encoding: 'utf8' })
+    if (value.review) {
+      const path = join(this.root, `${value.runId}.${value.batch}.${value.review.parentStoryId}.review-paused.story.json`)
+      if (!await this.publishReviewFile(path, content)) throw new Error('审阅批次已存在')
+    } else {
+      await writeFile(this.progressPath(value.runId, value.batch, 'paused'), content, { flag: 'wx', encoding: 'utf8' })
+    }
   }
 
   /** 读取有版本的暂停记录并核对所属运行及批次。 */
   async readStoryProgress(runId: string, batch: number): Promise<StoryProgress> {
-    const value = storyProgressSchema.parse(await this.readFile(this.progressPath(runId, batch, 'paused')))
+    const checkpoints = await this.reviewCheckpointPaths(runId, batch)
+    if (checkpoints.length > 1) throw new Error('同一批次存在多份审阅')
+    const checkpoint = checkpoints[0]
+    const path = checkpoint?.path ?? this.progressPath(runId, batch, 'paused')
+    const value = storyProgressSchema.parse(await this.readFile(path))
+    if (value.review?.parentStoryId !== checkpoint?.parentStoryId) throw new Error('故事审阅记录身份不匹配')
     const rootId = await this.readRootStoryId(runId)
     if (value.runId !== runId || value.batch !== batch || value.frames[0]?.node.storyId !== rootId) throw new Error('故事暂停记录身份不匹配')
     return value
@@ -464,7 +501,7 @@ export class CollaborationStore {
     let latest: number | undefined
     for (const name of await readdir(this.root)) {
       if (!name.startsWith(prefix)) continue
-      const match = /^(\d+)\.(paused|continued)\.story\.json$/.exec(name.slice(prefix.length))
+      const match = /^(\d+)\.(?:paused|continued|[0-9a-f-]{36}\.review-paused)\.story\.json$/.exec(name.slice(prefix.length))
       if (!match) continue
       const batch = Number(match[1])
       if (!Number.isSafeInteger(batch) || batch < 1 || String(batch) !== match[1]) throw new Error('故事批次文件编号无效')
