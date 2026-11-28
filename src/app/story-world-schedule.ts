@@ -203,10 +203,18 @@ export async function openStoryWorldSchedule(roots: Roots, options: {
     if (scheduleDigest(scene) !== claim.setupDigest) throw new Error('场景设置已变化')
     const result = await records.readSceneResult(scene)
     if (!result || result.status === 'unresolved') throw new Error('场景没有可核对的结算结果')
+    const events = await records.listInteractionEvents(slot.runId, scene.storyId, scene.sceneId)
+    for (const event of events) {
+      const actions = await records.readInteractionActions(event)
+      if (actions?.outcomes.some(action => action.status === 'unresolved')) throw new Error('场景仍有未确定的角色行动')
+    }
     for (const id of await records.listCharacterParticipationIds(slot.runId, scene.storyId, scene.sceneId)) {
       const participation = await records.readCharacterParticipation(slot.runId, scene.storyId, scene.sceneId, id)
       if (!slot.characters.includes(participation.claim.request.characterId) || participation.result?.outcome.status !== 'responded') {
         throw new Error('场景存在未获准或没有确定结果的角色参与')
+      }
+      if (participation.result.outcome.response.kind === 'respond' && !events.some(event => event.participationId === id)) {
+        throw new Error('角色发言或行动尚未进入场景互动记录')
       }
     }
     const positions = endingPositions ? await endingPositions({ slot: scheduleSlotSchema.parse(slotWithoutProgress(slot)), scene, result }) :

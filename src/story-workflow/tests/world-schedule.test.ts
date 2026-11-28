@@ -4,7 +4,7 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { openWorldScheduleStore, sceneScheduleReadiness, scheduleDigest, worldScheduleSchema, type ScheduleSlot, type WorldSchedule } from '../world-schedule.js'
-import { bindStoryCharacters, createStoryPlan, createStoryScene, openStoryCharacterRuntime, openStoryConvoyState, openStoryEvents, openStorySceneInteraction, openStoryWorldSchedule, runStoryTree, type bindStoryWorld } from '../../app/story-workflow.js'
+import { bindStoryCharacters, continueStoryTree, createStoryPlan, createStoryScene, openStoryCharacterRuntime, openStoryConvoyState, openStoryEvents, openStorySceneInteraction, openStoryWorldSchedule, runStoryTree, submitStoryReview, type bindStoryWorld } from '../../app/story-workflow.js'
 import { CharacterStore } from '@fly-novel/character'
 import { achieved, createTestDirectory, leaf, ScriptedAdapter, simulation } from './fixtures.js'
 
@@ -75,7 +75,12 @@ async function fixture(t: Parameters<typeof createTestDirectory>[0]) {
   return { root, roots, model, createPlan, deliveryId, options: { worldId, scheduleRoot, maxConcurrent: 2 } }
 }
 
-test('跨故事经历按真实感知逐角色装配，泄露和未登记角色调用被拒绝', { timeout: 10000 }, async t => {
+for (const lostReceipt of [false, true]) {
+  test(lostReceipt ? '回执响应丢失时按已保存事件和状态重核，不重放演绎或写入' :
+    '曲水城跨故事交接采用已结算状态，逐角色传递真实感知', { timeout: 10000 }, t => checkHandoff(t, lostReceipt))
+}
+
+async function checkHandoff(t: Parameters<typeof fixture>[0], lostReceipt: boolean) {
   const { root, roots, model, createPlan, deliveryId, options } = await fixture(t)
   const worldRoot = join(root, 'world')
   const characterRoot = join(worldRoot, 'characters')
@@ -163,13 +168,28 @@ test('跨故事经历按真实感知逐角色装配，泄露和未登记角色�
               assert.equal((await gateState.apply(operationId, activeSignal)).status, 'applied')
               assert.equal((await gateState.progress.current()).status, 'arrived')
               assert.equal((await gateState.apply(operationId, activeSignal)).status, 'applied')
+              if (lostReceipt) throw new Error('场景应用回执响应丢失')
             }
             return simulation
           } finally { await runtime.close() }
         }, signal)
       },
     }, planned.runId)
-    assert.deepEqual((await Promise.all([run(later), run(before)])).map(result => result.kind), ['result', 'result'])
+    if (lostReceipt) {
+      const downstream = run(later)
+      void downstream.catch(() => {})
+      await assert.rejects(run(before), /回执响应丢失/)
+      const pending = await dispatcher.view()
+      assert.equal(pending.slots[0]?.status, 'uncertain')
+      assert.equal(pending.slots[1]?.status, 'waiting')
+      assert.equal(guardModel.requests.length, 0)
+      await assert.rejects(dispatcher.reconcile(before.id, { kind: 'cancel-empty', reason: '尝试取消' }), /已有业务记录/)
+      await dispatcher.reconcile(before.id)
+      assert.equal((await downstream).kind, 'result')
+      assert.equal(early.requests.length, 1)
+    } else {
+      assert.deepEqual((await Promise.all([run(later), run(before)])).map(result => result.kind), ['result', 'result'])
+    }
     assert.match(JSON.stringify(guardModel.requests), /货物快坏了/)
     assert.doesNotMatch(JSON.stringify(guardModel.requests), /登记暗号|领队私念/)
     assert.match(JSON.stringify(clerkModel.requests), /登记暗号/)
@@ -179,7 +199,7 @@ test('跨故事经历按真实感知逐角色装配，泄露和未登记角色�
     assert.equal(settled.effect?.minute, 10)
     assert.equal(settled.effect?.state.revision, 1)
   } finally { await dispatcher.close(); await characters.close() }
-})
+}
 
 test('正式故事入口并发推进独立场景，重复领取被拒绝，已结算排期可重读', { timeout: 10000 }, async t => {
   const { roots, model, createPlan, options } = await fixture(t)
@@ -226,6 +246,93 @@ test('正式故事入口并发推进独立场景，重复领取被拒绝，已�
       await reopened.reconcile(gate.id)
     } finally { await reopened.close() }
   } finally { releaseBoth() }
+})
+
+test('持续审阅等待时独立故事照常推进，关闭后可核查并继续已确认批次', { timeout: 10000 }, async t => {
+  const { roots, model, createPlan, options } = await fixture(t)
+  const [gatePlan, officePlan] = await Promise.all([createPlan(['北门交涉']), createPlan(['值所准备'])])
+  const first = await openStoryWorldSchedule(roots, options)
+  t.after(() => first.close())
+  const gate = { ...slot(0, 10), runId: gatePlan.id }
+  const officeScene = { ...slot(2, 8, office), runId: officePlan.id, characters: [] }
+  const later = { ...slot(10, 12), runId: officePlan.id }
+  const draft = await first.openWindow({ id: randomUUID(), epoch: '当夜', start: 0, end: 60,
+    positions: [{ characterId: guard, locationId: north }], routes: [] })
+  await first.revise(draft.revision, { slots: [gate, officeScene, later], seal: true, reason: '预约北门及值所时段' })
+  function story(dispatcher: typeof first, planned: ScheduleSlot, interrupted = false) {
+    return {
+      ...roots, ...model, adapter: new ScriptedAdapter([...leaf('城门'), achieved]),
+      async simulate(input: Parameters<Parameters<typeof runStoryTree>[0]['simulate']>[0], signal: AbortSignal) {
+        const saved = await createStoryScene(roots, input.runId, input.storyId, { order: 1, situation: planned.locationId, preparation: '准备' })
+        return dispatcher.execute(planned.id, { storyId: input.storyId, sceneId: saved.sceneId }, async () => {
+          await input.recordSceneResult(saved.sceneId, { status: 'completed', simulation })
+          if (interrupted) throw new Error('保存后响应丢失')
+          return simulation
+        }, signal)
+      },
+    }
+  }
+  const review = { policy: { kind: 'indefinite' as const } }
+  const pending = await runStoryTree({ ...story(first, gate), review }, gatePlan.id)
+  assert.equal(pending.kind, 'review')
+  const status = await first.view()
+  assert.deepEqual(status.slots[0]?.review, { status: 'awaiting-review', batch: pending.batch })
+  assert.equal(status.slots[2]?.blocks[0]?.kind, 'predecessor')
+  assert.equal((await runStoryTree(story(first, officeScene), officePlan.id)).kind, 'result')
+  await first.close()
+  const reopened = await openStoryWorldSchedule(roots, options)
+  try {
+    await submitStoryReview(roots, gatePlan.id, pending.batch, pending.review, { kind: 'select', optionId: 'original' })
+    await assert.rejects(continueStoryTree({ ...story(reopened, gate, true), review }, gatePlan.id, pending.batch), /保存后响应丢失/)
+    assert.equal((await reopened.view()).slots[0]?.status, 'uncertain')
+    await assert.rejects(continueStoryTree({ ...story(reopened, gate), review }, gatePlan.id, pending.batch), /已取得推进位置/)
+  } finally { await reopened.close() }
+  const recovery = await openStoryWorldSchedule(roots, options)
+  try {
+    const verified = await recovery.reconcile(gate.id)
+    assert.equal(verified.window.slots[0]?.resolution?.kind, 'settled')
+    const after = await recovery.view()
+    assert.equal(after.slots[2]?.status, 'ready')
+    const cancelled = await recovery.cancel(later.id, after.revision, '后段无需启动')
+    assert.equal(cancelled.window.slots[2]?.resolution?.kind, 'cancelled')
+    const next = await recovery.openWindow({ id: randomUUID(), epoch: '当夜', start: 60, end: 100, positions: [], routes: [] }, cancelled.revision)
+    assert.deepEqual(next.window.positions, [{ characterId: guard, locationId: north }])
+  } finally { await recovery.close() }
+})
+
+test('关闭调度器取消执行，重开后只撤销经查无业务效果的领取', { timeout: 10000 }, async t => {
+  const { roots, model, createPlan, options } = await fixture(t)
+  const plan = await createPlan(['北门准备'])
+  const first = await openStoryWorldSchedule(roots, options)
+  t.after(() => first.close())
+  const scene = { ...slot(0, 10), runId: plan.id, characters: [] }
+  const draft = await first.openWindow({ id: randomUUID(), epoch: '当夜', start: 0, end: 60, positions: [], routes: [] })
+  await first.revise(draft.revision, { slots: [scene], seal: true, reason: '批准北门准备' })
+  let announce!: () => void
+  const entered = new Promise<void>(resolve => { announce = resolve })
+  const running = runStoryTree({
+    ...roots, ...model, adapter: new ScriptedAdapter([...leaf('准备'), achieved]),
+    async simulate(input, signal) {
+      const saved = await createStoryScene(roots, input.runId, input.storyId, { order: 1, situation: '北门', preparation: '准备' })
+      return first.execute(scene.id, { storyId: input.storyId, sceneId: saved.sceneId }, async (_, activeSignal) => {
+        announce()
+        await new Promise<void>(resolve => activeSignal.addEventListener('abort', () => resolve(), { once: true }))
+        activeSignal.throwIfAborted()
+        return simulation
+      }, signal)
+    },
+  }, plan.id, t.signal)
+  const rejected = assert.rejects(running, /调度器已关闭/)
+  await Promise.race([entered, running])
+  await first.close()
+  await rejected
+  const reopened = await openStoryWorldSchedule(roots, options)
+  try {
+    assert.equal((await reopened.view()).slots[0]?.status, 'uncertain')
+    await assert.rejects(reopened.reconcile(scene.id), /没有可核对的结算/)
+    const saved = await reopened.reconcile(scene.id, { kind: 'cancel-empty', reason: '已确认没有角色调用及业务效果' })
+    assert.equal(saved.window.slots[0]?.resolution?.kind, 'cancelled')
+  } finally { await reopened.close() }
 })
 
 test('世界时间窗拒绝反向区间、越界、未来依赖以及未知版本', () => {

@@ -102,6 +102,16 @@
 
 `inspectStoryProgress(options, planId)` 从已保存的故事、场景、回报和批次证据核查当前位置。可继续的状态为 `paused` 和 `review-ready`。见[进度状态与续跑条件](../story-workflow/README.md#核查运行进度)。
 
+### 世界时间与并行故事
+
+从 [story-workflow.ts](story-workflow.ts) 调用 `openStoryWorldSchedule(roots, options)`，绑定一个世界、独立真实的排期目录和最大并发数。同一可信写入进程持有该世界的调度器；故事运行沿用原规划和协作根。应用通过 `openWindow` 定义世界时间基准、范围、起始角色位置和获准通行证据，再通过 `revise` 登记并批准场景区间、参与角色、资源及依赖。变更须携带上一版号。调用 `view` 查看等待原因、审阅批次、领取和结算状态，按版本调用 `read` 可查历史。
+
+各条故事线分别调用 `runStoryTree` 或原批次继续入口，保留各自的父子推进顺序。模拟器先保存场景设置，再调用 `execute(slotId, { storyId, sceneId }, callback, signal)`。只有已获准的回调才调用角色、组织互动、保存该场景结果或应用其状态变化。等待前置结算或用户审阅期间，其他独立场景可照常推进。可信应用通过 `routeStillValid` 复核会变化的路线版本，通过 `endingPositions` 从已结算的结果核定移动后的位置。省略结束位置回调时，应用将已声明的场景位置作为结束位置，适用于静态场景。
+
+可用 `allowExperience` 按角色和目标场景核准引入当前时间窗中已结算的经历。角色装配会在实际参与前重读这些证据。应用如启用共享商队状态，在调度器绑定 `convoy` 配置，登记场景的读写权限，并向需要这一状态的故事线提供 `schedule.progress(runId, signal)`。在获准回调内通过既有商队入口准备及应用变化，按第七阶段的授权和回执要求执行。
+
+主动取消尚未领取的排期使用 `cancel`。关闭时从回调外等待 `close()` 完成，待执行或等待中的调用收到取消。重开后通过 `reconcile(slotId)` 重读已领取场景的现存证据，只在结果齐备时完成结算。对查无角色调用、互动或结果的场景，可明确选择 `cancel-empty`。有部分记录但缺少结算依据的场景保留待核查。时间窗的关闭条件和版本约定见[世界时间记录](../story-workflow/README.md#世界时间记录)。
+
 ### 父故事安排审阅
 
 从 [story-workflow.ts](story-workflow.ts) 使用以下可信应用入口。开新轮次时设置 `review.policy` 为 `{ kind: 'timed', durationMs: 30_000 }` 或 `{ kind: 'indefinite' }`。默认关闭。应用可通过 `review.propose` 根据保存的子故事、父任务和状态返回允许的排列、依赖及推荐项。省略时提供继续初步安排。继续时传入同样的模式，以及原世界状态来源和目标（如启用）。

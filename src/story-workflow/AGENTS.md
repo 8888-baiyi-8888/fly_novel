@@ -18,4 +18,4 @@
 - `user-review.ts`：父故事安排审阅的模式、选项、版本和决定校验。
 - `simulation.ts`：执行最小子故事的模拟演绎，处理场景结果写入、提前汇报、上级决定和取消。
 - `README.md`：模块职责、文件格式和使用边界。
-- `tests/`：所属模块的自动化测试，`round.test.ts` 贯通曲水城的规划、场景、续跑和整轮重读，`user-review.test.ts` 核对审阅、跨进程恢复和推进。
+- `tests/`：所属模块的自动化测试，`round.test.ts` 贯通曲水城整轮，`user-review.test.ts` 核对审阅与恢复，`world-schedule.test.ts` 核对排期、跨故事交接和结算。
