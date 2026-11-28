@@ -15,6 +15,11 @@ const scene = z.object({ storyId: id, sceneId: text, setupDigest: hash }).strict
 const claim = scene.extend({ token: id }).strict()
 const dependency = z.object({ slotId: id, kind: z.enum(['order', 'result']) }).strict()
 const target = z.object({ id, mode: z.enum(['read', 'write']) }).strict()
+export const scheduleRouteSchema = z.object({
+  from: text, to: text, duration: minute, sourceId: text, version: text,
+  passage: z.enum(['allowed', 'blocked', 'unknown']), basis: text,
+}).strict()
+export type ScheduleRoute = z.infer<typeof scheduleRouteSchema>
 
 export const scheduleSlotSchema = z.object({
   id, runId: id, ...range, locationId: text, characters: z.array(id), dependencies: z.array(dependency),
@@ -31,7 +36,7 @@ const resolution = z.discriminatedUnion('kind', [
 ])
 const scheduled = scheduleSlotSchema.extend({ claim: claim.optional(), resolution: resolution.optional() }).strict()
 const workspace = z.object({
-  id, ...range, sealed: z.boolean(), positions: z.array(position), slots: z.array(scheduled),
+  id, ...range, sealed: z.boolean(), positions: z.array(position), routes: z.array(scheduleRouteSchema), slots: z.array(scheduled),
 }).strict()
 export const worldScheduleSchema = z.object({
   formatVersion: z.literal(1), worldId: text, epoch: text, revision: minute,
@@ -41,6 +46,8 @@ export const worldScheduleSchema = z.object({
   const issue = (message: string) => ctx.addIssue({ code: 'custom', message })
   if ((value.revision === 0) !== (value.previous === null) || window.start >= window.end) issue('世界时间窗或版本无效')
   if (new Set(window.positions.map(item => item.characterId)).size !== window.positions.length) issue('角色起始位置重复')
+  if (new Set(window.routes.map(item => JSON.stringify([item.from, item.to]))).size !== window.routes.length ||
+    window.routes.some(item => item.from === item.to)) issue('直连路线方向重复或无效')
   const byId = new Map(window.slots.map(item => [item.id, item]))
   if (byId.size !== window.slots.length) issue('排期身份重复')
   const identities = new Set<string>()
@@ -64,9 +71,51 @@ export const worldScheduleSchema = z.object({
     }
     if (slot.resolution?.kind === 'uncertain' && !slot.claim) issue('待核查的排期缺少领取')
   }
+  const active = window.slots.filter(slot => slot.resolution?.kind !== 'cancelled')
+  for (const [index, left] of active.entries()) {
+    for (const right of active.slice(index + 1)) {
+      if (left.start < right.end && right.start < left.end && left.characters.some(id => right.characters.includes(id))) {
+        issue('同一角色的排期区间重叠')
+      }
+    }
+  }
 })
 export type WorldSchedule = z.infer<typeof worldScheduleSchema>
 export type ScheduledScene = WorldSchedule['window']['slots'][number]
+
+export type ScheduleBlock =
+  | { kind: 'unsealed' }
+  | { kind: 'predecessor' | 'result'; slotId: string; characterId?: string; targetId?: string }
+  | { kind: 'position' | 'no-route' | 'passage' | 'travel-time' | 'route-version'; characterId: string; from?: string; to: string }
+
+export function sceneScheduleReadiness(window: WorldSchedule['window'], slot: ScheduledScene): { blocks: ScheduleBlock[]; routes: ScheduleRoute[] } {
+  const blocks: ScheduleBlock[] = []
+  const routes: ScheduleRoute[] = []
+  if (!window.sealed) blocks.push({ kind: 'unsealed' })
+  for (const dependency of slot.dependencies) {
+    const before = window.slots.find(item => item.id === dependency.slotId)!
+    if (before.resolution?.kind === 'settled' || (before.resolution?.kind === 'cancelled' && dependency.kind === 'order')) continue
+    blocks.push({ kind: dependency.kind === 'result' ? 'result' : 'predecessor', slotId: before.id })
+  }
+  for (const characterId of slot.characters) {
+    const before = window.slots.filter(item => item.end <= slot.start && item.id !== slot.id && item.resolution?.kind !== 'cancelled' &&
+      item.characters.includes(characterId)).sort((left, right) => right.end - left.end)[0]
+    if (before && before.resolution?.kind !== 'settled') {
+      blocks.push({ kind: 'predecessor', slotId: before.id, characterId })
+      continue
+    }
+    const position = before?.resolution?.kind === 'settled' ? before.resolution.positions : window.positions
+    const from = position.find(item => item.characterId === characterId)?.locationId
+    const to = slot.locationId
+    if (from === to) continue
+    const route = window.routes.find(item => item.from === from && item.to === to)
+    const kind = !from ? 'position' : !route ? 'no-route' : route.passage !== 'allowed' ? 'passage' :
+      slot.start - (before?.end ?? window.start) < route.duration ? 'travel-time' : undefined
+    if (kind) blocks.push({ kind, characterId, from, to })
+    else if (route && !routes.includes(route)) routes.push(route)
+  }
+  return { blocks, routes }
+}
 
 export function scheduleDigest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
