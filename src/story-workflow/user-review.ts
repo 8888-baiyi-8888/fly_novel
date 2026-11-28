@@ -80,6 +80,8 @@ export const storyReviewDecisionSchema = z.discriminatedUnion('source', [
   z.object({ ...identity, source: z.literal('refresh'), nextBatch: z.number().int().positive() }).strict(),
 ])
 export type StoryReviewDecision = z.infer<typeof storyReviewDecisionSchema>
+export type StoryReviewChoice = z.infer<typeof reviewChoiceSchema>
+export type StoryReviewIdentity = Pick<StoryReview, 'reviewId' | 'version'>
 
 export function reviewDigest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')

@@ -1,5 +1,6 @@
 import { link, lstat, readdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
+import { storyReviewDecisionSchema, verifyReviewDecision, type StoryReview, type StoryReviewDecision } from './user-review.js'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { sceneEventIdentity, sceneEventSchema, type SceneEvent } from './scene-event.js'
@@ -68,6 +69,7 @@ const claimSchema = z.object({ formatVersion: z.literal(1), planId: uuid, childS
 
 /** 使用独立目录保存单个事件的独占尝试及最终协作记录。 */
 export class CollaborationStore {
+  private static readonly reviewOperations = new Map<string, Promise<unknown>>()
   private constructor(private readonly root: string) {}
 
   private async deriveSceneEvent(worldId: string, runId: string, storyId: string, sceneId: string): Promise<SceneEvent> {
@@ -431,6 +433,41 @@ export class CollaborationStore {
     } finally {
       await unlink(temporary)
     }
+  }
+
+  private reviewDecisionPath(review: StoryReview): string {
+    return join(this.root, `${review.runId}.${review.batch}.${review.parentStoryId}.review-decision.story.json`)
+  }
+
+  /** 协调同一可信进程内的时钟检查与独占发布。 */
+  async withReviewDecision<T>(review: StoryReview, operation: () => Promise<T>): Promise<T> {
+    const path = key(this.reviewDecisionPath(review))
+    const queue = CollaborationStore.reviewOperations
+    const pending = (queue.get(path) ?? Promise.resolve()).then(operation, operation)
+    queue.set(path, pending)
+    try { return await pending }
+    finally { if (queue.get(path) === pending) queue.delete(path) }
+  }
+
+  async readReviewDecision(review: StoryReview): Promise<StoryReviewDecision | undefined> {
+    let raw: unknown
+    try { raw = await this.readFile(this.reviewDecisionPath(review)) }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+      throw error
+    }
+    const decision = storyReviewDecisionSchema.parse(raw)
+    verifyReviewDecision(review, decision)
+    return decision
+  }
+
+  async publishReviewDecision(review: StoryReview, draft: StoryReviewDecision): Promise<StoryReviewDecision> {
+    const decision = storyReviewDecisionSchema.parse(draft)
+    verifyReviewDecision(review, decision)
+    if (await this.publishReviewFile(this.reviewDecisionPath(review), `${JSON.stringify(decision)}\n`)) return decision
+    const saved = await this.readReviewDecision(review)
+    if (!saved) throw new Error('审阅决定发布结果不明')
+    return saved
   }
 
   /** 独占保存提前汇报或上级决定，决定必须对应已保存的汇报。 */

@@ -5,8 +5,8 @@ import { CollaborationStore, PlanStore } from './store.js'
 import { readArrangement, readChildChoice, readIfPresent, readOutcome, readStoryRoot } from './story-query.js'
 import type { PlanRecord, StoryNode, StoryProgress, StoryStep } from './types.js'
 import type { StoryCollaborationOptions } from './workflow.js'
-import type { StoryWorldProgressSource, WorldObjective } from './world-progress.js'
-import type { StoryReviewPolicy } from './user-review.js'
+import { worldObjectivesSchema, type StoryWorldProgressSource, type WorldObjective } from './world-progress.js'
+import { reviewChoiceSchema, reviewEvidenceHash, reviewTime, type StoryReviewChoice, type StoryReviewIdentity, type StoryReviewPolicy } from './user-review.js'
 
 type StoryLocation = Pick<StoryNode, 'storyId' | 'parentStoryId' | 'description'>
 type ReviewPoint = {
@@ -20,6 +20,11 @@ type ConfirmedResult = {
   counted: boolean
 }
 type ProgressRoots = Pick<StoryCollaborationOptions, 'planRoot' | 'collaborationRoot' | 'protectedRoots'>
+export type StoryReviewOptions = ProgressRoots & {
+  now?: () => number
+  worldProgress?: StoryWorldProgressSource
+  worldObjectives?: readonly WorldObjective[]
+}
 
 function location(node: StoryNode): StoryLocation {
   const { storyId, parentStoryId, description } = node
@@ -143,14 +148,75 @@ function verifyNext(progress: StoryProgress, point: ReviewPoint | undefined): as
   }
 }
 
-/** 只读重开指定批次的审阅快照。 */
-export async function readStoryReview(options: ProgressRoots, runId: string, batch: number) {
+async function openReview(options: ProgressRoots, runId: string, batch: number) {
   const { planRoot, collaborationRoot, protectedRoots } = options
   const plans = await PlanStore.open(planRoot, [...protectedRoots, collaborationRoot])
   const store = await CollaborationStore.open(collaborationRoot, planRoot, protectedRoots)
-  const progress = await readVerifiedPause(store, await plans.read(runId), batch)
-  if (!progress.review) throw new Error('该批次没有父故事安排审阅')
-  return progress.review
+  const plan = await plans.read(runId)
+  const progress = await store.readStoryProgress(runId, batch)
+  const review = progress.review
+  if (!review) throw new Error('该批次没有父故事安排审阅')
+  return { store, plan, progress, review }
+}
+
+/** 只读重开指定批次的审阅快照及决定，保留已消费的历史记录。 */
+export async function readStoryReview(options: ProgressRoots, runId: string, batch: number) {
+  const { store, review } = await openReview(options, runId, batch)
+  return { review, consumed: await store.hasContinuedStoryProgress(runId, batch), decision: await store.readReviewDecision(review) }
+}
+
+function verifyReviewIdentity(review: StoryReviewIdentity, expected: StoryReviewIdentity) {
+  if (review.reviewId !== expected.reviewId || review.version !== expected.version) throw new Error('所见审阅身份或版本不匹配')
+}
+
+async function currentReviewEvidence(plan: PlanRecord, options: StoryReviewOptions) {
+  const source = options.worldProgress
+  if (source && (source.runId !== plan.id || plan.formatVersion !== 2 || source.worldId !== plan.input.world.worldId)) throw new Error('审阅的世界状态来源与本轮不匹配')
+  const objectives = options.worldObjectives && worldObjectivesSchema.parse(options.worldObjectives)
+  if (objectives && !source) throw new Error('审阅使用的评估目标需要可信世界状态来源')
+  return reviewEvidenceHash(source, objectives)
+}
+
+async function verifyPendingReview(store: CollaborationStore, plan: PlanRecord, batch: number) {
+  if (await store.latestStoryBatch(plan.id) !== batch || await store.hasContinuedStoryProgress(plan.id, batch)) throw new Error('审阅批次不再等待决定')
+  const pause = await readVerifiedPause(store, plan, batch)
+  const { root } = await readStoryRoot(store, plan)
+  verifyNext(pause, (await inspectTree(store, root)).point)
+  return pause
+}
+
+async function decideStoryReview(options: StoryReviewOptions, runId: string, batch: number, expected: StoryReviewIdentity, choice?: StoryReviewChoice) {
+  const { store, plan, review } = await openReview(options, runId, batch)
+  verifyReviewIdentity(review, expected)
+  return store.withReviewDecision(review, async () => {
+    const matching = (saved: NonNullable<Awaited<ReturnType<typeof store.readReviewDecision>>>) => {
+      if (choice === undefined ? saved.source === 'timeout' : saved.source === 'user' && isDeepStrictEqual(saved.choice, choice)) return saved
+      throw new Error('此版本已有其他审阅决定')
+    }
+    const saved = await store.readReviewDecision(review)
+    if (saved) return matching(saved)
+    await verifyPendingReview(store, plan, batch)
+    if (await currentReviewEvidence(plan, options) !== review.evidenceHash) throw new Error('审阅依据已变化，请重新展示并取得决定')
+    const identity = { formatVersion: 1 as const, reviewId: review.reviewId, version: review.version, decidedAt: reviewTime(options.now) }
+    if (choice !== undefined) {
+      return matching(await store.publishReviewDecision(review, { ...identity, source: 'user', choice }))
+    }
+    if (review.deadline === undefined) throw new Error('持续等待模式没有超时决定')
+    if (identity.decidedAt < review.deadline) throw new Error('审阅尚未到期')
+    return matching(await store.publishReviewDecision(review, {
+      ...identity, source: 'timeout', deadline: review.deadline, choice: { kind: 'select', optionId: review.recommendedId },
+    }))
+  })
+}
+
+/** 从可信用户提交已展示版本的选项或明确取消。 */
+export function submitStoryReview(options: StoryReviewOptions, runId: string, batch: number, expected: StoryReviewIdentity, choice: StoryReviewChoice) {
+  return decideStoryReview(options, runId, batch, { ...expected }, reviewChoiceSchema.parse(choice))
+}
+
+/** 应用定时或重开后显式调用，按可信时钟尝试采用已保存推荐项。 */
+export function settleStoryReview(options: StoryReviewOptions, runId: string, batch: number, expected: StoryReviewIdentity) {
+  return decideStoryReview(options, runId, batch, { ...expected })
 }
 
 /** 只读核查最新业务证据。只有 paused 表示尚未消费且可继续的位置。 */
@@ -182,7 +248,14 @@ export async function inspectStoryProgress(
       }
       const pause = await readVerifiedPause(store, plan, batch)
       verifyNext(pause, point)
-      if (pause.review) return { ...evidence, status: 'awaiting-review' as const, current: point.current, review: pause.review }
+      if (pause.review) {
+        const review = pause.review
+        const decision = await store.readReviewDecision(review)
+        if (!decision) return { ...evidence, status: 'awaiting-review' as const, current: point.current, review }
+        if (decision.source === 'refresh') return { ...evidence, status: 'needs-review' as const, ...point, reason: '替代审阅尚未保存' }
+        const status = decision.choice.kind === 'cancel' ? 'review-cancelled' as const : 'review-ready' as const
+        return { ...evidence, status, current: point.current, review, decision }
+      }
       return { ...evidence, status: 'paused' as const, current: point.current, next: point.next }
     }
     return { ...evidence, status: 'needs-review' as const, ...point }
