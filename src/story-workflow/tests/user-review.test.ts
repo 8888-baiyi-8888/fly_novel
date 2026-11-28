@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { test } from 'node:test'
 import { createReviewSnapshot, reviewDigest, reviewPolicySchema, storyReviewSchema } from '../user-review.js'
-import { continueStoryTree, inspectStoryProgress, readStory, readStoryReview, runStoryTree, settleStoryReview, submitStoryReview, type StoryTreeOptions } from '../../app/story-workflow.js'
-import { ScriptedAdapter, setup, simulation } from './fixtures.js'
+import { continueStoryTree, createStoryPlan, inspectStoryProgress, readStory, readStoryReview, refreshStoryReview, runStoryTree, settleStoryReview, submitStoryReview, type StoryTreeOptions } from '../../app/story-workflow.js'
+import { achieved, advance, leaf, ScriptedAdapter, setup, simulation, task } from './fixtures.js'
+import type { CurrentConvoyEvidence } from '../world-progress.js'
 
 test('审阅选项绑定原安排、期限、依赖和正文版本', () => {
   const first = randomUUID()
@@ -76,6 +77,138 @@ test('持续等待可以明确取消，同一决定可重读且冲突决定被�
   await assert.rejects(submitStoryReview(clock, plan.id, batch, review, { kind: 'select', optionId: 'original' }), /已有其他审阅决定/)
   assert.equal((await inspectStoryProgress(baseOptions, plan.id)).status, 'review-cancelled')
   assert.deepEqual((await readStoryReview(baseOptions, plan.id, batch)).decision, result)
+  const adapter = new ScriptedAdapter([])
+  await assert.rejects(continueStoryTree({
+    ...baseOptions, adapter, simulate: async () => simulation,
+    review: { policy: { kind: 'indefinite' } },
+  }, plan.id, batch), /审阅已取消/)
+  assert.equal(adapter.requests.length, 0)
+})
+
+test('嵌套审阅按采用顺序推进，独占消费并在普通暂停中核对采用依据', async t => {
+  const { baseOptions, plan } = await setup(t, ['安置夜间抵达的商队'])
+  const adapter = new ScriptedAdapter([
+    advance, task, '{"kind":"split","children":["核对闭门规则","组织门外等候"]}',
+    ...leaf('门外'), ...leaf('城门'), achieved, '已接收嵌套回报', achieved,
+  ])
+  const simulated: string[] = []
+  const options: StoryTreeOptions = {
+    ...baseOptions, adapter, limit: 1,
+    simulate: async ({ storyId }) => { simulated.push(storyId); return simulation },
+    review: {
+      policy: { kind: 'indefinite' }, now: () => 100,
+      propose({ children }) {
+        if (children.length < 2) return undefined
+        const childIds = children.map(child => child.id)
+        return {
+          options: [
+            { id: 'rules', label: '先核对闭门规则', childIds },
+            { id: 'waiting', label: '先组织门外等候', childIds: [...childIds].reverse() },
+          ],
+          recommendedId: 'rules', recommendationReason: '门规决定入城条件',
+        }
+      },
+    },
+  }
+  const clock = { ...baseOptions, now: () => 150 }
+  const root = await runStoryTree(options, plan.id)
+  assert.equal(root.kind, 'review')
+  await submitStoryReview(clock, plan.id, root.batch, root.review, { kind: 'select', optionId: 'original' })
+  const nested = await continueStoryTree(options, plan.id, root.batch)
+  assert.equal(nested.kind, 'review')
+  assert.notEqual(nested.review.parentStoryId, root.storyId)
+  assert.equal(nested.review.deadline, undefined)
+  const parentId = nested.review.parentStoryId
+  assert.deepEqual((await readStory(baseOptions, plan.id, parentId)).children.map(child => child.status), ['planned', 'planned'])
+  assert.equal(simulated.length, 0)
+  await submitStoryReview(clock, plan.id, nested.batch, nested.review, { kind: 'select', optionId: 'waiting' })
+  const outcomes = await Promise.allSettled([
+    continueStoryTree(options, plan.id, nested.batch),
+    continueStoryTree(options, plan.id, nested.batch),
+  ])
+  assert.equal(outcomes.filter(item => item.status === 'fulfilled').length, 1)
+  const advanced = outcomes.find(item => item.status === 'fulfilled')!.value
+  assert.equal(advanced.kind, 'paused')
+  const inspected = await inspectStoryProgress(baseOptions, plan.id)
+  assert.equal(inspected.status, 'paused')
+  const [first, second] = nested.review.children
+  assert.equal(inspected.next.storyId, first!.id)
+  assert.deepEqual(simulated, [second!.id])
+  const parent = await readStory(baseOptions, plan.id, parentId)
+  assert.deepEqual(parent.children.map(child => child.id), [second!.id, first!.id])
+  assert.equal(parent.adoptedReview?.optionId, 'waiting')
+  assert.equal((await readStoryReview(baseOptions, plan.id, nested.batch)).consumed, true)
+  const ended = await continueStoryTree(options, plan.id, advanced.batch)
+  assert.equal(ended.kind, 'result')
+  assert.deepEqual(simulated, [second!.id, first!.id])
+  assert.equal((await inspectStoryProgress(baseOptions, plan.id)).status, 'completed')
+})
+
+test('审阅领取后调用中断，保留已采用证据并拒绝重复启动', async t => {
+  const { baseOptions, plan } = await setup(t)
+  const adapter = new ScriptedAdapter([])
+  const options: StoryTreeOptions = {
+    ...baseOptions, adapter, simulate: async () => simulation, review: { policy: { kind: 'indefinite' } },
+  }
+  const waiting = await runStoryTree(options, plan.id)
+  assert.equal(waiting.kind, 'review')
+  await submitStoryReview(baseOptions, plan.id, waiting.batch, waiting.review, { kind: 'select', optionId: 'original' })
+  await assert.rejects(continueStoryTree(options, plan.id, waiting.batch))
+  assert.equal((await inspectStoryProgress(baseOptions, plan.id)).status, 'needs-review')
+  await assert.rejects(continueStoryTree(options, plan.id, waiting.batch), /审阅已取得推进位置/)
+  assert.equal(adapter.requests.length, 1)
+  assert.equal((await readStoryReview(baseOptions, plan.id, waiting.batch)).consumed, true)
+})
+
+test('依据更新后原决定不能推进，应用保存新版并要求再次确认', async t => {
+  const { baseOptions } = await setup(t)
+  const worldId = '曲水城'
+  const content = '夜间闭门'
+  const digest = reviewDigest('状态')
+  const { planRoot, collaborationRoot } = baseOptions
+  const plan = await createStoryPlan({
+    ...baseOptions, root: planRoot, protectedRoots: [collaborationRoot],
+    adapter: new ScriptedAdapter(['{"kind":"planned","events":["核对闭门规则"]}']),
+  }, {
+    task: '安置商队', facts: [content], directions: [],
+    world: { worldId, deliveryId: randomUUID(), deliveryVersion: '1', reviewVersion: '1',
+      materials: [{ category: 'setting', source: { kind: 'fixed', id: '城门' }, version: '1', content, digest: createHash('sha256').update(content).digest('hex') }],
+      notes: [], uncovered: [], deferred: [] },
+  })
+  const convoyId = randomUUID()
+  let current: CurrentConvoyEvidence = { worldId, convoyId, status: 'arrived', revision: 0, digest }
+  const worldProgress = {
+    worldId, runId: plan.id, current: async () => current,
+    event: async () => { throw new Error('没有已采用事件') },
+  }
+  let now = 100
+  const adapter = new ScriptedAdapter([])
+  const options: StoryTreeOptions = {
+    ...baseOptions, worldProgress, adapter, simulate: async () => simulation,
+    review: { policy: { kind: 'timed', durationMs: 30 }, now: () => now },
+  }
+  const input = { ...baseOptions, worldProgress, now: () => now }
+  const pending = await runStoryTree(options, plan.id)
+  assert.equal(pending.kind, 'review')
+  const select = { kind: 'select', optionId: 'original' } as const
+  const original = await submitStoryReview(input, plan.id, pending.batch, pending.review, select)
+  current = { worldId, convoyId, status: 'waiting', revision: 1, digest: reviewDigest('新状态'),
+    eventId: digest, operationId: randomUUID(), locationId: '门外等候点' }
+  await assert.rejects(continueStoryTree(options, plan.id, pending.batch), /依据已变化/)
+  await assert.rejects(refreshStoryReview(baseOptions, plan.id, pending.batch, pending.review), /原世界状态来源/)
+  now = 120
+  const replacement = await refreshStoryReview(input, plan.id, pending.batch, pending.review)
+  assert.equal(replacement.deadline, 150)
+  assert.equal(replacement.worldState?.revision, 1)
+  assert.notEqual(replacement.version, pending.review.version)
+  assert.deepEqual(await refreshStoryReview(input, plan.id, pending.batch, pending.review), replacement)
+  await assert.rejects(submitStoryReview(input, plan.id, pending.batch, pending.review, select), /版本已被替代/)
+  assert.deepEqual(await readStoryReview(baseOptions, plan.id, pending.batch), {
+    review: pending.review, decision: original, consumed: false, replacementBatch: replacement.batch,
+  })
+  assert.equal((await inspectStoryProgress(baseOptions, plan.id)).status, 'awaiting-review')
+  await assert.rejects(continueStoryTree(options, plan.id, replacement.batch), /需要审阅决定/)
+  assert.equal(adapter.requests.length, 0)
 })
 
 test('根故事在初步拆分后等待，重开时只读原版本和期限', async t => {

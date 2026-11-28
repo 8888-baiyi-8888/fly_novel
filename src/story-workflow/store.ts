@@ -1,6 +1,6 @@
 import { link, lstat, readdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { storyReviewDecisionSchema, verifyReviewDecision, type StoryReview, type StoryReviewDecision } from './user-review.js'
+import { reviewTransitionSchema, selectReviewArrangement, storyReviewDecisionSchema, verifyRefreshedEvidence, verifyReviewDecision, type ReviewTransition, type StoryReview, type StoryReviewDecision } from './user-review.js'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { sceneEventIdentity, sceneEventSchema, type SceneEvent } from './scene-event.js'
@@ -470,6 +470,62 @@ export class CollaborationStore {
     return saved
   }
 
+  private reviewTransitionPath(review: StoryReview): string {
+    return join(this.root, `${review.runId}.${review.batch}.${review.parentStoryId}.review-transition.story.json`)
+  }
+
+  async readReviewTransition(review: StoryReview): Promise<ReviewTransition | undefined> {
+    let raw: unknown
+    try { raw = await this.readFile(this.reviewTransitionPath(review)) }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+      throw error
+    }
+    const transition = reviewTransitionSchema.parse(raw)
+    if (review.reviewId !== transition.reviewId || review.version !== transition.version) throw new Error('审阅处理记录与版本不匹配')
+    if (transition.kind === 'adopted') {
+      const decision = await this.readReviewDecision(review)
+      if (!decision || decision.choice.kind !== 'select' || decision.choice.optionId !== transition.optionId || review.batch !== transition.batch) {
+        throw new Error('获准继续的审阅选项与决定不匹配')
+      }
+    } else {
+      const { replacement } = transition
+      if (replacement.batch !== review.batch + 1 || replacement.runId !== review.runId || replacement.parentStoryId !== review.parentStoryId ||
+        replacement.planHash !== review.planHash || replacement.reviewId === review.reviewId || replacement.evidenceHash === review.evidenceHash ||
+        replacement.openedAt < review.openedAt || !isDeepStrictEqual(replacement.policy, review.policy) ||
+        !isDeepStrictEqual(replacement.children, review.children) || replacement.goal !== review.goal ||
+        !isDeepStrictEqual(replacement.constraints, review.constraints)) throw new Error('替代审阅记录与原安排不匹配')
+      verifyRefreshedEvidence(review.worldState, replacement.worldState)
+    }
+    return transition
+  }
+
+  async publishReviewTransition(review: StoryReview, transition: ReviewTransition): Promise<boolean> {
+    const content = `${JSON.stringify(reviewTransitionSchema.parse(transition))}\n`
+    if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('审阅处理记录超过大小限制')
+    return this.publishReviewFile(this.reviewTransitionPath(review), content)
+  }
+
+  async readAdoptedStoryReview(runId: string, node: StoryNode, planHash: string, original: StoryProgress['frames'][number]['children']) {
+    let adopted: ReturnType<typeof selectReviewArrangement> | undefined
+    for (const { batch } of await this.reviewCheckpointPaths(runId, undefined, node.storyId)) {
+      const checkpoint = await this.readStoryProgress(runId, batch)
+      const review = checkpoint.review!
+      if (review.planHash !== planHash || !isDeepStrictEqual(checkpoint.frames.at(-1)?.node, node) ||
+        !isDeepStrictEqual(review.children, original)) throw new Error('审阅与原安排不匹配')
+      if ((await this.readReviewTransition(review))?.kind !== 'adopted') continue
+      if (adopted) throw new Error('父故事有多份已采用审阅')
+      const decision = await this.readReviewDecision(review)
+      if (!decision) throw new Error('已采用审阅缺少决定')
+      adopted = selectReviewArrangement(review, decision)
+    }
+    return adopted
+  }
+
+  async hasStoryReviews(runId: string) {
+    return (await this.reviewCheckpointPaths(runId)).length > 0
+  }
+
   /** 独占保存提前汇报或上级决定，决定必须对应已保存的汇报。 */
   async saveStoryNotice(notice: StoryNotice): Promise<void> {
     const value = storyNoticeSchema.parse(notice)
@@ -493,14 +549,19 @@ export class CollaborationStore {
     return value
   }
 
-  /** 保存本次正常暂停的推进位置。 */
-  async saveStoryProgress(progress: StoryProgress): Promise<void> {
+  encodeStoryProgress(progress: StoryProgress): { value: StoryProgress; content: string } {
     const value = storyProgressSchema.parse(progress)
     const content = `${JSON.stringify(value, null, 2)}\n`
     if (Buffer.byteLength(content) > 1024 * 1024) throw new Error('故事暂停记录超过大小限制')
+    return { value, content }
+  }
+
+  /** 保存本次批次暂停或审阅等待的推进位置。 */
+  async saveStoryProgress(progress: StoryProgress): Promise<void> {
+    const { value, content } = this.encodeStoryProgress(progress)
     if (value.review) {
       const path = join(this.root, `${value.runId}.${value.batch}.${value.review.parentStoryId}.review-paused.story.json`)
-      if (!await this.publishReviewFile(path, content)) throw new Error('审阅批次已存在')
+      if (!await this.publishReviewFile(path, content) && this.encodeStoryProgress(await this.readStoryProgress(value.runId, value.batch)).content !== content) throw new Error('审阅批次已存在')
     } else {
       await writeFile(this.progressPath(value.runId, value.batch, 'paused'), content, { flag: 'wx', encoding: 'utf8' })
     }

@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import type { StoryProgress } from './types.js'
-import { restoreStoryProgress } from './progress.js'
+import { inspectStoryProgress, restoreStoryProgress } from './progress.js'
 import { simulateStory, type StorySimulationInput } from './simulation.js'
 import type { Agent } from '@fly-novel/agents'
 import { collaborationIdentity, collaborationSchema, directorDecisionSchema, parseStrictJson, reportSchema, simulationSchema, storyAdvanceSchema, storyCompletionSchema, storyDecisionSchema, storyProgressVersion, taskSchema, type Collaboration, type Simulation, type StoryTask, type SiblingDecision, type StoryNode, type StoryStep } from './types.js'
 import { CollaborationStore } from './store.js'
 import { evaluateWorldObjectives, storyWorldEvidenceSchema, verifyWorldAssessment, worldObjectivesSchema, type EventEvidence, type StoryWorldEvidence, type StoryWorldProgressSource, type WorldObjective } from './world-progress.js'
-import { createReviewSnapshot, reviewEvidenceHash, reviewPolicySchema, reviewTime, type StoryReview, type StoryReviewConfiguration } from './user-review.js'
+import { createReviewSnapshot, readReviewEvidence, reviewPolicySchema, reviewTime, type StoryReview, type StoryReviewConfiguration } from './user-review.js'
 
 export interface DirectorScope { create(role: string): Promise<Agent>; dispose(): Promise<void> }
 export type OpenDirectors = () => Promise<DirectorScope>
@@ -235,6 +235,10 @@ export async function readStoryRoundResult(options: Pick<StoryCollaborationOptio
     if (plan.formatVersion !== 2 || plan.input.world.worldId !== result.worldEvidence.current.worldId) throw new Error('整轮结果的世界证据不匹配')
     verifyWorldAssessment(assessment.value.status, result.worldEvidence)
   }
+  if (await store.hasStoryReviews(planId)) {
+    const progress = await inspectStoryProgress(options, planId)
+    if (progress.status !== 'completed') throw new Error('整轮结果的审阅或推进证据不完整')
+  }
   return { result, assessment: assessment.value }
 }
 
@@ -364,11 +368,11 @@ export async function runStoryTree(options: StoryTreeOptions, openDirectors: Ope
       if (!frames.length) return { ...result, completedCount }
       continue
     }
-    if (reviewPolicy && frame.index === 0) {
+    if (reviewPolicy && frame.index === 0 && !frame.adoptedReview) {
       const subject = {
         runId: planId, parentStoryId: frame.node.storyId, batch, planHash,
         goal: frame.node.task.goal, constraints: frame.node.task.constraints, children: frame.children,
-        evidenceHash: await reviewEvidenceHash(source, objectives),
+        ...await readReviewEvidence(source, objectives),
       }
       const alternatives = options.review?.propose?.(structuredClone(subject))
       const review = createReviewSnapshot(subject, randomUUID(), reviewPolicy, reviewTime(options.review?.now), alternatives)

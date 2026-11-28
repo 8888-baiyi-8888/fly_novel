@@ -11,7 +11,7 @@ import { createStoryPlan as createPlan, runStoryCollaboration as runCollaboratio
 export type { StoryPlanningOptions, StoryCollaborationOptions } from '../story-workflow/workflow.js'
 export { readStoryPlan, readStoryCollaboration, readStorySimulation, readStorySiblingDecision, readStoryRoundResult } from '../story-workflow/workflow.js'
 export { readStory } from '../story-workflow/story-query.js'
-export { inspectStoryProgress, readStoryReview, settleStoryReview, submitStoryReview, type StoryReviewOptions } from '../story-workflow/progress.js'
+export { inspectStoryProgress, readStoryReview, refreshStoryReview, settleStoryReview, submitStoryReview, type StoryReviewOptions } from '../story-workflow/progress.js'
 export type { StoryReview, StoryReviewChoice, StoryReviewConfiguration, StoryReviewIdentity, StoryReviewProposals } from '../story-workflow/user-review.js'
 export { createStoryScene, listStoryScenes, readStoryScene } from '../story-workflow/scenes.js'
 export { bindStoryWorld, prepareStoryWorldInput } from './story-world-materials.js'

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import type { StoryWorldProgressSource, WorldObjective } from './world-progress.js'
+import { currentConvoyEvidenceSchema, type StoryWorldProgressSource, type WorldObjective } from './world-progress.js'
 
 const id = z.string().uuid()
 const text = z.string().trim().min(1)
@@ -24,6 +24,7 @@ const proposals = z.object({
 const subject = z.object({
   runId: id, parentStoryId: id, batch: z.number().int().positive(), planHash: hash,
   goal: text, constraints: z.array(text), children: z.array(child).min(1), evidenceHash: hash,
+  worldState: currentConvoyEvidenceSchema.optional(),
 }).strict()
 
 const snapshot = subject.extend({
@@ -63,10 +64,15 @@ export interface StoryReviewConfiguration {
   propose?(subject: StoryReviewSubject): StoryReviewProposals | undefined
 }
 
-export async function reviewEvidenceHash(source?: StoryWorldProgressSource, objectives?: readonly WorldObjective[]): Promise<string> {
-  const current = await source?.current()
-  if (current && current.worldId !== source?.worldId) throw new Error('审阅的世界状态身份不匹配')
-  return reviewDigest({ current, objectives })
+export async function readReviewEvidence(source?: StoryWorldProgressSource, objectives?: readonly WorldObjective[]) {
+  const worldState = source && currentConvoyEvidenceSchema.parse(await source.current())
+  if (worldState && worldState.worldId !== source?.worldId) throw new Error('审阅的世界状态身份不匹配')
+  return { ...(worldState ? { worldState } : {}), evidenceHash: reviewDigest({ worldState, objectives }) }
+}
+
+export function verifyRefreshedEvidence(before: StoryReview['worldState'], after: StoryReview['worldState']): void {
+  if (before?.worldId !== after?.worldId || before?.convoyId !== after?.convoyId) throw new Error('重新审阅需要原世界状态来源')
+  if (before && after && after.revision <= before.revision) throw new Error('重新审阅需要可信的新状态版本')
 }
 
 export const reviewChoiceSchema = z.discriminatedUnion('kind', [
@@ -77,11 +83,17 @@ const identity = { formatVersion: z.literal(1), reviewId: id, version: hash, dec
 export const storyReviewDecisionSchema = z.discriminatedUnion('source', [
   z.object({ ...identity, source: z.literal('user'), choice: reviewChoiceSchema }).strict(),
   z.object({ ...identity, source: z.literal('timeout'), choice: z.object({ kind: z.literal('select'), optionId: text }).strict(), deadline: timestamp }).strict(),
-  z.object({ ...identity, source: z.literal('refresh'), nextBatch: z.number().int().positive() }).strict(),
 ])
 export type StoryReviewDecision = z.infer<typeof storyReviewDecisionSchema>
 export type StoryReviewChoice = z.infer<typeof reviewChoiceSchema>
 export type StoryReviewIdentity = Pick<StoryReview, 'reviewId' | 'version'>
+export const adoptedReviewSchema = z.object({ reviewId: id, version: hash, batch: z.number().int().positive(), optionId: text }).strict()
+export type AdoptedReview = z.infer<typeof adoptedReviewSchema>
+export const reviewTransitionSchema = z.discriminatedUnion('kind', [
+  adoptedReviewSchema.extend({ kind: z.literal('adopted'), formatVersion: z.literal(1) }),
+  z.object({ kind: z.literal('refreshed'), formatVersion: z.literal(1), reviewId: id, version: hash, replacement: storyReviewSchema }).strict(),
+])
+export type ReviewTransition = z.infer<typeof reviewTransitionSchema>
 
 export function reviewDigest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -108,15 +120,23 @@ export function createReviewSnapshot(input: StoryReviewSubject, reviewId: string
 export function verifyReviewDecision(review: StoryReview, decision: StoryReviewDecision): void {
   if (decision.reviewId !== review.reviewId || decision.version !== review.version) throw new Error('审阅决定身份或版本不匹配')
   if (decision.decidedAt < review.openedAt) throw new Error('审阅决定早于等待开始')
-  if (decision.source === 'refresh') {
-    if (decision.nextBatch !== review.batch + 1) throw new Error('替代审阅批次无效')
-    return
-  }
   const { choice } = decision
   if (choice.kind === 'select' && !review.options.some(option => option.id === choice.optionId)) throw new Error('审阅选项不存在')
   if (decision.source === 'timeout') {
     if (decision.deadline !== review.deadline || decision.decidedAt < decision.deadline || decision.choice.optionId !== review.recommendedId) throw new Error('审阅超时决定不匹配')
   } else if (review.deadline !== undefined && decision.decidedAt >= review.deadline) {
     throw new Error('审阅已到截止时间')
+  }
+}
+
+export function selectReviewArrangement(review: StoryReview, decision: StoryReviewDecision) {
+  if (decision.choice.kind === 'cancel') throw new Error('父故事安排审阅已取消')
+  const { optionId } = decision.choice
+  const option = review.options.find(item => item.id === optionId)
+  if (!option) throw new Error('审阅选项不存在')
+  const children = new Map(review.children.map(child => [child.id, child]))
+  return {
+    adoptedReview: { reviewId: review.reviewId, version: review.version, batch: review.batch, optionId },
+    children: option.childIds.map(childId => children.get(childId)!),
   }
 }

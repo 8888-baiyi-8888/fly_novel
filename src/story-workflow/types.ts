@@ -3,7 +3,7 @@ import { parseDocument } from 'yaml'
 import { z } from 'zod'
 import { storyWorldEvidenceSchema, worldObjectivesSchema } from './world-progress.js'
 import { mapSceneNeedSchema, sceneMapEvidenceSchema } from './map-scene.js'
-import { enabledReviewPolicySchema, storyReviewSchema } from './user-review.js'
+import { adoptedReviewSchema, enabledReviewPolicySchema, reviewDigest, storyReviewSchema } from './user-review.js'
 import { isDeepStrictEqual } from 'node:util'
 
 const text = z.string().trim().min(1)
@@ -190,11 +190,12 @@ export const storyProgressSchema = z.object({
     results: z.array(completedStorySchema),
     decisions: z.array(directorDecisionSchema.extend({ description: text })),
     supplement: z.object({ id: uuid, description: text, reason: text }).strict().optional(),
+    adoptedReview: adoptedReviewSchema.optional(),
   }).strict()).min(1),
 }).strict().refine(
   value => {
     if (value.formatVersion !== 4) {
-      return value.reviewPolicy === undefined && value.review === undefined && value.formatVersion === storyProgressVersion(value.frames) &&
+      return value.reviewPolicy === undefined && value.review === undefined && value.frames.every(frame => frame.adoptedReview === undefined) && value.formatVersion === storyProgressVersion(value.frames) &&
         (value.worldObjectives === undefined || value.formatVersion === 3)
     }
     if (!value.reviewPolicy) return false
@@ -202,9 +203,10 @@ export const storyProgressSchema = z.object({
     if (!review) return true
     const top = value.frames.at(-1)!
     return review.runId === value.runId && review.batch === value.batch && review.planHash === value.planHash &&
+      review.evidenceHash === reviewDigest({ worldState: review.worldState, objectives: value.worldObjectives }) &&
       review.parentStoryId === top.node.storyId && review.goal === top.node.task.goal && isDeepStrictEqual(review.constraints, top.node.task.constraints) &&
       isDeepStrictEqual(review.policy, value.reviewPolicy) && isDeepStrictEqual(review.children, top.children) &&
-      top.index === 0 && top.decisions.length === 0 && top.results.length === 0 && top.supplement === undefined
+      top.index === 0 && top.decisions.length === 0 && top.results.length === 0 && top.supplement === undefined && top.adoptedReview === undefined
   },
   { message: '暂停记录版本与回报格式不一致', path: ['formatVersion'] },
 )
