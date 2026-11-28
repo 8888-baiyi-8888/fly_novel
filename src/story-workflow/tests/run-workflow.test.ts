@@ -4,8 +4,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test, type TestContext } from 'node:test'
 import { FsVersion } from '@fly-novel/fs'
+import { CharacterStore } from '@fly-novel/character'
 import { openStoryRunWorkflow, type StoryRunWorkflowOptions } from '../../app/story-run-workflow.js'
-import { createTestDirectory, ScriptedAdapter } from './fixtures.js'
+import { achieved, advance, createTestDirectory, ScriptedAdapter, task, report } from './fixtures.js'
 
 async function fixture(t: TestContext, responses: string[] = ['{"kind":"planned","events":["北门交涉"]}']) {
   const root = await createTestDirectory(t, 'story-run-')
@@ -42,8 +43,9 @@ test('开始请求固定规划身份，重开后重读，版本和请求冲突�
     assert.deepEqual(same, plan)
     assert.equal(adapter.requests.length, 1)
     assert.equal((await first.read(runId))?.manifest.planId, plan.id)
-    assert.deepEqual(await first.diagnose(runId), { runId, planId: plan.id, status: 'ready' })
-    assert.deepEqual(await first.diagnose(runId), { runId, planId: plan.id, status: 'ready' })
+    const view = await first.diagnose(runId)
+    assert.equal(view.status, 'ready')
+    assert.deepEqual(await first.diagnose(runId), view)
     await assert.rejects(first.start(runId, { ...selection, task: '另外一轮' }), /不同开始请求/)
   } finally { await first.close() }
   const reopened = await openStoryRunWorkflow(options)
@@ -65,4 +67,63 @@ test('开始请求固定规划身份，重开后重读，版本和请求冲突�
     assert.equal((await corrupted.diagnose(runId)).issue, 'corrupt')
   }
   finally { await corrupted.close() }
+})
+
+async function characterOptions(t: TestContext, data: Awaited<ReturnType<typeof fixture>>) {
+  const world = data.options.binding.world
+  const path = join(world.readRoot, 'characters')
+  await mkdir(path)
+  const store = await CharacterStore.open(path, true)
+  t.after(() => store.close())
+  const { id: characterId } = await store.create({ name: '守卫', summary: '值守城门', categories: {}, body: '夜间守卫' })
+  const candidate = { characterId, version: (await store.readVersioned(characterId)).version, presence: '城门值守' }
+  const role = new ScriptedAdapter(['{"kind":"respond","speech":[{"text":"城门已经关闭","channel":"normal","intendedCharacterIds":[]}],"actions":[]}'])
+  const config: NonNullable<StoryRunWorkflowOptions['execution']> = {
+    review: { policy: { kind: 'indefinite' } },
+    scene: { maxEvents: 5, characters: { store, ownerAgentId: 'characters',
+      configure: () => ({ provider: 'fixture', model: 'fixture', adapter: role, version: '1', timeoutMs: 5000 }) },
+      async prepare() {
+        return { candidates: [candidate], initialCandidates: [characterId],
+          async grants(_, scene) {
+            return [{ characterId, sceneId: scene.sceneId, category: 'profile', content: '夜间守卫', basis: '档案', source: { kind: 'profile' } },
+              { characterId, sceneId: scene.sceneId, category: 'observation', content: scene.situation, basis: '当前场景', source: { kind: 'scene', field: 'situation' } }]
+          },
+          async conditions() { return { version: '1', participants: [{ characterId, position: '北门', hearing: 'clear', sight: 'clear', basis: '在场' }] } },
+          allowObservation: () => true,
+        }
+      },
+    },
+  }
+  return { role, characterId, options: { ...data.options, execution: config, binding: { ...data.options.binding,
+    world: { ...world, agents: [{ agentId: 'characters', writableRoot: store.rootDirectory }] } } } }
+}
+
+test('正式入口从交付经用户审阅和真实角色编排到根回报', async t => {
+  const responses = ['{"kind":"planned","events":["北门交涉"]}']
+  const data = await fixture(t, responses)
+  const { options, characterId, role } = await characterOptions(t, data)
+  responses.push(advance, task, '{"kind":"direct","preparation":"核对闭门"}',
+    JSON.stringify({ participants: [{ characterId, invitation: '回答商队' }] }),
+    JSON.stringify({ perceptions: [{ characterId, status: 'not-received', reason: '本人发言', observations: [] }], next: { kind: 'end', reason: '交涉结束' } }),
+    report, '已接收', achieved)
+  const first = await openStoryRunWorkflow(options)
+  const { runId, selection } = data
+  try {
+    await first.start(runId, selection)
+    const paused = await first.advance(runId, (await first.diagnose(runId)).version)
+    assert.equal(paused.status, 'awaiting-review')
+    assert.equal(role.requests.length, 0)
+  } finally { await first.close() }
+  const next = await openStoryRunWorkflow(options)
+  try {
+    const paused = await next.diagnose(runId)
+    assert.equal(paused.status, 'awaiting-review')
+    await next.submitReview(runId, paused.batch!, paused.review, { kind: 'select', optionId: 'original' })
+    const confirmed = await next.diagnose(runId)
+    assert.equal(confirmed.status, 'review-ready')
+    const result = await next.advance(runId, confirmed.version)
+    assert.equal(result.status, 'completed')
+    assert.equal(role.requests.length, 1)
+    await assert.rejects(next.advance(runId, confirmed.version), /诊断版本已变化/)
+  } finally { await next.close() }
 })

@@ -3,10 +3,13 @@ import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
 import { PlanStore, CollaborationStore } from '../story-workflow/store.js'
 import { openStoryRunRecords, runDigest, storyRunManifestSchema, storyRunIdSchema, type StoryRunManifest } from '../story-workflow/run-records.js'
-import type { StoryPlanningOptions } from '../story-workflow/workflow.js'
+import type { StoryPlanningOptions, StoryTreeOptions } from '../story-workflow/workflow.js'
 import { readIfPresent } from '../story-workflow/story-query.js'
 import { prepareStoryWorldInput, type bindStoryWorld } from './story-world-materials.js'
-import { createReservedStoryPlan, inspectStoryProgress, readStoryRoundResult } from './story-workflow.js'
+import { continueStoryTree, createReservedStoryPlan, inspectStoryProgress, readStoryRoundResult, runStoryTree, settleStoryReview, submitStoryReview, type StoryReviewChoice, type StoryReviewIdentity } from './story-workflow.js'
+import { reviewPolicySchema } from '../story-workflow/user-review.js'
+import { runManagedScene, type StoryRunSceneOptions } from './story-run-scene.js'
+export type { StoryRunSceneOptions } from './story-run-scene.js'
 
 type Binding = Awaited<ReturnType<typeof bindStoryWorld>>
 type MaterialSelection = Parameters<typeof prepareStoryWorldInput>[1]
@@ -27,23 +30,35 @@ export interface StoryRunWorkflowOptions extends Roots {
   director: Pick<StoryPlanningOptions, 'provider' | 'model' | 'adapter'>
   /** 模型、人物授权及应用策略发生语义变化时更换此版本。 */
   configurationVersion: string
+  execution?: Pick<StoryTreeOptions, 'limit' | 'review' | 'worldObjectives'> & {
+    scene: StoryRunSceneOptions
+    worldProgress?(planId: string, signal: AbortSignal): StoryTreeOptions['worldProgress']
+  }
 }
 
 /** 使用可信目录和世界绑定打开运行入口。借用的资料服务由调用方关闭。 */
 export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
   const { binding, director } = options
+  const execution = options.execution
   const { world, deliveryId } = binding
   const configurationVersion = z.string().trim().min(1).parse(options.configurationVersion)
   z.string().trim().min(1).parse(director.provider)
   z.string().trim().min(1).parse(director.model)
   storyRunIdSchema.parse(deliveryId)
+  const policy = reviewPolicySchema.parse(execution?.review?.policy ?? { kind: 'off' })
+  if (execution) {
+    z.number().int().min(1).max(10000).parse(execution.scene.maxEvents)
+    if (execution.limit !== undefined) z.number().int().positive().parse(execution.limit)
+    if (execution.scene.schedule) z.string().trim().min(1).parse(execution.scene.schedule.version)
+  }
   const protectedRoots = [...new Set([...options.protectedRoots, world.readRoot])]
   const records = await openStoryRunRecords(options.runRoot, [options.planRoot, options.collaborationRoot, ...protectedRoots])
   const roots = { planRoot: options.planRoot, collaborationRoot: options.collaborationRoot, protectedRoots: [...protectedRoots, records.root] }
   const planning = { ...director, root: roots.planRoot, protectedRoots: [...roots.protectedRoots, roots.collaborationRoot] }
   const plans = await PlanStore.open(planning.root, planning.protectedRoots)
   const collaboration = await CollaborationStore.open(roots.collaborationRoot, roots.planRoot, roots.protectedRoots)
-  const configuration = runDigest({ world, deliveryId, configurationVersion, root: records.root, ...roots, provider: director.provider, model: director.model })
+  const configuration = runDigest({ world, deliveryId, configurationVersion, root: records.root, ...roots, provider: director.provider, model: director.model,
+    policy, objectives: execution?.worldObjectives, schedule: execution?.scene.schedule?.version })
   if (owners.has(records.root)) throw new Error('故事运行目录已有可信写入者')
   owners.add(records.root)
   const lifecycle = new AbortController()
@@ -76,7 +91,7 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
     if (plan && !isDeepStrictEqual(plan.input, value.input)) throw new Error('已保存规划与运行意图不匹配')
     return plan
   }
-  async function diagnose(runId: string) {
+  async function inspect(runId: string) {
     storyRunIdSchema.parse(runId)
     let planId: string | undefined
     try {
@@ -115,8 +130,44 @@ export async function openStoryRunWorkflow(options: StoryRunWorkflowOptions) {
       return { runId, planId, status: 'blocked' as const, issue: evidenceIssue(error) }
     }
   }
+  async function diagnose(runId: string) {
+    const result = await inspect(runId)
+    return { ...result, version: runDigest(result) }
+  }
+  async function executionInputs(runId: string, active: AbortSignal) {
+    const saved = await manifest(runId)
+    if (!saved || !await readPlan(saved)) throw new Error('故事运行尚无已保存规划')
+    if (!execution) throw new Error('故事运行未装配场景执行')
+    const worldProgress = execution.worldProgress?.(saved.planId, active)
+    const tree: StoryTreeOptions = { ...roots, ...director, limit: execution.limit, review: execution.review, worldObjectives: execution.worldObjectives, worldProgress,
+      simulate: (input, signal) => runManagedScene(roots, binding, director, execution.scene, input, signal) }
+    return { saved, tree, reviewOptions: { ...roots, now: execution.review?.now, worldProgress, worldObjectives: execution.worldObjectives } }
+  }
   return Object.freeze({
     diagnose,
+    advance(runId: string, version: string, signal?: AbortSignal) {
+      return operate(runId, async active => {
+        const state = await diagnose(runId)
+        if (state.version !== version) throw new Error('运行诊断版本已变化')
+        if (state.status !== 'ready' && state.status !== 'paused' && state.status !== 'review-ready') return state
+        const { saved, tree } = await executionInputs(runId, active)
+        if (state.status === 'ready') await runStoryTree(tree, saved.planId, active)
+        else await continueStoryTree(tree, saved.planId, state.batch!, active)
+        return diagnose(runId)
+      }, signal)
+    },
+    submitReview(runId: string, batch: number, expected: StoryReviewIdentity, choice: StoryReviewChoice, signal?: AbortSignal) {
+      return operate(runId, async active => {
+        const { saved, reviewOptions } = await executionInputs(runId, active)
+        return submitStoryReview(reviewOptions, saved.planId, batch, expected, choice)
+      }, signal)
+    },
+    settleReview(runId: string, batch: number, expected: StoryReviewIdentity, signal?: AbortSignal) {
+      return operate(runId, async active => {
+        const { saved, reviewOptions } = await executionInputs(runId, active)
+        return settleStoryReview(reviewOptions, saved.planId, batch, expected)
+      }, signal)
+    },
     async read(runId: string) {
       const saved = await manifest(runId)
       if (!saved) return undefined
